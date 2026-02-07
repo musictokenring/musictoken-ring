@@ -11,6 +11,65 @@
     
     <!-- Styles -->
     <link rel="stylesheet" href="./styles/main.css">
+    <style>
+        /* Fix para tamaño de carátulas */
+        .track-cover {
+            width: 60px !important;
+            height: 60px !important;
+            object-fit: cover !important;
+            border-radius: 8px !important;
+        }
+        
+        .track-item {
+            display: flex !important;
+            align-items: center !important;
+            gap: 15px !important;
+            padding: 12px !important;
+            margin: 8px 0 !important;
+            background: rgba(255, 255, 255, 0.05) !important;
+            border-radius: 10px !important;
+            cursor: pointer !important;
+            transition: all 0.3s ease !important;
+        }
+        
+        .track-item:hover {
+            background: rgba(0, 243, 255, 0.1) !important;
+            transform: translateX(5px) !important;
+        }
+        
+        .track-info {
+            flex: 1 !important;
+            min-width: 0 !important;
+        }
+        
+        .track-name {
+            font-weight: bold !important;
+            font-size: 14px !important;
+            white-space: nowrap !important;
+            overflow: hidden !important;
+            text-overflow: ellipsis !important;
+        }
+        
+        .track-artist {
+            font-size: 12px !important;
+            color: #aaa !important;
+            white-space: nowrap !important;
+            overflow: hidden !important;
+            text-overflow: ellipsis !important;
+        }
+        
+        .preview-btn {
+            padding: 6px 12px !important;
+            background: var(--spotify-green) !important;
+            border: none !important;
+            border-radius: 20px !important;
+            color: white !important;
+            font-size: 11px !important;
+            cursor: pointer !important;
+            white-space: nowrap !important;
+        }
+    </style>
+
     
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🥊</text></svg>">
 </head>
