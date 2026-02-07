@@ -3,16 +3,15 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>MusicToken Ring - Battle Your Favorite Songs</title>
+    <title>🥊 MusicToken Ring - Battle Your Favorite Songs</title>
     <meta name="description" content="Batalla de streams en tiempo real. Apuesta en tus canciones favoritas y gana $MTOKEN">
     
     <!-- Fonts -->
     <link href="https://fonts.googleapis.com/css2?family=Black+Ops+One&family=Orbitron:wght@400;700;900&family=Righteous&display=swap" rel="stylesheet">
     
     <!-- Styles -->
-    <link rel="stylesheet" href="styles/main.css">
+    <link rel="stylesheet" href="./styles/main.css">
     
-    <!-- Favicon -->
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🥊</text></svg>">
 </head>
 <body>
@@ -41,7 +40,7 @@
             
             <!-- Wallet Connect Button -->
             <div class="wallet-section">
-                <button id="connectWallet" class="btn-wallet">
+                <button id="connectWallet" class="btn-wallet" onclick="connectWallet()">
                     <span id="walletText">🔗 Connect Wallet</span>
                 </button>
                 <div id="userBalance" class="user-balance hidden">
@@ -243,12 +242,18 @@
 
     <!-- Scripts -->
     <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
-    <script src="https://cdn.ethers.io/lib/ethers-5.2.umd.min.js"></script>
-    <script src="config/config.js"></script>
-    <script src="utils/api.js"></script>
-    <script src="utils/web3.js"></script>
-    <script src="utils/audio.js"></script>
-    <script src="utils/ui.js"></script>
-    <script src="src/app.js"></script>
+    <script>
+        // CONFIG inline
+        const CONFIG = {
+            BACKEND_API: 'http://localhost:3000',
+            CHAIN_ID: 80001,
+            CONTRACT_ADDRESS: '0xYourContractAddress',
+            TOKEN_ADDRESS: '0xYourTokenAddress',
+            BATTLE_DURATION: 60,
+            BURN_RATE: 0.005,
+            MAX_BET: 10000,
+        };
+    </script>
+    <script src="./src/app.js"></script>
 </body>
 </html>
