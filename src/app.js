@@ -31,7 +31,7 @@ document.addEventListener('DOMContentLoaded', () => {
     console.log('🥊 MusicToken Ring ready!');
 });
 
-// Search Deezer (cambiado de Spotify)
+// Search Deezer
 async function searchDeezer(fighter) {
     const query = document.getElementById(`search${fighter}`).value.trim();
    
@@ -48,7 +48,7 @@ async function searchDeezer(fighter) {
             params: { q: query, limit: 6, type: 'track' }
         });
        
-        const tracks = response.data.data || [];  // Deezer usa "data" como array principal
+        const tracks = response.data.data || [];
        
         if (tracks.length === 0) {
             resultsContainer.innerHTML = '<div style="grid-column: 1/-1; text-align:center; padding:2rem; color:#666;">No se encontraron resultados</div>';
@@ -60,14 +60,18 @@ async function searchDeezer(fighter) {
             const artistName = track.artist?.name || 'Unknown';
             const hasPreview = track.preview && track.preview !== '';
            
+            const trackData = {
+                id: track.id,
+                name: track.title,
+                artist: artistName,
+                image: imageUrl,
+                preview_url: track.preview
+            };
+           
             return `
-                <div class="track-item" onclick='selectTrack(${JSON.stringify({
-                    id: track.id,
-                    name: track.title,
-                    artist: artistName,
-                    image: imageUrl,
-                    preview_url: track.preview
-                }).replace(/'/g, "&apos;")}, ${fighter})'>
+                <div class="track-item" 
+                     data-track='${JSON.stringify(trackData).replace(/"/g, '&quot;')}'
+                     onclick="selectTrack(this.dataset.track, ${fighter})">
                     <img src="${imageUrl}" class="track-cover" alt="${track.title}" onerror="this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%22200%22 height=%22200%22><rect fill=%22%23333%22 width=%22200%22 height=%22200%22/><text x=%2250%%22 y=%2250%%22 fill=%22%23666%22 font-size=%2240%22 text-anchor=%22middle%22 dy=%22.3em%22>🎵</text></svg>'">
                     <div class="track-info">
                         <div class="track-name">${track.title}</div>
@@ -89,8 +93,21 @@ async function searchDeezer(fighter) {
     }
 }
 
-// Select track (sin cambios, pero ahora track.name → track.name, y preview_url es consistente)
-function selectTrack(track, fighter) {
+// Select track - CORREGIDO
+function selectTrack(trackJsonString, fighter) {
+    // Parsear el string JSON que viene de data-track
+    let track;
+    try {
+        track = JSON.parse(trackJsonString);
+    } catch (e) {
+        console.error('Error parseando track data:', e);
+        showToast('Error al seleccionar canción', 'error');
+        return;
+    }
+
+    // Ignorar si el click fue en el botón de preview
+    if (event.target.closest('.preview-btn')) return;
+
     // Remove previous selections
     document.querySelectorAll(`#results${fighter} .track-item`).forEach(item => {
         item.classList.remove('selected');
@@ -114,7 +131,7 @@ function selectTrack(track, fighter) {
     }
 }
 
-// Play preview (sin cambios, funciona igual con Deezer preview)
+// Play preview (sin cambios)
 function playPreview(url, trackId, button) {
     if (currentPreview === trackId && !currentPreviewAudio.paused) {
         currentPreviewAudio.pause();
