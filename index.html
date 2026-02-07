@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MusicToken Ring - Battle Your Favorite Songs</title>
+    <meta name="description" content="Batalla de streams en tiempo real. Apuesta en tus canciones favoritas y gana $MTOKEN">
+    
+    <!-- Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Black+Ops+One&family=Orbitron:wght@400;700;900&family=Righteous&display=swap" rel="stylesheet">
+    
+    <!-- Styles -->
+    <link rel="stylesheet" href="styles/main.css">
+    
+    <!-- Favicon -->
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🥊</text></svg>">
+</head>
+<body>
+    <!-- Loading Screen -->
+    <div id="loadingScreen" class="loading-screen">
+        <div class="loading-content">
+            <h1 class="loading-logo">🥊 MUSICTOKEN RING</h1>
+            <div class="loading-spinner"></div>
+            <p>Cargando...</p>
+        </div>
+    </div>
+
+    <!-- Background Animation -->
+    <div class="bg-animation"></div>
+
+    <!-- Header -->
+    <header class="header">
+        <div class="container">
+            <h1 class="logo">🥊 MUSICTOKEN RING</h1>
+            <p class="subtitle">BATALLA DE STREAMS EN TIEMPO REAL</p>
+            <div class="header-badges">
+                <span class="badge badge-spotify">🎵 Powered by Spotify</span>
+                <span class="badge badge-polygon">⛓️ Polygon Network</span>
+                <span class="badge badge-live">🔴 LIVE</span>
+            </div>
+            
+            <!-- Wallet Connect Button -->
+            <div class="wallet-section">
+                <button id="connectWallet" class="btn-wallet">
+                    <span id="walletText">🔗 Connect Wallet</span>
+                </button>
+                <div id="userBalance" class="user-balance hidden">
+                    <span id="balanceAmount">0</span> $MTOKEN
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="main-container">
+        <!-- Search Section -->
+        <section id="searchSection" class="search-section">
+            <h2 class="section-title">🔍 BUSCA TUS CANCIONES EN SPOTIFY</h2>
+            
+            <div class="fighters-search">
+                <!-- Fighter 1 Search -->
+                <div class="fighter-search left">
+                    <div class="search-header">🔵 LUCHADOR 1</div>
+                    <div class="search-box">
+                        <input 
+                            type="text" 
+                            id="search1" 
+                            class="search-input"
+                            placeholder="Buscar canción o artista..."
+                        >
+                        <button onclick="searchSpotify(1)" class="search-btn">🔍</button>
+                    </div>
+                    <div id="results1" class="results-container"></div>
+                </div>
+
+                <!-- Fighter 2 Search -->
+                <div class="fighter-search right">
+                    <div class="search-header">🔴 LUCHADOR 2</div>
+                    <div class="search-box">
+                        <input 
+                            type="text" 
+                            id="search2" 
+                            class="search-input"
+                            placeholder="Buscar canción o artista..."
+                        >
+                        <button onclick="searchSpotify(2)" class="search-btn">🔍</button>
+                    </div>
+                    <div id="results2" class="results-container"></div>
+                </div>
+            </div>
+
+            <button onclick="confirmSelection()" id="confirmBtn" class="btn-confirm" disabled>
+                ✅ CONFIRMAR SELECCIÓN
+            </button>
+        </section>
+
+        <!-- Battle Arena -->
+        <section id="battleArena" class="battle-arena hidden">
+            <!-- Timer -->
+            <div class="battle-timer" id="timer">60</div>
+            
+            <!-- Ring -->
+            <div class="ring">
+                <!-- Fighter 1 -->
+                <div class="fighter left">
+                    <div class="fighter-avatar" id="avatar1">
+                        <div class="fighter-placeholder">🎵</div>
+                    </div>
+                    <div class="fighter-name" id="name1">Canción 1</div>
+                    <div class="health-bar-container">
+                        <div class="health-bar health-bar-1" id="health1" style="width: 100%;">
+                            <div class="health-text" id="health1-text">100%</div>
+                        </div>
+                    </div>
+                    <div class="stream-counter stream-counter-1" id="streams1">0 streams</div>
+                </div>
+
+                <!-- VS Badge -->
+                <div class="vs-badge">VS</div>
+
+                <!-- Fighter 2 -->
+                <div class="fighter right">
+                    <div class="fighter-avatar" id="avatar2">
+                        <div class="fighter-placeholder">🎶</div>
+                    </div>
+                    <div class="fighter-name" id="name2">Canción 2</div>
+                    <div class="health-bar-container">
+                        <div class="health-bar health-bar-2" id="health2" style="width: 100%;">
+                            <div class="health-text" id="health2-text">100%</div>
+                        </div>
+                    </div>
+                    <div class="stream-counter stream-counter-2" id="streams2">0 streams</div>
+                </div>
+            </div>
+
+            <!-- Stats -->
+            <div class="battle-stats">
+                <div class="stat-card">
+                    <div class="stat-icon">💰</div>
+                    <div class="stat-label">Total Pool</div>
+                    <div class="stat-value" id="totalPool">0 $MTOKEN</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-icon">🔥</div>
+                    <div class="stat-label">Quema (0.5%)</div>
+                    <div class="stat-value" id="burnAmount">0 $MTOKEN</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-icon">🏆</div>
+                    <div class="stat-label">Premio</div>
+                    <div class="stat-value" id="prizeAmount">0 $MTOKEN</div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Betting Section -->
+        <section id="bettingSection" class="betting-section hidden">
+            <h2 class="section-title">💰 COLOCA TU APUESTA</h2>
+            
+            <div class="betting-controls">
+                <div class="bet-input-group">
+                    <input type="number" id="bet1" value="100" min="1" class="bet-input">
+                    <button onclick="placeBet(1)" class="btn btn-blue">
+                        Apostar 1
+                    </button>
+                </div>
+
+                <button onclick="startBattle()" id="startBtn" class="btn btn-start">
+                    <span>⚡ INICIAR BATALLA</span>
+                </button>
+
+                <div class="bet-input-group">
+                    <input type="number" id="bet2" value="100" min="1" class="bet-input">
+                    <button onclick="placeBet(2)" class="btn btn-pink">
+                        Apostar 2
+                    </button>
+                </div>
+            </div>
+
+            <!-- Quick Bet Options -->
+            <div class="quick-bets">
+                <button onclick="setQuickBet(50)" class="quick-bet-btn">50</button>
+                <button onclick="setQuickBet(100)" class="quick-bet-btn">100</button>
+                <button onclick="setQuickBet(500)" class="quick-bet-btn">500</button>
+                <button onclick="setQuickBet(1000)" class="quick-bet-btn">1000</button>
+                <button onclick="setQuickBet(5000)" class="quick-bet-btn">5000</button>
+            </div>
+        </section>
+
+        <!-- Leaderboard -->
+        <section class="leaderboard-section">
+            <h2 class="section-title">🏆 TOP APOSTADORES</h2>
+            <div id="leaderboard" class="leaderboard">
+                <div class="leaderboard-item">
+                    <span class="rank">🥇</span>
+                    <span class="address">0x1234...5678</span>
+                    <span class="amount">50,000 $MTOKEN</span>
+                </div>
+                <div class="leaderboard-item">
+                    <span class="rank">🥈</span>
+                    <span class="address">0x8765...4321</span>
+                    <span class="amount">35,000 $MTOKEN</span>
+                </div>
+                <div class="leaderboard-item">
+                    <span class="rank">🥉</span>
+                    <span class="address">0xabcd...efgh</span>
+                    <span class="amount">25,000 $MTOKEN</span>
+                </div>
+            </div>
+        </section>
+
+        <!-- Recent Battles -->
+        <section class="recent-battles-section">
+            <h2 class="section-title">📜 BATALLAS RECIENTES</h2>
+            <div id="recentBattles" class="recent-battles">
+                <div class="battle-card">
+                    <div class="battle-fighters">
+                        <span class="winner">🎵 Blinding Lights</span>
+                        <span class="vs">VS</span>
+                        <span class="loser">🎶 Estoy Enfermo</span>
+                    </div>
+                    <div class="battle-stats-small">
+                        <span>Pool: 5,000 $MTOKEN</span>
+                        <span>Ganador: +4,975 $MTOKEN</span>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <!-- Winner Announcement Modal -->
+    <div id="winnerModal" class="modal">
+        <div class="modal-content winner-announcement">
+            <div class="winner-title">🏆 ¡GANADOR!</div>
+            <div id="winnerName" class="winner-name"></div>
+            <div id="winnerPrize" class="winner-prize"></div>
+            <div class="winner-confetti">🎉🎊✨</div>
+        </div>
+    </div>
+
+    <!-- Toast Notifications -->
+    <div id="toastContainer" class="toast-container"></div>
+
+    <!-- Scripts -->
+    <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+    <script src="https://cdn.ethers.io/lib/ethers-5.2.umd.min.js"></script>
+    <script src="config/config.js"></script>
+    <script src="utils/api.js"></script>
+    <script src="utils/web3.js"></script>
+    <script src="utils/audio.js"></script>
+    <script src="utils/ui.js"></script>
+    <script src="src/app.js"></script>
+</body>
+</html>
