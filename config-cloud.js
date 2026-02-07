@@ -18,54 +18,77 @@ const CONFIG = {
 }
 ```
 
-### **Guárdalo como:**
+### **4. Pégalo en Notepad (reemplaza todo)**
+
+### **5. Guarda:**
 ```
-C:\Users\fmfil\Documents\GitHub\MusicTokenRing-Frontend\config\config.js
+Ctrl + S
+Cierra Notepad
 ```
 
-**Reemplaza el archivo existente**
-
----
-
-## 📋 **PASO A PASO:**
-
-### **1. Abre Notepad**
+### **6. GitHub Desktop:**
 ```
-Presiona Win + R
-Escribe: notepad
-Enter
+1. Verás: config/config.js (new file o modified)
+2. Summary: "Fix: Backend URL to cloud"
+3. Commit to main
+4. Push origin
 ```
 
-### **2. Copia el código de arriba**
-```
-Selecciona TODO el código JavaScript
-Ctrl + C
-Pégalo en Notepad
-```
+### **7. Espera 30 seg → Vercel redeploy**
 
-### **3. Guardar**
-```
-File → Save As
-Navega a: C:\Users\fmfil\Documents\GitHub\MusicTokenRing-Frontend\config\
-Nombre: config.js
-Save as type: All Files (*)
-Click "Save"
-Cuando pregunte si reemplazar: SÍ
-```
-
-### **4. GitHub Desktop**
-```
-1. Abre GitHub Desktop
-2. Verás: config/config.js (modified)
-3. Summary: "Fix: Backend URL cloud"
-4. Commit to main
-5. Push origin
-```
-
-### **5. Espera 30 segundos**
-
-### **6. Prueba**
+### **8. Prueba:**
 ```
 www.musictokenring.com
 Ctrl + F5
 Busca "blinding lights"
+```
+
+---
+
+## 🔍 **VERIFICACIÓN RÁPIDA:**
+
+### **¿Existe la carpeta config?**
+
+Ve a:
+```
+C:\Users\fmfil\Documents\GitHub\musictoken-ring
+```
+
+Mira si ves una carpeta llamada `config/`
+
+**SI NO EXISTE:**
+1. Click derecho → Nueva carpeta
+2. Nombre: `config`
+3. Entra a la carpeta
+4. Click derecho → Nuevo → Documento de texto
+5. Nombre: `config.js` (borra el .txt)
+6. Pega el código de arriba
+
+**SI SÍ EXISTE:**
+1. Abre `config/config.js`
+2. Reemplaza todo con el código de arriba
+
+---
+
+## 📸 **TOMA SCREENSHOT:**
+
+De la carpeta:
+```
+C:\Users\fmfil\Documents\GitHub\musictoken-ring
+```
+
+Mostrando qué carpetas y archivos tienes, para verificar la estructura.
+
+---
+
+## ✅ **ESTRUCTURA CORRECTA DEBE SER:**
+```
+musictoken-ring/
+├── config/
+│   └── config.js       ← Este archivo debe tener la URL cloud
+├── src/
+│   └── app.js
+├── styles/
+│   └── main.css
+├── index.html
+└── README.md
