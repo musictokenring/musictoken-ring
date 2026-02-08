@@ -1,14 +1,17 @@
 // =========================================
-// AUTH - Registro e Inicio de Sesión con Supabase
+// AUTH - Registro, Login y Gestión de Sesión con Supabase
 // =========================================
 
-// Inicializa Supabase (pon tu URL y anon key reales)
+// Inicialización de Supabase con tu anon key pública
 const supabaseUrl = 'https://bscmgcnynbxalcuwdqlm.supabase.co';
-const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJzY21nY255bmJ4YWxjdXdkcWxtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzA0NTYwOTUsImV4cCI6MjA4NjAzMjA5NX0.1iasFQ5H0GmrFqi6poWNE1aZOtbmQuB113RCyg2BBK4';  // ← CAMBIA ESTO (la encuentras en Supabase → Settings → API)
+const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJzY21nY255bmJ4YWxjdXdkcWxtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzA0NTYwOTUsImV4cCI6MjA4NjAzMjA5NX0.1iasFQ5H0GmrFqi6poWNE1aZOtbmQuB113RCyg2BBK4';
 
 const supabase = supabase.createClient(supabaseUrl, supabaseAnonKey);
 
-// Función para mostrar/ocultar modal de auth (agrega esto al HTML después)
+// =========================================
+// Funciones de UI para modal (llamar desde HTML)
+// =========================================
+
 function toggleAuthModal(show = true) {
   const modal = document.getElementById('authModal');
   if (modal) {
@@ -16,13 +19,20 @@ function toggleAuthModal(show = true) {
   }
 }
 
-// Registro con email y password
+function showTab(tab) {
+  document.getElementById('loginTab').classList.toggle('hidden', tab !== 'login');
+  document.getElementById('registerTab').classList.toggle('hidden', tab !== 'register');
+}
+
+// =========================================
+// Registro con email y contraseña
+// =========================================
 async function registerUser() {
   const email = document.getElementById('regEmail')?.value?.trim();
   const password = document.getElementById('regPassword')?.value?.trim();
 
-  if (!email || !password) {
-    showToast('Completa email y contraseña', 'error');
+  if (!email || !password || password.length < 6) {
+    showToast('Completa email y contraseña (mínimo 6 caracteres)', 'error');
     return;
   }
 
@@ -31,21 +41,23 @@ async function registerUser() {
       email,
       password,
       options: {
-        emailRedirectTo: window.location.origin + '/dashboard.html'  // redirige aquí después de confirmar email
+        emailRedirectTo: window.location.origin + '/dashboard.html'  // Redirige aquí después de confirmar
       }
     });
 
     if (error) throw error;
 
-    showToast('¡Registrado! Revisa tu correo para confirmar', 'success');
+    showToast('¡Registrado! Revisa tu correo para confirmar la cuenta', 'success');
     toggleAuthModal(false);
   } catch (err) {
-    console.error('Error registro:', err);
-    showToast(err.message || 'Error al registrarte', 'error');
+    console.error('Error en registro:', err);
+    showToast(err.message || 'Error al registrarte. Intenta de nuevo.', 'error');
   }
 }
 
-// Login con email y password
+// =========================================
+// Inicio de sesión
+// =========================================
 async function loginUser() {
   const email = document.getElementById('loginEmail')?.value?.trim();
   const password = document.getElementById('loginPassword')?.value?.trim();
@@ -66,54 +78,83 @@ async function loginUser() {
     // Guardar sesión
     localStorage.setItem('sb-session', JSON.stringify(data.session));
 
-    showToast('¡Bienvenido!', 'success');
+    showToast(`¡Bienvenido, ${data.user.email.split('@')[0]}!`, 'success');
     toggleAuthModal(false);
 
-    // Redirigir a dashboard o recargar página principal
-    window.location.href = '/dashboard.html';  // crea esta página después
+    // Redirigir a dashboard
+    window.location.href = '/dashboard.html';
   } catch (err) {
-    console.error('Error login:', err);
-    showToast(err.message || 'Error al ingresar', 'error');
+    console.error('Error en login:', err);
+    showToast(err.message || 'Credenciales incorrectas o error al ingresar', 'error');
   }
 }
 
-// Verificar si hay sesión activa (llamar al cargar páginas protegidas)
+// =========================================
+// Verificar sesión activa (llamar al cargar cualquier página)
+// =========================================
 async function checkAuth() {
   const { data: { session } } = await supabase.auth.getSession();
-  
+
   if (session) {
     console.log('Usuario logueado:', session.user.email);
-    // Puedes mostrar nombre o avatar en la UI
-    document.getElementById('userDisplay')?.innerHTML = `Hola, ${session.user.email.split('@')[0]}`;
+    
+    // Mostrar info del usuario en UI (si tienes un elemento con id="userDisplay")
+    const userDisplay = document.getElementById('userDisplay');
+    if (userDisplay) {
+      userDisplay.textContent = `Hola, ${session.user.email.split('@')[0]}`;
+      userDisplay.classList.remove('hidden');
+    }
+
+    // Opcional: ocultar botón de login y mostrar logout
+    const authBtn = document.getElementById('authBtn');
+    const logoutBtn = document.getElementById('logoutBtn');
+    if (authBtn) authBtn.classList.add('hidden');
+    if (logoutBtn) logoutBtn.classList.remove('hidden');
+
     return session;
   } else {
-    console.log('No hay sesión');
-    // Mostrar botón de login o redirigir
-    toggleAuthModal(true);
+    console.log('No hay sesión activa');
+    // Mostrar modal o botón de login
+    const authBtn = document.getElementById('authBtn');
+    if (authBtn) authBtn.classList.remove('hidden');
     return null;
   }
 }
 
-// Logout
+// =========================================
+// Cerrar sesión
+// =========================================
 async function logoutUser() {
-  await supabase.auth.signOut();
+  const { error } = await supabase.auth.signOut();
+  if (error) {
+    showToast('Error al cerrar sesión', 'error');
+    return;
+  }
+
   localStorage.removeItem('sb-session');
   showToast('Sesión cerrada', 'info');
   window.location.href = '/';
 }
 
-// Listener para cambios de auth (ej. después de confirmar email)
+// =========================================
+// Listener global para cambios de auth
+// =========================================
 supabase.auth.onAuthStateChange((event, session) => {
   if (event === 'SIGNED_IN') {
     localStorage.setItem('sb-session', JSON.stringify(session));
-    window.location.href = '/dashboard.html';
+    // Redirigir si es necesario
+    if (window.location.pathname === '/' || window.location.pathname === '/index.html') {
+      window.location.href = '/dashboard.html';
+    }
   }
   if (event === 'SIGNED_OUT') {
     localStorage.removeItem('sb-session');
   }
 });
 
-// Inicializar al cargar cualquier página
+// =========================================
+// Inicializar al cargar la página
+// =========================================
 document.addEventListener('DOMContentLoaded', () => {
   checkAuth();
 });
