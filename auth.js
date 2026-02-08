@@ -1,14 +1,9 @@
-// =========================================
 // AUTH - Registro, Login y Gestión de Sesión con Supabase
-// =========================================
 
-// Usamos la instancia global del CDN (ya está en window.supabase)
+// Usamos la instancia global del CDN de Supabase (ya está en window.supabase)
 const supabase = window.supabase;
 
-// =========================================
 // Funciones de UI para modal
-// =========================================
-
 function toggleAuthModal(show = true) {
   const modal = document.getElementById('authModal');
   if (modal) {
@@ -42,9 +37,7 @@ function showTab(tab) {
   }
 }
 
-// =========================================
 // Registro
-// =========================================
 async function registerUser() {
   const email = document.getElementById('regEmail')?.value?.trim();
   const password = document.getElementById('regPassword')?.value?.trim();
@@ -71,9 +64,7 @@ async function registerUser() {
   }
 }
 
-// =========================================
 // Login
-// =========================================
 async function loginUser() {
   const email = document.getElementById('loginEmail')?.value?.trim();
   const password = document.getElementById('loginPassword')?.value?.trim();
@@ -101,9 +92,7 @@ async function loginUser() {
   }
 }
 
-// =========================================
 // Check auth al cargar página
-// =========================================
 async function checkAuth() {
   const { data: { session } } = await supabase.auth.getSession();
 
@@ -126,9 +115,7 @@ async function checkAuth() {
   }
 }
 
-// =========================================
 // Logout
-// =========================================
 async function logoutUser() {
   await supabase.auth.signOut();
   localStorage.removeItem('sb-session');
@@ -136,9 +123,7 @@ async function logoutUser() {
   window.location.href = '/';
 }
 
-// =========================================
 // Listener de cambios de auth
-// =========================================
 supabase.auth.onAuthStateChange((event, session) => {
   if (event === 'SIGNED_IN') {
     localStorage.setItem('sb-session', JSON.stringify(session));
