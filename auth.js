@@ -2,11 +2,8 @@
 // AUTH - Registro, Login y Gestión de Sesión con Supabase
 // =========================================
 
-// Inicialización de Supabase
-const supabaseUrl = 'https://bscmgcnynbxalcuwdqlm.supabase.co';
-const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJzY21nY255bmJ4YWxjdXdkcWxtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzA0NTYwOTUsImV4cCI6MjA4NjAzMjA5NX0.1iasFQ5H0GmrFqi6poWNE1aZOtbmQuB113RCyg2BBK4';
-
-const supabase = supabase.createClient(supabaseUrl, supabaseAnonKey);
+// Usamos la instancia global de Supabase del CDN (ya declarada en window.supabase)
+const supabase = window.supabase;
 
 // =========================================
 // Funciones de UI para modal
@@ -15,13 +12,7 @@ const supabase = supabase.createClient(supabaseUrl, supabaseAnonKey);
 function toggleAuthModal(show = true) {
   const modal = document.getElementById('authModal');
   if (modal) {
-    if (show) {
-      modal.classList.remove('hidden');
-    } else {
-      modal.classList.add('hidden');
-    }
-  } else {
-    console.warn('Modal no encontrado');
+    modal.classList[show ? 'remove' : 'add']('hidden');
   }
 }
 
@@ -39,11 +30,9 @@ function showTab(tab) {
   }
 
   if (loginTabBtn && registerTabBtn) {
-    // Resetear estilos de ambos
     loginTabBtn.classList.remove('text-pink-500', 'border-b-2', 'border-pink-500');
     registerTabBtn.classList.remove('text-pink-500', 'border-b-2', 'border-pink-500');
 
-    // Aplicar al activo
     if (tab === 'login') {
       loginTabBtn.classList.add('text-pink-500', 'border-b-2', 'border-pink-500');
     }
