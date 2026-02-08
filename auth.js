@@ -1,7 +1,7 @@
 // AUTH - Registro, Login y Gestión de Sesión con Supabase
-// Versión limpia - sin redeclaración de supabase (usa la global del CDN)
+// Versión FINAL limpia - sin redeclaración de supabase
 
-console.log('Auth.js cargado correctamente - versión FINAL limpia 07-02-2026');
+console.log('Auth.js cargado - versión segura y limpia 07-02-2026');
 
 // Usamos la instancia global del CDN (ya está en window.supabase)
 const supabase = window.supabase;
@@ -143,6 +143,3 @@ supabase.auth.onAuthStateChange((event, session) => {
 document.addEventListener('DOMContentLoaded', () => {
   checkAuth();
 });
-
-// Log para confirmar que cargó bien
-console.log('Auth.js cargado correctamente - versión FINAL limpia 07-02-2026');
