@@ -2,30 +2,52 @@
 // AUTH - Registro, Login y Gestión de Sesión con Supabase
 // =========================================
 
-// Inicialización de Supabase con tu anon key pública
+// Inicialización de Supabase
 const supabaseUrl = 'https://bscmgcnynbxalcuwdqlm.supabase.co';
 const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJzY21nY255bmJ4YWxjdXdkcWxtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzA0NTYwOTUsImV4cCI6MjA4NjAzMjA5NX0.1iasFQ5H0GmrFqi6poWNE1aZOtbmQuB113RCyg2BBK4';
 
 const supabase = supabase.createClient(supabaseUrl, supabaseAnonKey);
 
 // =========================================
-// Funciones de UI para modal (llamar desde HTML)
+// Funciones de UI para modal
 // =========================================
 
 function toggleAuthModal(show = true) {
   const modal = document.getElementById('authModal');
   if (modal) {
     modal.classList.toggle('hidden', !show);
+  } else {
+    console.warn('Modal no encontrado');
   }
 }
 
 function showTab(tab) {
-  document.getElementById('loginTab').classList.toggle('hidden', tab !== 'login');
-  document.getElementById('registerTab').classList.toggle('hidden', tab !== 'register');
+  const loginTab = document.getElementById('loginTab');
+  const registerTab = document.getElementById('registerTab');
+  const loginTabBtn = document.getElementById('loginTabBtn');
+  const registerTabBtn = document.getElementById('registerTabBtn');
+
+  if (loginTab && registerTab) {
+    loginTab.classList.toggle('hidden', tab !== 'login');
+    registerTab.classList.toggle('hidden', tab !== 'register');
+  }
+
+  if (loginTabBtn && registerTabBtn) {
+    // Remover clases de activo de ambos
+    loginTabBtn.classList.remove('text-pink-500', 'border-b-2', 'border-pink-500');
+    registerTabBtn.classList.remove('text-pink-500', 'border-b-2', 'border-pink-500');
+
+    // Agregar clases al tab activo
+    if (tab === 'login') {
+      loginTabBtn.classList.add('text-pink-500', 'border-b-2', 'border-pink-500');
+    } else if (tab === 'register') {
+      registerTabBtn.classList.add('text-pink-500', 'border-b-2', 'border-pink-500');
+    }
+  }
 }
 
 // =========================================
-// Registro con email y contraseña
+// Registro
 // =========================================
 async function registerUser() {
   const email = document.getElementById('regEmail')?.value?.trim();
@@ -40,23 +62,21 @@ async function registerUser() {
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
-      options: {
-        emailRedirectTo: window.location.origin + '/dashboard.html'  // Redirige aquí después de confirmar
-      }
+      options: { emailRedirectTo: window.location.origin + '/dashboard.html' }
     });
 
     if (error) throw error;
 
-    showToast('¡Registrado! Revisa tu correo para confirmar la cuenta', 'success');
+    showToast('¡Registrado! Revisa tu correo para confirmar', 'success');
     toggleAuthModal(false);
   } catch (err) {
-    console.error('Error en registro:', err);
-    showToast(err.message || 'Error al registrarte. Intenta de nuevo.', 'error');
+    console.error('Error registro:', err);
+    showToast(err.message || 'Error al registrarte', 'error');
   }
 }
 
 // =========================================
-// Inicio de sesión
+// Login
 // =========================================
 async function loginUser() {
   const email = document.getElementById('loginEmail')?.value?.trim();
@@ -75,74 +95,57 @@ async function loginUser() {
 
     if (error) throw error;
 
-    // Guardar sesión
     localStorage.setItem('sb-session', JSON.stringify(data.session));
-
     showToast(`¡Bienvenido, ${data.user.email.split('@')[0]}!`, 'success');
     toggleAuthModal(false);
-
-    // Redirigir a dashboard
     window.location.href = '/dashboard.html';
   } catch (err) {
-    console.error('Error en login:', err);
-    showToast(err.message || 'Credenciales incorrectas o error al ingresar', 'error');
+    console.error('Error login:', err);
+    showToast(err.message || 'Credenciales incorrectas', 'error');
   }
 }
 
 // =========================================
-// Verificar sesión activa (llamar al cargar cualquier página)
+// Check auth al cargar página
 // =========================================
 async function checkAuth() {
   const { data: { session } } = await supabase.auth.getSession();
 
+  const authBtn = document.getElementById('authBtn');
+  const userDisplay = document.getElementById('userDisplay');
+  const userName = document.getElementById('userName');
+
   if (session) {
-    console.log('Usuario logueado:', session.user.email);
-    
-    // Mostrar info del usuario en UI (si tienes un elemento con id="userDisplay")
-    const userDisplay = document.getElementById('userDisplay');
-    if (userDisplay) {
-      userDisplay.textContent = `Hola, ${session.user.email.split('@')[0]}`;
-      userDisplay.classList.remove('hidden');
-    }
-
-    // Opcional: ocultar botón de login y mostrar logout
-    const authBtn = document.getElementById('authBtn');
-    const logoutBtn = document.getElementById('logoutBtn');
     if (authBtn) authBtn.classList.add('hidden');
-    if (logoutBtn) logoutBtn.classList.remove('hidden');
-
+    if (userDisplay) {
+      userDisplay.classList.remove('hidden');
+      if (userName) userName.textContent = session.user.email.split('@')[0];
+    }
+    localStorage.setItem('user_id', session.user.id);
     return session;
   } else {
-    console.log('No hay sesión activa');
-    // Mostrar modal o botón de login
-    const authBtn = document.getElementById('authBtn');
     if (authBtn) authBtn.classList.remove('hidden');
+    if (userDisplay) userDisplay.classList.add('hidden');
     return null;
   }
 }
 
 // =========================================
-// Cerrar sesión
+// Logout
 // =========================================
 async function logoutUser() {
-  const { error } = await supabase.auth.signOut();
-  if (error) {
-    showToast('Error al cerrar sesión', 'error');
-    return;
-  }
-
+  await supabase.auth.signOut();
   localStorage.removeItem('sb-session');
   showToast('Sesión cerrada', 'info');
   window.location.href = '/';
 }
 
 // =========================================
-// Listener global para cambios de auth
+// Listener de cambios de auth
 // =========================================
 supabase.auth.onAuthStateChange((event, session) => {
   if (event === 'SIGNED_IN') {
     localStorage.setItem('sb-session', JSON.stringify(session));
-    // Redirigir si es necesario
     if (window.location.pathname === '/' || window.location.pathname === '/index.html') {
       window.location.href = '/dashboard.html';
     }
@@ -152,9 +155,7 @@ supabase.auth.onAuthStateChange((event, session) => {
   }
 });
 
-// =========================================
-// Inicializar al cargar la página
-// =========================================
+// Inicializar
 document.addEventListener('DOMContentLoaded', () => {
   checkAuth();
 });
