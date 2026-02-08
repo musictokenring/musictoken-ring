@@ -574,6 +574,59 @@
         background: var(--hover-bg);
         transform: rotate(90deg);
     }
+
+    /* Footer */
+    .footer {
+        background: #1A1A1A;
+        padding: 40px 20px;
+        margin-top: 80px;
+        border-top: 1px solid #2A2A2A;
+    }
+
+    .footer-content {
+        max-width: 1200px;
+        margin: 0 auto;
+        text-align: center;
+    }
+
+    .footer-links {
+        display: flex;
+        justify-content: center;
+        gap: 32px;
+        margin-bottom: 20px;
+        flex-wrap: wrap;
+    }
+
+    .footer-link {
+        color: #9CA3AF;
+        text-decoration: none;
+        font-size: 14px;
+        transition: color 0.2s ease;
+    }
+
+    .footer-link:hover {
+        color: #1DB954;
+    }
+
+    .footer-copyright {
+        color: #6B7280;
+        font-size: 13px;
+        margin: 0;
+    }
     </style>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <div class="footer-content">
+            <div class="footer-links">
+                <a href="/privacy.html" class="footer-link">Privacy Policy</a>
+                <a href="/terms.html" class="footer-link">Terms of Service</a>
+                <a href="mailto:legal@musictokenring.xyz" class="footer-link">Contact</a>
+            </div>
+            <p class="footer-copyright">
+                © 2026 MusicToken Ring. All rights reserved.
+            </p>
+        </div>
+    </footer>
 </body>
 </html>
