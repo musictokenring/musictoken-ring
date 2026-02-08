@@ -1,0 +1,552 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mi Perfil - MusicToken Ring</title>
+   
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+   
+    <!-- Styles -->
+    <link rel="stylesheet" href="./styles/main.css">
+   
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🥊</text></svg>">
+
+    <!-- Supabase JS -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body>
+    <!-- Header -->
+    <header class="header">
+        <div class="container">
+            <div class="header-content">
+                <div class="logo">
+                    <a href="/" style="text-decoration: none; color: inherit; display: flex; align-items: center; gap: 12px;">
+                        <span class="logo-icon">🥊</span>
+                        <span class="logo-text">MusicToken Ring</span>
+                    </a>
+                </div>
+                <div class="header-badges">
+                    <span class="badge">🎵 Deezer</span>
+                    <span class="badge badge-live">🔴 Live</span>
+                </div>
+                
+                <!-- AUTH BUTTON -->
+                <div id="authButton">
+                    <button onclick="window.location.href='/'" class="btn-login">
+                        Volver al Ring
+                    </button>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="main">
+        <div class="container">
+            
+            <!-- Profile Header -->
+            <section class="profile-header">
+                <div class="profile-avatar" id="profileAvatar">
+                    <span>👤</span>
+                </div>
+                <div class="profile-info">
+                    <h1 class="profile-name" id="profileName">Cargando...</h1>
+                    <p class="profile-email" id="profileEmail"></p>
+                </div>
+            </section>
+
+            <!-- Statistics Grid -->
+            <section class="stats-grid">
+                <div class="stat-card">
+                    <div class="stat-icon">🎮</div>
+                    <div class="stat-value" id="totalBattles">0</div>
+                    <div class="stat-label">Batallas Totales</div>
+                </div>
+
+                <div class="stat-card">
+                    <div class="stat-icon">🏆</div>
+                    <div class="stat-value" id="totalWins">0</div>
+                    <div class="stat-label">Victorias</div>
+                </div>
+
+                <div class="stat-card">
+                    <div class="stat-icon">💔</div>
+                    <div class="stat-value" id="totalLosses">0</div>
+                    <div class="stat-label">Derrotas</div>
+                </div>
+
+                <div class="stat-card">
+                    <div class="stat-icon">📊</div>
+                    <div class="stat-value" id="winRate">0%</div>
+                    <div class="stat-label">Win Rate</div>
+                </div>
+
+                <div class="stat-card">
+                    <div class="stat-icon">💰</div>
+                    <div class="stat-value" id="totalEarned">0</div>
+                    <div class="stat-label">$MTOKEN Ganados</div>
+                </div>
+
+                <div class="stat-card">
+                    <div class="stat-icon">🔥</div>
+                    <div class="stat-value" id="currentStreak">0</div>
+                    <div class="stat-label">Racha Actual</div>
+                </div>
+            </section>
+
+            <!-- Battle History -->
+            <section class="history-section">
+                <div class="section-header">
+                    <h2 class="section-title">Historial de Batallas</h2>
+                    <p class="section-subtitle">Tus últimas batallas musicales</p>
+                </div>
+
+                <div id="battleHistory" class="battle-list">
+                    <p style="text-align: center; padding: 40px; color: #9CA3AF;">
+                        Cargando historial...
+                    </p>
+                </div>
+            </section>
+
+        </div>
+    </main>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <div class="footer-content">
+            <div class="footer-links">
+                <a href="/privacy.html" class="footer-link">Privacy Policy</a>
+                <a href="/terms.html" class="footer-link">Terms of Service</a>
+                <a href="mailto:legal@musictokenring.xyz" class="footer-link">Contact</a>
+            </div>
+            <p class="footer-copyright">
+                © 2026 MusicToken Ring. All rights reserved.
+            </p>
+        </div>
+    </footer>
+
+    <!-- Scripts -->
+    <script>
+        const CONFIG = {
+            SUPABASE_URL: 'https://bscmgcnynbxalcuwdqlm.supabase.co',
+            SUPABASE_ANON_KEY: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJzY21nY255bmJ4YWxjdXdkcWxtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzA0NTYwOTUsImV4cCI6MjA4NjAzMjA5NX0.1iasFQ5H0GmrFqi6poWNE1aZOtbmQuB113RCyg2BBK4'
+        };
+
+        // Initialize Supabase
+        let supabaseClient;
+        if (typeof window.supabaseClient === 'undefined') {
+            supabaseClient = window.supabase.createClient(CONFIG.SUPABASE_URL, CONFIG.SUPABASE_ANON_KEY);
+            window.supabaseClient = supabaseClient;
+        } else {
+            supabaseClient = window.supabaseClient;
+        }
+
+        // Load profile on page load
+        document.addEventListener('DOMContentLoaded', async () => {
+            await checkAuth();
+            await loadProfile();
+            await loadStats();
+            await loadBattleHistory();
+        });
+
+        // Check if user is logged in
+        async function checkAuth() {
+            try {
+                const { data: { session } } = await supabaseClient.auth.getSession();
+                
+                if (!session) {
+                    // Redirect to home if not logged in
+                    window.location.href = '/';
+                    return;
+                }
+            } catch (error) {
+                console.error('Auth check error:', error);
+                window.location.href = '/';
+            }
+        }
+
+        // Load user profile
+        async function loadProfile() {
+            try {
+                const { data: { session } } = await supabaseClient.auth.getSession();
+                
+                if (!session) return;
+                
+                const user = session.user;
+                
+                // Display name
+                const displayName = user.user_metadata?.display_name || 
+                                   user.user_metadata?.full_name || 
+                                   user.email?.split('@')[0] || 
+                                   'Usuario';
+                
+                document.getElementById('profileName').textContent = displayName;
+                document.getElementById('profileEmail').textContent = user.email;
+                
+                // Avatar
+                const avatarEl = document.getElementById('profileAvatar');
+                if (user.user_metadata?.avatar_url) {
+                    avatarEl.innerHTML = `<img src="${user.user_metadata.avatar_url}" alt="${displayName}">`;
+                } else {
+                    avatarEl.innerHTML = `<span>${displayName.charAt(0).toUpperCase()}</span>`;
+                }
+                
+            } catch (error) {
+                console.error('Error loading profile:', error);
+            }
+        }
+
+        // Load statistics
+        async function loadStats() {
+            try {
+                const { data: { session } } = await supabaseClient.auth.getSession();
+                
+                if (!session) return;
+                
+                // Get stats from view
+                const { data, error } = await supabaseClient
+                    .from('user_stats')
+                    .select('*')
+                    .eq('user_id', session.user.id)
+                    .single();
+                
+                if (error) {
+                    console.log('No stats yet');
+                    return;
+                }
+                
+                if (data) {
+                    document.getElementById('totalBattles').textContent = data.total_battles || 0;
+                    document.getElementById('totalWins').textContent = data.total_wins || 0;
+                    document.getElementById('totalLosses').textContent = data.total_losses || 0;
+                    document.getElementById('winRate').textContent = `${data.win_rate || 0}%`;
+                    document.getElementById('totalEarned').textContent = data.total_earned || 0;
+                    
+                    // Calculate current streak
+                    await calculateStreak();
+                }
+                
+            } catch (error) {
+                console.error('Error loading stats:', error);
+            }
+        }
+
+        // Calculate current winning streak
+        async function calculateStreak() {
+            try {
+                const { data: { session } } = await supabaseClient.auth.getSession();
+                
+                if (!session) return;
+                
+                const { data: battles, error } = await supabaseClient
+                    .from('battles')
+                    .select('winner')
+                    .eq('user_id', session.user.id)
+                    .order('created_at', { ascending: false })
+                    .limit(50);
+                
+                if (error || !battles) return;
+                
+                let streak = 0;
+                for (const battle of battles) {
+                    if (battle.winner === 1) {
+                        streak++;
+                    } else {
+                        break;
+                    }
+                }
+                
+                document.getElementById('currentStreak').textContent = streak;
+                
+            } catch (error) {
+                console.error('Error calculating streak:', error);
+            }
+        }
+
+        // Load battle history
+        async function loadBattleHistory() {
+            try {
+                const { data: { session } } = await supabaseClient.auth.getSession();
+                
+                if (!session) return;
+                
+                const { data: battles, error } = await supabaseClient
+                    .from('battles')
+                    .select('*')
+                    .eq('user_id', session.user.id)
+                    .order('created_at', { ascending: false })
+                    .limit(20);
+                
+                if (error) {
+                    console.error('Error loading battles:', error);
+                    document.getElementById('battleHistory').innerHTML = `
+                        <p style="text-align: center; padding: 40px; color: #EF4444;">
+                            Error cargando historial
+                        </p>
+                    `;
+                    return;
+                }
+                
+                if (!battles || battles.length === 0) {
+                    document.getElementById('battleHistory').innerHTML = `
+                        <p style="text-align: center; padding: 40px; color: #9CA3AF;">
+                            No tienes batallas aún. ¡<a href="/" style="color: #1DB954;">Empieza a batallar!</a>
+                        </p>
+                    `;
+                    return;
+                }
+                
+                displayBattleHistory(battles);
+                
+            } catch (error) {
+                console.error('Error in loadBattleHistory:', error);
+            }
+        }
+
+        // Display battle history
+        function displayBattleHistory(battles) {
+            const historyDiv = document.getElementById('battleHistory');
+            
+            historyDiv.innerHTML = battles.map(battle => {
+                const isWinner1 = battle.winner === 1;
+                const winnerName = isWinner1 ? battle.fighter1_name : battle.fighter2_name;
+                const winnerImage = isWinner1 ? battle.fighter1_image : battle.fighter2_image;
+                const loserName = isWinner1 ? battle.fighter2_name : battle.fighter1_name;
+                const loserImage = isWinner1 ? battle.fighter2_image : battle.fighter1_image;
+                
+                const date = new Date(battle.created_at);
+                const dateStr = date.toLocaleDateString('es-ES', { 
+                    day: 'numeric', 
+                    month: 'short', 
+                    year: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit'
+                });
+                
+                return `
+                    <div class="battle-item">
+                        <div class="battle-fighters">
+                            <div class="battle-fighter winner">
+                                <img src="${winnerImage}" alt="${winnerName}">
+                                <div class="fighter-details">
+                                    <div class="fighter-name">${winnerName}</div>
+                                    <div class="fighter-status">🏆 Ganador</div>
+                                </div>
+                            </div>
+                            
+                            <div class="battle-vs">VS</div>
+                            
+                            <div class="battle-fighter loser">
+                                <img src="${loserImage}" alt="${loserName}">
+                                <div class="fighter-details">
+                                    <div class="fighter-name">${loserName}</div>
+                                    <div class="fighter-status">💔 Perdedor</div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="battle-info">
+                            <div class="battle-date">${dateStr}</div>
+                            <div class="battle-prize">+${battle.prize_amount} $MTOKEN</div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+    </script>
+
+    <style>
+    /* Profile specific styles */
+    .profile-header {
+        display: flex;
+        align-items: center;
+        gap: 24px;
+        background: #1A1A1A;
+        padding: 32px;
+        border-radius: 16px;
+        margin-bottom: 40px;
+    }
+
+    .profile-avatar {
+        width: 100px;
+        height: 100px;
+        border-radius: 50%;
+        background: linear-gradient(135deg, #1DB954, #1ed760);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 48px;
+        font-weight: 700;
+        color: white;
+        overflow: hidden;
+    }
+
+    .profile-avatar img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+    }
+
+    .profile-name {
+        font-size: 32px;
+        font-weight: 800;
+        margin-bottom: 4px;
+    }
+
+    .profile-email {
+        color: #9CA3AF;
+        font-size: 14px;
+    }
+
+    .stats-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+        gap: 20px;
+        margin-bottom: 40px;
+    }
+
+    .stat-card {
+        background: #1A1A1A;
+        padding: 24px;
+        border-radius: 12px;
+        text-align: center;
+        border: 1px solid #2A2A2A;
+        transition: all 0.2s ease;
+    }
+
+    .stat-card:hover {
+        border-color: #1DB954;
+        transform: translateY(-2px);
+    }
+
+    .stat-icon {
+        font-size: 32px;
+        margin-bottom: 12px;
+    }
+
+    .stat-value {
+        font-size: 28px;
+        font-weight: 800;
+        color: #1DB954;
+        margin-bottom: 4px;
+    }
+
+    .stat-label {
+        font-size: 13px;
+        color: #9CA3AF;
+        font-weight: 600;
+    }
+
+    .history-section {
+        margin-bottom: 40px;
+    }
+
+    .battle-list {
+        display: flex;
+        flex-direction: column;
+        gap: 16px;
+    }
+
+    .battle-item {
+        background: #1A1A1A;
+        border-radius: 12px;
+        padding: 20px;
+        border: 1px solid #2A2A2A;
+        transition: all 0.2s ease;
+    }
+
+    .battle-item:hover {
+        border-color: #1DB954;
+    }
+
+    .battle-fighters {
+        display: flex;
+        align-items: center;
+        gap: 20px;
+        margin-bottom: 16px;
+    }
+
+    .battle-fighter {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        flex: 1;
+    }
+
+    .battle-fighter img {
+        width: 60px;
+        height: 60px;
+        border-radius: 8px;
+        object-fit: cover;
+    }
+
+    .battle-fighter.winner img {
+        border: 3px solid #1DB954;
+    }
+
+    .battle-fighter.loser img {
+        border: 3px solid #EF4444;
+        opacity: 0.6;
+    }
+
+    .fighter-details {
+        flex: 1;
+    }
+
+    .fighter-name {
+        font-weight: 600;
+        font-size: 14px;
+        margin-bottom: 4px;
+    }
+
+    .fighter-status {
+        font-size: 12px;
+        color: #9CA3AF;
+    }
+
+    .battle-vs {
+        font-weight: 800;
+        color: #6B7280;
+        font-size: 14px;
+    }
+
+    .battle-info {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding-top: 16px;
+        border-top: 1px solid #2A2A2A;
+    }
+
+    .battle-date {
+        font-size: 13px;
+        color: #9CA3AF;
+    }
+
+    .battle-prize {
+        font-size: 15px;
+        font-weight: 700;
+        color: #1DB954;
+    }
+
+    @media (max-width: 768px) {
+        .stats-grid {
+            grid-template-columns: repeat(2, 1fr);
+        }
+
+        .battle-fighters {
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .battle-vs {
+            transform: rotate(90deg);
+        }
+    }
+    </style>
+</body>
+</html>
