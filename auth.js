@@ -1,20 +1,24 @@
-// AUTH - Registro y Login con Supabase (versión limpia)
+// AUTH - Registro, Login y Gestión de Sesión con Supabase
+// Versión limpia - sin redeclaración de supabase (usa la global del CDN)
 
-console.log('Auth.js cargado - versión segura 07-02-2026');
+console.log('Auth.js cargado correctamente - versión FINAL limpia 07-02-2026');
 
-// Usamos la instancia global del CDN
+// Usamos la instancia global del CDN (ya está en window.supabase)
 const supabase = window.supabase;
 
+// Funciones de UI para modal
 function toggleAuthModal(show = true) {
   const modal = document.getElementById('authModal');
-  if (modal) modal.classList[show ? 'remove' : 'add']('hidden');
+  if (modal) {
+    modal.classList[show ? 'remove' : 'add']('hidden');
+  }
 }
 
 function showTab(tab) {
   const loginTab = document.getElementById('loginTab');
   const registerTab = document.getElementById('registerTab');
-  const loginBtn = document.getElementById('loginTabBtn');
-  const registerBtn = document.getElementById('registerTabBtn');
+  const loginTabBtn = document.getElementById('loginTabBtn');
+  const registerTabBtn = document.getElementById('registerTabBtn');
 
   if (loginTab && registerTab) {
     loginTab.classList.add('hidden');
@@ -23,12 +27,16 @@ function showTab(tab) {
     if (tab === 'register') registerTab.classList.remove('hidden');
   }
 
-  if (loginBtn && registerBtn) {
-    loginBtn.classList.remove('text-pink-500', 'border-b-2', 'border-pink-500');
-    registerBtn.classList.remove('text-pink-500', 'border-b-2', 'border-pink-500');
+  if (loginTabBtn && registerTabBtn) {
+    loginTabBtn.classList.remove('text-pink-500', 'border-b-2', 'border-pink-500');
+    registerTabBtn.classList.remove('text-pink-500', 'border-b-2', 'border-pink-500');
 
-    if (tab === 'login') loginBtn.classList.add('text-pink-500', 'border-b-2', 'border-pink-500');
-    if (tab === 'register') registerBtn.classList.add('text-pink-500', 'border-b-2', 'border-pink-500');
+    if (tab === 'login') {
+      loginTabBtn.classList.add('text-pink-500', 'border-b-2', 'border-pink-500');
+    }
+    if (tab === 'register') {
+      registerTabBtn.classList.add('text-pink-500', 'border-b-2', 'border-pink-500');
+    }
   }
 }
 
@@ -43,7 +51,7 @@ async function registerUser() {
   }
 
   try {
-    const { error } = await supabase.auth.signUp({
+    const { data, error } = await supabase.auth.signUp({
       email,
       password,
       options: { emailRedirectTo: window.location.origin + '/dashboard.html' }
@@ -87,7 +95,54 @@ async function loginUser() {
   }
 }
 
+// Check auth al cargar página
+async function checkAuth() {
+  const { data: { session } } = await supabase.auth.getSession();
+
+  const authBtn = document.getElementById('authBtn');
+  const userDisplay = document.getElementById('userDisplay');
+  const userName = document.getElementById('userName');
+
+  if (session) {
+    if (authBtn) authBtn.classList.add('hidden');
+    if (userDisplay) {
+      userDisplay.classList.remove('hidden');
+      if (userName) userName.textContent = session.user.email.split('@')[0];
+    }
+    localStorage.setItem('user_id', session.user.id);
+    return session;
+  } else {
+    if (authBtn) authBtn.classList.remove('hidden');
+    if (userDisplay) userDisplay.classList.add('hidden');
+    return null;
+  }
+}
+
+// Logout
+async function logoutUser() {
+  await supabase.auth.signOut();
+  localStorage.removeItem('sb-session');
+  showToast('Sesión cerrada', 'info');
+  window.location.href = '/';
+}
+
+// Listener de cambios de auth
+supabase.auth.onAuthStateChange((event, session) => {
+  if (event === 'SIGNED_IN') {
+    localStorage.setItem('sb-session', JSON.stringify(session));
+    if (window.location.pathname === '/' || window.location.pathname === '/index.html') {
+      window.location.href = '/dashboard.html';
+    }
+  }
+  if (event === 'SIGNED_OUT') {
+    localStorage.removeItem('sb-session');
+  }
+});
+
 // Inicializar
 document.addEventListener('DOMContentLoaded', () => {
-  console.log('Auth inicializado');
+  checkAuth();
 });
+
+// Log para confirmar que cargó bien
+console.log('Auth.js cargado correctamente - versión FINAL limpia 07-02-2026');
