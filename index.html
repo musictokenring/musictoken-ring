@@ -15,7 +15,7 @@
    
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🥊</text></svg>">
 
-    <!-- Supabase JS Client CDN (necesario para auth.js) -->
+    <!-- Supabase JS Client CDN -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
 <body>
@@ -31,9 +31,9 @@
                     <span class="badge">🎵 Spotify</span>
                     <span class="badge badge-live">🔴 Live</span>
                     
-                    <!-- Botón Iniciar Sesión - ESTILO IGUAL A SPOTIFY -->
+                    <!-- Botón Iniciar Sesión - mismo estilo que Spotify -->
                     <button id="authBtn" 
-                            class="badge bg-gray-800 text-white hover:bg-gray-700 transition cursor-pointer px-4 py-1 rounded-full font-medium">
+                            class="badge bg-gray-800 text-white hover:bg-gray-700 transition cursor-pointer px-4 py-1 rounded-full font-medium text-sm">
                         Iniciar Sesión
                     </button>
 
@@ -52,6 +52,7 @@
     <!-- Main Content -->
     <main class="main">
         <div class="container">
+           
             <!-- Selection Section -->
             <section id="selectionSection" class="selection-section">
                 <div class="section-header">
@@ -66,7 +67,13 @@
                             <span class="fighter-indicator blue">🔵</span>
                         </div>
                         <div class="search-box">
-                            <input type="text" id="search1" class="search-input" placeholder="Buscar canción o artista..." autocomplete="off">
+                            <input
+                                type="text"
+                                id="search1"
+                                class="search-input"
+                                placeholder="Buscar canción o artista..."
+                                autocomplete="off"
+                            >
                             <button onclick="searchDeezer(1)" class="search-btn">
                                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                     <circle cx="11" cy="11" r="8"></circle>
@@ -83,7 +90,13 @@
                             <span class="fighter-indicator red">🔴</span>
                         </div>
                         <div class="search-box">
-                            <input type="text" id="search2" class="search-input" placeholder="Buscar canción o artista..." autocomplete="off">
+                            <input
+                                type="text"
+                                id="search2"
+                                class="search-input"
+                                placeholder="Buscar canción o artista..."
+                                autocomplete="off"
+                            >
                             <button onclick="searchDeezer(2)" class="search-btn">
                                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                     <circle cx="11" cy="11" r="8"></circle>
@@ -103,20 +116,109 @@
 
             <!-- Battle Arena -->
             <section id="battleSection" class="battle-section hidden">
-                <!-- ... (todo el contenido de batalla igual que antes, no lo cambié) ... -->
+                <div class="section-header">
+                    <h2 class="section-title">Arena de Batalla</h2>
+                    <p class="section-subtitle">Coloca tus apuestas y comienza la batalla</p>
+                </div>
+                <div class="battle-arena">
+                    <!-- Fighter 1 Card -->
+                    <div class="battle-card blue">
+                        <div class="battle-avatar" id="avatar1">
+                            <div class="avatar-placeholder">🎵</div>
+                        </div>
+                        <h3 class="battle-name" id="name1">Canción 1</h3>
+                        <div class="health-bar">
+                            <div class="health-fill blue" id="health1" style="width: 100%"></div>
+                            <span class="health-text" id="healthText1">100%</span>
+                        </div>
+                       
+                        <!-- Betting -->
+                        <div class="betting-box">
+                            <label class="bet-label">Apostar $MTOKEN</label>
+                            <div class="bet-input-group">
+                                <input type="number" id="bet1" class="bet-input" placeholder="0" min="0">
+                                <button onclick="placeBet(1)" class="btn-bet">Apostar</button>
+                            </div>
+                            <div class="bet-quick">
+                                <button onclick="document.getElementById('bet1').value='100'" class="btn-quick">100</button>
+                                <button onclick="document.getElementById('bet1').value='500'" class="btn-quick">500</button>
+                                <button onclick="document.getElementById('bet1').value='1000'" class="btn-quick">1K</button>
+                            </div>
+                        </div>
+                    </div>
+                    <!-- VS Divider -->
+                    <div class="vs-divider">
+                        <div class="vs-circle">
+                            <span class="vs-text">VS</span>
+                            <div class="timer" id="timer">60</div>
+                        </div>
+                    </div>
+                    <!-- Fighter 2 Card -->
+                    <div class="battle-card red">
+                        <div class="battle-avatar" id="avatar2">
+                            <div class="avatar-placeholder">🎵</div>
+                        </div>
+                        <h3 class="battle-name" id="name2">Canción 2</h3>
+                        <div class="health-bar">
+                            <div class="health-fill red" id="health2" style="width: 100%"></div>
+                            <span class="health-text" id="healthText2">100%</span>
+                        </div>
+                       
+                        <!-- Betting -->
+                        <div class="betting-box">
+                            <label class="bet-label">Apostar $MTOKEN</label>
+                            <div class="bet-input-group">
+                                <input type="number" id="bet2" class="bet-input" placeholder="0" min="0">
+                                <button onclick="placeBet(2)" class="btn-bet">Apostar</button>
+                            </div>
+                            <div class="bet-quick">
+                                <button onclick="document.getElementById('bet2').value='100'" class="btn-quick">100</button>
+                                <button onclick="document.getElementById('bet2').value='500'" class="btn-quick">500</button>
+                                <button onclick="document.getElementById('bet2').value='1000'" class="btn-quick">1K</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <!-- Battle Stats -->
+                <div class="battle-stats">
+                    <div class="stat-item">
+                        <span class="stat-label">Pool Total</span>
+                        <span class="stat-value" id="totalPool">0 $MTOKEN</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-label">Apuestas 1</span>
+                        <span class="stat-value blue" id="bets1">0 $MTOKEN</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-label">Apuestas 2</span>
+                        <span class="stat-value red" id="bets2">0 $MTOKEN</span>
+                    </div>
+                </div>
+                <div class="action-bar">
+                    <button id="startBtn" class="btn-primary btn-large" onclick="startBattle()">
+                        🎮 Iniciar Batalla
+                    </button>
+                </div>
             </section>
         </div>
     </main>
 
     <!-- Winner Modal -->
     <div id="winnerModal" class="modal hidden">
-        <!-- ... (igual) ... -->
+        <div class="modal-overlay" onclick="document.getElementById('winnerModal').classList.add('hidden')"></div>
+        <div class="modal-content">
+            <div class="winner-icon">🏆</div>
+            <h2 class="winner-title">¡Victoria!</h2>
+            <p class="winner-name" id="winnerName">Canción Ganadora</p>
+            <p class="winner-prize" id="winnerPrize">+0 $MTOKEN</p>
+            <button onclick="location.reload()" class="btn-primary">Nueva Batalla</button>
+        </div>
     </div>
 
     <!-- Toast Container -->
     <div id="toastContainer" class="toast-container"></div>
 
-    <!-- Scripts - ORDEN IMPORTANTE: Supabase primero, luego auth.js -->
+    <!-- Scripts -->
     <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
     <script>
         const CONFIG = {
@@ -138,12 +240,10 @@
 
         <!-- Tabs -->
         <div class="flex mb-6 border-b border-gray-700">
-          <button id="loginTabBtn" onclick="showTab('login')" 
-                  class="flex-1 py-3 font-medium text-lg text-gray-400 hover:text-pink-500 transition-colors border-b-2 border-transparent">
+          <button id="loginTabBtn" class="flex-1 py-3 font-medium text-lg text-gray-400 hover:text-pink-500 transition-colors border-b-2 border-transparent">
             Iniciar Sesión
           </button>
-          <button id="registerTabBtn" onclick="showTab('register')" 
-                  class="flex-1 py-3 font-medium text-lg text-gray-400 hover:text-pink-500 transition-colors border-b-2 border-transparent">
+          <button id="registerTabBtn" class="flex-1 py-3 font-medium text-lg text-gray-400 hover:text-pink-500 transition-colors border-b-2 border-transparent">
             Registrarse
           </button>
         </div>
@@ -171,20 +271,5 @@
         </p>
       </div>
     </div>
-
-    <!-- Script para tabs del modal -->
-    <script>
-      function showTab(tab) {
-        document.getElementById('loginTab').classList.toggle('hidden', tab !== 'login');
-        document.getElementById('registerTab').classList.toggle('hidden', tab !== 'register');
-        
-        document.getElementById('loginTabBtn').classList.toggle('text-pink-500 border-b-2 border-pink-500', tab === 'login');
-        document.getElementById('loginTabBtn').classList.toggle('text-gray-400 border-b-2 border-transparent', tab !== 'login');
-        document.getElementById('registerTabBtn').classList.toggle('text-pink-500 border-b-2 border-pink-500', tab === 'register');
-        document.getElementById('registerTabBtn').classList.toggle('text-gray-400 border-b-2 border-transparent', tab !== 'register');
-      }
-      
-      showTab('login');
-    </script>
 </body>
 </html>
