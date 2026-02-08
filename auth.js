@@ -140,3 +140,5 @@ supabase.auth.onAuthStateChange((event, session) => {
 document.addEventListener('DOMContentLoaded', () => {
   checkAuth();
 });
+
+console.log('Auth.js versión limpia y forzada - 07-02-2026');
