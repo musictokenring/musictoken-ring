@@ -1,6 +1,6 @@
 // AUTH - Registro, Login y Gestión de Sesión con Supabase
 
-// Usamos la instancia global del CDN (ya está en window.supabase)
+// Usamos la instancia global del CDN de Supabase (ya está en window.supabase)
 const supabase = window.supabase;
 
 // Funciones de UI para modal
