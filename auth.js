@@ -2,7 +2,7 @@
 // AUTH - Registro, Login y Gestión de Sesión con Supabase
 // =========================================
 
-// Usamos la instancia global de Supabase del CDN (ya declarada en window.supabase)
+// Usamos la instancia global de Supabase del CDN (ya está en window.supabase)
 const supabase = window.supabase;
 
 // =========================================
@@ -13,6 +13,8 @@ function toggleAuthModal(show = true) {
   const modal = document.getElementById('authModal');
   if (modal) {
     modal.classList[show ? 'remove' : 'add']('hidden');
+  } else {
+    console.warn('Modal no encontrado');
   }
 }
 
