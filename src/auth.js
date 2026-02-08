@@ -15,7 +15,11 @@ const supabase = supabase.createClient(supabaseUrl, supabaseAnonKey);
 function toggleAuthModal(show = true) {
   const modal = document.getElementById('authModal');
   if (modal) {
-    modal.classList.toggle('hidden', !show);
+    if (show) {
+      modal.classList.remove('hidden');
+    } else {
+      modal.classList.add('hidden');
+    }
   } else {
     console.warn('Modal no encontrado');
   }
@@ -28,19 +32,22 @@ function showTab(tab) {
   const registerTabBtn = document.getElementById('registerTabBtn');
 
   if (loginTab && registerTab) {
-    loginTab.classList.toggle('hidden', tab !== 'login');
-    registerTab.classList.toggle('hidden', tab !== 'register');
+    loginTab.classList.add('hidden');
+    registerTab.classList.add('hidden');
+    if (tab === 'login') loginTab.classList.remove('hidden');
+    if (tab === 'register') registerTab.classList.remove('hidden');
   }
 
   if (loginTabBtn && registerTabBtn) {
-    // Remover clases de activo de ambos
+    // Resetear estilos de ambos
     loginTabBtn.classList.remove('text-pink-500', 'border-b-2', 'border-pink-500');
     registerTabBtn.classList.remove('text-pink-500', 'border-b-2', 'border-pink-500');
 
-    // Agregar clases al tab activo
+    // Aplicar al activo
     if (tab === 'login') {
       loginTabBtn.classList.add('text-pink-500', 'border-b-2', 'border-pink-500');
-    } else if (tab === 'register') {
+    }
+    if (tab === 'register') {
       registerTabBtn.classList.add('text-pink-500', 'border-b-2', 'border-pink-500');
     }
   }
