@@ -155,3 +155,5 @@ supabase.auth.onAuthStateChange((event, session) => {
 document.addEventListener('DOMContentLoaded', () => {
   checkAuth();
 });
+
+console.log('Auth.js cargado correctamente - versión final');
