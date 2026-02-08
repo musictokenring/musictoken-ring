@@ -220,5 +220,44 @@
         console.log('🎵 MusicToken Ring loaded!');
     </script>
     <script src="./src/app.js"></script>
+<!-- Modal de Registro/Login -->
+<div id="authModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 hidden">
+  <div class="bg-gray-900 p-8 rounded-xl max-w-md w-full">
+    <h2 class="text-2xl font-bold mb-6 text-center">MusicToken Ring</h2>
+    
+    <!-- Tabs Registro / Login -->
+    <div class="flex mb-4">
+      <button class="flex-1 py-2 bg-pink-600 text-white rounded-l" onclick="showTab('login')">Iniciar Sesión</button>
+      <button class="flex-1 py-2 bg-gray-700 rounded-r" onclick="showTab('register')">Registrarse</button>
+    </div>
+
+    <!-- Form Login -->
+    <div id="loginTab">
+      <input id="loginEmail" type="email" placeholder="Correo electrónico" class="w-full p-3 mb-4 bg-gray-800 rounded">
+      <input id="loginPassword" type="password" placeholder="Contraseña" class="w-full p-3 mb-4 bg-gray-800 rounded">
+      <button onclick="loginUser()" class="w-full py-3 bg-pink-600 rounded font-bold">Ingresar</button>
+    </div>
+
+    <!-- Form Registro -->
+    <div id="registerTab" class="hidden">
+      <input id="regEmail" type="email" placeholder="Correo electrónico" class="w-full p-3 mb-4 bg-gray-800 rounded">
+      <input id="regPassword" type="password" placeholder="Contraseña" class="w-full p-3 mb-4 bg-gray-800 rounded">
+      <button onclick="registerUser()" class="w-full py-3 bg-pink-600 rounded font-bold">Registrarse</button>
+    </div>
+
+    <button onclick="toggleAuthModal(false)" class="mt-4 text-gray-400 hover:text-white w-full text-center">Cerrar</button>
+  </div>
+</div>
+
+<!-- Botón para abrir modal si no está logueado -->
+<button id="authBtn" onclick="toggleAuthModal(true)" class="fixed top-4 right-4 bg-pink-600 px-4 py-2 rounded">Iniciar Sesión</button>
+
+<!-- Script para tabs -->
+<script>
+  function showTab(tab) {
+    document.getElementById('loginTab').classList.toggle('hidden', tab !== 'login');
+    document.getElementById('registerTab').classList.toggle('hidden', tab !== 'register');
+  }
+</script>
 </body>
 </html>
