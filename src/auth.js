@@ -4,7 +4,7 @@
 
 // Inicializa Supabase (pon tu URL y anon key reales)
 const supabaseUrl = 'https://bscmgcnynbxalcuwdqlm.supabase.co';
-const supabaseAnonKey = 'TU_ANON_KEY_PÚBLICA_AQUÍ';  // ← CAMBIA ESTO (la encuentras en Supabase → Settings → API)
+const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJzY21nY255bmJ4YWxjdXdkcWxtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzA0NTYwOTUsImV4cCI6MjA4NjAzMjA5NX0.1iasFQ5H0GmrFqi6poWNE1aZOtbmQuB113RCyg2BBK4';  // ← CAMBIA ESTO (la encuentras en Supabase → Settings → API)
 
 const supabase = supabase.createClient(supabaseUrl, supabaseAnonKey);
 
