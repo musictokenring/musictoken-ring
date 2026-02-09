@@ -42,7 +42,10 @@ async function searchDeezer(fighter) {
     resultsDiv.innerHTML = '<p style="text-align: center; padding: 20px;">Buscando...</p>';
     
     try {
-        const response = await fetch(`https://api.deezer.com/search?q=${encodeURIComponent(query)}&limit=6`);
+        // Use CORS proxy
+        const corsProxy = 'https://api.allorigins.win/raw?url=';
+        const deezerUrl = `https://api.deezer.com/search?q=${encodeURIComponent(query)}&limit=6`;
+        const response = await fetch(corsProxy + encodeURIComponent(deezerUrl));
         
         if (!response.ok) throw new Error('Error en la búsqueda');
         
