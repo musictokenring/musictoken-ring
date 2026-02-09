@@ -3,11 +3,6 @@
 // Con búsqueda Deezer funcionando + Guardar batallas
 // =========================================
 
-const CONFIG = {
-    BACKEND_API: 'https://bug-free-space-lamp-v64w7v5444qvhj6g-3000.app.github.dev',
-    BATTLE_DURATION: 60,
-};
-
 // Battle state
 const battleState = {
     fighter1: null,
