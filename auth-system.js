@@ -1,32 +1,15 @@
 // =========================================
-// AUTHENTICATION SYSTEM - MusicToken Ring
+// AUTH SYSTEM - MusicToken Ring
+// Sistema de autenticación completo
 // =========================================
 
-// Use supabaseClient from app.js (already initialized)
-// No need to declare it here
-
-// Auth state
-let currentUser = null;
-
-// ========================================
-// MODAL FUNCTIONS (Must be defined first for onclick to work)
-// ========================================
-
+// Modal control functions (must be global)
 function openAuthModal() {
-    const modal = document.getElementById('authModal');
-    if (modal) {
-        modal.classList.remove('hidden');
-        // Show login form by default
-        document.getElementById('loginForm')?.classList.remove('hidden');
-        document.getElementById('signupForm')?.classList.add('hidden');
-    }
+    document.getElementById('authModal')?.classList.remove('hidden');
 }
 
 function closeAuthModal() {
-    const modal = document.getElementById('authModal');
-    if (modal) {
-        modal.classList.add('hidden');
-    }
+    document.getElementById('authModal')?.classList.add('hidden');
 }
 
 function switchToSignup() {
@@ -39,50 +22,22 @@ function switchToLogin() {
     document.getElementById('loginForm')?.classList.remove('hidden');
 }
 
-// Initialize auth on page load
-document.addEventListener('DOMContentLoaded', async () => {
-    await checkAuthStatus();
-    setupAuthListeners();
-});
-
-// Check current auth status
-async function checkAuthStatus() {
-    try {
-        const { data: { session }, error } = await window.supabaseClient.auth.getSession();
-        
-        if (error) throw error;
-        
-        if (session) {
-            currentUser = session.user;
-            updateUIForLoggedInUser(currentUser);
-        } else {
-            updateUIForLoggedOutUser();
-        }
-    } catch (error) {
-        console.error('Auth check error:', error);
-        updateUIForLoggedOutUser();
-    }
+// Initialize Supabase client (if not already initialized)
+if (typeof window.supabaseClient === 'undefined') {
+    const SUPABASE_URL = 'https://bscmgcnynbxalcuwdqlm.supabase.co';
+    const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJzY21nY255bmJ4YWxjdXdkcWxtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzA0NTYwOTUsImV4cCI6MjA4NjAzMjA5NX0.1iasFQ5H0GmrFqi6poWNE1aZOtbmQuB113RCyg2BBK4';
+    window.supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 }
 
-// Setup auth state listeners
-function setupAuthListeners() {
-    window.supabaseClient.auth.onAuthStateChange((event, session) => {
-        console.log('Auth state changed:', event);
-        
-        if (session) {
-            currentUser = session.user;
-            updateUIForLoggedInUser(currentUser);
-        } else {
-            currentUser = null;
-            updateUIForLoggedOutUser();
-        }
-    });
-}
+const supabaseClient = window.supabaseClient;
 
-// Login with Google
+// ==========================================
+// AUTH FUNCTIONS
+// ==========================================
+
 async function loginWithGoogle() {
     try {
-        const { data, error } = await window.supabaseClient.auth.signInWithOAuth({
+        const { data, error } = await supabaseClient.auth.signInWithOAuth({
             provider: 'google',
             options: {
                 redirectTo: window.location.origin
@@ -90,140 +45,172 @@ async function loginWithGoogle() {
         });
         
         if (error) throw error;
-        
-        showToast('Redirecting to Google...', 'success');
     } catch (error) {
-        console.error('Google login error:', error);
-        showToast('Error logging in with Google', 'error');
+        console.error('Error logging in with Google:', error);
+        showToast('Error al iniciar sesión con Google', 'error');
     }
 }
 
-// Login with Email
-async function loginWithEmail(email, password) {
+async function handleLoginSubmit(event) {
+    event.preventDefault();
+    
+    const email = document.getElementById('loginEmail').value;
+    const password = document.getElementById('loginPassword').value;
+    
     try {
-        const { data, error } = await window.supabaseClient.auth.signInWithPassword({
+        const { data, error } = await supabaseClient.auth.signInWithPassword({
             email: email,
             password: password
         });
         
         if (error) throw error;
         
-        showToast('Login successful!', 'success');
+        showToast('¡Bienvenido de vuelta!', 'success');
         closeAuthModal();
+        
     } catch (error) {
-        console.error('Email login error:', error);
-        showToast(error.message || 'Error logging in', 'error');
+        console.error('Error logging in:', error);
+        showToast(error.message || 'Error al iniciar sesión', 'error');
     }
 }
 
-// Sign up with Email
-async function signUpWithEmail(email, password, displayName) {
+async function handleSignupSubmit(event) {
+    event.preventDefault();
+    
+    const name = document.getElementById('signupName').value;
+    const email = document.getElementById('signupEmail').value;
+    const password = document.getElementById('signupPassword').value;
+    
     try {
-        const { data, error } = await window.supabaseClient.auth.signUp({
+        const { data, error } = await supabaseClient.auth.signUp({
             email: email,
             password: password,
             options: {
                 data: {
-                    display_name: displayName
+                    display_name: name
                 }
             }
         });
         
         if (error) throw error;
         
-        showToast('Account created! Check your email to verify.', 'success');
+        showToast('¡Cuenta creada! Revisa tu email para confirmar', 'success');
         closeAuthModal();
+        
     } catch (error) {
-        console.error('Sign up error:', error);
-        showToast(error.message || 'Error creating account', 'error');
+        console.error('Error signing up:', error);
+        showToast(error.message || 'Error al crear cuenta', 'error');
     }
 }
 
-// Logout
 async function logout() {
     try {
-        const { error } = await window.supabaseClient.auth.signOut();
+        const { error } = await supabaseClient.auth.signOut();
         
         if (error) throw error;
         
-        showToast('Logged out successfully', 'success');
+        showToast('Sesión cerrada', 'info');
+        window.location.reload();
+        
     } catch (error) {
-        console.error('Logout error:', error);
-        showToast('Error logging out', 'error');
+        console.error('Error logging out:', error);
+        showToast('Error al cerrar sesión', 'error');
     }
 }
 
-// Update UI for logged in user
-function updateUIForLoggedInUser(user) {
-    // Update header
+// ==========================================
+// UI UPDATE FUNCTIONS
+// ==========================================
+
+function updateAuthUI(session) {
     const authButton = document.getElementById('authButton');
-    if (authButton) {
-        const displayName = user.user_metadata?.display_name || user.email?.split('@')[0] || 'User';
-        authButton.innerHTML = `
-            <div class="user-menu">
-                <a href="/profile.html" style="text-decoration: none; color: inherit; display: flex; align-items: center; gap: 12px;">
-                    <div class="user-avatar">
-                        ${user.user_metadata?.avatar_url ? 
-                            `<img src="${user.user_metadata.avatar_url}" alt="${displayName}">` :
-                            `<span>${displayName.charAt(0).toUpperCase()}</span>`
-                        }
-                    </div>
-                    <span class="user-name">${displayName}</span>
-                </a>
-                <button onclick="logout()" class="btn-logout">Logout</button>
-            </div>
-        `;
-    }
     
-    console.log('User logged in:', user.email);
-}
-
-// Update UI for logged out user
-function updateUIForLoggedOutUser() {
-    const authButton = document.getElementById('authButton');
-    if (authButton) {
+    if (!authButton) return;
+    
+    if (session && session.user) {
+        // Usuario logueado
+        console.log('User logged in:', session.user.email);
+        
+        const user = session.user;
+        const displayName = user.user_metadata?.display_name || 
+                          user.user_metadata?.full_name || 
+                          user.email?.split('@')[0] || 
+                          'Usuario';
+        const avatarUrl = user.user_metadata?.avatar_url || 
+                         user.user_metadata?.picture || 
+                         `https://ui-avatars.com/api/?name=${encodeURIComponent(displayName)}&background=1DB954&color=fff`;
+        
+        authButton.innerHTML = `
+            <div class="user-profile">
+                <img src="${avatarUrl}" alt="${displayName}" class="user-avatar">
+                <div class="user-info">
+                    <div class="user-name">${displayName}</div>
+                </div>
+            </div>
+            <button onclick="logout()" class="btn-logout">
+                Salir
+            </button>
+        `;
+        
+        // Mostrar selector de modos
+        if (typeof showModeSelector === 'function') {
+            showModeSelector();
+        }
+        
+        // Inicializar GameEngine si existe
+        if (typeof GameEngine !== 'undefined' && !GameEngine.initialized) {
+            GameEngine.init();
+            GameEngine.initialized = true;
+        }
+        
+    } else {
+        // Usuario no logueado
+        console.log('User logged out');
+        
         authButton.innerHTML = `
             <button onclick="openAuthModal()" class="btn-login">
                 Iniciar Sesión
             </button>
         `;
+        
+        // Mostrar login wall
+        if (typeof showLoginWall === 'function') {
+            showLoginWall();
+        }
     }
-    
-    console.log('User logged out');
 }
 
-// Handle login form submit
-function handleLoginSubmit(event) {
-    event.preventDefault();
-    
-    const email = document.getElementById('loginEmail').value;
-    const password = document.getElementById('loginPassword').value;
-    
-    loginWithEmail(email, password);
-}
+// ==========================================
+// AUTH STATE LISTENER
+// ==========================================
 
-// Handle signup form submit
-function handleSignupSubmit(event) {
-    event.preventDefault();
-    
-    const email = document.getElementById('signupEmail').value;
-    const password = document.getElementById('signupPassword').value;
-    const displayName = document.getElementById('signupName').value;
-    
-    if (password.length < 6) {
-        showToast('Password must be at least 6 characters', 'error');
-        return;
-    }
-    
-    signUpWithEmail(email, password, displayName);
-}
+supabaseClient.auth.onAuthStateChange((event, session) => {
+    console.log('Auth state changed:', event);
+    updateAuthUI(session);
+});
 
-// Get current user (utility function)
-function getCurrentUser() {
-    return currentUser;
-}
+// ==========================================
+// INITIALIZE ON LOAD
+// ==========================================
 
-// Check if user is logged in (utility function)
-function isLoggedIn() {
-    return currentUser !== null;
-}
+document.addEventListener('DOMContentLoaded', async () => {
+    console.log('🔐 Auth system initializing...');
+    
+    // Get current session
+    const { data: { session } } = await supabaseClient.auth.getSession();
+    
+    // Update UI
+    updateAuthUI(session);
+    
+    console.log('✅ Auth system ready!');
+});
+
+// Export functions to window
+window.openAuthModal = openAuthModal;
+window.closeAuthModal = closeAuthModal;
+window.switchToSignup = switchToSignup;
+window.switchToLogin = switchToLogin;
+window.loginWithGoogle = loginWithGoogle;
+window.handleLoginSubmit = handleLoginSubmit;
+window.handleSignupSubmit = handleSignupSubmit;
+window.logout = logout;
