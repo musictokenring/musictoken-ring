@@ -570,18 +570,9 @@
                 showToast('Selecciona una canción primero', 'error');
                 return;
             }
-            
-            // Generar canción random para CPU (simulación)
-            const cpuSong = {
-                id: 'cpu_' + Date.now(),
-                name: 'CPU Fighter',
-                artist: 'Computer',
-                image: selectedSong.image, // Usar misma imagen temporalmente
-                preview: selectedSong.preview
-            };
-            
+
             if (typeof GameEngine !== 'undefined') {
-                await GameEngine.startPracticeMatch(selectedSong, cpuSong);
+                await GameEngine.startPracticeMatch(selectedSong);
             } else {
                 showToast('Modo práctica en desarrollo', 'info');
             }
@@ -598,4 +589,10 @@
         function copyRoomCode() {
             const code = document.getElementById('roomCode').textContent;
             navigator.clipboard.writeText(code);
-            if (typeof showToast !
+            if (typeof showToast !== 'undefined') {
+                showToast('Código copiado', 'success');
+            }
+        }
+    </script>
+</body>
+</html>

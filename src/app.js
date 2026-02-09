@@ -179,59 +179,6 @@ function handleTrackSelect(track) {
 }
 
 // =========================================
-// UTILITY FUNCTIONS
-// =========================================
-
-// Format time (seconds to MM:SS)
-function formatTime(seconds) {
-    const mins = Math.floor(seconds / 60);
-    const secs = seconds % 60;
-    return `${mins}:${secs.toString().padStart(2, '0')}`;
-}
-
-// Format number with commas
-function formatNumber(num) {
-    return num.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
-}
-
-// Validate bet amount
-function validateBet(amount, minBet, maxBet = null) {
-    if (!amount || amount < minBet) {
-        showToast(`Apuesta mínima: ${minBet} $MTOKEN`, 'error');
-        return false;
-    }
-    
-    if (maxBet && amount > maxBet) {
-        showToast(`Apuesta máxima: ${maxBet} $MTOKEN`, 'error');
-        return false;
-    }
-    
-    return true;
-}
-
-// Check if user is logged in
-async function checkUserLoggedIn() {
-    try {
-        const { data: { session } } = await supabaseClient.auth.getSession();
-        return !!session;
-    } catch (error) {
-        console.error('Error checking auth:', error);
-        return false;
-    }
-}
-
-// Get current user
-async function getCurrentUser() {
-    try {
-        const { data: { session } } = await supabaseClient.auth.getSession();
-        return session?.user || null;
-    } catch (error) {
-        console.error('Error getting user:', error);
-        return null;
-    }
-}
-
-// =========================================
 // EVENT LISTENERS
 // =========================================
 
@@ -264,8 +211,3 @@ window.stopAllPreviews = stopAllPreviews;
 window.searchDeezer = searchDeezer;
 window.displaySearchResults = displaySearchResults;
 window.handleTrackSelect = handleTrackSelect;
-window.formatTime = formatTime;
-window.formatNumber = formatNumber;
-window.validateBet = validateBet;
-window.checkUserLoggedIn = checkUserLoggedIn;
-window.getCurrentUser = getCurrentUser;
