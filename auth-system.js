@@ -140,13 +140,15 @@ function updateUIForLoggedInUser(user) {
         const displayName = user.user_metadata?.display_name || user.email?.split('@')[0] || 'User';
         authButton.innerHTML = `
             <div class="user-menu">
-                <div class="user-avatar">
-                    ${user.user_metadata?.avatar_url ? 
-                        `<img src="${user.user_metadata.avatar_url}" alt="${displayName}">` :
-                        `<span>${displayName.charAt(0).toUpperCase()}</span>`
-                    }
-                </div>
-                <span class="user-name">${displayName}</span>
+                <a href="/profile.html" style="text-decoration: none; color: inherit; display: flex; align-items: center; gap: 12px;">
+                    <div class="user-avatar">
+                        ${user.user_metadata?.avatar_url ? 
+                            `<img src="${user.user_metadata.avatar_url}" alt="${displayName}">` :
+                            `<span>${displayName.charAt(0).toUpperCase()}</span>`
+                        }
+                    </div>
+                    <span class="user-name">${displayName}</span>
+                </a>
                 <button onclick="logout()" class="btn-logout">Logout</button>
             </div>
         `;
