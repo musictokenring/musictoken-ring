@@ -1,19 +1,11 @@
 // =========================================
 // APP.JS - MusicToken Ring
 // Funciones auxiliares de búsqueda y audio
-// (La lógica de juego está en game-manager.js)
+// (La lógica de juego está en game-engine.js)
 // =========================================
 
-// Initialize Supabase client
-let supabaseClient;
-if (typeof window.supabaseClient === 'undefined') {
-    const SUPABASE_URL = 'https://bscmgcnynbxalcuwdqlm.supabase.co';
-    const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJzY21nY255bmJ4YWxjdXdkcWxtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzA0NTYwOTUsImV4cCI6MjA4NjAzMjA5NX0.1iasFQ5H0GmrFqi6poWNE1aZOtbmQuB113RCyg2BBK4';
-    supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-    window.supabaseClient = supabaseClient;
-} else {
-    supabaseClient = window.supabaseClient;
-}
+// Use existing Supabase client (already initialized by auth-system.js)
+const supabaseClient = window.supabaseClient;
 
 console.log('🥊 MusicToken Ring ready!');
 
