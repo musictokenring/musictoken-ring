@@ -1,6 +1,12 @@
 // =========================================
 // APP.JS - MusicToken Ring
+// Con búsqueda Deezer funcionando + Guardar batallas
 // =========================================
+
+const CONFIG = {
+    BACKEND_API: 'https://bug-free-space-lamp-v64w7v5444qvhj6g-3000.app.github.dev',
+    BATTLE_DURATION: 60,
+};
 
 // Battle state
 const battleState = {
@@ -10,6 +16,19 @@ const battleState = {
     isRunning: false,
     timer: null
 };
+
+// Initialize Supabase client
+let supabaseClient;
+if (typeof window.supabaseClient === 'undefined') {
+    const SUPABASE_URL = 'https://bscmgcnynbxalcuwdqlm.supabase.co';
+    const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJzY21nY255bmJ4YWxjdXdkcWxtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzA0NTYwOTUsImV4cCI6MjA4NjAzMjA5NX0.1iasFQ5H0GmrFqi6poWNE1aZOtbmQuB113RCyg2BBK4';
+    supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    window.supabaseClient = supabaseClient;
+} else {
+    supabaseClient = window.supabaseClient;
+}
+
+console.log('🥊 MusicToken Ring ready!');
 
 // Toast notification system
 function showToast(message, type = 'info') {
@@ -28,60 +47,50 @@ function showToast(message, type = 'info') {
     }, 3000);
 }
 
-// Search Deezer
-async function searchDeezer(fighter) {
-    const input = document.getElementById(`search${fighter}`);
+// Search Deezer (CÓDIGO ORIGINAL QUE FUNCIONABA)
+function searchDeezer(fighter) {
+    const query = document.getElementById(`search${fighter}`).value.trim();
     const resultsDiv = document.getElementById(`results${fighter}`);
-    const query = input.value.trim();
-    
+
     if (!query) {
-        showToast('Por favor ingresa un término de búsqueda', 'error');
+        showToast('Ingresa un término de búsqueda', 'error');
         return;
     }
-    
-    resultsDiv.innerHTML = '<p style="text-align: center; padding: 20px;">Buscando...</p>';
-    
-    try {
-        // Use CORS proxy
-        const corsProxy = 'https://api.allorigins.win/raw?url=';
-        const deezerUrl = `https://api.deezer.com/search?q=${encodeURIComponent(query)}&limit=6`;
-        const response = await fetch(corsProxy + encodeURIComponent(deezerUrl));
-        
-        if (!response.ok) throw new Error('Error en la búsqueda');
-        
-        const data = await response.json();
-        
-        if (!data.data || data.data.length === 0) {
-            resultsDiv.innerHTML = '<p style="text-align: center; padding: 20px; color: #9CA3AF;">No se encontraron resultados</p>';
-            return;
-        }
-        
-        displayResults(data.data, fighter);
-    } catch (error) {
-        console.error('Search error:', error);
-        showToast('Error en la búsqueda', 'error');
-        resultsDiv.innerHTML = '<p style="text-align: center; padding: 20px; color: #EF4444;">❌ Error en la búsqueda</p>';
-    }
-}
 
-// Display search results
-function displayResults(tracks, fighter) {
-    const resultsDiv = document.getElementById(`results${fighter}`);
-    
-    resultsDiv.innerHTML = tracks.map(track => `
-        <div class="track-item" onclick="selectTrack(${fighter}, ${JSON.stringify(track).replace(/"/g, '&quot;')})">
-            <img src="${track.album.cover_medium}" alt="${track.title}">
-            <div class="track-info">
-                <div class="track-name">${track.title}</div>
-                <div class="track-artist">${track.artist.name}</div>
-            </div>
-            ${track.preview ? `
-                <button class="btn-preview" onclick="event.stopPropagation(); togglePreview('${track.preview}', this)">
-                    ▶ Preview
-                </button>
-            ` : '<span style="color: #6B7280; font-size: 12px;">Sin preview</span>'}
-        </div>
-    `).join('');
+    resultsDiv.innerHTML = '<p style="text-align:center; padding:20px; color:#9CA3AF;">🔍 Buscando...</p>';
+
+    fetch(`https://api.deezer.com/search?q=${encodeURIComponent(query)}&limit=6`)
+        .then(res => res.json())
+        .then(data => {
+            if (!data.data || data.data.length === 0) {
+                resultsDiv.innerHTML = '<p style="text-align:center; padding:20px; color:#9CA3AF;">No se encontraron resultados</p>';
+                return;
+            }
+
+            let html = '';
+            data.data.forEach(track => {
+                html += `
+                    <div class="track-item" onclick='selectTrack(${fighter}, ${JSON.stringify(track).replace(/'/g, "&#39;")})'>
+                        <img src="${track.album.cover_medium}" alt="${track.title}">
+                        <div class="track-info">
+                            <div class="track-name">${track.title}</div>
+                            <div class="track-artist">${track.artist.name}</div>
+                        </div>
+                        ${track.preview ? `
+                            <button class="btn-preview" onclick="event.stopPropagation(); togglePreview('${track.preview}', this)">
+                                ▶ Preview
+                            </button>
+                        ` : '<span style="color:#6B7280; font-size:12px;">Sin preview</span>'}
+                    </div>
+                `;
+            });
+            resultsDiv.innerHTML = html;
+        })
+        .catch(err => {
+            console.error('Search error:', err);
+            resultsDiv.innerHTML = '<p style="text-align:center; padding:20px; color:#EF4444;">❌ Error en la búsqueda</p>';
+            showToast('Error al buscar', 'error');
+        });
 }
 
 // Audio preview management
@@ -99,8 +108,9 @@ function togglePreview(url, button) {
     } else {
         if (currentAudio) {
             currentAudio.pause();
-            const oldButtons = document.querySelectorAll('.btn-preview');
-            oldButtons.forEach(btn => btn.textContent = '▶ Preview');
+            document.querySelectorAll('.btn-preview').forEach(btn => {
+                btn.textContent = '▶ Preview';
+            });
         }
         
         currentAudio = new Audio(url);
@@ -126,7 +136,6 @@ function selectTrack(fighter, track) {
     
     showToast(`${track.title} seleccionado como Luchador ${fighter}`, 'success');
     
-    // Check if both fighters selected
     if (battleState.fighter1 && battleState.fighter2) {
         document.getElementById('confirmBtn').disabled = false;
     }
@@ -139,13 +148,9 @@ function confirmSelection() {
         return;
     }
     
-    // Hide selection section
     document.getElementById('selectionSection').classList.add('hidden');
-    
-    // Show battle section
     document.getElementById('battleSection').classList.remove('hidden');
     
-    // Setup battle arena
     setupBattleArena();
 }
 
@@ -198,7 +203,7 @@ function updateBetStats() {
 }
 
 // Start battle
-async function startBattle() {
+function startBattle() {
     if (battleState.isRunning) return;
     
     battleState.isRunning = true;
@@ -206,27 +211,22 @@ async function startBattle() {
     
     showToast('¡Batalla iniciada!', 'success');
     
-    // Battle duration
     let timeLeft = CONFIG.BATTLE_DURATION;
     const timerEl = document.getElementById('timer');
     
-    // Health values
     let health1 = 100;
     let health2 = 100;
     
-    // Battle loop
     const interval = setInterval(() => {
         timeLeft--;
         timerEl.textContent = timeLeft;
         
-        // Random damage
         const damage1 = Math.random() * 3;
         const damage2 = Math.random() * 3;
         
         health1 -= damage2;
         health2 -= damage1;
         
-        // Update health bars
         health1 = Math.max(0, health1);
         health2 = Math.max(0, health2);
         
@@ -235,7 +235,6 @@ async function startBattle() {
         document.getElementById('healthText1').textContent = `${Math.round(health1)}%`;
         document.getElementById('healthText2').textContent = `${Math.round(health2)}%`;
         
-        // Check if battle ended
         if (timeLeft <= 0 || health1 <= 0 || health2 <= 0) {
             clearInterval(interval);
             endBattle(health1, health2);
@@ -247,29 +246,25 @@ async function startBattle() {
 async function endBattle(health1, health2) {
     battleState.isRunning = false;
     
-    // Determine winner
     const winner = health1 > health2 ? 1 : 2;
     const winnerData = battleState[`fighter${winner}`];
     
-    // Calculate prize
     const totalPool = battleState.bets.fighter1 + battleState.bets.fighter2;
-    const burnRate = 0.005; // 0.5% burn
+    const burnRate = 0.005;
     const burnAmount = Math.floor(totalPool * burnRate);
     const prize = totalPool - burnAmount;
     
-    // Show winner modal
     showWinnerModal(winnerData, prize);
     
-    // Save battle to database
+    // NUEVO: Guardar batalla en Supabase
     await saveBattle(winner, prize);
     
     showToast(`¡${winnerData.name} ganó!`, 'success');
 }
 
-// Save battle to Supabase
+// NUEVA FUNCIÓN: Guardar batalla en Supabase
 async function saveBattle(winner, prize) {
     try {
-        // Check if user is logged in
         const { data: { session } } = await supabaseClient.auth.getSession();
         
         if (!session) {
@@ -299,7 +294,7 @@ async function saveBattle(winner, prize) {
         if (error) {
             console.error('Error saving battle:', error);
         } else {
-            console.log('Battle saved successfully!');
+            console.log('✅ Battle saved successfully!');
         }
     } catch (error) {
         console.error('Error in saveBattle:', error);
@@ -323,6 +318,4 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('search2')?.addEventListener('keypress', (e) => {
         if (e.key === 'Enter') searchDeezer(2);
     });
-    
-    console.log('🥊 MusicToken Ring ready!');
 });
