@@ -6,17 +6,45 @@
 const SUPABASE_URL = 'https://bscmgcnynbxalcuwdqlm.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJzY21nY255bmJ4YWxjdXdkcWxtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzA0NTYwOTUsImV4cCI6MjA4NjAzMjA5NX0.1iasFQ5H0GmrFqi6poWNE1aZOtbmQuB113RCyg2BBK4';
 
-// Initialize Supabase client (only if not already initialized)
-let supabaseClient;
+// Use existing supabaseClient from app.js or create new one
 if (typeof window.supabaseClient === 'undefined') {
-    supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-    window.supabaseClient = supabaseClient;
-} else {
-    supabaseClient = window.supabaseClient;
+    window.supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 }
+const supabaseClient = window.supabaseClient;
 
 // Auth state
 let currentUser = null;
+
+// ========================================
+// MODAL FUNCTIONS (Must be defined first for onclick to work)
+// ========================================
+
+function openAuthModal() {
+    const modal = document.getElementById('authModal');
+    if (modal) {
+        modal.classList.remove('hidden');
+        // Show login form by default
+        document.getElementById('loginForm')?.classList.remove('hidden');
+        document.getElementById('signupForm')?.classList.add('hidden');
+    }
+}
+
+function closeAuthModal() {
+    const modal = document.getElementById('authModal');
+    if (modal) {
+        modal.classList.add('hidden');
+    }
+}
+
+function switchToSignup() {
+    document.getElementById('loginForm')?.classList.add('hidden');
+    document.getElementById('signupForm')?.classList.remove('hidden');
+}
+
+function switchToLogin() {
+    document.getElementById('signupForm')?.classList.add('hidden');
+    document.getElementById('loginForm')?.classList.remove('hidden');
+}
 
 // Initialize auth on page load
 document.addEventListener('DOMContentLoaded', async () => {
@@ -171,22 +199,6 @@ function updateUIForLoggedOutUser() {
     console.log('User logged out');
 }
 
-// Open auth modal
-function openAuthModal() {
-    const modal = document.getElementById('authModal');
-    if (modal) {
-        modal.classList.remove('hidden');
-    }
-}
-
-// Close auth modal
-function closeAuthModal() {
-    const modal = document.getElementById('authModal');
-    if (modal) {
-        modal.classList.add('hidden');
-    }
-}
-
 // Handle login form submit
 function handleLoginSubmit(event) {
     event.preventDefault();
@@ -211,17 +223,6 @@ function handleSignupSubmit(event) {
     }
     
     signUpWithEmail(email, password, displayName);
-}
-
-// Switch between login and signup
-function switchToSignup() {
-    document.getElementById('loginForm').classList.add('hidden');
-    document.getElementById('signupForm').classList.remove('hidden');
-}
-
-function switchToLogin() {
-    document.getElementById('signupForm').classList.add('hidden');
-    document.getElementById('loginForm').classList.remove('hidden');
 }
 
 // Get current user (utility function)
