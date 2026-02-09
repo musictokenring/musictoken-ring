@@ -159,7 +159,7 @@
                 </div>
             </section>
 
-            <!-- SELECCIÓN DE CANCIÓN Y APUESTA (para modo seleccionado) -->
+            <!-- SELECCIÓN DE CANCIÓN Y APUESTA -->
             <section id="songSelection" class="hidden">
                 <div class="section-header">
                     <button onclick="backToModes()" class="btn-back">← Volver</button>
@@ -215,9 +215,7 @@
                             </div>
 
                             <!-- Botones según modo -->
-                            <div id="actionButtons">
-                                <!-- Se llenarán dinámicamente -->
-                            </div>
+                            <div id="actionButtons"></div>
                         </div>
                     </div>
                 </div>
@@ -237,7 +235,7 @@
             <section id="roomScreen" class="hidden">
                 <div class="room-content">
                     <div class="room-header">
-                        <h2>🚪 Sala Privada</h2>
+                        <h2>🎪 Sala Privada</h2>
                         <div class="room-code-display">
                             <span>Código:</span>
                             <strong id="roomCode">XXXXX</strong>
@@ -260,25 +258,140 @@
                 </div>
             </section>
 
-            <!-- ARENA DE BATALLA (mantener el existente pero oculto inicialmente) -->
-            <section id="battleSection" class="battle-section hidden">
-                <!-- Tu código de batalla actual aquí -->
-            </section>
-
         </div>
     </main>
 
     <!-- Toast Container -->
     <div id="toastContainer" class="toast-container"></div>
 
-    <!-- Auth Modal (mantener el existente) -->
+    <!-- Auth Modal -->
     <div id="authModal" class="modal hidden">
-        <!-- Tu código de auth modal aquí -->
-    </div>
-
-    <!-- Victory Modal (mantener el existente) -->
-    <div id="victoryModal" class="modal hidden">
-        <!-- Tu código de victory modal aquí -->
+        <div class="modal-overlay" onclick="closeAuthModal()"></div>
+        <div class="modal-content auth-modal-content">
+            <button onclick="closeAuthModal()" class="modal-close">×</button>
+            
+            <!-- Login Form -->
+            <div id="loginForm" class="auth-form">
+                <h2 class="auth-title">Iniciar Sesión</h2>
+                <p class="auth-subtitle">Accede a tu cuenta para guardar tu progreso</p>
+                
+                <!-- Google Login -->
+                <button onclick="loginWithGoogle()" class="btn-google">
+                    <svg width="18" height="18" viewBox="0 0 18 18">
+                        <path fill="#4285F4" d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844c-.209 1.125-.843 2.078-1.796 2.717v2.258h2.908c1.702-1.567 2.684-3.875 2.684-6.615z"/>
+                        <path fill="#34A853" d="M9 18c2.43 0 4.467-.806 5.956-2.184l-2.908-2.258c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332C2.438 15.983 5.482 18 9 18z"/>
+                        <path fill="#FBBC05" d="M3.964 10.707c-.18-.54-.282-1.117-.282-1.707 0-.593.102-1.167.282-1.707V4.961H.957C.347 6.175 0 7.55 0 9s.348 2.825.957 4.039l3.007-2.332z"/>
+                        <path fill="#EA4335" d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0 5.482 0 2.438 2.017.957 4.961L3.964 7.29C4.672 5.163 6.656 3.58 9 3.58z"/>
+                    </svg>
+                    Continuar con Google
+                </button>
+                
+                <div class="auth-divider">
+                    <span>o</span>
+                </div>
+                
+                <!-- Email Login -->
+                <form onsubmit="handleLoginSubmit(event)">
+                    <div class="form-group">
+                        <label for="loginEmail">Email</label>
+                        <input 
+                            type="email" 
+                            id="loginEmail" 
+                            class="form-input" 
+                            placeholder="tu@email.com"
+                            required
+                        >
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="loginPassword">Contraseña</label>
+                        <input 
+                            type="password" 
+                            id="loginPassword" 
+                            class="form-input" 
+                            placeholder="••••••••"
+                            required
+                        >
+                    </div>
+                    
+                    <button type="submit" class="btn-primary btn-block">
+                        Iniciar Sesión
+                    </button>
+                </form>
+                
+                <p class="auth-switch">
+                    ¿No tienes cuenta? 
+                    <a href="#" onclick="switchToSignup(); return false;">Regístrate</a>
+                </p>
+            </div>
+            
+            <!-- Signup Form -->
+            <div id="signupForm" class="auth-form hidden">
+                <h2 class="auth-title">Crear Cuenta</h2>
+                <p class="auth-subtitle">Únete a MusicToken Ring</p>
+                
+                <!-- Google Signup -->
+                <button onclick="loginWithGoogle()" class="btn-google">
+                    <svg width="18" height="18" viewBox="0 0 18 18">
+                        <path fill="#4285F4" d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844c-.209 1.125-.843 2.078-1.796 2.717v2.258h2.908c1.702-1.567 2.684-3.875 2.684-6.615z"/>
+                        <path fill="#34A853" d="M9 18c2.43 0 4.467-.806 5.956-2.184l-2.908-2.258c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332C2.438 15.983 5.482 18 9 18z"/>
+                        <path fill="#FBBC05" d="M3.964 10.707c-.18-.54-.282-1.117-.282-1.707 0-.593.102-1.167.282-1.707V4.961H.957C.347 6.175 0 7.55 0 9s.348 2.825.957 4.039l3.007-2.332z"/>
+                        <path fill="#EA4335" d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0 5.482 0 2.438 2.017.957 4.961L3.964 7.29C4.672 5.163 6.656 3.58 9 3.58z"/>
+                    </svg>
+                    Continuar con Google
+                </button>
+                
+                <div class="auth-divider">
+                    <span>o</span>
+                </div>
+                
+                <!-- Email Signup -->
+                <form onsubmit="handleSignupSubmit(event)">
+                    <div class="form-group">
+                        <label for="signupName">Nombre</label>
+                        <input 
+                            type="text" 
+                            id="signupName" 
+                            class="form-input" 
+                            placeholder="Tu nombre"
+                            required
+                        >
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="signupEmail">Email</label>
+                        <input 
+                            type="email" 
+                            id="signupEmail" 
+                            class="form-input" 
+                            placeholder="tu@email.com"
+                            required
+                        >
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="signupPassword">Contraseña</label>
+                        <input 
+                            type="password" 
+                            id="signupPassword" 
+                            class="form-input" 
+                            placeholder="Mínimo 6 caracteres"
+                            required
+                            minlength="6"
+                        >
+                    </div>
+                    
+                    <button type="submit" class="btn-primary btn-block">
+                        Crear Cuenta
+                    </button>
+                </form>
+                
+                <p class="auth-switch">
+                    ¿Ya tienes cuenta? 
+                    <a href="#" onclick="switchToLogin(); return false;">Inicia sesión</a>
+                </p>
+            </div>
+        </div>
     </div>
 
     <!-- Footer -->
@@ -287,7 +400,7 @@
             <div class="footer-links">
                 <a href="/privacy.html" class="footer-link">Privacy Policy</a>
                 <a href="/terms.html" class="footer-link">Terms of Service</a>
-                <a href="/cdn-cgi/l/email-protection#553930323439153820263c36213a3e303b273c3b327b2d2c2f" class="footer-link">Contact</a>
+                <a href="mailto:legal@musictokenring.xyz" class="footer-link">Contact</a>
             </div>
             <p class="footer-copyright">
                 © 2026 MusicToken Ring. All rights reserved.
@@ -296,7 +409,7 @@
     </footer>
 
     <!-- Scripts -->
-    <script data-cfasync="false" src="/cdn-cgi/scripts/5c5dd728/cloudflare-static/email-decode.min.js"></script><script src="./auth-system.js"></script>
+    <script src="./auth-system.js"></script>
     <script src="./game-manager.js"></script>
     <script src="./src/app.js"></script>
 
@@ -311,6 +424,10 @@
             
             if (session) {
                 showModeSelector();
+                // Inicializar GameManager
+                if (typeof GameManager !== 'undefined') {
+                    await GameManager.init();
+                }
             } else {
                 showLoginWall();
             }
@@ -356,17 +473,17 @@
             if (mode === 'quick') {
                 buttonsDiv.innerHTML = `
                     <button onclick="startQuickMatch()" class="btn-primary btn-large" id="startQuickBtn" disabled>
-                        ⚡ Buscar Rival
+                        ⚔️ Buscar Rival
                     </button>
                 `;
             } else if (mode === 'private') {
                 buttonsDiv.innerHTML = `
                     <button onclick="createRoom()" class="btn-primary" id="createRoomBtn" disabled>
-                        🚪 Crear Sala
+                        🎪 Crear Sala
                     </button>
                     <div class="or-divider">o</div>
                     <div class="join-room-group">
-                        <input type="text" id="joinRoomCode" placeholder="Código de sala" class="room-code-input" maxlength="6">
+                        <input type="text" id="joinRoomCode" placeholder="Código" class="room-code-input" maxlength="6">
                         <button onclick="joinRoom()" class="btn-secondary" id="joinRoomBtn" disabled>
                             Unirse
                         </button>
@@ -375,7 +492,7 @@
             } else if (mode === 'practice') {
                 buttonsDiv.innerHTML = `
                     <button onclick="startPractice()" class="btn-primary btn-large" id="startPracticeBtn" disabled>
-                        🤖 Iniciar Práctica
+                        🎯 Iniciar Práctica
                     </button>
                 `;
             }
@@ -384,56 +501,9 @@
         // Búsqueda de canciones
         function searchSong() {
             const query = document.getElementById('songSearch').value;
-            searchDeezer(query);
-        }
-
-        function searchDeezer(query) {
-            if (!query.trim()) return;
-            
-            const resultsDiv = document.getElementById('searchResults');
-            resultsDiv.innerHTML = '<p style="text-align: center; padding: 20px;">🔍 Buscando...</p>';
-            
-            const callbackName = `deezerCallback_${Date.now()}`;
-            
-            window[callbackName] = function(data) {
-                delete window[callbackName];
-                document.getElementById(callbackName)?.remove();
-                
-                if (!data.data || data.data.length === 0) {
-                    resultsDiv.innerHTML = '<p style="text-align: center; padding: 20px; color: #9CA3AF;">No se encontraron resultados</p>';
-                    return;
-                }
-                
-                let html = '';
-                data.data.forEach(track => {
-                    html += `
-                        <div class="track-item" onclick='selectSongForBattle(${JSON.stringify({
-                            id: track.id,
-                            name: track.title,
-                            artist: track.artist.name,
-                            image: track.album.cover_big,
-                            preview: track.preview
-                        }).replace(/'/g, "&#39;")})'>
-                            <img src="${track.album.cover_medium}" alt="${track.title}">
-                            <div class="track-info">
-                                <div class="track-name">${track.title}</div>
-                                <div class="track-artist">${track.artist.name}</div>
-                            </div>
-                            ${track.preview ? `
-                                <button class="btn-preview" onclick="event.stopPropagation(); togglePreview('${track.preview}', this)">
-                                    ▶ Preview
-                                </button>
-                            ` : ''}
-                        </div>
-                    `;
-                });
-                resultsDiv.innerHTML = html;
-            };
-            
-            const script = document.createElement('script');
-            script.id = callbackName;
-            script.src = `https://api.deezer.com/search?q=${encodeURIComponent(query)}&limit=6&output=jsonp&callback=${callbackName}`;
-            document.head.appendChild(script);
+            if (query.trim()) {
+                searchDeezer(query, 'searchResults');
+            }
         }
 
         // Seleccionar canción
@@ -466,43 +536,70 @@
         async function startQuickMatch() {
             if (!selectedSong) return;
             const bet = parseInt(document.getElementById('betAmount').value) || 100;
-            await GameManager.joinQuickMatch(selectedSong, bet);
+            if (typeof GameManager !== 'undefined') {
+                await GameManager.joinQuickMatch(selectedSong, bet);
+            } else {
+                showToast('GameManager no está cargado', 'error');
+            }
         }
 
         async function createRoom() {
             if (!selectedSong) return;
             const bet = parseInt(document.getElementById('betAmount').value) || 100;
-            await GameManager.createPrivateRoom(selectedSong, bet);
+            if (typeof GameManager !== 'undefined') {
+                await GameManager.createPrivateRoom(selectedSong, bet);
+            } else {
+                showToast('GameManager no está cargado', 'error');
+            }
         }
 
         async function joinRoom() {
             if (!selectedSong) return;
             const roomCode = document.getElementById('joinRoomCode').value.toUpperCase();
             const bet = parseInt(document.getElementById('betAmount').value) || 100;
-            await GameManager.joinPrivateRoom(roomCode, selectedSong, bet);
+            if (typeof GameManager !== 'undefined') {
+                await GameManager.joinPrivateRoom(roomCode, selectedSong, bet);
+            } else {
+                showToast('GameManager no está cargado', 'error');
+            }
         }
 
         async function startPractice() {
-            if (!selectedSong) return;
-            // Seleccionar canción aleatoria para CPU
-            // Por ahora usar la misma lógica
-            await GameManager.startPracticeMatch(selectedSong, selectedSong);
+            if (!selectedSong) {
+                showToast('Selecciona una canción primero', 'error');
+                return;
+            }
+            
+            // Generar canción random para CPU (simulación)
+            const cpuSong = {
+                id: 'cpu_' + Date.now(),
+                name: 'CPU Fighter',
+                artist: 'Computer',
+                image: selectedSong.image, // Usar misma imagen temporalmente
+                preview: selectedSong.preview
+            };
+            
+            if (typeof GameManager !== 'undefined') {
+                await GameManager.startPracticeMatch(selectedSong, cpuSong);
+            } else {
+                showToast('Modo práctica en desarrollo', 'info');
+            }
         }
 
         function cancelSearch() {
-            // Implementar cancelación
             backToModes();
         }
 
         function leaveRoom() {
-            // Implementar salir de sala
             backToModes();
         }
 
         function copyRoomCode() {
             const code = document.getElementById('roomCode').textContent;
             navigator.clipboard.writeText(code);
-            showToast('Código copiado', 'success');
+            if (typeof showToast !== 'undefined') {
+                showToast('Código copiado', 'success');
+            }
         }
 
         // Enter key en búsqueda
@@ -510,4 +607,5 @@
             if (e.key === 'Enter') searchSong();
         });
     </script>
-
+</body>
+</html>
