@@ -97,9 +97,15 @@ function searchDeezer(query, resultsElementId = 'searchResults') {
     // Create unique callback name
     const callbackName = `deezerCallback_${Date.now()}`;
     
+    let timeoutId = null;
+
     // Create callback function
     window[callbackName] = function(data) {
         // Clean up
+        if (timeoutId) {
+            clearTimeout(timeoutId);
+            timeoutId = null;
+        }
         delete window[callbackName];
         const scriptEl = document.getElementById(callbackName);
         if (scriptEl) scriptEl.remove();
@@ -117,12 +123,24 @@ function searchDeezer(query, resultsElementId = 'searchResults') {
     script.id = callbackName;
     script.src = `https://api.deezer.com/search?q=${encodeURIComponent(query)}&limit=6&output=jsonp&callback=${callbackName}`;
     script.onerror = function() {
+        if (timeoutId) {
+            clearTimeout(timeoutId);
+            timeoutId = null;
+        }
         delete window[callbackName];
         resultsDiv.innerHTML = '<p style="text-align: center; padding: 20px; color: #EF4444;">❌ Error en la búsqueda</p>';
         showToast('Error al buscar', 'error');
     };
     
     document.head.appendChild(script);
+
+    timeoutId = setTimeout(() => {
+        delete window[callbackName];
+        const scriptEl = document.getElementById(callbackName);
+        if (scriptEl) scriptEl.remove();
+        resultsDiv.innerHTML = '<p style="text-align: center; padding: 20px; color: #EF4444;">⏱️ Tiempo de espera agotado</p>';
+        showToast('La búsqueda tardó demasiado, intenta nuevamente', 'error');
+    }, 8000);
 }
 
 // =========================================
