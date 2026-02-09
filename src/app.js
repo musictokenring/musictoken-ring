@@ -4,9 +4,6 @@
 // (La lógica de juego está en game-engine.js)
 // =========================================
 
-// Use existing Supabase client (already initialized by auth-system.js)
-const supabaseClient = window.supabaseClient;
-
 console.log('🥊 MusicToken Ring ready!');
 
 // =========================================
