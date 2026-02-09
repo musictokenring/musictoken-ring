@@ -97,9 +97,15 @@ function searchDeezer(query, resultsElementId = 'searchResults') {
     // Create unique callback name
     const callbackName = `deezerCallback_${Date.now()}`;
     
+    let timeoutId = null;
+
     // Create callback function
     window[callbackName] = function(data) {
         // Clean up
+        if (timeoutId) {
+            clearTimeout(timeoutId);
+            timeoutId = null;
+        }
         delete window[callbackName];
         const scriptEl = document.getElementById(callbackName);
         if (scriptEl) scriptEl.remove();
@@ -117,12 +123,24 @@ function searchDeezer(query, resultsElementId = 'searchResults') {
     script.id = callbackName;
     script.src = `https://api.deezer.com/search?q=${encodeURIComponent(query)}&limit=6&output=jsonp&callback=${callbackName}`;
     script.onerror = function() {
+        if (timeoutId) {
+            clearTimeout(timeoutId);
+            timeoutId = null;
+        }
         delete window[callbackName];
         resultsDiv.innerHTML = '<p style="text-align: center; padding: 20px; color: #EF4444;">❌ Error en la búsqueda</p>';
         showToast('Error al buscar', 'error');
     };
     
     document.head.appendChild(script);
+
+    timeoutId = setTimeout(() => {
+        delete window[callbackName];
+        const scriptEl = document.getElementById(callbackName);
+        if (scriptEl) scriptEl.remove();
+        resultsDiv.innerHTML = '<p style="text-align: center; padding: 20px; color: #EF4444;">⏱️ Tiempo de espera agotado</p>';
+        showToast('La búsqueda tardó demasiado, intenta nuevamente', 'error');
+    }, 8000);
 }
 
 // =========================================
@@ -179,59 +197,6 @@ function handleTrackSelect(track) {
 }
 
 // =========================================
-// UTILITY FUNCTIONS
-// =========================================
-
-// Format time (seconds to MM:SS)
-function formatTime(seconds) {
-    const mins = Math.floor(seconds / 60);
-    const secs = seconds % 60;
-    return `${mins}:${secs.toString().padStart(2, '0')}`;
-}
-
-// Format number with commas
-function formatNumber(num) {
-    return num.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
-}
-
-// Validate bet amount
-function validateBet(amount, minBet, maxBet = null) {
-    if (!amount || amount < minBet) {
-        showToast(`Apuesta mínima: ${minBet} $MTOKEN`, 'error');
-        return false;
-    }
-    
-    if (maxBet && amount > maxBet) {
-        showToast(`Apuesta máxima: ${maxBet} $MTOKEN`, 'error');
-        return false;
-    }
-    
-    return true;
-}
-
-// Check if user is logged in
-async function checkUserLoggedIn() {
-    try {
-        const { data: { session } } = await supabaseClient.auth.getSession();
-        return !!session;
-    } catch (error) {
-        console.error('Error checking auth:', error);
-        return false;
-    }
-}
-
-// Get current user
-async function getCurrentUser() {
-    try {
-        const { data: { session } } = await supabaseClient.auth.getSession();
-        return session?.user || null;
-    } catch (error) {
-        console.error('Error getting user:', error);
-        return null;
-    }
-}
-
-// =========================================
 // EVENT LISTENERS
 // =========================================
 
@@ -264,8 +229,3 @@ window.stopAllPreviews = stopAllPreviews;
 window.searchDeezer = searchDeezer;
 window.displaySearchResults = displaySearchResults;
 window.handleTrackSelect = handleTrackSelect;
-window.formatTime = formatTime;
-window.formatNumber = formatNumber;
-window.validateBet = validateBet;
-window.checkUserLoggedIn = checkUserLoggedIn;
-window.getCurrentUser = getCurrentUser;
