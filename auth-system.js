@@ -130,6 +130,9 @@ function updateAuthUI(session) {
     if (session && session.user) {
         // Usuario logueado
         console.log('User logged in:', session.user.email);
+
+        document.getElementById('loginWall')?.classList.add('hidden');
+        document.getElementById('modeSelector')?.classList.remove('hidden');
         
         const user = session.user;
         const displayName = user.user_metadata?.display_name || 
@@ -166,6 +169,9 @@ function updateAuthUI(session) {
     } else {
         // Usuario no logueado
         console.log('User logged out');
+
+        document.getElementById('loginWall')?.classList.remove('hidden');
+        document.getElementById('modeSelector')?.classList.add('hidden');
         
         authButton.innerHTML = `
             <button onclick="openAuthModal()" class="btn-login">

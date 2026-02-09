@@ -12,6 +12,8 @@ const GameEngine = {
     victoryAudioDuration: 15,
     userAudio: null,
     victoryAudio: null,
+    currentRoomCode: null,
+    currentPrivateMatchId: null,
     
     // ==========================================
     // INICIALIZACIÓN
@@ -231,6 +233,9 @@ const GameEngine = {
                 .single();
             
             if (matchError) throw matchError;
+
+            this.currentRoomCode = roomCode;
+            this.currentPrivateMatchId = match.id;
             
             // Crear sala
             const { error: roomError } = await supabaseClient
@@ -340,6 +345,46 @@ const GameEngine = {
                 await this.startMatch(matchId);
             }
         }, 2000);
+    },
+
+    async leavePrivateRoom() {
+        try {
+            clearInterval(this.roomWaitInterval);
+
+            const { data: { session } } = await supabaseClient.auth.getSession();
+            if (!session) {
+                showToast('Sesión no encontrada', 'error');
+                return;
+            }
+
+            if (this.currentRoomCode) {
+                await supabaseClient
+                    .from('private_rooms')
+                    .delete()
+                    .eq('room_code', this.currentRoomCode)
+                    .eq('creator_id', session.user.id);
+            }
+
+            if (this.currentPrivateMatchId) {
+                await supabaseClient
+                    .from('matches')
+                    .delete()
+                    .eq('id', this.currentPrivateMatchId)
+                    .eq('player1_id', session.user.id);
+            }
+
+            this.currentRoomCode = null;
+            this.currentPrivateMatchId = null;
+
+            document.getElementById('roomScreen')?.classList.add('hidden');
+            document.getElementById('songSelection')?.classList.add('hidden');
+            document.getElementById('modeSelector')?.classList.remove('hidden');
+
+            showToast('Sala cerrada', 'info');
+        } catch (error) {
+            console.error('Error leaving room:', error);
+            showToast('Error al salir de la sala', 'error');
+        }
     },
     
     // ==========================================

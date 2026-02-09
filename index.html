@@ -579,11 +579,19 @@
         }
 
         function cancelSearch() {
-            backToModes();
+            if (typeof GameEngine !== 'undefined' && typeof GameEngine.cancelMatchmaking === 'function') {
+                GameEngine.cancelMatchmaking();
+            } else {
+                backToModes();
+            }
         }
 
         function leaveRoom() {
-            backToModes();
+            if (typeof GameEngine !== 'undefined' && typeof GameEngine.leavePrivateRoom === 'function') {
+                GameEngine.leavePrivateRoom();
+            } else {
+                backToModes();
+            }
         }
 
         function copyRoomCode() {
