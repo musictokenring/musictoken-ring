@@ -42,7 +42,7 @@ function showToast(message, type = 'info') {
     }, 3000);
 }
 
-// Search Deezer (CÓDIGO ORIGINAL QUE FUNCIONABA)
+// Search Deezer (USANDO JSONP PARA EVITAR CORS)
 function searchDeezer(fighter) {
     const query = document.getElementById(`search${fighter}`).value.trim();
     const resultsDiv = document.getElementById(`results${fighter}`);
@@ -54,38 +54,51 @@ function searchDeezer(fighter) {
 
     resultsDiv.innerHTML = '<p style="text-align:center; padding:20px; color:#9CA3AF;">🔍 Buscando...</p>';
 
-    fetch(`https://api.deezer.com/search?q=${encodeURIComponent(query)}&limit=6`)
-        .then(res => res.json())
-        .then(data => {
-            if (!data.data || data.data.length === 0) {
-                resultsDiv.innerHTML = '<p style="text-align:center; padding:20px; color:#9CA3AF;">No se encontraron resultados</p>';
-                return;
-            }
+    // Create unique callback name
+    const callbackName = `deezerCallback${fighter}_${Date.now()}`;
+    
+    // Create callback function
+    window[callbackName] = function(data) {
+        // Clean up
+        delete window[callbackName];
+        document.getElementById(callbackName).remove();
+        
+        if (!data.data || data.data.length === 0) {
+            resultsDiv.innerHTML = '<p style="text-align:center; padding:20px; color:#9CA3AF;">No se encontraron resultados</p>';
+            return;
+        }
 
-            let html = '';
-            data.data.forEach(track => {
-                html += `
-                    <div class="track-item" onclick='selectTrack(${fighter}, ${JSON.stringify(track).replace(/'/g, "&#39;")})'>
-                        <img src="${track.album.cover_medium}" alt="${track.title}">
-                        <div class="track-info">
-                            <div class="track-name">${track.title}</div>
-                            <div class="track-artist">${track.artist.name}</div>
-                        </div>
-                        ${track.preview ? `
-                            <button class="btn-preview" onclick="event.stopPropagation(); togglePreview('${track.preview}', this)">
-                                ▶ Preview
-                            </button>
-                        ` : '<span style="color:#6B7280; font-size:12px;">Sin preview</span>'}
+        let html = '';
+        data.data.forEach(track => {
+            html += `
+                <div class="track-item" onclick='selectTrack(${fighter}, ${JSON.stringify(track).replace(/'/g, "&#39;")})'>
+                    <img src="${track.album.cover_medium}" alt="${track.title}">
+                    <div class="track-info">
+                        <div class="track-name">${track.title}</div>
+                        <div class="track-artist">${track.artist.name}</div>
                     </div>
-                `;
-            });
-            resultsDiv.innerHTML = html;
-        })
-        .catch(err => {
-            console.error('Search error:', err);
-            resultsDiv.innerHTML = '<p style="text-align:center; padding:20px; color:#EF4444;">❌ Error en la búsqueda</p>';
-            showToast('Error al buscar', 'error');
+                    ${track.preview ? `
+                        <button class="btn-preview" onclick="event.stopPropagation(); togglePreview('${track.preview}', this)">
+                            ▶ Preview
+                        </button>
+                    ` : '<span style="color:#6B7280; font-size:12px;">Sin preview</span>'}
+                </div>
+            `;
         });
+        resultsDiv.innerHTML = html;
+    };
+    
+    // Create script tag for JSONP request
+    const script = document.createElement('script');
+    script.id = callbackName;
+    script.src = `https://api.deezer.com/search?q=${encodeURIComponent(query)}&limit=6&output=jsonp&callback=${callbackName}`;
+    script.onerror = function() {
+        delete window[callbackName];
+        resultsDiv.innerHTML = '<p style="text-align:center; padding:20px; color:#EF4444;">❌ Error en la búsqueda</p>';
+        showToast('Error al buscar', 'error');
+    };
+    
+    document.head.appendChild(script);
 }
 
 // Audio preview management
