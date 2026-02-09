@@ -2,15 +2,8 @@
 // AUTHENTICATION SYSTEM - MusicToken Ring
 // =========================================
 
-// Supabase client configuration
-const SUPABASE_URL = 'https://bscmgcnynbxalcuwdqlm.supabase.co';
-const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJzY21nY255bmJ4YWxjdXdkcWxtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzA0NTYwOTUsImV4cCI6MjA4NjAzMjA5NX0.1iasFQ5H0GmrFqi6poWNE1aZOtbmQuB113RCyg2BBK4';
-
-// Use existing supabaseClient from app.js or create new one
-if (typeof window.supabaseClient === 'undefined') {
-    window.supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-}
-const supabaseClient = window.supabaseClient;
+// Use supabaseClient from app.js (already initialized)
+// No need to declare it here
 
 // Auth state
 let currentUser = null;
@@ -55,7 +48,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 // Check current auth status
 async function checkAuthStatus() {
     try {
-        const { data: { session }, error } = await supabaseClient.auth.getSession();
+        const { data: { session }, error } = await window.supabaseClient.auth.getSession();
         
         if (error) throw error;
         
@@ -73,7 +66,7 @@ async function checkAuthStatus() {
 
 // Setup auth state listeners
 function setupAuthListeners() {
-    supabaseClient.auth.onAuthStateChange((event, session) => {
+    window.supabaseClient.auth.onAuthStateChange((event, session) => {
         console.log('Auth state changed:', event);
         
         if (session) {
@@ -89,7 +82,7 @@ function setupAuthListeners() {
 // Login with Google
 async function loginWithGoogle() {
     try {
-        const { data, error } = await supabaseClient.auth.signInWithOAuth({
+        const { data, error } = await window.supabaseClient.auth.signInWithOAuth({
             provider: 'google',
             options: {
                 redirectTo: window.location.origin
@@ -108,7 +101,7 @@ async function loginWithGoogle() {
 // Login with Email
 async function loginWithEmail(email, password) {
     try {
-        const { data, error } = await supabaseClient.auth.signInWithPassword({
+        const { data, error } = await window.supabaseClient.auth.signInWithPassword({
             email: email,
             password: password
         });
@@ -126,7 +119,7 @@ async function loginWithEmail(email, password) {
 // Sign up with Email
 async function signUpWithEmail(email, password, displayName) {
     try {
-        const { data, error } = await supabaseClient.auth.signUp({
+        const { data, error } = await window.supabaseClient.auth.signUp({
             email: email,
             password: password,
             options: {
@@ -149,7 +142,7 @@ async function signUpWithEmail(email, password, displayName) {
 // Logout
 async function logout() {
     try {
-        const { error } = await supabaseClient.auth.signOut();
+        const { error } = await window.supabaseClient.auth.signOut();
         
         if (error) throw error;
         
