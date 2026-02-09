@@ -34,10 +34,19 @@ const GameEngine = {
                 .from('user_balances')
                 .select('balance')
                 .eq('user_id', session.user.id)
-                .single();
+                .maybeSingle();
+            
+            if (error) {
+                console.error('Error loading balance:', error);
+                return;
+            }
             
             if (data) {
                 this.userBalance = data.balance;
+                this.updateBalanceDisplay();
+            } else {
+                // Usuario nuevo - balance inicial de 1000
+                this.userBalance = 1000;
                 this.updateBalanceDisplay();
             }
         } catch (error) {
