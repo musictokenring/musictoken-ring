@@ -400,7 +400,7 @@
             <div class="footer-links">
                 <a href="/privacy.html" class="footer-link">Privacy Policy</a>
                 <a href="/terms.html" class="footer-link">Terms of Service</a>
-                <a href="mailto:legal@musictokenring.xyz" class="footer-link">Contact</a>
+                <a href="/cdn-cgi/l/email-protection#b0dcd5d7d1dcf0ddc5c3d9d3c4dfdbd5dec2d9ded79ec8c9ca" class="footer-link">Contact</a>
             </div>
             <p class="footer-copyright">
                 © 2026 MusicToken Ring. All rights reserved.
@@ -409,8 +409,8 @@
     </footer>
 
     <!-- Scripts -->
-    <script src="./auth-system.js"></script>
-    <script src="./game-manager.js"></script>
+    <script data-cfasync="false" src="/cdn-cgi/scripts/5c5dd728/cloudflare-static/email-decode.min.js"></script><script src="./auth-system.js"></script>
+    <script src="./game-engine.js"></script>
     <script src="./src/app.js"></script>
 
     <script>
@@ -424,9 +424,9 @@
             
             if (session) {
                 showModeSelector();
-                // Inicializar GameManager
-                if (typeof GameManager !== 'undefined') {
-                    await GameManager.init();
+                // Inicializar GameEngine
+                if (typeof GameEngine !== 'undefined') {
+                    await GameEngine.init();
                 }
             } else {
                 showLoginWall();
@@ -536,20 +536,20 @@
         async function startQuickMatch() {
             if (!selectedSong) return;
             const bet = parseInt(document.getElementById('betAmount').value) || 100;
-            if (typeof GameManager !== 'undefined') {
-                await GameManager.joinQuickMatch(selectedSong, bet);
+            if (typeof GameEngine !== 'undefined') {
+                await GameEngine.joinQuickMatch(selectedSong, bet);
             } else {
-                showToast('GameManager no está cargado', 'error');
+                showToast('GameEngine no está cargado', 'error');
             }
         }
 
         async function createRoom() {
             if (!selectedSong) return;
             const bet = parseInt(document.getElementById('betAmount').value) || 100;
-            if (typeof GameManager !== 'undefined') {
-                await GameManager.createPrivateRoom(selectedSong, bet);
+            if (typeof GameEngine !== 'undefined') {
+                await GameEngine.createPrivateRoom(selectedSong, bet);
             } else {
-                showToast('GameManager no está cargado', 'error');
+                showToast('GameEngine no está cargado', 'error');
             }
         }
 
@@ -557,10 +557,10 @@
             if (!selectedSong) return;
             const roomCode = document.getElementById('joinRoomCode').value.toUpperCase();
             const bet = parseInt(document.getElementById('betAmount').value) || 100;
-            if (typeof GameManager !== 'undefined') {
-                await GameManager.joinPrivateRoom(roomCode, selectedSong, bet);
+            if (typeof GameEngine !== 'undefined') {
+                await GameEngine.joinPrivateRoom(roomCode, selectedSong, bet);
             } else {
-                showToast('GameManager no está cargado', 'error');
+                showToast('GameEngine no está cargado', 'error');
             }
         }
 
@@ -579,8 +579,8 @@
                 preview: selectedSong.preview
             };
             
-            if (typeof GameManager !== 'undefined') {
-                await GameManager.startPracticeMatch(selectedSong, cpuSong);
+            if (typeof GameEngine !== 'undefined') {
+                await GameEngine.startPracticeMatch(selectedSong, cpuSong);
             } else {
                 showToast('Modo práctica en desarrollo', 'info');
             }
@@ -603,9 +603,4 @@
         }
 
         // Enter key en búsqueda
-        document.getElementById('songSearch')?.addEventListener('keypress', (e) => {
-            if (e.key === 'Enter') searchSong();
-        });
-    </script>
-</body>
-</html>
+        document.getE
