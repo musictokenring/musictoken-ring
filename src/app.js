@@ -1,16 +1,8 @@
 // =========================================
 // APP.JS - MusicToken Ring
-// Con búsqueda Deezer funcionando + Guardar batallas
+// Funciones auxiliares de búsqueda y audio
+// (La lógica de juego está en game-manager.js)
 // =========================================
-
-// Battle state
-const battleState = {
-    fighter1: null,
-    fighter2: null,
-    bets: { fighter1: 0, fighter2: 0 },
-    isRunning: false,
-    timer: null
-};
 
 // Initialize Supabase client
 let supabaseClient;
@@ -25,9 +17,14 @@ if (typeof window.supabaseClient === 'undefined') {
 
 console.log('🥊 MusicToken Ring ready!');
 
-// Toast notification system
+// =========================================
+// TOAST NOTIFICATION SYSTEM
+// =========================================
+
 function showToast(message, type = 'info') {
     const container = document.getElementById('toastContainer');
+    if (!container) return;
+    
     const toast = document.createElement('div');
     toast.className = `toast toast-${type}`;
     toast.textContent = message;
@@ -42,66 +39,10 @@ function showToast(message, type = 'info') {
     }, 3000);
 }
 
-// Search Deezer (USANDO JSONP PARA EVITAR CORS)
-function searchDeezer(fighter) {
-    const query = document.getElementById(`search${fighter}`).value.trim();
-    const resultsDiv = document.getElementById(`results${fighter}`);
+// =========================================
+// AUDIO PREVIEW MANAGEMENT
+// =========================================
 
-    if (!query) {
-        showToast('Ingresa un término de búsqueda', 'error');
-        return;
-    }
-
-    resultsDiv.innerHTML = '<p style="text-align:center; padding:20px; color:#9CA3AF;">🔍 Buscando...</p>';
-
-    // Create unique callback name
-    const callbackName = `deezerCallback${fighter}_${Date.now()}`;
-    
-    // Create callback function
-    window[callbackName] = function(data) {
-        // Clean up
-        delete window[callbackName];
-        document.getElementById(callbackName).remove();
-        
-        if (!data.data || data.data.length === 0) {
-            resultsDiv.innerHTML = '<p style="text-align:center; padding:20px; color:#9CA3AF;">No se encontraron resultados</p>';
-            return;
-        }
-
-        let html = '';
-        data.data.forEach(track => {
-            html += `
-                <div class="track-item" onclick='selectTrack(${fighter}, ${JSON.stringify(track).replace(/'/g, "&#39;")})'>
-                    <img src="${track.album.cover_medium}" alt="${track.title}">
-                    <div class="track-info">
-                        <div class="track-name">${track.title}</div>
-                        <div class="track-artist">${track.artist.name}</div>
-                    </div>
-                    ${track.preview ? `
-                        <button class="btn-preview" onclick="event.stopPropagation(); togglePreview('${track.preview}', this)">
-                            ▶ Preview
-                        </button>
-                    ` : '<span style="color:#6B7280; font-size:12px;">Sin preview</span>'}
-                </div>
-            `;
-        });
-        resultsDiv.innerHTML = html;
-    };
-    
-    // Create script tag for JSONP request
-    const script = document.createElement('script');
-    script.id = callbackName;
-    script.src = `https://api.deezer.com/search?q=${encodeURIComponent(query)}&limit=6&output=jsonp&callback=${callbackName}`;
-    script.onerror = function() {
-        delete window[callbackName];
-        resultsDiv.innerHTML = '<p style="text-align:center; padding:20px; color:#EF4444;">❌ Error en la búsqueda</p>';
-        showToast('Error al buscar', 'error');
-    };
-    
-    document.head.appendChild(script);
-}
-
-// Audio preview management
 let currentAudio = null;
 
 function togglePreview(url, button) {
@@ -114,6 +55,7 @@ function togglePreview(url, button) {
             button.textContent = '▶ Preview';
         }
     } else {
+        // Stop previous audio
         if (currentAudio) {
             currentAudio.pause();
             document.querySelectorAll('.btn-preview').forEach(btn => {
@@ -121,6 +63,7 @@ function togglePreview(url, button) {
             });
         }
         
+        // Play new audio
         currentAudio = new Audio(url);
         currentAudio.play();
         button.textContent = '⏸ Pause';
@@ -131,199 +74,206 @@ function togglePreview(url, button) {
     }
 }
 
-// Select track
-function selectTrack(fighter, track) {
-    battleState[`fighter${fighter}`] = {
-        id: track.id,
-        name: track.title,
-        artist: track.artist.name,
-        image: track.album.cover_big,
-        preview: track.preview,
-        popularity: track.rank || Math.floor(Math.random() * 1000000)
-    };
-    
-    showToast(`${track.title} seleccionado como Luchador ${fighter}`, 'success');
-    
-    if (battleState.fighter1 && battleState.fighter2) {
-        document.getElementById('confirmBtn').disabled = false;
+function stopAllPreviews() {
+    if (currentAudio) {
+        currentAudio.pause();
+        currentAudio = null;
     }
+    document.querySelectorAll('.btn-preview').forEach(btn => {
+        btn.textContent = '▶ Preview';
+    });
 }
 
-// Confirm selection
-function confirmSelection() {
-    if (!battleState.fighter1 || !battleState.fighter2) {
-        showToast('Selecciona ambos luchadores', 'error');
+// =========================================
+// DEEZER SEARCH (JSONP)
+// =========================================
+
+function searchDeezer(query, resultsElementId = 'searchResults') {
+    if (!query || !query.trim()) {
+        showToast('Por favor ingresa un término de búsqueda', 'error');
         return;
     }
     
-    document.getElementById('selectionSection').classList.add('hidden');
-    document.getElementById('battleSection').classList.remove('hidden');
-    
-    setupBattleArena();
-}
-
-// Setup battle arena
-function setupBattleArena() {
-    const { fighter1, fighter2 } = battleState;
-    
-    // Fighter 1
-    document.getElementById('avatar1').innerHTML = `<img src="${fighter1.image}" alt="${fighter1.name}">`;
-    document.getElementById('name1').textContent = fighter1.name;
-    
-    // Fighter 2
-    document.getElementById('avatar2').innerHTML = `<img src="${fighter2.image}" alt="${fighter2.name}">`;
-    document.getElementById('name2').textContent = fighter2.name;
-    
-    // Reset health bars
-    document.getElementById('health1').style.width = '100%';
-    document.getElementById('health2').style.width = '100%';
-    document.getElementById('healthText1').textContent = '100%';
-    document.getElementById('healthText2').textContent = '100%';
-    
-    // Reset bets
-    battleState.bets = { fighter1: 0, fighter2: 0 };
-    updateBetStats();
-}
-
-// Place bet
-function placeBet(fighter) {
-    const input = document.getElementById(`bet${fighter}`);
-    const amount = parseInt(input.value) || 0;
-    
-    if (amount <= 0) {
-        showToast('Ingresa una cantidad válida', 'error');
+    const resultsDiv = document.getElementById(resultsElementId);
+    if (!resultsDiv) {
+        console.error('Results element not found:', resultsElementId);
         return;
     }
     
-    battleState.bets[`fighter${fighter}`] += amount;
-    showToast(`Apostaste ${amount} $MTOKEN en Luchador ${fighter}`, 'success');
+    resultsDiv.innerHTML = '<p style="text-align: center; padding: 20px; color: #9CA3AF;">🔍 Buscando...</p>';
     
-    input.value = '';
-    updateBetStats();
-}
-
-// Update bet statistics
-function updateBetStats() {
-    const total = battleState.bets.fighter1 + battleState.bets.fighter2;
-    document.getElementById('totalPool').textContent = `${total} $MTOKEN`;
-    document.getElementById('bets1').textContent = `${battleState.bets.fighter1} $MTOKEN`;
-    document.getElementById('bets2').textContent = `${battleState.bets.fighter2} $MTOKEN`;
-}
-
-// Start battle
-function startBattle() {
-    if (battleState.isRunning) return;
+    // Create unique callback name
+    const callbackName = `deezerCallback_${Date.now()}`;
     
-    battleState.isRunning = true;
-    document.getElementById('startBtn').disabled = true;
-    
-    showToast('¡Batalla iniciada!', 'success');
-    
-    let timeLeft = CONFIG.BATTLE_DURATION;
-    const timerEl = document.getElementById('timer');
-    
-    let health1 = 100;
-    let health2 = 100;
-    
-    const interval = setInterval(() => {
-        timeLeft--;
-        timerEl.textContent = timeLeft;
+    // Create callback function
+    window[callbackName] = function(data) {
+        // Clean up
+        delete window[callbackName];
+        const scriptEl = document.getElementById(callbackName);
+        if (scriptEl) scriptEl.remove();
         
-        const damage1 = Math.random() * 3;
-        const damage2 = Math.random() * 3;
-        
-        health1 -= damage2;
-        health2 -= damage1;
-        
-        health1 = Math.max(0, health1);
-        health2 = Math.max(0, health2);
-        
-        document.getElementById('health1').style.width = `${health1}%`;
-        document.getElementById('health2').style.width = `${health2}%`;
-        document.getElementById('healthText1').textContent = `${Math.round(health1)}%`;
-        document.getElementById('healthText2').textContent = `${Math.round(health2)}%`;
-        
-        if (timeLeft <= 0 || health1 <= 0 || health2 <= 0) {
-            clearInterval(interval);
-            endBattle(health1, health2);
-        }
-    }, 1000);
-}
-
-// End battle
-async function endBattle(health1, health2) {
-    battleState.isRunning = false;
-    
-    const winner = health1 > health2 ? 1 : 2;
-    const winnerData = battleState[`fighter${winner}`];
-    
-    const totalPool = battleState.bets.fighter1 + battleState.bets.fighter2;
-    const burnRate = 0.005;
-    const burnAmount = Math.floor(totalPool * burnRate);
-    const prize = totalPool - burnAmount;
-    
-    showWinnerModal(winnerData, prize);
-    
-    // NUEVO: Guardar batalla en Supabase
-    await saveBattle(winner, prize);
-    
-    showToast(`¡${winnerData.name} ganó!`, 'success');
-}
-
-// NUEVA FUNCIÓN: Guardar batalla en Supabase
-async function saveBattle(winner, prize) {
-    try {
-        const { data: { session } } = await supabaseClient.auth.getSession();
-        
-        if (!session) {
-            console.log('User not logged in, battle not saved');
+        if (!data.data || data.data.length === 0) {
+            resultsDiv.innerHTML = '<p style="text-align: center; padding: 20px; color: #9CA3AF;">No se encontraron resultados</p>';
             return;
         }
         
-        const battleData = {
-            user_id: session.user.id,
-            fighter1_name: battleState.fighter1.name,
-            fighter1_artist: battleState.fighter1.artist,
-            fighter1_image: battleState.fighter1.image,
-            fighter1_preview: battleState.fighter1.preview,
-            fighter2_name: battleState.fighter2.name,
-            fighter2_artist: battleState.fighter2.artist,
-            fighter2_image: battleState.fighter2.image,
-            fighter2_preview: battleState.fighter2.preview,
-            winner: winner,
-            bet_amount: battleState.bets.fighter1 + battleState.bets.fighter2,
-            prize_amount: prize
+        displaySearchResults(data.data, resultsDiv);
+    };
+    
+    // Create script tag for JSONP request
+    const script = document.createElement('script');
+    script.id = callbackName;
+    script.src = `https://api.deezer.com/search?q=${encodeURIComponent(query)}&limit=6&output=jsonp&callback=${callbackName}`;
+    script.onerror = function() {
+        delete window[callbackName];
+        resultsDiv.innerHTML = '<p style="text-align: center; padding: 20px; color: #EF4444;">❌ Error en la búsqueda</p>';
+        showToast('Error al buscar', 'error');
+    };
+    
+    document.head.appendChild(script);
+}
+
+// =========================================
+// DISPLAY SEARCH RESULTS
+// =========================================
+
+function displaySearchResults(tracks, resultsDiv) {
+    let html = '';
+    
+    tracks.forEach(track => {
+        const trackData = {
+            id: track.id,
+            name: track.title,
+            artist: track.artist.name,
+            image: track.album.cover_big,
+            preview: track.preview
         };
         
-        const { data, error } = await supabaseClient
-            .from('battles')
-            .insert([battleData]);
-        
-        if (error) {
-            console.error('Error saving battle:', error);
-        } else {
-            console.log('✅ Battle saved successfully!');
-        }
-    } catch (error) {
-        console.error('Error in saveBattle:', error);
+        html += `
+            <div class="track-item" onclick='handleTrackSelect(${JSON.stringify(trackData).replace(/'/g, "&#39;")})'>
+                <img src="${track.album.cover_medium}" alt="${track.title}">
+                <div class="track-info">
+                    <div class="track-name">${track.title}</div>
+                    <div class="track-artist">${track.artist.name}</div>
+                </div>
+                ${track.preview ? `
+                    <button class="btn-preview" onclick="event.stopPropagation(); togglePreview('${track.preview}', this)">
+                        ▶ Preview
+                    </button>
+                ` : '<span style="color:#6B7280; font-size:12px; padding: 12px;">Sin preview</span>'}
+            </div>
+        `;
+    });
+    
+    resultsDiv.innerHTML = html;
+}
+
+// =========================================
+// TRACK SELECTION HANDLER
+// =========================================
+
+function handleTrackSelect(track) {
+    // Stop any playing preview
+    stopAllPreviews();
+    
+    // Call the selection function if it exists
+    if (typeof selectSongForBattle === 'function') {
+        selectSongForBattle(track);
+    } else if (typeof selectTrack === 'function') {
+        selectTrack(track);
+    } else {
+        console.warn('No track selection handler found');
     }
 }
 
-// Show winner modal
-function showWinnerModal(winner, prize) {
-    const modal = document.getElementById('winnerModal');
-    document.getElementById('winnerName').textContent = winner.name;
-    document.getElementById('winnerPrize').textContent = `+${prize} $MTOKEN`;
-    modal.classList.remove('hidden');
+// =========================================
+// UTILITY FUNCTIONS
+// =========================================
+
+// Format time (seconds to MM:SS)
+function formatTime(seconds) {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
 }
 
-// Enter key support for search
-document.addEventListener('DOMContentLoaded', () => {
-    document.getElementById('search1')?.addEventListener('keypress', (e) => {
-        if (e.key === 'Enter') searchDeezer(1);
-    });
+// Format number with commas
+function formatNumber(num) {
+    return num.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+}
+
+// Validate bet amount
+function validateBet(amount, minBet, maxBet = null) {
+    if (!amount || amount < minBet) {
+        showToast(`Apuesta mínima: ${minBet} $MTOKEN`, 'error');
+        return false;
+    }
     
-    document.getElementById('search2')?.addEventListener('keypress', (e) => {
-        if (e.key === 'Enter') searchDeezer(2);
-    });
+    if (maxBet && amount > maxBet) {
+        showToast(`Apuesta máxima: ${maxBet} $MTOKEN`, 'error');
+        return false;
+    }
+    
+    return true;
+}
+
+// Check if user is logged in
+async function checkUserLoggedIn() {
+    try {
+        const { data: { session } } = await supabaseClient.auth.getSession();
+        return !!session;
+    } catch (error) {
+        console.error('Error checking auth:', error);
+        return false;
+    }
+}
+
+// Get current user
+async function getCurrentUser() {
+    try {
+        const { data: { session } } = await supabaseClient.auth.getSession();
+        return session?.user || null;
+    } catch (error) {
+        console.error('Error getting user:', error);
+        return null;
+    }
+}
+
+// =========================================
+// EVENT LISTENERS
+// =========================================
+
+document.addEventListener('DOMContentLoaded', () => {
+    // Enter key support for search
+    const searchInput = document.getElementById('songSearch');
+    if (searchInput) {
+        searchInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                const query = searchInput.value;
+                if (typeof searchSong === 'function') {
+                    searchSong();
+                } else {
+                    searchDeezer(query);
+                }
+            }
+        });
+    }
+    
+    console.log('🎵 Search system initialized!');
 });
+
+// =========================================
+// EXPORT FOR GLOBAL ACCESS
+// =========================================
+
+window.showToast = showToast;
+window.togglePreview = togglePreview;
+window.stopAllPreviews = stopAllPreviews;
+window.searchDeezer = searchDeezer;
+window.displaySearchResults = displaySearchResults;
+window.handleTrackSelect = handleTrackSelect;
+window.formatTime = formatTime;
+window.formatNumber = formatNumber;
+window.validateBet = validateBet;
+window.checkUserLoggedIn = checkUserLoggedIn;
+window.getCurrentUser = getCurrentUser;
