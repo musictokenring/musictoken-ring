@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>MusicToken Ring - Music Battle Platform</title>
+    <title>MusicToken Ring - Music Battle Arena</title>
    
     <!-- Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -17,6 +17,15 @@
 
     <!-- Supabase JS -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+    <script>
+        const CONFIG = {
+            SUPABASE_URL: 'https://bscmgcnynbxalcuwdqlm.supabase.co',
+            SUPABASE_ANON_KEY: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJzY21nY255bmJ4YWxjdXdkcWxtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzA0NTYwOTUsImV4cCI6MjA4NjAzMjA5NX0.1iasFQ5H0GmrFqi6poWNE1aZOtbmQuB113RCyg2BBK4',
+            BATTLE_DURATION: 60
+        };
+        console.log('🎵 MusicToken Ring loaded!');
+    </script>
 </head>
 <body>
     <!-- Header -->
@@ -27,9 +36,11 @@
                     <span class="logo-icon">🥊</span>
                     <span class="logo-text">MusicToken Ring</span>
                 </div>
+                
                 <div class="header-badges">
                     <span class="badge">🎵 Deezer</span>
                     <span class="badge badge-live">🔴 Live</span>
+                    <span class="badge" id="balanceDisplay">💰 0 $MTOKEN</span>
                 </div>
                 
                 <!-- AUTH BUTTON -->
@@ -45,575 +56,230 @@
     <!-- Main Content -->
     <main class="main">
         <div class="container">
-           
-            <!-- Selection Section -->
-            <section id="selectionSection" class="selection-section">
-                <div class="section-header">
-                    <h2 class="section-title">Elige tus luchadores</h2>
-                    <p class="section-subtitle">Busca y selecciona dos canciones para la batalla</p>
-                </div>
-
-                <div class="fighters-grid">
-                    <!-- Fighter 1 -->
-                    <div class="fighter-panel">
-                        <div class="panel-header">
-                            <h3 class="panel-title">Luchador 1</h3>
-                            <span class="fighter-indicator blue">🔵</span>
-                        </div>
-                        <div class="search-box">
-                            <input 
-                                type="text" 
-                                id="search1" 
-                                class="search-input" 
-                                placeholder="Buscar canción o artista..."
-                                autocomplete="off"
-                            >
-                            <button onclick="searchDeezer(1)" class="search-btn">
-                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                    <circle cx="11" cy="11" r="8"></circle>
-                                    <path d="m21 21-4.35-4.35"></path>
-                                </svg>
-                            </button>
-                        </div>
-                        <div id="results1" class="results-grid"></div>
-                    </div>
-
-                    <!-- Fighter 2 -->
-                    <div class="fighter-panel">
-                        <div class="panel-header">
-                            <h3 class="panel-title">Luchador 2</h3>
-                            <span class="fighter-indicator red">🔴</span>
-                        </div>
-                        <div class="search-box">
-                            <input 
-                                type="text" 
-                                id="search2" 
-                                class="search-input" 
-                                placeholder="Buscar canción o artista..."
-                                autocomplete="off"
-                            >
-                            <button onclick="searchDeezer(2)" class="search-btn">
-                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                    <circle cx="11" cy="11" r="8"></circle>
-                                    <path d="m21 21-4.35-4.35"></path>
-                                </svg>
-                            </button>
-                        </div>
-                        <div id="results2" class="results-grid"></div>
-                    </div>
-                </div>
-
-                <div class="action-bar">
-                    <button id="confirmBtn" class="btn-primary" onclick="confirmSelection()" disabled>
-                        Confirmar Selección
+            
+            <!-- LOGIN WALL (mostrar si no está logueado) -->
+            <section id="loginWall" class="login-wall">
+                <div class="login-wall-content">
+                    <div class="login-wall-icon">🥊</div>
+                    <h1 class="login-wall-title">Bienvenido a MusicToken Ring</h1>
+                    <p class="login-wall-subtitle">
+                        Batalla con tus canciones favoritas, apuesta $MTOKEN y demuestra quién tiene mejor gusto musical
+                    </p>
+                    <button onclick="openAuthModal()" class="btn-primary btn-large">
+                        Iniciar Sesión para Jugar
                     </button>
+                    <div class="login-wall-features">
+                        <div class="feature-item">
+                            <span class="feature-icon">⚡</span>
+                            <span class="feature-text">Modo Rápido</span>
+                        </div>
+                        <div class="feature-item">
+                            <span class="feature-icon">🚪</span>
+                            <span class="feature-text">Salas Privadas</span>
+                        </div>
+                        <div class="feature-item">
+                            <span class="feature-icon">🏆</span>
+                            <span class="feature-text">Torneos</span>
+                        </div>
+                        <div class="feature-item">
+                            <span class="feature-icon">🤖</span>
+                            <span class="feature-text">Modo Práctica</span>
+                        </div>
+                    </div>
                 </div>
             </section>
 
-            <!-- Battle Arena -->
-            <section id="battleSection" class="battle-section hidden">
+            <!-- SELECTOR DE MODO (mostrar si está logueado) -->
+            <section id="modeSelector" class="mode-selector hidden">
                 <div class="section-header">
-                    <h2 class="section-title">Arena de Batalla</h2>
-                    <p class="section-subtitle">Coloca tus apuestas y comienza la batalla</p>
+                    <h1 class="section-title">Elige tu Modo de Juego</h1>
+                    <p class="section-subtitle">Selecciona cómo quieres competir</p>
                 </div>
 
-                <div class="battle-arena">
-                    <!-- Fighter 1 Card -->
-                    <div class="battle-card blue">
-                        <div class="battle-avatar" id="avatar1">
-                            <div class="avatar-placeholder">🎵</div>
+                <div class="modes-grid">
+                    <!-- Modo Rápido -->
+                    <div class="mode-card" onclick="selectMode('quick')">
+                        <div class="mode-icon">⚡</div>
+                        <h3 class="mode-title">Modo Rápido</h3>
+                        <p class="mode-description">
+                            Matchmaking automático. Encuentra un rival en segundos y empieza a batallar.
+                        </p>
+                        <div class="mode-features">
+                            <span class="mode-feature">🎯 Emparejamiento automático</span>
+                            <span class="mode-feature">💰 Apuesta personalizada</span>
+                            <span class="mode-feature">⏱️ Partidas de 1 minuto</span>
                         </div>
-                        <h3 class="battle-name" id="name1">Canción 1</h3>
-                        <div class="health-bar">
-                            <div class="health-fill blue" id="health1" style="width: 100%"></div>
-                            <span class="health-text" id="healthText1">100%</span>
+                        <button class="btn-mode">Jugar Ahora</button>
+                    </div>
+
+                    <!-- Sala Privada -->
+                    <div class="mode-card" onclick="selectMode('private')">
+                        <div class="mode-icon">🚪</div>
+                        <h3 class="mode-title">Sala Privada</h3>
+                        <p class="mode-description">
+                            Crea una sala e invita a tus amigos. Personaliza las reglas y apuestas.
+                        </p>
+                        <div class="mode-features">
+                            <span class="mode-feature">👥 Juega con amigos</span>
+                            <span class="mode-feature">🔗 Código de sala único</span>
+                            <span class="mode-feature">⚙️ Reglas personalizadas</span>
                         </div>
-                       
-                        <!-- Betting -->
-                        <div class="betting-box">
-                            <label class="bet-label">Apostar $MTOKEN</label>
-                            <div class="bet-input-group">
-                                <input type="number" id="bet1" class="bet-input" placeholder="0" min="0">
-                                <button onclick="placeBet(1)" class="btn-bet">Apostar</button>
+                        <button class="btn-mode">Crear Sala</button>
+                    </div>
+
+                    <!-- Torneo -->
+                    <div class="mode-card mode-coming-soon">
+                        <div class="mode-icon">🏆</div>
+                        <h3 class="mode-title">Torneo</h3>
+                        <p class="mode-description">
+                            Compite en torneos de eliminación. Gana premios masivos del prize pool.
+                        </p>
+                        <div class="mode-features">
+                            <span class="mode-feature">🎪 Múltiples rondas</span>
+                            <span class="mode-feature">💎 Grandes premios</span>
+                            <span class="mode-feature">🏅 Rankings globales</span>
+                        </div>
+                        <button class="btn-mode btn-disabled" disabled>Próximamente</button>
+                    </div>
+
+                    <!-- Modo Práctica -->
+                    <div class="mode-card" onclick="selectMode('practice')">
+                        <div class="mode-icon">🤖</div>
+                        <h3 class="mode-title">Modo Práctica</h3>
+                        <p class="mode-description">
+                            Practica contra la CPU sin arriesgar tokens. Perfecto para nuevos jugadores.
+                        </p>
+                        <div class="mode-features">
+                            <span class="mode-feature">🎮 Sin riesgo</span>
+                            <span class="mode-feature">🎁 Pequeñas recompensas</span>
+                            <span class="mode-feature">📚 Aprende a jugar</span>
+                        </div>
+                        <button class="btn-mode">Practicar</button>
+                    </div>
+                </div>
+            </section>
+
+            <!-- SELECCIÓN DE CANCIÓN Y APUESTA (para modo seleccionado) -->
+            <section id="songSelection" class="hidden">
+                <div class="section-header">
+                    <button onclick="backToModes()" class="btn-back">← Volver</button>
+                    <h2 class="section-title" id="modeTitle">Modo Rápido</h2>
+                    <p class="section-subtitle">Elige tu canción y realiza tu apuesta</p>
+                </div>
+
+                <div class="selection-container">
+                    <!-- Búsqueda -->
+                    <div class="search-panel">
+                        <h3>🎵 Busca tu Canción</h3>
+                        <div class="search-box">
+                            <input 
+                                type="text" 
+                                id="songSearch" 
+                                placeholder="Nombre de canción o artista..."
+                                class="search-input"
+                            >
+                            <button onclick="searchSong()" class="search-btn">🔍</button>
+                        </div>
+
+                        <!-- Resultados -->
+                        <div id="searchResults" class="results-grid"></div>
+                    </div>
+
+                    <!-- Selección Actual y Apuesta -->
+                    <div class="bet-panel">
+                        <div class="selected-song" id="selectedSongCard">
+                            <div class="no-selection">
+                                <div class="no-selection-icon">🎵</div>
+                                <p>Selecciona una canción</p>
                             </div>
+                        </div>
+
+                        <div class="bet-section">
+                            <h3>💰 Tu Apuesta</h3>
+                            <div class="bet-info">
+                                <span>Balance: <strong id="userBalance">0</strong> $MTOKEN</span>
+                                <span>Mínimo: <strong id="minBet">100</strong> $MTOKEN</span>
+                            </div>
+                            <input 
+                                type="number" 
+                                id="betAmount" 
+                                placeholder="100" 
+                                min="100" 
+                                class="bet-input"
+                            >
                             <div class="bet-quick">
-                                <button onclick="document.getElementById('bet1').value='100'" class="btn-quick">100</button>
-                                <button onclick="document.getElementById('bet1').value='500'" class="btn-quick">500</button>
-                                <button onclick="document.getElementById('bet1').value='1000'" class="btn-quick">1K</button>
+                                <button onclick="quickBet(100)" class="btn-quick">100</button>
+                                <button onclick="quickBet(500)" class="btn-quick">500</button>
+                                <button onclick="quickBet(1000)" class="btn-quick">1K</button>
+                                <button onclick="quickBet(5000)" class="btn-quick">5K</button>
                             </div>
-                        </div>
-                    </div>
 
-                    <!-- VS Divider -->
-                    <div class="vs-divider">
-                        <div class="vs-circle">
-                            <span class="vs-text">VS</span>
-                            <div class="timer" id="timer">60</div>
-                        </div>
-                    </div>
-
-                    <!-- Fighter 2 Card -->
-                    <div class="battle-card red">
-                        <div class="battle-avatar" id="avatar2">
-                            <div class="avatar-placeholder">🎵</div>
-                        </div>
-                        <h3 class="battle-name" id="name2">Canción 2</h3>
-                        <div class="health-bar">
-                            <div class="health-fill red" id="health2" style="width: 100%"></div>
-                            <span class="health-text" id="healthText2">100%</span>
-                        </div>
-                       
-                        <!-- Betting -->
-                        <div class="betting-box">
-                            <label class="bet-label">Apostar $MTOKEN</label>
-                            <div class="bet-input-group">
-                                <input type="number" id="bet2" class="bet-input" placeholder="0" min="0">
-                                <button onclick="placeBet(2)" class="btn-bet">Apostar</button>
-                            </div>
-                            <div class="bet-quick">
-                                <button onclick="document.getElementById('bet2').value='100'" class="btn-quick">100</button>
-                                <button onclick="document.getElementById('bet2').value='500'" class="btn-quick">500</button>
-                                <button onclick="document.getElementById('bet2').value='1000'" class="btn-quick">1K</button>
+                            <!-- Botones según modo -->
+                            <div id="actionButtons">
+                                <!-- Se llenarán dinámicamente -->
                             </div>
                         </div>
                     </div>
                 </div>
+            </section>
 
-                <!-- Battle Stats -->
-                <div class="battle-stats">
-                    <div class="stat-item">
-                        <span class="stat-label">Pool Total</span>
-                        <span class="stat-value" id="totalPool">0 $MTOKEN</span>
-                    </div>
-                    <div class="stat-item">
-                        <span class="stat-label">Apuestas 1</span>
-                        <span class="stat-value blue" id="bets1">0 $MTOKEN</span>
-                    </div>
-                    <div class="stat-item">
-                        <span class="stat-label">Apuestas 2</span>
-                        <span class="stat-value red" id="bets2">0 $MTOKEN</span>
-                    </div>
+            <!-- PANTALLA DE ESPERA -->
+            <section id="waitingScreen" class="hidden">
+                <div class="waiting-content">
+                    <div class="waiting-spinner">⏳</div>
+                    <h2 class="waiting-title">Buscando Oponente...</h2>
+                    <p class="waiting-subtitle">Esto puede tomar unos segundos</p>
+                    <button onclick="cancelSearch()" class="btn-secondary">Cancelar Búsqueda</button>
                 </div>
+            </section>
 
-                <div class="action-bar">
-                    <button id="startBtn" class="btn-primary btn-large" onclick="startBattle()">
-                        🎮 Iniciar Batalla
-                    </button>
+            <!-- PANTALLA DE SALA PRIVADA -->
+            <section id="roomScreen" class="hidden">
+                <div class="room-content">
+                    <div class="room-header">
+                        <h2>🚪 Sala Privada</h2>
+                        <div class="room-code-display">
+                            <span>Código:</span>
+                            <strong id="roomCode">XXXXX</strong>
+                            <button onclick="copyRoomCode()" class="btn-copy">📋</button>
+                        </div>
+                    </div>
+                    <div class="room-players">
+                        <div class="room-player" id="player1Card">
+                            <div class="player-avatar">👤</div>
+                            <span class="player-name">Esperando...</span>
+                        </div>
+                        <div class="room-vs">VS</div>
+                        <div class="room-player" id="player2Card">
+                            <div class="player-avatar">❓</div>
+                            <span class="player-name">Esperando rival...</span>
+                        </div>
+                    </div>
+                    <p class="room-info">Comparte el código con tu amigo</p>
+                    <button onclick="leaveRoom()" class="btn-secondary">Salir de la Sala</button>
                 </div>
+            </section>
+
+            <!-- ARENA DE BATALLA (mantener el existente pero oculto inicialmente) -->
+            <section id="battleSection" class="battle-section hidden">
+                <!-- Tu código de batalla actual aquí -->
             </section>
 
         </div>
     </main>
 
-    <!-- Winner Modal -->
-    <div id="winnerModal" class="modal hidden">
-        <div class="modal-overlay" onclick="document.getElementById('winnerModal').classList.add('hidden')"></div>
-        <div class="modal-content">
-            <div class="winner-icon">🏆</div>
-            <h2 class="winner-title">¡Victoria!</h2>
-            <p class="winner-name" id="winnerName">Canción Ganadora</p>
-            <p class="winner-prize" id="winnerPrize">+0 $MTOKEN</p>
-            <button onclick="location.reload()" class="btn-primary">Nueva Batalla</button>
-        </div>
-    </div>
-
-    <!-- Auth Modal -->
-    <div id="authModal" class="modal hidden">
-        <div class="modal-overlay" onclick="closeAuthModal()"></div>
-        <div class="modal-content auth-modal-content">
-            <button onclick="closeAuthModal()" class="modal-close">×</button>
-            
-            <!-- Login Form -->
-            <div id="loginForm" class="auth-form">
-                <h2 class="auth-title">Iniciar Sesión</h2>
-                <p class="auth-subtitle">Accede a tu cuenta para guardar tu progreso</p>
-                
-                <!-- Google Login -->
-                <button onclick="loginWithGoogle()" class="btn-google">
-                    <svg width="18" height="18" viewBox="0 0 18 18">
-                        <path fill="#4285F4" d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844c-.209 1.125-.843 2.078-1.796 2.717v2.258h2.908c1.702-1.567 2.684-3.875 2.684-6.615z"/>
-                        <path fill="#34A853" d="M9 18c2.43 0 4.467-.806 5.956-2.184l-2.908-2.258c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332C2.438 15.983 5.482 18 9 18z"/>
-                        <path fill="#FBBC05" d="M3.964 10.707c-.18-.54-.282-1.117-.282-1.707 0-.593.102-1.167.282-1.707V4.961H.957C.347 6.175 0 7.55 0 9s.348 2.825.957 4.039l3.007-2.332z"/>
-                        <path fill="#EA4335" d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0 5.482 0 2.438 2.017.957 4.961L3.964 7.29C4.672 5.163 6.656 3.58 9 3.58z"/>
-                    </svg>
-                    Continuar con Google
-                </button>
-                
-                <div class="auth-divider">
-                    <span>o</span>
-                </div>
-                
-                <!-- Email Login -->
-                <form onsubmit="handleLoginSubmit(event)">
-                    <div class="form-group">
-                        <label for="loginEmail">Email</label>
-                        <input 
-                            type="email" 
-                            id="loginEmail" 
-                            class="form-input" 
-                            placeholder="tu@email.com"
-                            required
-                        >
-                    </div>
-                    
-                    <div class="form-group">
-                        <label for="loginPassword">Contraseña</label>
-                        <input 
-                            type="password" 
-                            id="loginPassword" 
-                            class="form-input" 
-                            placeholder="••••••••"
-                            required
-                        >
-                    </div>
-                    
-                    <button type="submit" class="btn-primary btn-block">
-                        Iniciar Sesión
-                    </button>
-                </form>
-                
-                <p class="auth-switch">
-                    ¿No tienes cuenta? 
-                    <a href="#" onclick="switchToSignup(); return false;">Regístrate</a>
-                </p>
-            </div>
-            
-            <!-- Signup Form -->
-            <div id="signupForm" class="auth-form hidden">
-                <h2 class="auth-title">Crear Cuenta</h2>
-                <p class="auth-subtitle">Únete a MusicToken Ring</p>
-                
-                <!-- Google Signup -->
-                <button onclick="loginWithGoogle()" class="btn-google">
-                    <svg width="18" height="18" viewBox="0 0 18 18">
-                        <path fill="#4285F4" d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844c-.209 1.125-.843 2.078-1.796 2.717v2.258h2.908c1.702-1.567 2.684-3.875 2.684-6.615z"/>
-                        <path fill="#34A853" d="M9 18c2.43 0 4.467-.806 5.956-2.184l-2.908-2.258c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332C2.438 15.983 5.482 18 9 18z"/>
-                        <path fill="#FBBC05" d="M3.964 10.707c-.18-.54-.282-1.117-.282-1.707 0-.593.102-1.167.282-1.707V4.961H.957C.347 6.175 0 7.55 0 9s.348 2.825.957 4.039l3.007-2.332z"/>
-                        <path fill="#EA4335" d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0 5.482 0 2.438 2.017.957 4.961L3.964 7.29C4.672 5.163 6.656 3.58 9 3.58z"/>
-                    </svg>
-                    Continuar con Google
-                </button>
-                
-                <div class="auth-divider">
-                    <span>o</span>
-                </div>
-                
-                <!-- Email Signup -->
-                <form onsubmit="handleSignupSubmit(event)">
-                    <div class="form-group">
-                        <label for="signupName">Nombre</label>
-                        <input 
-                            type="text" 
-                            id="signupName" 
-                            class="form-input" 
-                            placeholder="Tu nombre"
-                            required
-                        >
-                    </div>
-                    
-                    <div class="form-group">
-                        <label for="signupEmail">Email</label>
-                        <input 
-                            type="email" 
-                            id="signupEmail" 
-                            class="form-input" 
-                            placeholder="tu@email.com"
-                            required
-                        >
-                    </div>
-                    
-                    <div class="form-group">
-                        <label for="signupPassword">Contraseña</label>
-                        <input 
-                            type="password" 
-                            id="signupPassword" 
-                            class="form-input" 
-                            placeholder="Mínimo 6 caracteres"
-                            required
-                            minlength="6"
-                        >
-                    </div>
-                    
-                    <button type="submit" class="btn-primary btn-block">
-                        Crear Cuenta
-                    </button>
-                </form>
-                
-                <p class="auth-switch">
-                    ¿Ya tienes cuenta? 
-                    <a href="#" onclick="switchToLogin(); return false;">Inicia sesión</a>
-                </p>
-            </div>
-        </div>
-    </div>
-
     <!-- Toast Container -->
     <div id="toastContainer" class="toast-container"></div>
 
-    <!-- Scripts -->
-    <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
-    <script>
-        const CONFIG = {
-            BACKEND_API: 'https://bscmgcnynbxalcuwdqlm.supabase.co/functions/v1/deezer-search',
-            BATTLE_DURATION: 60,
-        };
-        console.log('🎵 MusicToken Ring loaded!');
-    </script>
-    <script src="./src/app.js"></script>
-    <script src="./auth-system.js"></script>
+    <!-- Auth Modal (mantener el existente) -->
+    <div id="authModal" class="modal hidden">
+        <!-- Tu código de auth modal aquí -->
+    </div>
 
-    <!-- Auth Styles -->
-    <style>
-    /* Auth Modal */
-    .auth-modal-content {
-        max-width: 440px;
-        padding: 40px;
-    }
-
-    .auth-title {
-        font-size: 28px;
-        font-weight: 800;
-        margin-bottom: 8px;
-        text-align: center;
-    }
-
-    .auth-subtitle {
-        color: var(--text-secondary);
-        text-align: center;
-        margin-bottom: 32px;
-    }
-
-    .auth-form {
-        width: 100%;
-    }
-
-    /* Google Button */
-    .btn-google {
-        width: 100%;
-        padding: 12px 24px;
-        background: white;
-        border: 1px solid var(--border-color);
-        border-radius: 12px;
-        color: #202124;
-        font-size: 15px;
-        font-weight: 600;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        gap: 12px;
-        cursor: pointer;
-        transition: all 0.2s ease;
-        margin-bottom: 24px;
-    }
-
-    .btn-google:hover {
-        background: #f8f9fa;
-        border-color: #dadce0;
-    }
-
-    /* Divider */
-    .auth-divider {
-        display: flex;
-        align-items: center;
-        text-align: center;
-        margin: 24px 0;
-        color: var(--text-secondary);
-    }
-
-    .auth-divider::before,
-    .auth-divider::after {
-        content: '';
-        flex: 1;
-        border-bottom: 1px solid var(--border-color);
-    }
-
-    .auth-divider span {
-        padding: 0 16px;
-        font-size: 13px;
-    }
-
-    /* Form Groups */
-    .form-group {
-        margin-bottom: 20px;
-    }
-
-    .form-group label {
-        display: block;
-        font-size: 13px;
-        font-weight: 600;
-        margin-bottom: 8px;
-        color: var(--text-primary);
-    }
-
-    .form-input {
-        width: 100%;
-        padding: 12px 16px;
-        background: var(--bg-card);
-        border: 1px solid var(--border-color);
-        border-radius: 10px;
-        color: var(--text-primary);
-        font-size: 15px;
-        font-family: inherit;
-        transition: all 0.2s ease;
-    }
-
-    .form-input:focus {
-        outline: none;
-        border-color: var(--accent-green);
-        background: var(--bg-primary);
-    }
-
-    .btn-block {
-        width: 100%;
-        margin-top: 8px;
-    }
-
-    /* Auth Switch */
-    .auth-switch {
-        text-align: center;
-        margin-top: 24px;
-        font-size: 14px;
-        color: var(--text-secondary);
-    }
-
-    .auth-switch a {
-        color: var(--accent-green);
-        text-decoration: none;
-        font-weight: 600;
-    }
-
-    .auth-switch a:hover {
-        text-decoration: underline;
-    }
-
-    /* User Menu */
-    .user-menu {
-        display: flex;
-        align-items: center;
-        gap: 12px;
-    }
-
-    .user-avatar {
-        width: 36px;
-        height: 36px;
-        border-radius: 50%;
-        overflow: hidden;
-        background: var(--accent-green);
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-weight: 700;
-        color: white;
-    }
-
-    .user-avatar img {
-        width: 100%;
-        height: 100%;
-        object-fit: cover;
-    }
-
-    .user-name {
-        font-size: 14px;
-        font-weight: 600;
-    }
-
-    .btn-logout {
-        padding: 6px 16px;
-        background: var(--bg-card);
-        border: 1px solid var(--border-color);
-        border-radius: 8px;
-        color: var(--text-primary);
-        font-size: 13px;
-        font-weight: 600;
-        cursor: pointer;
-        transition: all 0.2s ease;
-    }
-
-    .btn-logout:hover {
-        background: var(--hover-bg);
-        border-color: var(--accent-red);
-        color: var(--accent-red);
-    }
-
-    .btn-login {
-        padding: 10px 24px;
-        background: var(--accent-green);
-        border: none;
-        border-radius: 20px;
-        color: white;
-        font-size: 14px;
-        font-weight: 700;
-        cursor: pointer;
-        transition: all 0.2s ease;
-    }
-
-    .btn-login:hover {
-        background: #1ed760;
-        transform: scale(1.05);
-    }
-
-    .modal-close {
-        position: absolute;
-        top: 16px;
-        right: 16px;
-        width: 32px;
-        height: 32px;
-        border: none;
-        background: var(--bg-card);
-        border-radius: 50%;
-        color: var(--text-primary);
-        font-size: 24px;
-        cursor: pointer;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        transition: all 0.2s ease;
-    }
-
-    .modal-close:hover {
-        background: var(--hover-bg);
-        transform: rotate(90deg);
-    }
-
-    /* Footer */
-    .footer {
-        background: #1A1A1A;
-        padding: 40px 20px;
-        margin-top: 80px;
-        border-top: 1px solid #2A2A2A;
-    }
-
-    .footer-content {
-        max-width: 1200px;
-        margin: 0 auto;
-        text-align: center;
-    }
-
-    .footer-links {
-        display: flex;
-        justify-content: center;
-        gap: 32px;
-        margin-bottom: 20px;
-        flex-wrap: wrap;
-    }
-
-    .footer-link {
-        color: #9CA3AF;
-        text-decoration: none;
-        font-size: 14px;
-        transition: color 0.2s ease;
-    }
-
-    .footer-link:hover {
-        color: #1DB954;
-    }
-
-    .footer-copyright {
-        color: #6B7280;
-        font-size: 13px;
-        margin: 0;
-    }
-    </style>
+    <!-- Victory Modal (mantener el existente) -->
+    <div id="victoryModal" class="modal hidden">
+        <!-- Tu código de victory modal aquí -->
+    </div>
 
     <!-- Footer -->
     <footer class="footer">
@@ -621,12 +287,227 @@
             <div class="footer-links">
                 <a href="/privacy.html" class="footer-link">Privacy Policy</a>
                 <a href="/terms.html" class="footer-link">Terms of Service</a>
-                <a href="mailto:legal@musictokenring.xyz" class="footer-link">Contact</a>
+                <a href="/cdn-cgi/l/email-protection#553930323439153820263c36213a3e303b273c3b327b2d2c2f" class="footer-link">Contact</a>
             </div>
             <p class="footer-copyright">
                 © 2026 MusicToken Ring. All rights reserved.
             </p>
         </div>
     </footer>
-</body>
-</html>
+
+    <!-- Scripts -->
+    <script data-cfasync="false" src="/cdn-cgi/scripts/5c5dd728/cloudflare-static/email-decode.min.js"></script><script src="./auth-system.js"></script>
+    <script src="./game-manager.js"></script>
+    <script src="./src/app.js"></script>
+
+    <script>
+        // Variables globales
+        let selectedSong = null;
+        let currentMode = null;
+
+        // Verificar login al cargar
+        document.addEventListener('DOMContentLoaded', async () => {
+            const { data: { session } } = await supabaseClient.auth.getSession();
+            
+            if (session) {
+                showModeSelector();
+            } else {
+                showLoginWall();
+            }
+        });
+
+        // Mostrar/ocultar secciones
+        function showLoginWall() {
+            document.getElementById('loginWall').classList.remove('hidden');
+            document.getElementById('modeSelector').classList.add('hidden');
+        }
+
+        function showModeSelector() {
+            document.getElementById('loginWall').classList.add('hidden');
+            document.getElementById('modeSelector').classList.remove('hidden');
+        }
+
+        // Seleccionar modo
+        function selectMode(mode) {
+            currentMode = mode;
+            document.getElementById('modeSelector').classList.add('hidden');
+            document.getElementById('songSelection').classList.remove('hidden');
+            
+            const titles = {
+                'quick': 'Modo Rápido',
+                'private': 'Sala Privada',
+                'practice': 'Modo Práctica'
+            };
+            document.getElementById('modeTitle').textContent = titles[mode];
+            
+            updateActionButtons(mode);
+        }
+
+        function backToModes() {
+            document.getElementById('songSelection').classList.add('hidden');
+            document.getElementById('modeSelector').classList.remove('hidden');
+            selectedSong = null;
+        }
+
+        // Actualizar botones según modo
+        function updateActionButtons(mode) {
+            const buttonsDiv = document.getElementById('actionButtons');
+            
+            if (mode === 'quick') {
+                buttonsDiv.innerHTML = `
+                    <button onclick="startQuickMatch()" class="btn-primary btn-large" id="startQuickBtn" disabled>
+                        ⚡ Buscar Rival
+                    </button>
+                `;
+            } else if (mode === 'private') {
+                buttonsDiv.innerHTML = `
+                    <button onclick="createRoom()" class="btn-primary" id="createRoomBtn" disabled>
+                        🚪 Crear Sala
+                    </button>
+                    <div class="or-divider">o</div>
+                    <div class="join-room-group">
+                        <input type="text" id="joinRoomCode" placeholder="Código de sala" class="room-code-input" maxlength="6">
+                        <button onclick="joinRoom()" class="btn-secondary" id="joinRoomBtn" disabled>
+                            Unirse
+                        </button>
+                    </div>
+                `;
+            } else if (mode === 'practice') {
+                buttonsDiv.innerHTML = `
+                    <button onclick="startPractice()" class="btn-primary btn-large" id="startPracticeBtn" disabled>
+                        🤖 Iniciar Práctica
+                    </button>
+                `;
+            }
+        }
+
+        // Búsqueda de canciones
+        function searchSong() {
+            const query = document.getElementById('songSearch').value;
+            searchDeezer(query);
+        }
+
+        function searchDeezer(query) {
+            if (!query.trim()) return;
+            
+            const resultsDiv = document.getElementById('searchResults');
+            resultsDiv.innerHTML = '<p style="text-align: center; padding: 20px;">🔍 Buscando...</p>';
+            
+            const callbackName = `deezerCallback_${Date.now()}`;
+            
+            window[callbackName] = function(data) {
+                delete window[callbackName];
+                document.getElementById(callbackName)?.remove();
+                
+                if (!data.data || data.data.length === 0) {
+                    resultsDiv.innerHTML = '<p style="text-align: center; padding: 20px; color: #9CA3AF;">No se encontraron resultados</p>';
+                    return;
+                }
+                
+                let html = '';
+                data.data.forEach(track => {
+                    html += `
+                        <div class="track-item" onclick='selectSongForBattle(${JSON.stringify({
+                            id: track.id,
+                            name: track.title,
+                            artist: track.artist.name,
+                            image: track.album.cover_big,
+                            preview: track.preview
+                        }).replace(/'/g, "&#39;")})'>
+                            <img src="${track.album.cover_medium}" alt="${track.title}">
+                            <div class="track-info">
+                                <div class="track-name">${track.title}</div>
+                                <div class="track-artist">${track.artist.name}</div>
+                            </div>
+                            ${track.preview ? `
+                                <button class="btn-preview" onclick="event.stopPropagation(); togglePreview('${track.preview}', this)">
+                                    ▶ Preview
+                                </button>
+                            ` : ''}
+                        </div>
+                    `;
+                });
+                resultsDiv.innerHTML = html;
+            };
+            
+            const script = document.createElement('script');
+            script.id = callbackName;
+            script.src = `https://api.deezer.com/search?q=${encodeURIComponent(query)}&limit=6&output=jsonp&callback=${callbackName}`;
+            document.head.appendChild(script);
+        }
+
+        // Seleccionar canción
+        function selectSongForBattle(song) {
+            selectedSong = song;
+            
+            const cardDiv = document.getElementById('selectedSongCard');
+            cardDiv.innerHTML = `
+                <img src="${song.image}" alt="${song.name}" class="selected-song-image">
+                <div class="selected-song-info">
+                    <h4>${song.name}</h4>
+                    <p>${song.artist}</p>
+                </div>
+            `;
+            
+            // Habilitar botones
+            document.querySelectorAll('#actionButtons button').forEach(btn => {
+                if (!btn.classList.contains('btn-disabled')) {
+                    btn.disabled = false;
+                }
+            });
+        }
+
+        // Apuesta rápida
+        function quickBet(amount) {
+            document.getElementById('betAmount').value = amount;
+        }
+
+        // Iniciar según modo
+        async function startQuickMatch() {
+            if (!selectedSong) return;
+            const bet = parseInt(document.getElementById('betAmount').value) || 100;
+            await GameManager.joinQuickMatch(selectedSong, bet);
+        }
+
+        async function createRoom() {
+            if (!selectedSong) return;
+            const bet = parseInt(document.getElementById('betAmount').value) || 100;
+            await GameManager.createPrivateRoom(selectedSong, bet);
+        }
+
+        async function joinRoom() {
+            if (!selectedSong) return;
+            const roomCode = document.getElementById('joinRoomCode').value.toUpperCase();
+            const bet = parseInt(document.getElementById('betAmount').value) || 100;
+            await GameManager.joinPrivateRoom(roomCode, selectedSong, bet);
+        }
+
+        async function startPractice() {
+            if (!selectedSong) return;
+            // Seleccionar canción aleatoria para CPU
+            // Por ahora usar la misma lógica
+            await GameManager.startPracticeMatch(selectedSong, selectedSong);
+        }
+
+        function cancelSearch() {
+            // Implementar cancelación
+            backToModes();
+        }
+
+        function leaveRoom() {
+            // Implementar salir de sala
+            backToModes();
+        }
+
+        function copyRoomCode() {
+            const code = document.getElementById('roomCode').textContent;
+            navigator.clipboard.writeText(code);
+            showToast('Código copiado', 'success');
+        }
+
+        // Enter key en búsqueda
+        document.getElementById('songSearch')?.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') searchSong();
+        });
+    </script>
+
