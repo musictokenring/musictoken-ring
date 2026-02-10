@@ -820,6 +820,7 @@ const GameEngine = {
         const winnerName = winner === 1 ? match.player1_song_name : match.player2_song_name;
         const prize = userWon ? payouts.winnerPayout : 0;
         const platformWallet = this.getPlatformWalletAddress();
+        const payoutNetwork = this.getPreferredNetwork();
         
         const container = document.querySelector('.container');
         container.innerHTML = `
@@ -832,6 +833,7 @@ const GameEngine = {
                     <div class="victory-breakdown">
                         <p>Comisión plataforma: ${payouts.platformFee} $MTOKEN</p>
                         <p>Pago al ganador: ${payouts.winnerPayout} $MTOKEN</p>
+                        <p>Red de cobro: ${payoutNetwork.toUpperCase()}</p>
                         <p>Billetera plataforma: ${platformWallet}</p>
                     </div>
                 ` : ''}
@@ -1064,9 +1066,12 @@ const GameEngine = {
         }
         try {
             const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
+            const chainIdHex = await window.ethereum.request({ method: 'eth_chainId' });
+            const chainId = Number.parseInt(chainIdHex, 16);
             if (accounts && accounts.length > 0) {
                 this.connectedWallet = accounts[0];
                 localStorage.setItem('mtr_wallet', accounts[0]);
+                localStorage.setItem('mtr_wallet_chain', this.getChainNameFromId(chainId));
                 this.updateWalletDisplay();
                 showToast('Wallet conectada', 'success');
             }
@@ -1083,9 +1088,53 @@ const GameEngine = {
             walletEl.classList.remove('hidden');
         }
     },
+    getChainNameFromId(chainId) {
+        const map = {
+            1: 'ethereum',
+            10: 'optimism',
+            56: 'bnb',
+            137: 'polygon',
+            42161: 'arbitrum',
+            59144: 'linea',
+            8453: 'base',
+            80001: 'polygon',
+            11155111: 'ethereum'
+        };
+        return map[chainId] || 'polygon';
+    },
+
+
+    getPreferredNetwork() {
+        const configured = localStorage.getItem('mtr_preferred_network');
+        if (configured) return configured;
+
+        const connectedChain = localStorage.getItem('mtr_wallet_chain');
+        if (connectedChain) return connectedChain;
+
+        return 'polygon';
+    },
 
     getPlatformWalletAddress() {
-        return window.PLATFORM_WALLET_ADDRESS || 'PENDIENTE_CONFIGURAR';
+        const addresses = window.PLATFORM_WALLET_ADDRESSES || {};
+        const preferredOrder = [
+            this.getPreferredNetwork(),
+            'polygon',
+            'ethereum',
+            'optimism',
+            'base',
+            'arbitrum',
+            'bnb',
+            'linea',
+            'tron',
+            'solana',
+            'bitcoin'
+        ];
+
+        for (const chainKey of preferredOrder) {
+            if (addresses[chainKey]) return addresses[chainKey];
+        }
+
+        return 'PENDIENTE_CONFIGURAR';
     },
 
     calculateMatchPayouts(totalPot) {
