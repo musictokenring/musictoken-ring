@@ -6,12 +6,19 @@
 const GameEngine = {
     currentMatch: null,
     currentMode: null,
+    currentUserId: null,
     userBalance: 0,
     minBet: 100,
     battleDuration: 60,
     victoryAudioDuration: 15,
+    platformFeeRate: 0.1,
+    jackpotRate: 0.1,
+    platformRevenueTarget: 100000,
     userAudio: null,
     victoryAudio: null,
+    connectedWallet: null,
+    quickMatchChannel: null,
+    pendingChallenge: null,
     currentRoomCode: null,
     currentPrivateMatchId: null,
     
@@ -23,6 +30,7 @@ const GameEngine = {
         console.log('🎮 Game Engine initializing...');
         await this.loadUserBalance();
         await this.loadGameConfig();
+        this.loadStoredWallet();
         this.setupRealtimeSubscriptions();
         console.log('✅ Game Engine ready!');
     },
@@ -31,6 +39,8 @@ const GameEngine = {
         try {
             const { data: { session } } = await supabaseClient.auth.getSession();
             if (!session) return;
+
+            this.currentUserId = session.user.id;
             
             const { data, error } = await supabaseClient
                 .from('user_balances')
@@ -67,6 +77,9 @@ const GameEngine = {
                 this.minBet = data.min_bet;
                 this.battleDuration = data.battle_duration;
                 this.victoryAudioDuration = data.victory_audio_duration;
+                if (data.platform_fee_rate) this.platformFeeRate = data.platform_fee_rate;
+                if (data.jackpot_rate) this.jackpotRate = data.jackpot_rate;
+                if (data.platform_revenue_target) this.platformRevenueTarget = data.platform_revenue_target;
             }
         } catch (error) {
             console.error('Error loading config:', error);
@@ -102,7 +115,13 @@ const GameEngine = {
         try {
             const { data: { session } } = await supabaseClient.auth.getSession();
             
+            if (this.pendingChallenge) {
+                await this.acceptQuickChallenge(song, betAmount, session.user.id);
+                return;
+            }
+
             showToast('Buscando oponente...', 'info');
+            await this.broadcastQuickChallenge(song, betAmount, session.user.id);
             
             // Buscar oponente en cola
             const { data: opponents } = await supabaseClient
@@ -153,6 +172,63 @@ const GameEngine = {
             console.error('Error joining quick match:', error);
             showToast('Error al buscar partida', 'error');
         }
+    },
+
+    async broadcastQuickChallenge(song, betAmount, userId) {
+        if (!this.quickMatchChannel) return;
+        const payload = {
+            type: 'challenge',
+            from: userId,
+            betAmount,
+            song: {
+                id: song.id,
+                name: song.name,
+                artist: song.artist,
+                image: song.image,
+                preview: song.preview
+            }
+        };
+        await this.quickMatchChannel.send({
+            type: 'broadcast',
+            event: 'quick-challenge',
+            payload
+        });
+    },
+
+    async acceptQuickChallenge(song, betAmount, userId) {
+        const challenge = this.pendingChallenge;
+        if (!challenge) return;
+        if (betAmount < challenge.betAmount) {
+            showToast(`La apuesta debe ser mínimo ${challenge.betAmount} $MTOKEN`, 'error');
+            return;
+        }
+        this.pendingChallenge = null;
+
+        await this.createMatch(
+            'quick',
+            userId,
+            challenge.from,
+            song,
+            {
+                song_id: challenge.song.id,
+                song_name: challenge.song.name,
+                song_artist: challenge.song.artist,
+                song_image: challenge.song.image,
+                song_preview: challenge.song.preview
+            },
+            betAmount,
+            challenge.betAmount
+        );
+
+        await this.quickMatchChannel.send({
+            type: 'broadcast',
+            event: 'quick-challenge-response',
+            payload: {
+                type: 'accepted',
+                from: userId,
+                to: challenge.from
+            }
+        });
     },
     
     startMatchmakingPolling() {
@@ -254,6 +330,10 @@ const GameEngine = {
             document.getElementById('songSelection').classList.add('hidden');
             document.getElementById('roomScreen').classList.remove('hidden');
             document.getElementById('roomCode').textContent = roomCode;
+            const linkEl = document.getElementById('roomInviteLink');
+            if (linkEl) {
+                linkEl.value = `${window.location.origin}${window.location.pathname}?room=${roomCode}`;
+            }
             
             showToast(`Sala creada: ${roomCode}`, 'success');
             
@@ -395,14 +475,7 @@ const GameEngine = {
         try {
             const { data: { session } } = await supabaseClient.auth.getSession();
             
-            // Generar canción random para CPU
-            const cpuSongs = [
-                { id: 'cpu1', name: 'Warrior Mode', artist: 'CPU Fighter', image: userSong.image, preview: userSong.preview },
-                { id: 'cpu2', name: 'Battle Anthem', artist: 'Computer Champion', image: userSong.image, preview: userSong.preview },
-                { id: 'cpu3', name: 'Victory March', artist: 'AI Opponent', image: userSong.image, preview: userSong.preview }
-            ];
-            
-            const cpuSong = cpuSongs[Math.floor(Math.random() * cpuSongs.length)];
+            const cpuSong = await this.fetchCpuOpponentTrack(userSong);
             
             const { data: match, error } = await supabaseClient
                 .from('matches')
@@ -497,13 +570,22 @@ const GameEngine = {
             if (error) throw error;
             
             // Actualizar torneo
+            const {
+                platformFee,
+                jackpotContribution,
+                platformNet,
+                prizeContribution
+            } = this.calculateTournamentEntry(betAmount);
             await supabaseClient
                 .from('tournaments')
                 .update({
                     current_participants: tournament.current_participants + 1,
-                    prize_pool: tournament.prize_pool + betAmount
+                    prize_pool: tournament.prize_pool + prizeContribution
                 })
                 .eq('id', tournamentId);
+
+            this.addToPlatformRevenue(platformNet);
+            this.addToJackpotPool(jackpotContribution);
             
             // Descontar entrada
             await this.updateBalance(-betAmount, 'bet', null);
@@ -609,6 +691,7 @@ const GameEngine = {
                                 <span class="health-text" id="health1Text">100%</span>
                             </div>
                         </div>
+                        <div class="battle-plays">🎧 Reproducciones: <span id="plays1">0</span></div>
                         <div class="battle-bet">💰 ${match.player1_bet} $MTOKEN</div>
                     </div>
                     
@@ -632,6 +715,7 @@ const GameEngine = {
                                 <span class="health-text" id="health2Text">100%</span>
                             </div>
                         </div>
+                        <div class="battle-plays">🎧 Reproducciones: <span id="plays2">0</span></div>
                         <div class="battle-bet">💰 ${match.player2_bet} $MTOKEN</div>
                     </div>
                 </div>
@@ -649,7 +733,11 @@ const GameEngine = {
         const userSong = isPlayer1 ? match.player1_song_preview : match.player2_song_preview;
         this.playUserSong(userSong);
         
-        // Simular batalla
+        const oracleStats = await this.fetchOracleStats(match);
+        const basePlays1 = oracleStats.player1Projected;
+        const basePlays2 = oracleStats.player2Projected;
+        let plays1 = 0;
+        let plays2 = 0;
         let health1 = 100;
         let health2 = 100;
         let timeLeft = this.battleDuration;
@@ -659,33 +747,35 @@ const GameEngine = {
             
             document.getElementById('battleTimer').textContent = timeLeft;
             
-            // Daño aleatorio
-            const damage1 = Math.random() * 3 + 1;
-            const damage2 = Math.random() * 3 + 1;
-            
-            health1 -= damage2;
-            health2 -= damage1;
-            
-            health1 = Math.max(0, health1);
-            health2 = Math.max(0, health2);
+            plays1 += this.calculatePlaysIncrement(basePlays1);
+            plays2 += this.calculatePlaysIncrement(basePlays2);
+
+            const totalPlays = plays1 + plays2;
+            const share1 = totalPlays > 0 ? (plays1 / totalPlays) * 100 : 50;
+            const share2 = 100 - share1;
+            health1 = Math.max(0, Math.min(100, share1));
+            health2 = Math.max(0, Math.min(100, share2));
             
             // Actualizar UI
             document.getElementById('health1Fill').style.width = `${health1}%`;
             document.getElementById('health2Fill').style.width = `${health2}%`;
             document.getElementById('health1Text').textContent = `${Math.round(health1)}%`;
             document.getElementById('health2Text').textContent = `${Math.round(health2)}%`;
+            document.getElementById('plays1').textContent = Math.round(plays1).toLocaleString('es-ES');
+            document.getElementById('plays2').textContent = Math.round(plays2).toLocaleString('es-ES');
             
             // Fin de batalla
-            if (timeLeft <= 0 || health1 <= 0 || health2 <= 0) {
+            if (timeLeft <= 0) {
                 clearInterval(battleInterval);
-                this.endBattle(match, health1, health2, isPlayer1);
+                this.endBattle(match, health1, health2, isPlayer1, plays1, plays2);
             }
         }, 1000);
     },
     
-    async endBattle(match, health1, health2, isPlayer1) {
-        const winner = health1 > health2 ? 1 : 2;
+    async endBattle(match, health1, health2, isPlayer1, plays1, plays2) {
+        const winner = plays1 > plays2 ? 1 : 2;
         const userWon = (isPlayer1 && winner === 1) || (!isPlayer1 && winner === 2);
+        const payouts = this.calculateMatchPayouts(match.total_pot);
         
         // Detener canción del usuario
         this.stopUserSong();
@@ -698,6 +788,8 @@ const GameEngine = {
                 winner: winner,
                 player1_final_health: Math.round(health1),
                 player2_final_health: Math.round(health2),
+                player1_streams: Math.round(plays1),
+                player2_streams: Math.round(plays2),
                 finished_at: new Date().toISOString()
             })
             .eq('id', match.id);
@@ -709,8 +801,9 @@ const GameEngine = {
         // Procesar premios
         if (match.match_type !== 'practice') {
             if (userWon) {
-                await this.updateBalance(match.total_pot, 'win', match.id);
+                await this.updateBalance(payouts.winnerPayout, 'win', match.id);
             }
+            this.addToPlatformRevenue(payouts.platformFee);
         } else {
             if (userWon) {
                 await this.updateBalance(50, 'practice_reward', match.id);
@@ -719,13 +812,15 @@ const GameEngine = {
         
         // Mostrar resultado después de 15 segundos
         setTimeout(() => {
-            this.showVictoryScreen(match, winner, userWon);
+            this.showVictoryScreen(match, winner, userWon, payouts);
         }, 15000);
     },
     
-    showVictoryScreen(match, winner, userWon) {
+    showVictoryScreen(match, winner, userWon, payouts) {
         const winnerName = winner === 1 ? match.player1_song_name : match.player2_song_name;
-        const prize = userWon ? match.total_pot : 0;
+        const prize = userWon ? payouts.winnerPayout : 0;
+        const platformWallet = this.getPlatformWalletAddress();
+        const payoutNetwork = this.getPreferredNetwork();
         
         const container = document.querySelector('.container');
         container.innerHTML = `
@@ -734,6 +829,14 @@ const GameEngine = {
                 <h1 class="victory-title">${userWon ? '¡VICTORIA!' : 'Derrota'}</h1>
                 <h2 class="victory-winner">${winnerName}</h2>
                 ${prize > 0 ? `<p class="victory-prize">+${prize} $MTOKEN</p>` : ''}
+                ${match.match_type !== 'practice' ? `
+                    <div class="victory-breakdown">
+                        <p>Comisión plataforma: ${payouts.platformFee} $MTOKEN</p>
+                        <p>Pago al ganador: ${payouts.winnerPayout} $MTOKEN</p>
+                        <p>Red de cobro: ${payoutNetwork.toUpperCase()}</p>
+                        <p>Billetera plataforma: ${platformWallet}</p>
+                    </div>
+                ` : ''}
                 <button onclick="location.reload()" class="btn-primary btn-large">
                     Jugar de Nuevo
                 </button>
@@ -760,6 +863,7 @@ const GameEngine = {
     },
     
     playVictorySong(url) {
+        if (!url) return;
         if (this.victoryAudio) this.victoryAudio.pause();
         this.victoryAudio = new Audio(url);
         this.victoryAudio.play();
@@ -771,6 +875,313 @@ const GameEngine = {
         }, this.victoryAudioDuration * 1000);
     },
     
+    // ==========================================
+    // ORÁCULOS & CPU
+    // ==========================================
+
+    async fetchDeezerJsonp(url) {
+        return new Promise((resolve, reject) => {
+            const callbackName = `deezerOracle_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
+            window[callbackName] = function(data) {
+                delete window[callbackName];
+                const scriptEl = document.getElementById(callbackName);
+                if (scriptEl) scriptEl.remove();
+                resolve(data);
+            };
+
+            const script = document.createElement('script');
+            script.id = callbackName;
+            script.src = `${url}${url.includes('?') ? '&' : '?'}output=jsonp&callback=${callbackName}`;
+            script.onerror = () => {
+                delete window[callbackName];
+                script.remove();
+                reject(new Error('JSONP request failed'));
+            };
+            document.head.appendChild(script);
+        });
+    },
+
+    async fetchTrackDetails(trackId) {
+        try {
+            return await this.fetchDeezerJsonp(`https://api.deezer.com/track/${trackId}`);
+        } catch (error) {
+            console.warn('No se pudo obtener detalle Deezer:', error);
+            return null;
+        }
+    },
+
+    async fetchRelatedArtists(artistId) {
+        try {
+            const data = await this.fetchDeezerJsonp(`https://api.deezer.com/artist/${artistId}/related`);
+            return data?.data || [];
+        } catch (error) {
+            console.warn('No se pudo obtener artistas relacionados:', error);
+            return [];
+        }
+    },
+
+    async fetchChartTracks() {
+        try {
+            const data = await this.fetchDeezerJsonp('https://api.deezer.com/chart/0/tracks?limit=20');
+            return data?.data || [];
+        } catch (error) {
+            console.warn('No se pudo obtener chart tracks:', error);
+            return [];
+        }
+    },
+
+    async fetchSearchTracks(query) {
+        try {
+            const data = await this.fetchDeezerJsonp(`https://api.deezer.com/search?q=${encodeURIComponent(query)}&limit=20`);
+            return data?.data || [];
+        } catch (error) {
+            console.warn('No se pudo obtener búsqueda Deezer:', error);
+            return [];
+        }
+    },
+
+    async fetchTopTrackForArtist(artistId) {
+        try {
+            const data = await this.fetchDeezerJsonp(`https://api.deezer.com/artist/${artistId}/top?limit=6`);
+            const tracks = data?.data || [];
+            return tracks.find(track => track.preview) || tracks[0];
+        } catch (error) {
+            console.warn('No se pudo obtener top tracks:', error);
+            return null;
+        }
+    },
+
+    pickCpuTrack(tracks, userSong) {
+        if (!tracks || tracks.length === 0) return null;
+        const differentArtist = tracks.find(track => {
+            const artistName = track.artist?.name?.toLowerCase();
+            const sameArtist = artistName === userSong.artist.toLowerCase();
+            const cover = track.album?.cover_big || track.album?.cover_medium;
+            return track.preview && cover && cover !== userSong.image && !sameArtist;
+        });
+        if (differentArtist) return differentArtist;
+
+        const differentCover = tracks.find(track => {
+            const cover = track.album?.cover_big || track.album?.cover_medium;
+            return track.preview && cover && cover !== userSong.image;
+        });
+        if (differentCover) return differentCover;
+
+        return tracks.find(track => track.preview) || tracks[0];
+    },
+
+    async fetchCpuOpponentTrack(userSong) {
+        const userDetails = await this.fetchTrackDetails(userSong.id);
+        const artistId = userDetails?.artist?.id;
+        if (artistId) {
+            const relatedArtists = await this.fetchRelatedArtists(artistId);
+            for (const artist of relatedArtists) {
+                if (artist.name?.toLowerCase() === userSong.artist.toLowerCase()) continue;
+                const topTrack = await this.fetchTopTrackForArtist(artist.id);
+                if (!topTrack) continue;
+                const cpuTrack = {
+                    id: topTrack.id,
+                    name: topTrack.title,
+                    artist: topTrack.artist?.name || artist.name,
+                    image: topTrack.album?.cover_big || topTrack.album?.cover_medium,
+                    preview: topTrack.preview,
+                    rank: topTrack.rank
+                };
+                if (cpuTrack.image && cpuTrack.image !== userSong.image) {
+                    return cpuTrack;
+                }
+            }
+        }
+
+        const chartTracks = await this.fetchChartTracks();
+        const chartPick = this.pickCpuTrack(chartTracks, userSong);
+        if (chartPick) {
+            return {
+                id: chartPick.id,
+                name: chartPick.title,
+                artist: chartPick.artist?.name,
+                image: chartPick.album?.cover_big || chartPick.album?.cover_medium,
+                preview: chartPick.preview,
+                rank: chartPick.rank
+            };
+        }
+
+        const searchTracks = await this.fetchSearchTracks(`${userSong.artist} hits`);
+        const searchPick = this.pickCpuTrack(searchTracks, userSong);
+        if (searchPick) {
+            return {
+                id: searchPick.id,
+                name: searchPick.title,
+                artist: searchPick.artist?.name,
+                image: searchPick.album?.cover_big || searchPick.album?.cover_medium,
+                preview: searchPick.preview,
+                rank: searchPick.rank
+            };
+        }
+
+        return {
+            id: `cpu_fallback_${Date.now()}`,
+            name: 'Rival Generado',
+            artist: 'CPU Challenger',
+            image: 'https://via.placeholder.com/500x500.png?text=CPU+Rival',
+            preview: userSong.preview
+        };
+    },
+
+    async fetchOracleStats(match) {
+        const [track1, track2] = await Promise.all([
+            this.fetchTrackDetails(match.player1_song_id),
+            this.fetchTrackDetails(match.player2_song_id)
+        ]);
+        const projected1 = track1?.rank || Math.floor(Math.random() * 800000) + 200000;
+        const projected2 = track2?.rank || Math.floor(Math.random() * 800000) + 200000;
+        return {
+            player1Projected: projected1,
+            player2Projected: projected2
+        };
+    },
+
+    calculatePlaysIncrement(projectedPlays) {
+        const base = projectedPlays / this.battleDuration;
+        const variance = 0.7 + Math.random() * 0.6;
+        return base * variance;
+    },
+
+    // ==========================================
+    // WALLETS & PAYOUTS
+    // ==========================================
+
+    loadStoredWallet() {
+        const stored = localStorage.getItem('mtr_wallet');
+        if (stored) {
+            this.connectedWallet = stored;
+            this.updateWalletDisplay();
+        }
+    },
+
+    async connectWallet() {
+        if (!window.ethereum) {
+            showToast('Instala MetaMask para conectar tu billetera', 'error');
+            return;
+        }
+        try {
+            const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
+            const chainIdHex = await window.ethereum.request({ method: 'eth_chainId' });
+            const chainId = Number.parseInt(chainIdHex, 16);
+            if (accounts && accounts.length > 0) {
+                this.connectedWallet = accounts[0];
+                localStorage.setItem('mtr_wallet', accounts[0]);
+                localStorage.setItem('mtr_wallet_chain', this.getChainNameFromId(chainId));
+                this.updateWalletDisplay();
+                showToast('Wallet conectada', 'success');
+            }
+        } catch (error) {
+            console.error('Error conectando wallet:', error);
+            showToast('No se pudo conectar la wallet', 'error');
+        }
+    },
+
+    updateWalletDisplay() {
+        const walletEl = document.getElementById('walletAddress');
+        if (walletEl && this.connectedWallet) {
+            walletEl.textContent = `${this.connectedWallet.slice(0, 6)}...${this.connectedWallet.slice(-4)}`;
+            walletEl.classList.remove('hidden');
+        }
+    },
+    getChainNameFromId(chainId) {
+        const map = {
+            1: 'ethereum',
+            10: 'optimism',
+            56: 'bnb',
+            137: 'polygon',
+            42161: 'arbitrum',
+            59144: 'linea',
+            8453: 'base',
+            80001: 'polygon',
+            11155111: 'ethereum'
+        };
+        return map[chainId] || 'polygon';
+    },
+
+
+    getPreferredNetwork() {
+        const configured = localStorage.getItem('mtr_preferred_network');
+        if (configured) return configured;
+
+        const connectedChain = localStorage.getItem('mtr_wallet_chain');
+        if (connectedChain) return connectedChain;
+
+        return 'polygon';
+    },
+
+    getPlatformWalletAddress() {
+        const addresses = window.PLATFORM_WALLET_ADDRESSES || {};
+        const preferredOrder = [
+            this.getPreferredNetwork(),
+            'polygon',
+            'ethereum',
+            'optimism',
+            'base',
+            'arbitrum',
+            'bnb',
+            'linea',
+            'tron',
+            'solana',
+            'bitcoin'
+        ];
+
+        for (const chainKey of preferredOrder) {
+            if (addresses[chainKey]) return addresses[chainKey];
+        }
+
+        return 'PENDIENTE_CONFIGURAR';
+    },
+
+    calculateMatchPayouts(totalPot) {
+        if (!totalPot) {
+            return { platformFee: 0, winnerPayout: 0 };
+        }
+        const platformFee = Math.round(totalPot * this.platformFeeRate);
+        const winnerPayout = Math.max(0, totalPot - platformFee);
+        return { platformFee, winnerPayout };
+    },
+
+    calculateTournamentEntry(entryFee) {
+        const platformFee = Math.round(entryFee * this.platformFeeRate);
+        const threshold = this.platformRevenueTarget * 0.9;
+        const currentRevenue = this.getPlatformRevenue();
+        const jackpotContribution = currentRevenue >= threshold
+            ? Math.round(platformFee * this.jackpotRate)
+            : 0;
+        const platformNet = Math.max(0, platformFee - jackpotContribution);
+        const prizeContribution = entryFee - platformFee;
+        return {
+            platformFee,
+            jackpotContribution,
+            platformNet,
+            prizeContribution,
+            threshold
+        };
+    },
+
+    addToPlatformRevenue(amount) {
+        const current = parseInt(localStorage.getItem('mtr_platform_revenue') || '0', 10);
+        localStorage.setItem('mtr_platform_revenue', current + amount);
+    },
+
+    getPlatformRevenue() {
+        return parseInt(localStorage.getItem('mtr_platform_revenue') || '0', 10);
+    },
+
+    addToJackpotPool(amount) {
+        const current = parseInt(localStorage.getItem('mtr_jackpot_pool') || '0', 10);
+        localStorage.setItem('mtr_jackpot_pool', current + amount);
+    },
+
+    getJackpotPool() {
+        return parseInt(localStorage.getItem('mtr_jackpot_pool') || '0', 10);
+    },
+
     // ==========================================
     // BALANCE
     // ==========================================
@@ -813,6 +1224,27 @@ const GameEngine = {
                 table: 'matches' 
             }, (payload) => {
                 console.log('Match update:', payload);
+            })
+            .subscribe();
+
+        this.quickMatchChannel = supabaseClient.channel('quick-match');
+        this.quickMatchChannel
+            .on('broadcast', { event: 'quick-challenge' }, (payload) => {
+                const { from, betAmount, song } = payload.payload || {};
+                if (!from || !song) return;
+                if (this.currentUserId && from === this.currentUserId) return;
+                this.pendingChallenge = { from, betAmount, song };
+                if (typeof window.showIncomingChallenge === 'function') {
+                    window.showIncomingChallenge(this.pendingChallenge);
+                } else {
+                    showToast('Tienes un reto rápido disponible', 'info');
+                }
+            })
+            .on('broadcast', { event: 'quick-challenge-response' }, (payload) => {
+                const { type } = payload.payload || {};
+                if (type === 'accepted') {
+                    showToast('Tu reto fue aceptado', 'success');
+                }
             })
             .subscribe();
     }

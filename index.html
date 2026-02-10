@@ -24,6 +24,18 @@
             SUPABASE_ANON_KEY: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJzY21nY255bmJ4YWxjdXdkcWxtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzA0NTYwOTUsImV4cCI6MjA4NjAzMjA5NX0.1iasFQ5H0GmrFqi6poWNE1aZOtbmQuB113RCyg2BBK4',
             BATTLE_DURATION: 60
         };
+        const PLATFORM_WALLET_ADDRESSES = {
+            polygon: '0x75376BC58830f27415402875D26B73A6BE8E2253',
+            optimism: '0x75376BC58830f27415402875D26B73A6BE8E2253',
+            base: '0x75376BC58830f27415402875D26B73A6BE8E2253',
+            bnb: '0x75376BC58830f27415402875D26B73A6BE8E2253',
+            arbitrum: '0x75376BC58830f27415402875D26B73A6BE8E2253',
+            linea: '0x75376BC58830f27415402875D26B73A6BE8E2253',
+            ethereum: '0x75376BC58830f27415402875D26B73A6BE8E2253',
+            tron: 'TQMKLv12VA2kt2xH1edWNnQjgFGuzaLcVj',
+            solana: 'AavRs1c4CmBDcJ2KzTh5C8btwbLv7CnCRbA6EpEJqaNr',
+            bitcoin: 'bc1qtjwwj5lwsn4r5pjg8l30r4s5p843g4p344tr6a'
+        };
         console.log('🎵 MusicToken Ring loaded!');
     </script>
 </head>
@@ -41,6 +53,13 @@
                     <span class="badge">🎵 Deezer</span>
                     <span class="badge badge-live">🔴 Live</span>
                     <span class="badge" id="balanceDisplay">💰 0 $MTOKEN</span>
+                </div>
+
+                <div class="wallet-section">
+                    <button onclick="connectWallet()" class="btn-secondary btn-wallet">
+                        🦊 Conectar Wallet
+                    </button>
+                    <span id="walletAddress" class="wallet-address hidden"></span>
                 </div>
                 
                 <!-- AUTH BUTTON -->
@@ -87,6 +106,40 @@
                         </div>
                     </div>
                 </div>
+            </section>
+
+            <section class="streaming-showcase">
+                <p class="streaming-label">Streaming partners (referencias visuales)</p>
+                <div class="streaming-logos">
+                    <img src="https://cdn.jsdelivr.net/npm/simple-icons@v9/icons/deezer.svg" alt="Deezer" class="streaming-logo">
+                    <img src="https://cdn.jsdelivr.net/npm/simple-icons@v9/icons/spotify.svg" alt="Spotify" class="streaming-logo">
+                    <img src="https://cdn.jsdelivr.net/npm/simple-icons@v9/icons/applemusic.svg" alt="Apple Music" class="streaming-logo">
+                    <img src="https://cdn.jsdelivr.net/npm/simple-icons@v9/icons/youtubemusic.svg" alt="YouTube Music" class="streaming-logo">
+                    <img src="https://cdn.jsdelivr.net/npm/simple-icons@v9/icons/amazonmusic.svg" alt="Amazon Music" class="streaming-logo">
+                    <img src="https://cdn.jsdelivr.net/npm/simple-icons@v9/icons/tidal.svg" alt="Tidal" class="streaming-logo">
+                    <img src="https://cdn.jsdelivr.net/npm/simple-icons@v9/icons/soundcloud.svg" alt="SoundCloud" class="streaming-logo">
+                </div>
+            </section>
+
+            <section class="payments-showcase">
+                <p class="streaming-label">Redes y monedas soportadas para pagos</p>
+                <div class="payment-controls">
+                    <label for="preferredNetwork" class="payment-label">Red preferida para comisiones</label>
+                    <select id="preferredNetwork" class="payment-select" onchange="setPreferredNetwork(this.value)"></select>
+                </div>
+                <div class="currency-logos">
+                    <img src="https://cdn.jsdelivr.net/npm/simple-icons@v9/icons/polygon.svg" alt="Polygon" class="currency-logo">
+                    <img src="https://cdn.jsdelivr.net/npm/simple-icons@v9/icons/ethereum.svg" alt="Ethereum" class="currency-logo">
+                    <img src="https://cdn.jsdelivr.net/npm/simple-icons@v9/icons/optimism.svg" alt="Optimism" class="currency-logo">
+                    <img src="https://cdn.jsdelivr.net/npm/simple-icons@v9/icons/base.svg" alt="Base" class="currency-logo">
+                    <img src="https://cdn.jsdelivr.net/npm/simple-icons@v9/icons/binance.svg" alt="BNB Chain" class="currency-logo">
+                    <img src="https://cdn.jsdelivr.net/npm/simple-icons@v9/icons/arbitrum.svg" alt="Arbitrum" class="currency-logo">
+                    <img src="https://cdn.jsdelivr.net/npm/simple-icons@v9/icons/linea.svg" alt="Linea" class="currency-logo">
+                    <img src="https://cdn.jsdelivr.net/npm/simple-icons@v9/icons/tron.svg" alt="Tron" class="currency-logo">
+                    <img src="https://cdn.jsdelivr.net/npm/simple-icons@v9/icons/solana.svg" alt="Solana" class="currency-logo">
+                    <img src="https://cdn.jsdelivr.net/npm/simple-icons@v9/icons/bitcoin.svg" alt="Bitcoin" class="currency-logo">
+                </div>
+                <div class="wallet-directory" id="walletDirectory"></div>
             </section>
 
             <!-- SELECTOR DE MODO (mostrar si está logueado) -->
@@ -242,6 +295,13 @@
                             <button onclick="copyRoomCode()" class="btn-copy">📋</button>
                         </div>
                     </div>
+                    <div class="room-invite">
+                        <label for="roomInviteLink">Link privado para invitar</label>
+                        <div class="room-invite-actions">
+                            <input id="roomInviteLink" type="text" readonly class="room-invite-input">
+                            <button onclick="copyRoomLink()" class="btn-secondary">Copiar link</button>
+                        </div>
+                    </div>
                     <div class="room-players">
                         <div class="room-player" id="player1Card">
                             <div class="player-avatar">👤</div>
@@ -394,6 +454,20 @@
         </div>
     </div>
 
+    <!-- Quick Match Challenge Modal -->
+    <div id="challengeModal" class="modal hidden">
+        <div class="modal-overlay" onclick="closeChallengeModal()"></div>
+        <div class="modal-content">
+            <button onclick="closeChallengeModal()" class="modal-close">×</button>
+            <h2 class="auth-title">⚔️ Reto Rápido</h2>
+            <p class="auth-subtitle" id="challengeDetails">Tienes un reto pendiente</p>
+            <div class="challenge-actions">
+                <button onclick="acceptChallenge()" class="btn-primary btn-block">Aceptar</button>
+                <button onclick="rejectChallenge()" class="btn-secondary btn-block">Rechazar</button>
+            </div>
+        </div>
+    </div>
+
     <!-- Footer -->
     <footer class="footer">
         <div class="footer-content">
@@ -432,6 +506,17 @@
             } else {
                 showLoginWall();
             }
+
+            const urlParams = new URLSearchParams(window.location.search);
+            const roomParam = urlParams.get('room');
+            if (roomParam) {
+                selectMode('private');
+                document.getElementById('joinRoomCode').value = roomParam.toUpperCase();
+                showToast('Sala privada detectada. Selecciona tu canción para unirte.', 'info');
+            }
+
+            initializePreferredNetwork();
+            renderWalletDirectory();
         });
 
         // Mostrar/ocultar secciones
@@ -445,6 +530,49 @@
             document.getElementById('modeSelector').classList.remove('hidden');
         }
 
+        function initializePreferredNetwork() {
+            const selector = document.getElementById('preferredNetwork');
+            if (!selector || typeof PLATFORM_WALLET_ADDRESSES === 'undefined') return;
+
+            const stored = localStorage.getItem('mtr_preferred_network') || 'polygon';
+            const options = Object.keys(PLATFORM_WALLET_ADDRESSES).map((network) => {
+                const label = network.charAt(0).toUpperCase() + network.slice(1);
+                const selected = network === stored ? 'selected' : '';
+                return `<option value="${network}" ${selected}>${label}</option>`;
+            }).join('');
+
+            selector.innerHTML = options;
+            localStorage.setItem('mtr_preferred_network', selector.value || stored);
+        }
+
+        function setPreferredNetwork(network) {
+            localStorage.setItem('mtr_preferred_network', network);
+            showToast(`Red preferida actualizada: ${network.toUpperCase()}`, 'success');
+        }
+
+        function copyWalletAddress(address, network) {
+            navigator.clipboard.writeText(address);
+            showToast(`Dirección de ${network.toUpperCase()} copiada`, 'success');
+        }
+
+        function renderWalletDirectory() {
+            const walletDirectory = document.getElementById('walletDirectory');
+            if (!walletDirectory || typeof PLATFORM_WALLET_ADDRESSES === 'undefined') return;
+
+            const items = Object.entries(PLATFORM_WALLET_ADDRESSES).map(([network, address]) => {
+                const label = network.charAt(0).toUpperCase() + network.slice(1);
+                return `
+                    <div class="wallet-item">
+                        <span class="wallet-network">${label}</span>
+                        <span class="wallet-value">${address}</span>
+                        <button class="wallet-copy" onclick="copyWalletAddress('${address}', '${network}')">Copiar</button>
+                    </div>
+                `;
+            }).join('');
+
+            walletDirectory.innerHTML = items;
+        }
+
         // Seleccionar modo
         function selectMode(mode) {
             currentMode = mode;
@@ -454,7 +582,8 @@
             const titles = {
                 'quick': 'Modo Rápido',
                 'private': 'Sala Privada',
-                'practice': 'Modo Práctica'
+                'practice': 'Modo Práctica',
+                'tournament': 'Modo Torneo'
             };
             document.getElementById('modeTitle').textContent = titles[mode];
             
@@ -495,6 +624,18 @@
                     <button onclick="startPractice()" class="btn-primary btn-large" id="startPracticeBtn" disabled>
                         🎯 Iniciar Práctica
                     </button>
+                `;
+            } else if (mode === 'tournament') {
+                buttonsDiv.innerHTML = `
+                    <div class="join-room-group">
+                        <input type="text" id="tournamentId" placeholder="ID de torneo" class="room-code-input">
+                        <button onclick="joinTournamentMode()" class="btn-primary" id="joinTournamentBtn" disabled>
+                            🏆 Unirme
+                        </button>
+                    </div>
+                    <p class="section-subtitle" style="margin-top: 12px;">
+                        El jackpot crece con un % de las comisiones cuando la plataforma supera el 90% del objetivo.
+                    </p>
                 `;
             }
         }
@@ -578,6 +719,21 @@
             }
         }
 
+        async function joinTournamentMode() {
+            if (!selectedSong) return;
+            const tournamentId = document.getElementById('tournamentId').value;
+            if (!tournamentId) {
+                showToast('Ingresa el ID del torneo', 'error');
+                return;
+            }
+            const bet = parseInt(document.getElementById('betAmount').value) || 100;
+            if (typeof GameEngine !== 'undefined') {
+                await GameEngine.joinTournament(tournamentId, selectedSong, bet);
+            } else {
+                showToast('Modo torneo en desarrollo', 'info');
+            }
+        }
+
         function cancelSearch() {
             if (typeof GameEngine !== 'undefined' && typeof GameEngine.cancelMatchmaking === 'function') {
                 GameEngine.cancelMatchmaking();
@@ -601,6 +757,51 @@
                 showToast('Código copiado', 'success');
             }
         }
+
+        function copyRoomLink() {
+            const link = document.getElementById('roomInviteLink').value;
+            navigator.clipboard.writeText(link);
+            if (typeof showToast !== 'undefined') {
+                showToast('Link copiado', 'success');
+            }
+        }
+
+        function connectWallet() {
+            if (typeof GameEngine !== 'undefined') {
+                GameEngine.connectWallet();
+            } else {
+                showToast('GameEngine no está cargado', 'error');
+            }
+        }
+
+        function showIncomingChallenge(challenge) {
+            const modal = document.getElementById('challengeModal');
+            const details = document.getElementById('challengeDetails');
+            if (details) {
+                details.textContent = `${challenge.song.name} - ${challenge.song.artist} | Apuesta: ${challenge.betAmount} $MTOKEN`;
+            }
+            modal.classList.remove('hidden');
+        }
+
+        function closeChallengeModal() {
+            document.getElementById('challengeModal').classList.add('hidden');
+        }
+
+        function acceptChallenge() {
+            closeChallengeModal();
+            selectMode('quick');
+            showToast('Reto aceptado. Selecciona tu canción para iniciar.', 'success');
+        }
+
+        function rejectChallenge() {
+            if (typeof GameEngine !== 'undefined') {
+                GameEngine.pendingChallenge = null;
+            }
+            closeChallengeModal();
+            showToast('Reto rechazado', 'info');
+        }
+
+        window.showIncomingChallenge = showIncomingChallenge;
     </script>
 </body>
 </html>
