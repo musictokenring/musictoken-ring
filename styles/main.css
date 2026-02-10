@@ -97,6 +97,27 @@ body {
     color: var(--accent-red);
 }
 
+.wallet-section {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.btn-wallet {
+    padding: 10px 16px;
+    font-size: 13px;
+    border-radius: 20px;
+}
+
+.wallet-address {
+    font-size: 12px;
+    color: var(--text-secondary);
+    padding: 6px 12px;
+    border-radius: 20px;
+    border: 1px solid var(--border-color);
+    background: var(--bg-card);
+}
+
 /* === MAIN CONTENT === */
 .main {
     padding: 48px 0;
@@ -166,6 +187,44 @@ body {
     grid-template-columns: repeat(2, 1fr);
     gap: 16px;
     margin-top: 48px;
+}
+
+.streaming-showcase {
+    margin: 32px auto 48px;
+    text-align: center;
+    padding: 16px 24px;
+    border-radius: 16px;
+    border: 1px solid var(--border-color);
+    background: var(--bg-secondary);
+}
+
+.streaming-label {
+    color: var(--text-secondary);
+    font-size: 13px;
+    margin-bottom: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+}
+
+.streaming-logos {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 20px;
+    align-items: center;
+}
+
+.streaming-logo {
+    width: 42px;
+    height: 42px;
+    filter: invert(1) brightness(1.2);
+    opacity: 0.8;
+    transition: transform 0.2s ease, opacity 0.2s ease;
+}
+
+.streaming-logo:hover {
+    transform: scale(1.08);
+    opacity: 1;
 }
 
 .feature-item {
@@ -733,6 +792,34 @@ body {
     margin-bottom: 32px;
 }
 
+.room-invite {
+    margin: 16px auto 32px;
+    max-width: 520px;
+    text-align: left;
+}
+
+.room-invite label {
+    display: block;
+    font-size: 13px;
+    color: var(--text-secondary);
+    margin-bottom: 8px;
+}
+
+.room-invite-actions {
+    display: flex;
+    gap: 12px;
+}
+
+.room-invite-input {
+    flex: 1;
+    padding: 12px 16px;
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    color: var(--text-primary);
+    font-size: 14px;
+}
+
 /* === BUTTONS === */
 .btn-primary {
     padding: 14px 32px;
@@ -969,6 +1056,12 @@ body {
     color: var(--accent-green);
 }
 
+.battle-plays {
+    font-size: 13px;
+    color: var(--text-secondary);
+    margin-bottom: 12px;
+}
+
 .vs-divider {
     display: flex;
     flex-direction: column;
@@ -1050,6 +1143,24 @@ body {
     font-weight: 700;
     color: var(--accent-green);
     margin-bottom: 32px;
+}
+
+.victory-breakdown {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    padding: 16px 20px;
+    margin-bottom: 24px;
+    font-size: 14px;
+    color: var(--text-secondary);
+}
+
+.victory-breakdown p {
+    margin-bottom: 6px;
+}
+
+.victory-breakdown p:last-child {
+    margin-bottom: 0;
 }
 
 /* === MODAL === */
@@ -1215,6 +1326,10 @@ body {
 .btn-block {
     width: 100%;
     margin-top: 8px;
+}
+
+.challenge-actions {
+    margin-top: 24px;
 }
 
 .auth-switch {
