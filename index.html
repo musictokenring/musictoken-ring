@@ -580,6 +580,7 @@
 
         function setPreferredNetwork(network) {
             localStorage.setItem('mtr_preferred_network', network);
+            renderWalletDirectory(network);
             showToast(`Red preferida actualizada: ${network.toUpperCase()}`, 'success');
         }
 
@@ -588,22 +589,27 @@
             showToast(`Dirección de ${network.toUpperCase()} copiada`, 'success');
         }
 
-        function renderWalletDirectory() {
+        function renderWalletDirectory(selectedNetwork = null) {
             const walletDirectory = document.getElementById('walletDirectory');
             if (!walletDirectory || typeof PLATFORM_WALLET_ADDRESSES === 'undefined') return;
 
-            const items = Object.entries(PLATFORM_WALLET_ADDRESSES).map(([network, address]) => {
-                const label = network.charAt(0).toUpperCase() + network.slice(1);
-                return `
-                    <div class="wallet-item">
-                        <span class="wallet-network">${label}</span>
-                        <span class="wallet-value">${address}</span>
-                        <button class="wallet-copy" onclick="copyWalletAddress('${address}', '${network}')">Copiar</button>
-                    </div>
-                `;
-            }).join('');
+            const selector = document.getElementById('preferredNetwork');
+            const activeNetwork = selectedNetwork || selector?.value || localStorage.getItem('mtr_preferred_network') || 'polygon';
+            const selectedAddress = PLATFORM_WALLET_ADDRESSES[activeNetwork];
 
-            walletDirectory.innerHTML = items;
+            if (!selectedAddress) {
+                walletDirectory.innerHTML = '<div class="wallet-item"><span class="wallet-network">Sin red seleccionada</span></div>';
+                return;
+            }
+
+            const label = activeNetwork.charAt(0).toUpperCase() + activeNetwork.slice(1);
+            walletDirectory.innerHTML = `
+                <div class="wallet-item">
+                    <span class="wallet-network">${label}</span>
+                    <span class="wallet-value">${selectedAddress}</span>
+                    <button class="wallet-copy" onclick="copyWalletAddress('${selectedAddress}', '${activeNetwork}')">Copiar</button>
+                </div>
+            `;
         }
 
         // Seleccionar modo
