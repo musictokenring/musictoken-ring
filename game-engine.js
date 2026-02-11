@@ -1183,6 +1183,130 @@ const GameEngine = {
     },
 
     // ==========================================
+<<<<<<< HEAD
+    // DEPOSITOS / LIQUIDACION (BACKEND VERIFY)
+    // ==========================================
+
+    getBackendApiBase() {
+        if (window.CONFIG?.BACKEND_API) return window.CONFIG.BACKEND_API;
+        if (window.APP_BACKEND_API) return window.APP_BACKEND_API;
+        return '';
+    },
+
+    async backendRequest(path, payload = {}) {
+        const base = this.getBackendApiBase();
+        if (!base) {
+            showToast('Backend API no configurada', 'error');
+            return null;
+        }
+
+        const { data: { session } } = await supabaseClient.auth.getSession();
+        const token = session?.access_token;
+
+        const response = await fetch(`${base}${path}`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                ...(token ? { Authorization: `Bearer ${token}` } : {})
+            },
+            body: JSON.stringify(payload)
+        });
+
+        let data = null;
+        try {
+            data = await response.json();
+        } catch {
+            data = null;
+        }
+
+        if (!response.ok) {
+            const message = data?.message || `Error ${response.status}`;
+            showToast(message, 'error');
+            return null;
+        }
+
+        return data;
+    },
+
+    async verifyDepositAndCredit(txHash, options = {}) {
+        if (!txHash || txHash.length < 12) {
+            showToast('Hash inválido', 'error');
+            return null;
+        }
+
+        try {
+            const data = await this.backendRequest('/api/deposits/verify', {
+                txHash,
+                network: options.network || this.getPreferredNetwork(),
+                expectedAmount: options.expectedAmount || null,
+                walletAddress: this.connectedWallet || localStorage.getItem('mtr_wallet') || null
+            });
+
+            if (!data) return null;
+
+            if (typeof data.newBalance === 'number') {
+                this.userBalance = data.newBalance;
+                this.updateBalanceDisplay();
+            } else {
+                await this.loadUserBalance();
+            }
+
+            return data;
+        } catch (error) {
+            console.error('Error verifying deposit:', error);
+            showToast('No se pudo verificar la recarga', 'error');
+            return null;
+        }
+    },
+
+    async getUsdSettlementQuote(tokenAmount) {
+        try {
+            const data = await this.backendRequest('/api/settlement/quote', {
+                tokenAmount,
+                network: this.getPreferredNetwork()
+            });
+            return data;
+        } catch (error) {
+            console.error('Error getting settlement quote:', error);
+            showToast('No se pudo obtener la cotización', 'error');
+            return null;
+        }
+    },
+
+    async requestCashout(tokenAmount, options = {}) {
+        if (tokenAmount > this.userBalance) {
+            showToast('No tienes saldo suficiente para retirar', 'error');
+            return null;
+        }
+
+        try {
+            const data = await this.backendRequest('/api/settlement/request-cashout', {
+                tokenAmount,
+                network: options.network || this.getPreferredNetwork(),
+                walletAddress: this.connectedWallet || localStorage.getItem('mtr_wallet') || null,
+                stableCurrency: 'USDs'
+            });
+
+            if (!data) return null;
+
+            if (typeof data.newBalance === 'number') {
+                this.userBalance = data.newBalance;
+                this.updateBalanceDisplay();
+            } else {
+                await this.loadUserBalance();
+            }
+
+            return data;
+        } catch (error) {
+            console.error('Error requesting cashout:', error);
+            showToast('No se pudo solicitar el retiro', 'error');
+            return null;
+        }
+    },
+
+    // ==========================================
+=======
+>>>>>>> origin/main
     // BALANCE
     // ==========================================
     

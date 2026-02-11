@@ -22,7 +22,20 @@
         const CONFIG = {
             SUPABASE_URL: 'https://bscmgcnynbxalcuwdqlm.supabase.co',
             SUPABASE_ANON_KEY: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJzY21nY255bmJ4YWxjdXdkcWxtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzA0NTYwOTUsImV4cCI6MjA4NjAzMjA5NX0.1iasFQ5H0GmrFqi6poWNE1aZOtbmQuB113RCyg2BBK4',
-            BATTLE_DURATION: 60
+            BATTLE_DURATION: 60,
+            BACKEND_API: 'https://musictoken-backend.onrender.com'
+        };
+        const PLATFORM_WALLET_ADDRESSES = {
+            polygon: '0x75376BC58830f27415402875D26B73A6BE8E2253',
+            optimism: '0x75376BC58830f27415402875D26B73A6BE8E2253',
+            base: '0x75376BC58830f27415402875D26B73A6BE8E2253',
+            bnb: '0x75376BC58830f27415402875D26B73A6BE8E2253',
+            arbitrum: '0x75376BC58830f27415402875D26B73A6BE8E2253',
+            linea: '0x75376BC58830f27415402875D26B73A6BE8E2253',
+            ethereum: '0x75376BC58830f27415402875D26B73A6BE8E2253',
+            tron: 'TQMKLv12VA2kt2xH1edWNnQjgFGuzaLcVj',
+            solana: 'AavRs1c4CmBDcJ2KzTh5C8btwbLv7CnCRbA6EpEJqaNr',
+            bitcoin: 'bc1qtjwwj5lwsn4r5pjg8l30r4s5p843g4p344tr6a'
         };
         const PLATFORM_WALLET_ADDRESSES = {
             polygon: '0x75376BC58830f27415402875D26B73A6BE8E2253',
@@ -140,6 +153,36 @@
                     <img src="https://cdn.jsdelivr.net/npm/simple-icons@latest/icons/bitcoin.svg" alt="Bitcoin" class="currency-logo" onerror="this.style.display='none'">
                 </div>
                 <div class="wallet-directory" id="walletDirectory"></div>
+<<<<<<< HEAD
+
+                <div class="settlement-panel">
+                    <div class="settlement-card">
+                        <h4>Recarga verificable (on-chain → saldo)</h4>
+                        <p class="settlement-help">
+                            Envía tus tokens a la wallet de la red seleccionada y pega el hash de transacción para validarlo con el backend.
+                        </p>
+                        <div class="settlement-grid">
+                            <input id="depositTxHash" class="payment-input" type="text" placeholder="0x... hash de transacción">
+                            <input id="depositAmount" class="payment-input" type="number" min="1" placeholder="Monto enviado (opcional)">
+                        </div>
+                        <button class="btn-secondary" onclick="verifyDepositTx()">✅ Verificar y acreditar recarga</button>
+                    </div>
+
+                    <div class="settlement-card">
+                        <h4>Liquidación de ganancias (MTOKEN → USD digital)</h4>
+                        <p class="settlement-help">
+                            Solicita retiro cuando tengas saldo. El backend cotiza con referencia USD y registra la comisión antes de liquidar.
+                        </p>
+                        <div class="settlement-grid">
+                            <input id="cashoutAmount" class="payment-input" type="number" min="1" placeholder="MTOKEN a retirar">
+                            <button class="btn-secondary" onclick="quoteCashout()">📊 Cotizar en USD</button>
+                        </div>
+                        <p class="settlement-quote" id="cashoutQuote">Sin cotización aún.</p>
+                        <button class="btn-primary" onclick="requestCashout()">💸 Solicitar retiro</button>
+                    </div>
+                </div>
+=======
+>>>>>>> origin/main
             </section>
 
             <!-- SELECTOR DE MODO (mostrar si está logueado) -->
@@ -801,6 +844,71 @@
             showToast('Reto rechazado', 'info');
         }
 
+<<<<<<< HEAD
+        async function verifyDepositTx() {
+            const txHash = document.getElementById('depositTxHash')?.value?.trim();
+            const expectedAmount = parseFloat(document.getElementById('depositAmount')?.value || '0');
+
+            if (!txHash) {
+                showToast('Ingresa el hash de la transacción', 'error');
+                return;
+            }
+
+            if (typeof GameEngine === 'undefined') {
+                showToast('GameEngine no está cargado', 'error');
+                return;
+            }
+
+            const result = await GameEngine.verifyDepositAndCredit(txHash, {
+                network: document.getElementById('preferredNetwork')?.value || 'polygon',
+                expectedAmount: expectedAmount > 0 ? expectedAmount : undefined
+            });
+
+            if (result?.ok) {
+                showToast(`Recarga acreditada: +${result.creditedAmount || result.amount || 0} $MTOKEN`, 'success');
+            }
+        }
+
+        async function quoteCashout() {
+            const amount = parseFloat(document.getElementById('cashoutAmount')?.value || '0');
+            if (!amount || amount <= 0) {
+                showToast('Ingresa un monto válido', 'error');
+                return;
+            }
+            if (typeof GameEngine === 'undefined') {
+                showToast('GameEngine no está cargado', 'error');
+                return;
+            }
+
+            const quote = await GameEngine.getUsdSettlementQuote(amount);
+            const quoteEl = document.getElementById('cashoutQuote');
+            if (quoteEl && quote) {
+                quoteEl.textContent = `Referencia: 1 MTOKEN = $${quote.usdRate}. Neto estimado: $${quote.netUsd} (fee ${quote.feePercent}%).`;
+            }
+        }
+
+        async function requestCashout() {
+            const amount = parseFloat(document.getElementById('cashoutAmount')?.value || '0');
+            if (!amount || amount <= 0) {
+                showToast('Ingresa un monto válido', 'error');
+                return;
+            }
+            if (typeof GameEngine === 'undefined') {
+                showToast('GameEngine no está cargado', 'error');
+                return;
+            }
+
+            const payout = await GameEngine.requestCashout(amount, {
+                network: document.getElementById('preferredNetwork')?.value || 'polygon'
+            });
+
+            if (payout?.ok) {
+                showToast(`Retiro solicitado: ${payout.requestId || 'ID pendiente'}`, 'success');
+            }
+        }
+
+=======
+>>>>>>> origin/main
         window.showIncomingChallenge = showIncomingChallenge;
     </script>
 </body>
