@@ -6,11 +6,13 @@ set -euo pipefail
 #   bash scripts/auto_resolve_pr_conflicts.sh
 #   bash scripts/auto_resolve_pr_conflicts.sh --strategy theirs
 #   bash scripts/auto_resolve_pr_conflicts.sh --strategy ours --base main --remote origin
+#   bash scripts/auto_resolve_pr_conflicts.sh --skip-merge --index-two-blocks
 
 STRATEGY="ours"
 BASE_BRANCH="main"
 REMOTE_NAME="origin"
 SKIP_MERGE=0
+INDEX_TWO_BLOCKS=0
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -28,6 +30,10 @@ while [[ $# -gt 0 ]]; do
       ;;
     --skip-merge)
       SKIP_MERGE=1
+      shift
+      ;;
+    --index-two-blocks)
+      INDEX_TWO_BLOCKS=1
       shift
       ;;
     *)
@@ -62,6 +68,69 @@ if [[ $SKIP_MERGE -eq 0 ]]; then
     echo "No existe remoto '${REMOTE_NAME}' ni rama local '${BASE_BRANCH}'."
     echo "Configura remoto/rama o usa --skip-merge si ya estás en estado de conflicto."
     exit 1
+  fi
+fi
+
+resolve_index_with_current_side() {
+  local file="index.html"
+  if [[ ! -f "$file" ]]; then
+    echo "No existe $file para resolver bloques."
+    return 1
+  fi
+
+  python3 - <<'PY'
+from pathlib import Path
+
+path = Path("index.html")
+text = path.read_text(encoding="utf-8")
+
+if "<<<<<<< " not in text:
+    print("index.html no tiene marcadores de conflicto.")
+    raise SystemExit(0)
+
+out = []
+i = 0
+resolved = 0
+while True:
+    start = text.find("<<<<<<< ", i)
+    if start == -1:
+        out.append(text[i:])
+        break
+
+    out.append(text[i:start])
+    mid = text.find("\n=======\n", start)
+    end = text.find("\n>>>>>>> ", start)
+    if mid == -1 or end == -1 or mid > end:
+        raise SystemExit("No se pudo parsear un bloque de conflicto en index.html")
+
+    current_start = text.find("\n", start) + 1
+    current_block = text[current_start:mid]
+    out.append(current_block)
+    after_end = text.find("\n", end + 1)
+    if after_end == -1:
+        i = len(text)
+    else:
+        i = after_end + 1
+    resolved += 1
+
+path.write_text("".join(out), encoding="utf-8")
+print(f"Bloques de conflicto resueltos en index.html: {resolved}")
+PY
+}
+
+if [[ $INDEX_TWO_BLOCKS -eq 1 ]]; then
+  echo "Resolviendo bloques de index.html (tomando current change)..."
+  resolve_index_with_current_side
+  git add index.html
+
+  if [[ -f scripts/auto_resolve_pr_conflicts.sh ]] && git diff --name-only --diff-filter=U | grep -qx "scripts/auto_resolve_pr_conflicts.sh"; then
+    echo "Resolviendo conflicto en scripts/auto_resolve_pr_conflicts.sh con estrategia: $STRATEGY"
+    if [[ "$STRATEGY" == "ours" ]]; then
+      git checkout --ours -- scripts/auto_resolve_pr_conflicts.sh
+    else
+      git checkout --theirs -- scripts/auto_resolve_pr_conflicts.sh
+    fi
+    git add scripts/auto_resolve_pr_conflicts.sh
   fi
 fi
 
