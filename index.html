@@ -37,18 +37,6 @@
             solana: 'AavRs1c4CmBDcJ2KzTh5C8btwbLv7CnCRbA6EpEJqaNr',
             bitcoin: 'bc1qtjwwj5lwsn4r5pjg8l30r4s5p843g4p344tr6a'
         };
-        const PLATFORM_WALLET_ADDRESSES = {
-            polygon: '0x75376BC58830f27415402875D26B73A6BE8E2253',
-            optimism: '0x75376BC58830f27415402875D26B73A6BE8E2253',
-            base: '0x75376BC58830f27415402875D26B73A6BE8E2253',
-            bnb: '0x75376BC58830f27415402875D26B73A6BE8E2253',
-            arbitrum: '0x75376BC58830f27415402875D26B73A6BE8E2253',
-            linea: '0x75376BC58830f27415402875D26B73A6BE8E2253',
-            ethereum: '0x75376BC58830f27415402875D26B73A6BE8E2253',
-            tron: 'TQMKLv12VA2kt2xH1edWNnQjgFGuzaLcVj',
-            solana: 'AavRs1c4CmBDcJ2KzTh5C8btwbLv7CnCRbA6EpEJqaNr',
-            bitcoin: 'bc1qtjwwj5lwsn4r5pjg8l30r4s5p843g4p344tr6a'
-        };
         console.log('🎵 MusicToken Ring loaded!');
     </script>
 </head>
@@ -535,28 +523,33 @@
 
         // Verificar login al cargar
         document.addEventListener('DOMContentLoaded', async () => {
-            const { data: { session } } = await supabaseClient.auth.getSession();
-            
-            if (session) {
-                showModeSelector();
-                // Inicializar GameEngine
-                if (typeof GameEngine !== 'undefined') {
-                    await GameEngine.init();
-                }
-            } else {
-                showLoginWall();
-            }
-
-            const urlParams = new URLSearchParams(window.location.search);
-            const roomParam = urlParams.get('room');
-            if (roomParam) {
-                selectMode('private');
-                document.getElementById('joinRoomCode').value = roomParam.toUpperCase();
-                showToast('Sala privada detectada. Selecciona tu canción para unirte.', 'info');
-            }
-
             initializePreferredNetwork();
             renderWalletDirectory();
+
+            try {
+                const { data: { session } } = await supabaseClient.auth.getSession();
+                
+                if (session) {
+                    showModeSelector();
+                    // Inicializar GameEngine
+                    if (typeof GameEngine !== 'undefined') {
+                        await GameEngine.init();
+                    }
+                } else {
+                    showLoginWall();
+                }
+
+                const urlParams = new URLSearchParams(window.location.search);
+                const roomParam = urlParams.get('room');
+                if (roomParam) {
+                    selectMode('private');
+                    document.getElementById('joinRoomCode').value = roomParam.toUpperCase();
+                    showToast('Sala privada detectada. Selecciona tu canción para unirte.', 'info');
+                }
+            } catch (error) {
+                console.error('Error inicializando sesión:', error);
+                showLoginWall();
+            }
         });
 
         // Mostrar/ocultar secciones
