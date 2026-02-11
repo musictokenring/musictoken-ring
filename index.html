@@ -153,7 +153,6 @@
                     <img src="https://cdn.jsdelivr.net/npm/simple-icons@latest/icons/bitcoin.svg" alt="Bitcoin" class="currency-logo" onerror="this.style.display='none'">
                 </div>
                 <div class="wallet-directory" id="walletDirectory"></div>
-<<<<<<< HEAD
 
                 <div class="settlement-panel">
                     <div class="settlement-card">
@@ -181,8 +180,6 @@
                         <button class="btn-primary" onclick="requestCashout()">💸 Solicitar retiro</button>
                     </div>
                 </div>
-=======
->>>>>>> origin/main
             </section>
 
             <!-- SELECTOR DE MODO (mostrar si está logueado) -->
@@ -844,7 +841,6 @@
             showToast('Reto rechazado', 'info');
         }
 
-<<<<<<< HEAD
         async function verifyDepositTx() {
             const txHash = document.getElementById('depositTxHash')?.value?.trim();
             const expectedAmount = parseFloat(document.getElementById('depositAmount')?.value || '0');
@@ -906,9 +902,6 @@
                 showToast(`Retiro solicitado: ${payout.requestId || 'ID pendiente'}`, 'success');
             }
         }
-
-=======
->>>>>>> origin/main
         window.showIncomingChallenge = showIncomingChallenge;
     </script>
 </body>
