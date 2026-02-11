@@ -99,6 +99,21 @@ Endpoints requeridos:
 - `GET /api/track/:id` - Detalles de canción
 - `POST /api/battle/start` - Iniciar batalla
 - `GET /api/streaming-data/:trackId` - Datos streaming
+- `POST /api/deposits/verify` - Verificar tx on-chain y acreditar recarga
+- `POST /api/settlement/quote` - Cotizar MTOKEN vs referencia USD para liquidación
+- `POST /api/settlement/request-cashout` - Solicitar retiro y registrar comisión
+
+### Flujo recomendado de recarga verificable
+1. El usuario transfiere tokens a la wallet de plataforma de la red elegida.
+2. Pega el `txHash` en frontend y se envía a `POST /api/deposits/verify`.
+3. Backend valida hash, red, contrato/token, destino, confirmaciones e idempotencia.
+4. Si todo es válido, backend acredita saldo interno del usuario y devuelve `newBalance`.
+
+### Flujo recomendado de cobro de ganancias
+1. El usuario solicita retiro indicando cantidad de MTOKEN.
+2. Backend consulta/caché de referencia de precio USD (oracle o proveedor autorizado).
+3. Calcula fee/comisión, monto neto y crea orden de liquidación.
+4. Marca la operación y responde al frontend con número de solicitud y estado.
 
 ### Smart Contracts
 
