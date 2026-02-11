@@ -37,6 +37,18 @@
             solana: 'AavRs1c4CmBDcJ2KzTh5C8btwbLv7CnCRbA6EpEJqaNr',
             bitcoin: 'bc1qtjwwj5lwsn4r5pjg8l30r4s5p843g4p344tr6a'
         };
+        const PLATFORM_WALLET_ADDRESSES = {
+            polygon: '0x75376BC58830f27415402875D26B73A6BE8E2253',
+            optimism: '0x75376BC58830f27415402875D26B73A6BE8E2253',
+            base: '0x75376BC58830f27415402875D26B73A6BE8E2253',
+            bnb: '0x75376BC58830f27415402875D26B73A6BE8E2253',
+            arbitrum: '0x75376BC58830f27415402875D26B73A6BE8E2253',
+            linea: '0x75376BC58830f27415402875D26B73A6BE8E2253',
+            ethereum: '0x75376BC58830f27415402875D26B73A6BE8E2253',
+            tron: 'TQMKLv12VA2kt2xH1edWNnQjgFGuzaLcVj',
+            solana: 'AavRs1c4CmBDcJ2KzTh5C8btwbLv7CnCRbA6EpEJqaNr',
+            bitcoin: 'bc1qtjwwj5lwsn4r5pjg8l30r4s5p843g4p344tr6a'
+        };
         console.log('🎵 MusicToken Ring loaded!');
     </script>
 </head>
@@ -141,6 +153,7 @@
                     <img src="https://cdn.jsdelivr.net/npm/simple-icons@latest/icons/bitcoin.svg" alt="Bitcoin" class="currency-logo" onerror="this.style.display='none'">
                 </div>
                 <div class="wallet-directory" id="walletDirectory"></div>
+<<<<<<< HEAD
 
                 <div class="settlement-panel">
                     <div class="settlement-card">
@@ -168,6 +181,8 @@
                         <button class="btn-primary" onclick="requestCashout()">💸 Solicitar retiro</button>
                     </div>
                 </div>
+=======
+>>>>>>> origin/main
             </section>
 
             <!-- SELECTOR DE MODO (mostrar si está logueado) -->
@@ -829,6 +844,7 @@
             showToast('Reto rechazado', 'info');
         }
 
+<<<<<<< HEAD
         async function verifyDepositTx() {
             const txHash = document.getElementById('depositTxHash')?.value?.trim();
             const expectedAmount = parseFloat(document.getElementById('depositAmount')?.value || '0');
@@ -891,6 +907,8 @@
             }
         }
 
+=======
+>>>>>>> origin/main
         window.showIncomingChallenge = showIncomingChallenge;
     </script>
 </body>

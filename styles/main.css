@@ -336,6 +336,7 @@ body {
     color: var(--accent-green);
 }
 
+<<<<<<< HEAD
 .settlement-panel {
     margin-top: 18px;
     display: grid;
@@ -393,6 +394,8 @@ body {
     font-size: 12px;
 }
 
+=======
+>>>>>>> origin/main
 .feature-item {
     background: var(--bg-secondary);
     padding: 16px;
