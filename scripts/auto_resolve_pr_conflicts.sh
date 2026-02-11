@@ -7,21 +7,13 @@ set -euo pipefail
 #   bash scripts/auto_resolve_pr_conflicts.sh --strategy theirs
 #   bash scripts/auto_resolve_pr_conflicts.sh --strategy ours --base main --remote origin
 #   bash scripts/auto_resolve_pr_conflicts.sh --skip-merge --index-two-blocks
-<<<<<<< HEAD
 #   bash scripts/auto_resolve_pr_conflicts.sh --skip-merge --settlement-block
-=======
->>>>>>> origin/main
-
 STRATEGY="ours"
 BASE_BRANCH="main"
 REMOTE_NAME="origin"
 SKIP_MERGE=0
 INDEX_TWO_BLOCKS=0
-<<<<<<< HEAD
 SETTLEMENT_BLOCK=0
-=======
->>>>>>> origin/main
-
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --strategy)
@@ -44,13 +36,10 @@ while [[ $# -gt 0 ]]; do
       INDEX_TWO_BLOCKS=1
       shift
       ;;
-<<<<<<< HEAD
     --settlement-block)
       SETTLEMENT_BLOCK=1
       shift
       ;;
-=======
->>>>>>> origin/main
     *)
       echo "Argumento no reconocido: $1"
       exit 1
@@ -133,7 +122,6 @@ print(f"Bloques de conflicto resueltos en index.html: {resolved}")
 PY
 }
 
-<<<<<<< HEAD
 resolve_settlement_block_with_current_side() {
   local file="game-engine.js"
   if [[ ! -f "$file" ]]; then
@@ -187,9 +175,6 @@ path.write_text("".join(out), encoding="utf-8")
 print(f"Bloques settlement resueltos en game-engine.js: {resolved}")
 PY
 }
-
-=======
->>>>>>> origin/main
 if [[ $INDEX_TWO_BLOCKS -eq 1 ]]; then
   echo "Resolviendo bloques de index.html (tomando current change)..."
   resolve_index_with_current_side
@@ -206,15 +191,11 @@ if [[ $INDEX_TWO_BLOCKS -eq 1 ]]; then
   fi
 fi
 
-<<<<<<< HEAD
 if [[ $SETTLEMENT_BLOCK -eq 1 ]]; then
   echo "Resolviendo bloque DEPOSITOS/LIQUIDACION en game-engine.js (current change)..."
   resolve_settlement_block_with_current_side
   git add game-engine.js
 fi
-
-=======
->>>>>>> origin/main
 mapfile -t conflicted < <(git diff --name-only --diff-filter=U)
 
 if [[ ${#conflicted[@]} -eq 0 ]]; then
