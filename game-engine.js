@@ -21,6 +21,8 @@ const GameEngine = {
     pendingChallenge: null,
     currentRoomCode: null,
     currentPrivateMatchId: null,
+    practiceDemoBalance: 0,
+    practiceDemoInitialBalance: 1000,
     
     // ==========================================
     // INICIALIZACIÓN
@@ -28,11 +30,34 @@ const GameEngine = {
     
     async init() {
         console.log('🎮 Game Engine initializing...');
+        this.loadPracticeDemoBalance();
         await this.loadUserBalance();
         await this.loadGameConfig();
         this.loadStoredWallet();
         this.setupRealtimeSubscriptions();
         console.log('✅ Game Engine ready!');
+    },
+
+    loadPracticeDemoBalance() {
+        const stored = parseInt(localStorage.getItem('mtr_practice_demo_balance') || `${this.practiceDemoInitialBalance}`, 10);
+        this.practiceDemoBalance = Number.isFinite(stored) ? stored : this.practiceDemoInitialBalance;
+    },
+
+    setPracticeDemoBalance(amount) {
+        this.practiceDemoBalance = Math.max(0, Math.round(amount));
+        localStorage.setItem('mtr_practice_demo_balance', String(this.practiceDemoBalance));
+    },
+
+    updatePracticeBetDisplay() {
+        const labelEl = document.getElementById('balanceLabel');
+        const valueEl = document.getElementById('userBalance');
+        if (labelEl) labelEl.textContent = 'Saldo real';
+        if (valueEl) valueEl.textContent = this.userBalance;
+
+        if (typeof window !== 'undefined' && window.currentMode === 'practice') {
+            if (labelEl) labelEl.textContent = 'Saldo demo (práctica)';
+            if (valueEl) valueEl.textContent = this.practiceDemoBalance;
+        }
     },
     
     async loadUserBalance() {
@@ -95,6 +120,7 @@ const GameEngine = {
         if (userBalanceEl) {
             userBalanceEl.textContent = this.userBalance;
         }
+        this.updatePracticeBetDisplay();
     },
     
     // ==========================================
@@ -471,9 +497,18 @@ const GameEngine = {
     // MODO PRÁCTICA (Practice)
     // ==========================================
     
-    async startPracticeMatch(userSong) {
+    async startPracticeMatch(userSong, demoBet = 100) {
         try {
             const { data: { session } } = await supabaseClient.auth.getSession();
+
+            const normalizedBet = Math.max(this.minBet, Math.round(demoBet || this.minBet));
+            if (normalizedBet > this.practiceDemoBalance) {
+                showToast(`Saldo demo insuficiente. Disponible: ${this.practiceDemoBalance} $MTOKEN`, 'error');
+                return;
+            }
+
+            this.setPracticeDemoBalance(this.practiceDemoBalance - normalizedBet);
+            this.updatePracticeBetDisplay();
             
             const cpuSong = await this.fetchCpuOpponentTrack(userSong);
             
@@ -487,14 +522,14 @@ const GameEngine = {
                     player1_song_artist: userSong.artist,
                     player1_song_image: userSong.image,
                     player1_song_preview: userSong.preview,
-                    player1_bet: 0,
+                    player1_bet: normalizedBet,
                     player2_song_id: cpuSong.id,
                     player2_song_name: cpuSong.name,
                     player2_song_artist: cpuSong.artist,
                     player2_song_image: cpuSong.image,
                     player2_song_preview: cpuSong.preview,
-                    player2_bet: 0,
-                    total_pot: 0,
+                    player2_bet: normalizedBet,
+                    total_pot: normalizedBet * 2,
                     status: 'ready'
                 }])
                 .select()
@@ -502,7 +537,7 @@ const GameEngine = {
             
             if (error) throw error;
             
-            showToast('¡Iniciando práctica!', 'success');
+            showToast(`¡Iniciando práctica con ${normalizedBet} $MTOKEN demo!`, 'success');
             await this.startMatch(match.id);
             
         } catch (error) {

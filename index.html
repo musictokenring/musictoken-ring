@@ -278,7 +278,7 @@
                         <div class="bet-section">
                             <h3>💰 Tu Apuesta</h3>
                             <div class="bet-info">
-                                <span>Balance: <strong id="userBalance">0</strong> $MTOKEN</span>
+                                <span><span id="balanceLabel">Balance</span>: <strong id="userBalance">0</strong> $MTOKEN</span>
                                 <span>Mínimo: <strong id="minBet">100</strong> $MTOKEN</span>
                             </div>
                             <input 
@@ -647,6 +647,7 @@
         // Seleccionar modo
         function selectMode(mode) {
             currentMode = mode;
+            window.currentMode = mode;
             document.getElementById('modeSelector').classList.add('hidden');
             document.getElementById('songSelection').classList.remove('hidden');
             
@@ -659,11 +660,18 @@
             document.getElementById('modeTitle').textContent = titles[mode];
             
             updateActionButtons(mode);
+            if (typeof GameEngine !== 'undefined' && typeof GameEngine.updatePracticeBetDisplay === 'function') {
+                GameEngine.updatePracticeBetDisplay();
+            }
         }
 
         function backToModes() {
             document.getElementById('songSelection').classList.add('hidden');
             document.getElementById('modeSelector').classList.remove('hidden');
+            window.currentMode = null;
+            if (typeof GameEngine !== 'undefined' && typeof GameEngine.updatePracticeBetDisplay === 'function') {
+                GameEngine.updatePracticeBetDisplay();
+            }
             selectedSong = null;
         }
 
@@ -783,8 +791,10 @@
                 return;
             }
 
+            const demoBet = parseInt(document.getElementById('betAmount').value) || 100;
+
             if (typeof GameEngine !== 'undefined') {
-                await GameEngine.startPracticeMatch(selectedSong);
+                await GameEngine.startPracticeMatch(selectedSong, demoBet);
             } else {
                 showToast('Modo práctica en desarrollo', 'info');
             }
