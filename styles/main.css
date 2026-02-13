@@ -1652,6 +1652,36 @@ body {
     border-color: var(--accent-blue);
 }
 
+
+
+/* === CONTACT SECTION === */
+.contact-section {
+    margin-top: 56px;
+}
+
+.contact-card {
+    max-width: 720px;
+    margin: 0 auto;
+    padding: 28px;
+    border: 1px solid var(--border-color);
+    border-radius: 16px;
+    background: var(--bg-secondary);
+}
+
+.contact-card h2 {
+    margin-bottom: 8px;
+}
+
+.contact-card p {
+    color: var(--text-secondary);
+    margin-bottom: 20px;
+}
+
+.contact-form textarea.form-input {
+    resize: vertical;
+    min-height: 120px;
+}
+
 /* === FOOTER === */
 .footer {
     background: var(--bg-secondary);

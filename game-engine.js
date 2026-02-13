@@ -79,11 +79,11 @@ const GameEngine = {
             }
             
             if (data) {
-                this.userBalance = data.balance;
+                this.userBalance = Math.max(0, Math.round(data.balance || 0));
                 this.updateBalanceDisplay();
             } else {
-                // Usuario nuevo - balance inicial de 1000
-                this.userBalance = 1000;
+                // Usuario nuevo - saldo real inicia en cero hasta recarga
+                this.userBalance = 0;
                 this.updateBalanceDisplay();
             }
         } catch (error) {
