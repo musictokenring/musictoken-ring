@@ -37,18 +37,6 @@
             solana: 'AavRs1c4CmBDcJ2KzTh5C8btwbLv7CnCRbA6EpEJqaNr',
             bitcoin: 'bc1qtjwwj5lwsn4r5pjg8l30r4s5p843g4p344tr6a'
         };
-        const PLATFORM_WALLET_ADDRESSES = {
-            polygon: '0x75376BC58830f27415402875D26B73A6BE8E2253',
-            optimism: '0x75376BC58830f27415402875D26B73A6BE8E2253',
-            base: '0x75376BC58830f27415402875D26B73A6BE8E2253',
-            bnb: '0x75376BC58830f27415402875D26B73A6BE8E2253',
-            arbitrum: '0x75376BC58830f27415402875D26B73A6BE8E2253',
-            linea: '0x75376BC58830f27415402875D26B73A6BE8E2253',
-            ethereum: '0x75376BC58830f27415402875D26B73A6BE8E2253',
-            tron: 'TQMKLv12VA2kt2xH1edWNnQjgFGuzaLcVj',
-            solana: 'AavRs1c4CmBDcJ2KzTh5C8btwbLv7CnCRbA6EpEJqaNr',
-            bitcoin: 'bc1qtjwwj5lwsn4r5pjg8l30r4s5p843g4p344tr6a'
-        };
         console.log('🎵 MusicToken Ring loaded!');
     </script>
 </head>
@@ -153,7 +141,6 @@
                     <img src="https://cdn.jsdelivr.net/npm/simple-icons@latest/icons/bitcoin.svg" alt="Bitcoin" class="currency-logo" onerror="this.style.display='none'">
                 </div>
                 <div class="wallet-directory" id="walletDirectory"></div>
-<<<<<<< HEAD
 
                 <div class="settlement-panel">
                     <div class="settlement-card">
@@ -181,8 +168,6 @@
                         <button class="btn-primary" onclick="requestCashout()">💸 Solicitar retiro</button>
                     </div>
                 </div>
-=======
->>>>>>> origin/main
             </section>
 
             <!-- SELECTOR DE MODO (mostrar si está logueado) -->
@@ -497,6 +482,39 @@
         </div>
     </div>
 
+    <!-- Player Profile Modal -->
+    <div id="profileModal" class="modal hidden">
+        <div class="modal-overlay" onclick="closeProfileModal()"></div>
+        <div class="modal-content profile-modal-content">
+            <button onclick="closeProfileModal()" class="modal-close">×</button>
+            <h2 class="auth-title">Perfil del Jugador</h2>
+            <p class="auth-subtitle">Resumen de rendimiento y actividad reciente</p>
+
+            <div class="profile-header">
+                <p id="profileDisplayName" class="profile-name">Jugador</p>
+                <p id="profileEmail" class="profile-email">-</p>
+                <p class="profile-since">Miembro desde: <span id="profileSince">-</span></p>
+            </div>
+
+            <div class="profile-stats-grid">
+                <div class="profile-stat-card"><span>Balance</span><strong id="profileBalance">-</strong></div>
+                <div class="profile-stat-card"><span>Partidas</span><strong id="profileMatches">-</strong></div>
+                <div class="profile-stat-card"><span>Victorias</span><strong id="profileWins">-</strong></div>
+                <div class="profile-stat-card"><span>Derrotas</span><strong id="profileLosses">-</strong></div>
+                <div class="profile-stat-card"><span>Win Rate</span><strong id="profileWinRate">-</strong></div>
+                <div class="profile-stat-card"><span>Streams totales</span><strong id="profileStreams">-</strong></div>
+                <div class="profile-stat-card full"><span>MTOKEN apostados</span><strong id="profileWagered">-</strong></div>
+            </div>
+
+            <div class="profile-recent-section">
+                <h3>Últimas partidas</h3>
+                <div id="profileRecentMatches" class="profile-recent-list">
+                    <p class="profile-empty">Sin partidas aún.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- Quick Match Challenge Modal -->
     <div id="challengeModal" class="modal hidden">
         <div class="modal-overlay" onclick="closeChallengeModal()"></div>
@@ -526,8 +544,7 @@
     </footer>
 
     <!-- Scripts -->
-    <!-- Scripts -->
-    <script data-cfasync="false" src="/cdn-cgi/scripts/5c5dd728/cloudflare-static/email-decode.min.js"></script><script src="./auth-system.js"></script>
+    <script src="./auth-system.js"></script>
     <script src="./game-engine.js"></script>
     <script src="./src/app.js"></script>
 
@@ -538,28 +555,33 @@
 
         // Verificar login al cargar
         document.addEventListener('DOMContentLoaded', async () => {
-            const { data: { session } } = await supabaseClient.auth.getSession();
-            
-            if (session) {
-                showModeSelector();
-                // Inicializar GameEngine
-                if (typeof GameEngine !== 'undefined') {
-                    await GameEngine.init();
-                }
-            } else {
-                showLoginWall();
-            }
-
-            const urlParams = new URLSearchParams(window.location.search);
-            const roomParam = urlParams.get('room');
-            if (roomParam) {
-                selectMode('private');
-                document.getElementById('joinRoomCode').value = roomParam.toUpperCase();
-                showToast('Sala privada detectada. Selecciona tu canción para unirte.', 'info');
-            }
-
             initializePreferredNetwork();
             renderWalletDirectory();
+
+            try {
+                const { data: { session } } = await supabaseClient.auth.getSession();
+                
+                if (session) {
+                    showModeSelector();
+                    // Inicializar GameEngine
+                    if (typeof GameEngine !== 'undefined') {
+                        await GameEngine.init();
+                    }
+                } else {
+                    showLoginWall();
+                }
+
+                const urlParams = new URLSearchParams(window.location.search);
+                const roomParam = urlParams.get('room');
+                if (roomParam) {
+                    selectMode('private');
+                    document.getElementById('joinRoomCode').value = roomParam.toUpperCase();
+                    showToast('Sala privada detectada. Selecciona tu canción para unirte.', 'info');
+                }
+            } catch (error) {
+                console.error('Error inicializando sesión:', error);
+                showLoginWall();
+            }
         });
 
         // Mostrar/ocultar secciones
@@ -590,6 +612,7 @@
 
         function setPreferredNetwork(network) {
             localStorage.setItem('mtr_preferred_network', network);
+            renderWalletDirectory(network);
             showToast(`Red preferida actualizada: ${network.toUpperCase()}`, 'success');
         }
 
@@ -598,22 +621,27 @@
             showToast(`Dirección de ${network.toUpperCase()} copiada`, 'success');
         }
 
-        function renderWalletDirectory() {
+        function renderWalletDirectory(selectedNetwork = null) {
             const walletDirectory = document.getElementById('walletDirectory');
             if (!walletDirectory || typeof PLATFORM_WALLET_ADDRESSES === 'undefined') return;
 
-            const items = Object.entries(PLATFORM_WALLET_ADDRESSES).map(([network, address]) => {
-                const label = network.charAt(0).toUpperCase() + network.slice(1);
-                return `
-                    <div class="wallet-item">
-                        <span class="wallet-network">${label}</span>
-                        <span class="wallet-value">${address}</span>
-                        <button class="wallet-copy" onclick="copyWalletAddress('${address}', '${network}')">Copiar</button>
-                    </div>
-                `;
-            }).join('');
+            const selector = document.getElementById('preferredNetwork');
+            const activeNetwork = selectedNetwork || selector?.value || localStorage.getItem('mtr_preferred_network') || 'polygon';
+            const selectedAddress = PLATFORM_WALLET_ADDRESSES[activeNetwork];
 
-            walletDirectory.innerHTML = items;
+            if (!selectedAddress) {
+                walletDirectory.innerHTML = '<div class="wallet-item"><span class="wallet-network">Sin red seleccionada</span></div>';
+                return;
+            }
+
+            const label = activeNetwork.charAt(0).toUpperCase() + activeNetwork.slice(1);
+            walletDirectory.innerHTML = `
+                <div class="wallet-item">
+                    <span class="wallet-network">${label}</span>
+                    <span class="wallet-value">${selectedAddress}</span>
+                    <button class="wallet-copy" onclick="copyWalletAddress('${selectedAddress}', '${activeNetwork}')">Copiar</button>
+                </div>
+            `;
         }
 
         // Seleccionar modo
@@ -844,7 +872,6 @@
             showToast('Reto rechazado', 'info');
         }
 
-<<<<<<< HEAD
         async function verifyDepositTx() {
             const txHash = document.getElementById('depositTxHash')?.value?.trim();
             const expectedAmount = parseFloat(document.getElementById('depositAmount')?.value || '0');
@@ -906,9 +933,6 @@
                 showToast(`Retiro solicitado: ${payout.requestId || 'ID pendiente'}`, 'success');
             }
         }
-
-=======
->>>>>>> origin/main
         window.showIncomingChallenge = showIncomingChallenge;
     </script>
 </body>
