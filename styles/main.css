@@ -1267,6 +1267,162 @@ body {
     color: white;
 }
 
+
+.battle-rhythm {
+    width: 220px;
+    margin-top: 18px;
+    display: flex;
+    align-items: end;
+    justify-content: space-between;
+    position: relative;
+    padding: 10px 8px 14px;
+    border-radius: 14px;
+    border: 1px solid rgba(255,255,255,0.08);
+    background: linear-gradient(180deg, rgba(255,255,255,0.05), rgba(0,0,0,0.2));
+    overflow: hidden;
+}
+
+.rhythm-stage {
+    position: absolute;
+    left: 14px;
+    right: 14px;
+    bottom: 8px;
+    height: 6px;
+    border-radius: 999px;
+    background: linear-gradient(90deg, rgba(59,130,246,0.55), rgba(239,68,68,0.55));
+    filter: blur(0.2px);
+}
+
+.rhythm-fighter {
+    position: relative;
+    width: 72px;
+    height: 118px;
+    transform-origin: 50% 100%;
+    animation: fighterBounce 0.8s ease-in-out infinite;
+    z-index: 2;
+}
+
+.rhythm-fighter.right {
+    transform: scaleX(-1);
+}
+
+.fighter-head,
+.fighter-body,
+.fighter-arm,
+.fighter-leg {
+    position: absolute;
+    display: block;
+    background: #E5E7EB;
+}
+
+.rhythm-fighter.left .fighter-head,
+.rhythm-fighter.left .fighter-body,
+.rhythm-fighter.left .fighter-arm,
+.rhythm-fighter.left .fighter-leg {
+    background: #60A5FA;
+}
+
+.rhythm-fighter.right .fighter-head,
+.rhythm-fighter.right .fighter-body,
+.rhythm-fighter.right .fighter-arm,
+.rhythm-fighter.right .fighter-leg {
+    background: #F87171;
+}
+
+.fighter-head {
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    left: 25px;
+    top: 6px;
+    box-shadow: 0 0 0 2px rgba(255,255,255,0.12) inset;
+}
+
+.fighter-body {
+    width: 20px;
+    height: 34px;
+    border-radius: 10px;
+    left: 26px;
+    top: 28px;
+}
+
+.fighter-arm {
+    width: 28px;
+    height: 8px;
+    border-radius: 999px;
+    top: 34px;
+    transform-origin: 6px 50%;
+}
+
+.fighter-arm.front { left: 14px; animation: armPunchFront 0.8s ease-in-out infinite; }
+.fighter-arm.back { left: 30px; animation: armPunchBack 0.8s ease-in-out infinite; }
+
+.fighter-leg {
+    width: 10px;
+    height: 32px;
+    border-radius: 999px;
+    top: 58px;
+    transform-origin: 50% 6px;
+}
+
+.fighter-leg.front { left: 24px; animation: legStepFront 0.8s ease-in-out infinite; }
+.fighter-leg.back { left: 36px; animation: legStepBack 0.8s ease-in-out infinite; }
+
+.fighter-hit {
+    position: absolute;
+    top: 24px;
+    right: -2px;
+    font-size: 18px;
+    color: #FDE047;
+    opacity: 0;
+    transform: translateX(0) scale(0.6);
+    text-shadow: 0 0 10px rgba(253, 224, 71, 0.8);
+}
+
+.battle-rhythm.beat-a .rhythm-fighter { animation-delay: 0s; }
+.battle-rhythm.beat-b .rhythm-fighter { animation-delay: 0.15s; }
+
+.battle-rhythm.left-attack #leftHitFx,
+.battle-rhythm.right-attack #rightHitFx {
+    animation: hitFlash 0.45s ease;
+}
+
+.battle-rhythm.climax {
+    box-shadow: 0 0 0 1px rgba(253,224,71,0.35), 0 0 20px rgba(253,224,71,0.25);
+}
+
+@keyframes fighterBounce {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-6px); }
+}
+
+@keyframes armPunchFront {
+    0%, 100% { transform: rotate(20deg) scaleX(1); }
+    45% { transform: rotate(-12deg) scaleX(1.1); }
+    60% { transform: rotate(0deg) scaleX(1.3); }
+}
+
+@keyframes armPunchBack {
+    0%, 100% { transform: rotate(-25deg); }
+    50% { transform: rotate(5deg); }
+}
+
+@keyframes legStepFront {
+    0%, 100% { transform: rotate(8deg); }
+    50% { transform: rotate(-12deg); }
+}
+
+@keyframes legStepBack {
+    0%, 100% { transform: rotate(-8deg); }
+    50% { transform: rotate(12deg); }
+}
+
+@keyframes hitFlash {
+    0% { opacity: 0; transform: translateX(0) scale(0.6); }
+    40% { opacity: 1; transform: translateX(7px) scale(1.1); }
+    100% { opacity: 0; transform: translateX(12px) scale(1.35); }
+}
+
 /* Victory Screen */
 .victory-screen {
     display: flex;
@@ -1740,6 +1896,18 @@ body {
 
 /* === RESPONSIVE === */
 @media (max-width: 1024px) {
+    .battle-arena-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .vs-divider {
+        padding-top: 16px;
+    }
+
+    .battle-rhythm {
+        margin: 16px auto 0;
+    }
+
     .selection-container {
         grid-template-columns: 1fr;
     }

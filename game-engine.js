@@ -736,6 +736,27 @@ const GameEngine = {
                             <span class="vs-text">VS</span>
                             <span class="timer" id="battleTimer">60</span>
                         </div>
+                        <div id="battleRhythm" class="battle-rhythm beat-a" aria-label="Animación de batalla musical">
+                            <div class="rhythm-fighter left" id="rhythmFighterLeft" aria-hidden="true">
+                                <span class="fighter-head"></span>
+                                <span class="fighter-body"></span>
+                                <span class="fighter-arm front"></span>
+                                <span class="fighter-arm back"></span>
+                                <span class="fighter-leg front"></span>
+                                <span class="fighter-leg back"></span>
+                                <span class="fighter-hit" id="leftHitFx">♪</span>
+                            </div>
+                            <div class="rhythm-stage" aria-hidden="true"></div>
+                            <div class="rhythm-fighter right" id="rhythmFighterRight" aria-hidden="true">
+                                <span class="fighter-head"></span>
+                                <span class="fighter-body"></span>
+                                <span class="fighter-arm front"></span>
+                                <span class="fighter-arm back"></span>
+                                <span class="fighter-leg front"></span>
+                                <span class="fighter-leg back"></span>
+                                <span class="fighter-hit" id="rightHitFx">♫</span>
+                            </div>
+                        </div>
                     </div>
                     
                     <!-- Fighter 2 -->
@@ -781,9 +802,10 @@ const GameEngine = {
             timeLeft--;
             
             document.getElementById('battleTimer').textContent = timeLeft;
-            
+
             plays1 += this.calculatePlaysIncrement(basePlays1);
             plays2 += this.calculatePlaysIncrement(basePlays2);
+            this.updateBattleRhythmAnimation(timeLeft, plays1, plays2);
 
             const totalPlays = plays1 + plays2;
             const share1 = totalPlays > 0 ? (plays1 / totalPlays) * 100 : 50;
@@ -807,6 +829,24 @@ const GameEngine = {
         }, 1000);
     },
     
+    updateBattleRhythmAnimation(timeLeft, plays1, plays2) {
+        const rhythmEl = document.getElementById('battleRhythm');
+        if (!rhythmEl) return;
+
+        const phaseClass = timeLeft % 2 === 0 ? 'beat-a' : 'beat-b';
+        rhythmEl.classList.remove('beat-a', 'beat-b', 'left-attack', 'right-attack', 'climax');
+        rhythmEl.classList.add(phaseClass);
+
+        const diff = plays1 - plays2;
+        if (Math.abs(diff) > 1) {
+            rhythmEl.classList.add(diff > 0 ? 'left-attack' : 'right-attack');
+        }
+
+        if (timeLeft <= 10) {
+            rhythmEl.classList.add('climax');
+        }
+    },
+
     async endBattle(match, health1, health2, isPlayer1, plays1, plays2) {
         const winner = plays1 > plays2 ? 1 : 2;
         const userWon = (isPlayer1 && winner === 1) || (!isPlayer1 && winner === 2);
