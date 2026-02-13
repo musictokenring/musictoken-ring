@@ -336,7 +336,6 @@ body {
     color: var(--accent-green);
 }
 
-<<<<<<< HEAD
 .settlement-panel {
     margin-top: 18px;
     display: grid;
@@ -393,9 +392,6 @@ body {
     color: var(--text-secondary);
     font-size: 12px;
 }
-
-=======
->>>>>>> origin/main
 .feature-item {
     background: var(--bg-secondary);
     padding: 16px;
@@ -1070,7 +1066,10 @@ body {
     border: 1px solid var(--border-color);
     border-radius: 24px;
     transition: all 0.2s ease;
+    cursor: pointer;
+    font-family: inherit;
 }
+
 
 .user-profile:hover {
     border-color: var(--accent-green);
@@ -1399,6 +1398,103 @@ body {
 .auth-modal-content {
     max-width: 440px;
     padding: 40px;
+}
+
+.profile-modal-content {
+    max-width: 620px;
+    width: min(92vw, 620px);
+    max-height: 85vh;
+    overflow-y: auto;
+    text-align: left;
+}
+
+.profile-header {
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    padding: 14px;
+    margin-bottom: 14px;
+}
+
+.profile-name {
+    margin: 0;
+    font-weight: 700;
+}
+
+.profile-email,
+.profile-since {
+    margin: 4px 0 0;
+    color: var(--text-secondary);
+    font-size: 13px;
+}
+
+.profile-stats-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+}
+
+.profile-stat-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: 10px;
+    padding: 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.profile-stat-card.full {
+    grid-column: 1 / -1;
+}
+
+.profile-stat-card span {
+    color: var(--text-secondary);
+    font-size: 12px;
+}
+
+.profile-stat-card strong {
+    color: var(--text-primary);
+    font-size: 16px;
+}
+
+.profile-recent-section {
+    margin-top: 16px;
+}
+
+.profile-recent-section h3 {
+    margin: 0 0 8px;
+    font-size: 14px;
+}
+
+.profile-recent-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.profile-match {
+    display: flex;
+    justify-content: space-between;
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 10px;
+    font-size: 13px;
+}
+
+.profile-match.win {
+    border-color: rgba(34, 197, 94, 0.5);
+}
+
+.profile-match.loss {
+    border-color: rgba(239, 68, 68, 0.5);
+}
+
+.profile-empty {
+    margin: 0;
+    color: var(--text-secondary);
+    font-size: 13px;
 }
 
 .auth-form {
