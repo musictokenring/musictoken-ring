@@ -99,6 +99,7 @@ echo "[info] Merge conflict detected. Applying strategy '$STRATEGY'."
 HOTSPOTS=(
   "game-engine.js"
   "styles/main.css"
+  "scripts/resolve-pr-conflicts.sh"
   "index.html"
   "privacy.html"
   "profile.html"
@@ -129,8 +130,12 @@ if git ls-files -u | grep -q .; then
   exit 4
 fi
 
+
+UNMERGED_AFTER=$(git ls-files -u | wc -l | tr -d ' ')
+echo "[info] unmerged entries after strategy application: ${UNMERGED_AFTER}"
+
 # Safety check for conflict markers in key files.
-if grep -nE '^(<<<<<<<|=======|>>>>>>>)' game-engine.js styles/main.css index.html >/dev/null 2>&1; then
+if grep -nE '^(<<<<<<<|=======|>>>>>>>)' game-engine.js styles/main.css scripts/resolve-pr-conflicts.sh index.html >/dev/null 2>&1; then
   echo "[error] Conflict markers still present in key files." >&2
   exit 5
 fi
