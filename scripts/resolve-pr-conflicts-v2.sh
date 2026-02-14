@@ -60,8 +60,21 @@ fi
 
 echo "[info] remote=$REMOTE target=$TARGET_BRANCH base=$BASE_BRANCH strategy=$STRATEGY"
 
+MERGE_IN_PROGRESS=0
+if git rev-parse -q --verify MERGE_HEAD >/dev/null 2>&1; then
+  MERGE_IN_PROGRESS=1
+  CURRENT_BRANCH="$(git rev-parse --abbrev-ref HEAD)"
+  if [[ "$CURRENT_BRANCH" != "$TARGET_BRANCH" ]]; then
+    echo "[error] Merge in progress on branch $CURRENT_BRANCH, expected $TARGET_BRANCH." >&2
+    echo "[hint] Finish/abort current merge first: git merge --continue OR git merge --abort" >&2
+    exit 9
+  fi
+  echo "[warn] Existing merge in progress detected. Reusing current merge state."
+fi
+
 git fetch "$REMOTE" --prune
 
+if [[ "$MERGE_IN_PROGRESS" -eq 0 ]]; then
 if git show-ref --verify --quiet "refs/heads/${TARGET_BRANCH}"; then
   git switch "$TARGET_BRANCH"
 elif git show-ref --verify --quiet "refs/remotes/${REMOTE}/${TARGET_BRANCH}"; then
@@ -72,26 +85,30 @@ else
   exit 2
 fi
 
+fi
+
 if ! git show-ref --verify --quiet "refs/remotes/${REMOTE}/${BASE_BRANCH}"; then
   echo "[error] Base branch not found on remote: ${REMOTE}/${BASE_BRANCH}" >&2
   exit 3
 fi
 
-# Clean state to avoid local noise.
-git reset --hard "${REMOTE}/${TARGET_BRANCH}"
+# Clean state / merge only when not already in a merge state.
+if [[ "$MERGE_IN_PROGRESS" -eq 0 ]]; then
+  git reset --hard "${REMOTE}/${TARGET_BRANCH}"
 
-set +e
-git merge --no-ff "${REMOTE}/${BASE_BRANCH}"
-MERGE_CODE=$?
-set -e
+  set +e
+  git merge --no-ff "${REMOTE}/${BASE_BRANCH}"
+  MERGE_CODE=$?
+  set -e
 
-if [[ "$MERGE_CODE" -eq 0 ]]; then
-  echo "[ok] No conflicts: branch is mergeable already."
-  exit 0
-fi
-if [[ "$MERGE_CODE" -ne 1 ]]; then
-  echo "[error] Merge failed unexpectedly (exit $MERGE_CODE)." >&2
-  exit "$MERGE_CODE"
+  if [[ "$MERGE_CODE" -eq 0 ]]; then
+    echo "[ok] No conflicts: branch is mergeable already."
+    exit 0
+  fi
+  if [[ "$MERGE_CODE" -ne 1 ]]; then
+    echo "[error] Merge failed unexpectedly (exit $MERGE_CODE)." >&2
+    exit "$MERGE_CODE"
+  fi
 fi
 
 echo "[info] Merge conflict detected. Applying strategy '$STRATEGY'."

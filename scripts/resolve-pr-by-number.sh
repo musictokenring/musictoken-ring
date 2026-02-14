@@ -83,8 +83,21 @@ fi
 
 echo "[info] head=${HEAD_REF} base=${BASE_REF}"
 
+MERGE_IN_PROGRESS=0
+if git rev-parse -q --verify MERGE_HEAD >/dev/null 2>&1; then
+  MERGE_IN_PROGRESS=1
+  CURRENT_BRANCH="$(git rev-parse --abbrev-ref HEAD)"
+  if [[ "$CURRENT_BRANCH" != "$HEAD_REF" ]]; then
+    echo "[error] Merge in progress on branch $CURRENT_BRANCH, but PR head is $HEAD_REF." >&2
+    echo "[hint] Finish/abort current merge first: git merge --continue OR git merge --abort" >&2
+    exit 8
+  fi
+  echo "[warn] Existing merge in progress detected. Reusing current merge state."
+fi
+
 git fetch "$REMOTE" --prune
 
+if [[ "$MERGE_IN_PROGRESS" -eq 0 ]]; then
 if git show-ref --verify --quiet "refs/heads/${HEAD_REF}"; then
   git switch "$HEAD_REF"
 elif git show-ref --verify --quiet "refs/remotes/${REMOTE}/${HEAD_REF}"; then
@@ -94,26 +107,30 @@ else
   exit 4
 fi
 
+fi
+
 if ! git show-ref --verify --quiet "refs/remotes/${REMOTE}/${BASE_REF}"; then
   echo "[error] Base ref not found on remote: ${BASE_REF}" >&2
   exit 5
 fi
 
-# Deterministic merge state
-git reset --hard "${REMOTE}/${HEAD_REF}"
+# Deterministic merge state (only when not already merging)
+if [[ "$MERGE_IN_PROGRESS" -eq 0 ]]; then
+  git reset --hard "${REMOTE}/${HEAD_REF}"
 
-set +e
-git merge --no-ff "${REMOTE}/${BASE_REF}"
-MERGE_CODE=$?
-set -e
+  set +e
+  git merge --no-ff "${REMOTE}/${BASE_REF}"
+  MERGE_CODE=$?
+  set -e
 
-if [[ "$MERGE_CODE" -eq 0 ]]; then
-  echo "[ok] No conflicts detected for PR #${PR_NUMBER}."
-  exit 0
-fi
-if [[ "$MERGE_CODE" -ne 1 ]]; then
-  echo "[error] Merge failed unexpectedly (exit $MERGE_CODE)." >&2
-  exit "$MERGE_CODE"
+  if [[ "$MERGE_CODE" -eq 0 ]]; then
+    echo "[ok] No conflicts detected for PR #${PR_NUMBER}."
+    exit 0
+  fi
+  if [[ "$MERGE_CODE" -ne 1 ]]; then
+    echo "[error] Merge failed unexpectedly (exit $MERGE_CODE)." >&2
+    exit "$MERGE_CODE"
+  fi
 fi
 
 HOTSPOTS=(
