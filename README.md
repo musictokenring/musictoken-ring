@@ -200,6 +200,21 @@ bash scripts/resolve-pr20-force.sh main ours origin --dry-run
 bash scripts/resolve-pr20-force.sh main theirs origin
 ```
 
+### Resolver 2 PRs atorados (#20 y #21)
+
+Si tienes ambas fusiones bloqueadas, ejecuta en secuencia:
+
+```bash
+bash scripts/resolve-stuck-prs.sh --prs 20,21 --strategy ours --remote origin
+```
+
+También puedes correr uno por uno:
+
+```bash
+bash scripts/resolve-pr-by-number.sh --pr 20 --strategy ours --remote origin
+bash scripts/resolve-pr-by-number.sh --pr 21 --strategy ours --remote origin
+```
+
 ## 🧪 Testing
 
 ### Test Búsqueda
