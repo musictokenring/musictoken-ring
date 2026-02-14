@@ -1,83 +1,43 @@
 #!/usr/bin/env bash
-set -euo pipefail
+set -u -o pipefail
 
-usage() {
-  cat <<'USAGE'
-Usage: scripts/resolve-pr20-force.sh [base_branch] [strategy] [remote] [--dry-run]
-
-Arguments:
-  base_branch   Base branch to merge from (default: main)
-  strategy      Conflict strategy for unresolved files: ours|theirs (default: ours)
-  remote        Remote name (default: origin)
-
-Options:
-  --dry-run     Print commands without mutating git state
-  -h, --help    Show this help
-USAGE
-}
-
-BASE_BRANCH="main"
-STRATEGY="ours"
-REMOTE="origin"
-DRY_RUN=0
-
-POSITIONAL=()
-for arg in "$@"; do
-  case "$arg" in
-    -h|--help)
-      usage
-      exit 0
-      ;;
-    --dry-run)
-      DRY_RUN=1
-      ;;
-    *)
-      POSITIONAL+=("$arg")
-      ;;
-  esac
-done
-
-if [[ ${#POSITIONAL[@]} -ge 1 ]]; then BASE_BRANCH="${POSITIONAL[0]}"; fi
-if [[ ${#POSITIONAL[@]} -ge 2 ]]; then STRATEGY="${POSITIONAL[1]}"; fi
-if [[ ${#POSITIONAL[@]} -ge 3 ]]; then REMOTE="${POSITIONAL[2]}"; fi
-if [[ ${#POSITIONAL[@]} -gt 3 ]]; then
-  echo "[ERROR] Too many positional arguments"
-  usage
-  exit 1
-fi
+BASE_BRANCH="${1:-main}"
+STRATEGY="${2:-ours}"   # ours|theirs
+REMOTE="${3:-origin}"
 
 if [[ "$STRATEGY" != "ours" && "$STRATEGY" != "theirs" ]]; then
   echo "[ERROR] strategy inválida: $STRATEGY (usa ours|theirs)"
   exit 1
 fi
 
+LOG_FILE="resolve-pr20-force.$(date +%Y%m%d-%H%M%S).log"
+exec > >(tee -a "$LOG_FILE") 2>&1
+
 run() {
-  echo "+ $*"
-  if [[ "$DRY_RUN" -eq 0 ]]; then
-    "$@"
+  local cmd="$1"
+  local ok_codes="${2:-0}"
+  echo "> $cmd"
+  bash -lc "$cmd"
+  local rc=$?
+  local ok=1
+  IFS=',' read -ra ALLOWED <<< "$ok_codes"
+  for c in "${ALLOWED[@]}"; do
+    [[ "$rc" == "$c" ]] && ok=0 && break
+  done
+  if [[ $ok -ne 0 ]]; then
+    echo "[ERROR] comando falló rc=$rc :: $cmd"
+    exit "$rc"
   fi
 }
 
-if ! git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
-  echo "[ERROR] Ejecuta este script dentro de un repositorio git"
-  exit 1
-fi
+echo "[INFO] Log: $LOG_FILE"
 
-if ! git remote get-url "$REMOTE" >/dev/null 2>&1; then
-  echo "[ERROR] remote '$REMOTE' no existe"
-  exit 1
-fi
+run "git rev-parse --is-inside-work-tree"
+run "git remote | grep -qx '$REMOTE'"
 
 CURRENT_BRANCH="$(git rev-parse --abbrev-ref HEAD)"
 
-echo "[INFO] branch=$CURRENT_BRANCH base=$BASE_BRANCH strategy=$STRATEGY remote=$REMOTE dry_run=$DRY_RUN"
-
-if [[ "$DRY_RUN" -eq 0 ]]; then
-  if ! git diff --quiet || ! git diff --cached --quiet; then
-    echo "[ERROR] Working tree sucio. Commit/stash antes de correr el script."
-    exit 1
-  fi
-fi
+echo "[INFO] branch=$CURRENT_BRANCH base=$BASE_BRANCH strategy=$STRATEGY remote=$REMOTE"
 
 MERGE_IN_PROGRESS=0
 if git rev-parse -q --verify MERGE_HEAD >/dev/null 2>&1; then
@@ -85,46 +45,30 @@ if git rev-parse -q --verify MERGE_HEAD >/dev/null 2>&1; then
   echo "[WARN] merge en progreso detectado; se reutiliza estado actual"
 fi
 
-run git fetch "$REMOTE" --prune
+run "git fetch $REMOTE --prune"
 
 if [[ "$MERGE_IN_PROGRESS" -eq 0 ]]; then
-  set +e
-  if [[ "$DRY_RUN" -eq 0 ]]; then
-    git merge --no-ff "$REMOTE/$BASE_BRANCH"
-    MERGE_RC=$?
-  else
-    echo "+ git merge --no-ff $REMOTE/$BASE_BRANCH"
-    MERGE_RC=1
-  fi
-  set -e
-
-  if [[ "$MERGE_RC" -ne 0 ]]; then
-    echo "[INFO] merge retornó rc=$MERGE_RC, intentando resolver conflictos..."
-  fi
+  run "git merge --no-ff $REMOTE/$BASE_BRANCH" "0,1"
 fi
 
-HOTSPOTS=(
-  "game-engine.js"
-  "styles/main.css"
-  "scripts/resolve-pr-conflicts.sh"
-)
-
-for f in "${HOTSPOTS[@]}"; do
+# Resolver hotspots explícitos del PR
+for f in game-engine.js styles/main.css scripts/resolve-pr-conflicts.sh; do
   if git ls-files -u -- "$f" | grep -q .; then
-    run git checkout "--$STRATEGY" -- "$f"
-    run git add "$f"
+    run "git checkout --$STRATEGY -- '$f'"
+    run "git add '$f'"
     echo "[INFO] hotspot resuelto: $f"
   fi
 done
 
+# Resolver cualquier otro conflicto restante
 while IFS= read -r f; do
   [[ -z "$f" ]] && continue
-  run git checkout "--$STRATEGY" -- "$f"
-  run git add "$f"
+  run "git checkout --$STRATEGY -- '$f'"
+  run "git add '$f'"
   echo "[INFO] conflicto adicional resuelto: $f"
 done < <(git diff --name-only --diff-filter=U)
 
-UNMERGED="$(git ls-files -u | wc -l | tr -d ' ')"
+UNMERGED=$(git ls-files -u | wc -l | tr -d ' ')
 echo "[INFO] unmerged entries: $UNMERGED"
 if [[ "$UNMERGED" != "0" ]]; then
   echo "[ERROR] todavía hay conflictos sin resolver"
@@ -132,18 +76,23 @@ if [[ "$UNMERGED" != "0" ]]; then
   exit 2
 fi
 
-if rg -n '^(<<<<<<<|=======|>>>>>>>)' game-engine.js styles/main.css scripts/resolve-pr-conflicts.sh >/dev/null 2>&1; then
+if grep -nE '^(<<<<<<<|=======|>>>>>>>)' game-engine.js styles/main.css scripts/resolve-pr-conflicts.sh >/dev/null 2>&1; then
   echo "[ERROR] quedan markers de conflicto en hotspots"
   exit 3
 fi
 
+# Finalizar merge siempre que esté activo, aunque árbol quede igual
 if git rev-parse -q --verify MERGE_HEAD >/dev/null 2>&1; then
-  run git add -A
-  run git commit --allow-empty -m "Resolve conflicts vs $BASE_BRANCH with $STRATEGY strategy (forced)"
+  run "git add -A"
+  run "git commit --allow-empty -m 'Resolve conflicts vs $BASE_BRANCH with $STRATEGY strategy (forced)'"
 else
-  echo "[INFO] no hay merge activo; nada que commitear"
+  if ! git diff --cached --quiet; then
+    run "git commit -m 'Apply post-merge conflict resolutions'"
+  else
+    echo "[INFO] sin merge activo y sin cambios staged; nada que commitear"
+  fi
 fi
 
-run git push "$REMOTE" "$CURRENT_BRANCH"
+run "git push $REMOTE $CURRENT_BRANCH"
 
 echo "[OK] conflicto resuelto y push completado en $CURRENT_BRANCH"
