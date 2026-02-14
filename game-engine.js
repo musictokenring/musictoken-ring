@@ -11,7 +11,7 @@ const GameEngine = {
     minBet: 100,
     battleDuration: 60,
     victoryAudioDuration: 15,
-    platformFeeRate: 0.1,
+    platformFeeRate: 0.3,
     jackpotRate: 0.1,
     platformRevenueTarget: 100000,
     userAudio: null,
@@ -35,6 +35,7 @@ const GameEngine = {
         await this.loadGameConfig();
         this.loadStoredWallet();
         this.setupRealtimeSubscriptions();
+        this.scheduleEloRefresh();
         console.log('✅ Game Engine ready!');
     },
 
@@ -157,21 +158,43 @@ const GameEngine = {
                 .gte('bet_amount', betAmount * 0.8)
                 .lte('bet_amount', betAmount * 1.2)
                 .order('created_at', { ascending: true })
-                .limit(1);
+                .limit(8);
             
             if (opponents && opponents.length > 0) {
-                const opponent = opponents[0];
-                
-                // Crear match
-                await this.createMatch('quick', session.user.id, opponent.user_id, song, opponent, betAmount, opponent.bet_amount);
-                
-                // Remover de cola
-                await supabaseClient
-                    .from('matchmaking_queue')
-                    .delete()
-                    .eq('id', opponent.id);
-                
-                showToast('¡Oponente encontrado!', 'success');
+                const eligibleOpponents = [];
+                for (const candidate of opponents) {
+                    const canBattle = await this.canMatchByElo(song.id, candidate.song_id);
+                    if (canBattle.allowed) eligibleOpponents.push(candidate);
+                }
+
+                if (eligibleOpponents.length > 0) {
+                    const opponent = eligibleOpponents[0];
+                    await this.createMatch('quick', session.user.id, opponent.user_id, song, opponent, betAmount, opponent.bet_amount);
+
+                    await supabaseClient
+                        .from('matchmaking_queue')
+                        .delete()
+                        .eq('id', opponent.id);
+
+                    showToast('¡Oponente encontrado!', 'success');
+                } else {
+                    showToast('Sin rival en rango ELO (<300). Te agregamos a la cola.', 'info');
+                    await supabaseClient
+                        .from('matchmaking_queue')
+                        .insert([{
+                            user_id: session.user.id,
+                            song_id: song.id,
+                            song_name: song.name,
+                            song_artist: song.artist,
+                            song_image: song.image,
+                            song_preview: song.preview,
+                            bet_amount: betAmount
+                        }]);
+
+                    document.getElementById('songSelection').classList.add('hidden');
+                    document.getElementById('waitingScreen').classList.remove('hidden');
+                    this.startMatchmakingPolling();
+                }
             } else {
                 // Agregar a cola
                 const { error } = await supabaseClient
@@ -403,6 +426,12 @@ const GameEngine = {
                 return;
             }
             
+
+            const eloGate = await this.canMatchByElo(song.id, match.player1_song_id);
+            if (!eloGate.allowed) {
+                showToast(`Matchmaking ELO bloqueado: diferencia ${eloGate.diff} (>300)`, 'error');
+                return;
+            }
             // Unirse al match
             const { error: updateError } = await supabaseClient
                 .from('matches')
@@ -510,7 +539,7 @@ const GameEngine = {
             this.setPracticeDemoBalance(this.practiceDemoBalance - normalizedBet);
             this.updatePracticeBetDisplay();
             
-            const cpuSong = await this.fetchCpuOpponentTrack(userSong);
+            const cpuSong = await this.fetchCpuOpponentByElo(userSong);
             
             const { data: match, error } = await supabaseClient
                 .from('matches')
@@ -966,6 +995,7 @@ const GameEngine = {
                 await this.updateBalance(payouts.winnerPayout, 'win', match.id);
             }
             this.addToPlatformRevenue(payouts.platformFee);
+            await this.logPlatformFeeTransaction(match.id, payouts.platformFee);
         } else {
             if (userWon) {
                 await this.updateBalance(50, 'practice_reward', match.id);
@@ -1305,8 +1335,8 @@ const GameEngine = {
         if (!totalPot) {
             return { platformFee: 0, winnerPayout: 0 };
         }
-        const platformFee = Math.round(totalPot * this.platformFeeRate);
-        const winnerPayout = Math.max(0, totalPot - platformFee);
+        const platformFee = Math.round(totalPot * 0.3);
+        const winnerPayout = Math.max(0, Math.round(totalPot * 0.7));
         return { platformFee, winnerPayout };
     },
 
@@ -1326,6 +1356,91 @@ const GameEngine = {
             prizeContribution,
             threshold
         };
+    },
+
+
+    scheduleEloRefresh() {
+        this.refreshSongEloScores();
+        setInterval(() => this.refreshSongEloScores(), 2 * 60 * 60 * 1000);
+    },
+
+    async refreshSongEloScores() {
+        try {
+            const tracks = await this.fetchChartTracks();
+            const top = (tracks || []).slice(0, 24);
+            for (const track of top) {
+                const avg24h = Math.max(1, Math.round((track.rank || 1000) / 1000));
+                await supabaseClient
+                    .from('songs_elo')
+                    .upsert({
+                        track_id: String(track.id),
+                        elo_score: avg24h,
+                        last_update: new Date().toISOString()
+                    }, { onConflict: 'track_id' });
+            }
+            localStorage.setItem('mtr_last_elo_refresh', new Date().toISOString());
+        } catch (error) {
+            console.warn('No se pudo refrescar songs_elo:', error);
+        }
+    },
+
+    async getSongElo(trackId) {
+        try {
+            const { data } = await supabaseClient
+                .from('songs_elo')
+                .select('elo_score')
+                .eq('track_id', String(trackId))
+                .maybeSingle();
+
+            if (data?.elo_score) return Number(data.elo_score);
+
+            await supabaseClient
+                .from('songs_elo')
+                .upsert({
+                    track_id: String(trackId),
+                    elo_score: 1000,
+                    last_update: new Date().toISOString()
+                }, { onConflict: 'track_id' });
+            return 1000;
+        } catch {
+            return 1000;
+        }
+    },
+
+    async ensureSongEligibleForMatchmaking(trackId) {
+        const elo = await this.getSongElo(trackId);
+        return { allowed: Number.isFinite(elo), elo };
+    },
+
+    async canMatchByElo(trackIdA, trackIdB) {
+        const [a, b] = await Promise.all([this.getSongElo(trackIdA), this.getSongElo(trackIdB)]);
+        const diff = Math.abs((a || 1000) - (b || 1000));
+        return { allowed: diff < 300, diff, a, b };
+    },
+
+    async fetchCpuOpponentByElo(userSong) {
+        for (let i = 0; i < 4; i++) {
+            const cpuSong = await this.fetchCpuOpponentTrack(userSong);
+            const gate = await this.canMatchByElo(userSong.id, cpuSong.id);
+            if (gate.allowed) return cpuSong;
+        }
+        return this.fetchCpuOpponentTrack(userSong);
+    },
+
+    async logPlatformFeeTransaction(matchId, amount) {
+        if (!amount || amount <= 0) return;
+        try {
+            await supabaseClient
+                .from('transactions')
+                .insert([{
+                    match_id: matchId,
+                    type: 'fee',
+                    amount,
+                    created_at: new Date().toISOString()
+                }]);
+        } catch (error) {
+            console.warn('No se pudo registrar comisión fee:', error);
+        }
     },
 
     addToPlatformRevenue(amount) {
