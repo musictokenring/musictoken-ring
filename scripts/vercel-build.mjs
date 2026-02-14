@@ -2,7 +2,7 @@ import fs from 'fs';
 import path from 'path';
 
 const ROOT = process.cwd();
-const OUT = path.join(ROOT, 'dist');
+const OUT = path.join(ROOT, 'public');
 
 const files = [
   'index.html',
@@ -37,4 +37,4 @@ for (const dir of dirs) {
   }
 }
 
-console.log('Built static output in dist/');
+console.log('Built static output in public/');
