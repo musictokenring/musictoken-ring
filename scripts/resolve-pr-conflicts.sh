@@ -3,11 +3,22 @@ set -euo pipefail
 
 # Usage:
 #   scripts/resolve-pr-conflicts.sh [target_branch] [base_branch]
-# Example:
+# Examples:
 #   scripts/resolve-pr-conflicts.sh codex/fix-contact-link-and-create-contact-form-uzk4jq main
+#   scripts/resolve-pr-conflicts.sh                    # uses current branch + main
 
-TARGET_BRANCH="${1:-$(git rev-parse --abbrev-ref HEAD)}"
+CURRENT_BRANCH="$(git rev-parse --abbrev-ref HEAD)"
+RAW_TARGET_BRANCH="${1:-$CURRENT_BRANCH}"
 BASE_BRANCH="${2:-main}"
+
+# Common user mistake: passing placeholder text literally like <rama-del-pr>
+if [[ "$RAW_TARGET_BRANCH" == "<"*">" ]] || [[ "$RAW_TARGET_BRANCH" == "rama-del-pr" ]]; then
+  echo "[warn] Placeholder branch argument detected ('$RAW_TARGET_BRANCH')."
+  echo "[warn] Falling back to current branch: ${CURRENT_BRANCH}."
+  TARGET_BRANCH="$CURRENT_BRANCH"
+else
+  TARGET_BRANCH="$RAW_TARGET_BRANCH"
+fi
 
 echo "[info] target branch: ${TARGET_BRANCH}"
 echo "[info] base branch:   ${BASE_BRANCH}"
@@ -23,8 +34,12 @@ git fetch origin --prune
 # Switch to target branch from remote if needed.
 if git show-ref --verify --quiet "refs/heads/${TARGET_BRANCH}"; then
   git switch "${TARGET_BRANCH}"
-else
+elif git show-ref --verify --quiet "refs/remotes/origin/${TARGET_BRANCH}"; then
   git switch -C "${TARGET_BRANCH}" --track "origin/${TARGET_BRANCH}"
+else
+  echo "[error] Target branch not found locally or on origin: ${TARGET_BRANCH}" >&2
+  echo "[hint] List remote branches with: git branch -r | grep codex/" >&2
+  exit 4
 fi
 
 # Clean local state so merge runs predictably.
@@ -35,6 +50,11 @@ set +e
 git merge --no-ff "origin/${BASE_BRANCH}"
 MERGE_CODE=$?
 set -e
+
+if [ "$MERGE_CODE" -ne 0 ] && [ "$MERGE_CODE" -ne 1 ]; then
+  echo "[error] Merge failed with unexpected exit code ${MERGE_CODE}." >&2
+  exit "$MERGE_CODE"
+fi
 
 if [ "$MERGE_CODE" -eq 0 ]; then
   echo "[info] No conflicts. Branch already mergeable with origin/${BASE_BRANCH}."

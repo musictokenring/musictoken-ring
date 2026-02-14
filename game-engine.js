@@ -738,7 +738,7 @@ const GameEngine = {
                         </div>
                         <div id="battleRhythm" class="battle-rhythm beat-a" aria-label="Animación de batalla musical">
                             <div class="rhythm-fighter left" aria-hidden="true">
-                                <span class="fighter-head"></span>
+                                <span class="fighter-head"><span class="fighter-face">😐</span></span>
                                 <span class="fighter-body"></span>
                                 <span class="fighter-arm front"></span>
                                 <span class="fighter-arm back"></span>
@@ -747,13 +747,8 @@ const GameEngine = {
                                 <span class="fighter-hit" id="leftHitFx">♪</span>
                             </div>
                             <div class="rhythm-stage" aria-hidden="true"></div>
-                            <div class="rhythm-clash" aria-hidden="true">
-                                <span class="clash-core"></span>
-                                <span class="clash-ring"></span>
-                                <span class="clash-ring second"></span>
-                            </div>
                             <div class="rhythm-fighter right" aria-hidden="true">
-                                <span class="fighter-head"></span>
+                                <span class="fighter-head"><span class="fighter-face">😐</span></span>
                                 <span class="fighter-body"></span>
                                 <span class="fighter-arm front"></span>
                                 <span class="fighter-arm back"></span>
@@ -841,45 +836,49 @@ const GameEngine = {
         const diff = plays1 - plays2;
         const leadRatio = Math.abs(diff) / totalPlays;
         const impactPulse = timeLeft % 4 === 0;
-        const clashWindow = Math.abs(diff) <= Math.max(2, totalPlays * 0.04);
         const phaseClass = timeLeft % 2 === 0 ? 'beat-a' : 'beat-b';
         const intensity = Math.min(1, 0.35 + leadRatio * 3 + (this.battleDuration - timeLeft) / Math.max(1, this.battleDuration));
 
-        let leftApproach = 0;
-        let rightApproach = 0;
+        let leftApproach = 12;
+        let rightApproach = 12;
+
+        const leftFade = diff >= 0 ? 1 : Math.max(0.35, 1 - leadRatio * 3);
+        const rightFade = diff <= 0 ? 1 : Math.max(0.35, 1 - leadRatio * 3);
 
         rhythmEl.style.setProperty('--battle-intensity', intensity.toFixed(2));
+        rhythmEl.style.setProperty('--left-approach', `${leftApproach}px`);
+        rhythmEl.style.setProperty('--right-approach', `${rightApproach}px`);
+        rhythmEl.style.setProperty('--left-fade', leftFade.toFixed(2));
+        rhythmEl.style.setProperty('--right-fade', rightFade.toFixed(2));
+
         rhythmEl.classList.remove(
             'beat-a', 'beat-b', 'left-attack', 'right-attack', 'pressure-left', 'pressure-right',
-            'impact-pulse', 'clash', 'climax'
+            'impact-pulse', 'clash', 'climax', 'battle-finished', 'winner-left', 'winner-right', 'loser-left', 'loser-right'
         );
         rhythmEl.classList.add(phaseClass);
 
         if (leadRatio >= 0.16) {
             rhythmEl.classList.add(diff > 0 ? 'left-attack' : 'right-attack');
             if (diff > 0) {
-                leftApproach = 24;
-                rightApproach = 10;
-            } else {
-                leftApproach = 10;
+                leftApproach = 32;
                 rightApproach = 24;
+            } else {
+                leftApproach = 24;
+                rightApproach = 32;
             }
         } else if (leadRatio >= 0.08) {
             rhythmEl.classList.add(diff > 0 ? 'pressure-left' : 'pressure-right');
             if (diff > 0) {
-                leftApproach = 14;
-                rightApproach = 8;
+                leftApproach = 24;
+                rightApproach = 18;
             } else {
-                leftApproach = 8;
-                rightApproach = 14;
+                leftApproach = 18;
+                rightApproach = 24;
             }
-        }
-
-        const closeEngagement = clashWindow || (leadRatio >= 0.16 && impactPulse);
-        if (closeEngagement) {
+        } else {
             rhythmEl.classList.add('clash');
-            leftApproach = Math.max(leftApproach, 26);
-            rightApproach = Math.max(rightApproach, 26);
+            leftApproach = 28;
+            rightApproach = 28;
         }
 
         if (impactPulse) {
@@ -894,6 +893,31 @@ const GameEngine = {
 
         rhythmEl.style.setProperty('--left-approach', `${leftApproach}px`);
         rhythmEl.style.setProperty('--right-approach', `${rightApproach}px`);
+    },
+
+    finalizeBattleRhythmAnimation(winner) {
+        const rhythmEl = document.getElementById('battleRhythm');
+        if (!rhythmEl) return;
+
+        const leftFace = rhythmEl.querySelector('.rhythm-fighter.left .fighter-face');
+        const rightFace = rhythmEl.querySelector('.rhythm-fighter.right .fighter-face');
+
+        rhythmEl.classList.add('battle-finished');
+        rhythmEl.classList.remove('left-attack', 'right-attack', 'pressure-left', 'pressure-right', 'impact-pulse', 'clash');
+
+        if (winner === 1) {
+            rhythmEl.classList.add('winner-left', 'loser-right');
+            rhythmEl.style.setProperty('--left-fade', '1');
+            rhythmEl.style.setProperty('--right-fade', '0.3');
+            if (leftFace) leftFace.textContent = '😄';
+            if (rightFace) rightFace.textContent = '😞';
+        } else {
+            rhythmEl.classList.add('winner-right', 'loser-left');
+            rhythmEl.style.setProperty('--left-fade', '0.3');
+            rhythmEl.style.setProperty('--right-fade', '1');
+            if (leftFace) leftFace.textContent = '😞';
+            if (rightFace) rightFace.textContent = '😄';
+        }
     },
 
     goToPracticeSelection() {
@@ -948,6 +972,8 @@ const GameEngine = {
             }
         }
         
+        this.finalizeBattleRhythmAnimation(winner);
+
         // Mostrar resultado después de 15 segundos
         setTimeout(() => {
             this.showVictoryScreen(match, winner, userWon, payouts);
