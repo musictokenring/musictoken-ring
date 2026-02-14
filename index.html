@@ -49,6 +49,7 @@
                     <span class="logo-icon">🥊</span>
                     <span class="logo-text">MusicToken Ring</span>
                 </div>
+                <h2 class="slogan">Music Token Ring – The Wall Street of Beats</h2>
                 
                 <div class="header-badges">
                     <span class="badge">🎵 Deezer</span>
@@ -76,6 +77,22 @@
     <!-- Main Content -->
     <main class="main">
         <div class="container">
+            <section id="streamDashboard" class="stream-dashboard">
+                <div class="stream-dashboard-header">
+                    <h2>📈 Wall Street of Beats</h2>
+                    <p>Top streams por región (últimos 5 min)</p>
+                </div>
+                <div class="stream-region-tabs">
+                    <button class="stream-region-tab active" data-region="latam" onclick="setDashboardRegion('latam')">Latam</button>
+                    <button class="stream-region-tab" data-region="us" onclick="setDashboardRegion('us')">US</button>
+                    <button class="stream-region-tab" data-region="eu" onclick="setDashboardRegion('eu')">EU</button>
+                </div>
+                <div class="stream-carousel-wrap">
+                    <button class="stream-carousel-nav" onclick="moveDashboardCarousel(-1)">‹</button>
+                    <div id="streamDashboardTrackList" class="stream-carousel-track"></div>
+                    <button class="stream-carousel-nav" onclick="moveDashboardCarousel(1)">›</button>
+                </div>
+            </section>
             
             <!-- LOGIN WALL (mostrar si no está logueado) -->
             <section id="loginWall" class="login-wall">
@@ -770,7 +787,14 @@
         }
 
         // Seleccionar canción
-        function selectSongForBattle(song) {
+        async function selectSongForBattle(song) {
+            if (typeof GameEngine !== 'undefined' && typeof GameEngine.ensureSongEligibleForMatchmaking === 'function') {
+                const eloGate = await GameEngine.ensureSongEligibleForMatchmaking(song.id);
+                if (!eloGate.allowed) {
+                    showToast(eloGate.reason || 'Canción fuera del rango ELO permitido', 'error');
+                    return;
+                }
+            }
             selectedSong = song;
             
             const cardDiv = document.getElementById('selectedSongCard');
