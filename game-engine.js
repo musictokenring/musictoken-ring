@@ -79,11 +79,11 @@ const GameEngine = {
             }
             
             if (data) {
-                this.userBalance = data.balance;
+                this.userBalance = Math.max(0, Math.round(data.balance || 0));
                 this.updateBalanceDisplay();
             } else {
-                // Usuario nuevo - balance inicial de 1000
-                this.userBalance = 1000;
+                // Usuario nuevo - saldo real inicia en cero hasta recarga
+                this.userBalance = 0;
                 this.updateBalanceDisplay();
             }
         } catch (error) {
@@ -736,6 +736,32 @@ const GameEngine = {
                             <span class="vs-text">VS</span>
                             <span class="timer" id="battleTimer">60</span>
                         </div>
+                        <div id="battleRhythm" class="battle-rhythm beat-a" aria-label="Animación de batalla musical">
+                            <div class="rhythm-fighter left" aria-hidden="true">
+                                <span class="fighter-head"></span>
+                                <span class="fighter-body"></span>
+                                <span class="fighter-arm front"></span>
+                                <span class="fighter-arm back"></span>
+                                <span class="fighter-leg front"></span>
+                                <span class="fighter-leg back"></span>
+                                <span class="fighter-hit" id="leftHitFx">♪</span>
+                            </div>
+                            <div class="rhythm-stage" aria-hidden="true"></div>
+                            <div class="rhythm-clash" aria-hidden="true">
+                                <span class="clash-core"></span>
+                                <span class="clash-ring"></span>
+                                <span class="clash-ring second"></span>
+                            </div>
+                            <div class="rhythm-fighter right" aria-hidden="true">
+                                <span class="fighter-head"></span>
+                                <span class="fighter-body"></span>
+                                <span class="fighter-arm front"></span>
+                                <span class="fighter-arm back"></span>
+                                <span class="fighter-leg front"></span>
+                                <span class="fighter-leg back"></span>
+                                <span class="fighter-hit" id="rightHitFx">♫</span>
+                            </div>
+                        </div>
                     </div>
                     
                     <!-- Fighter 2 -->
@@ -781,9 +807,10 @@ const GameEngine = {
             timeLeft--;
             
             document.getElementById('battleTimer').textContent = timeLeft;
-            
+
             plays1 += this.calculatePlaysIncrement(basePlays1);
             plays2 += this.calculatePlaysIncrement(basePlays2);
+            this.updateBattleRhythmAnimation(timeLeft, plays1, plays2);
 
             const totalPlays = plays1 + plays2;
             const share1 = totalPlays > 0 ? (plays1 / totalPlays) * 100 : 50;
@@ -806,7 +833,83 @@ const GameEngine = {
             }
         }, 1000);
     },
-    
+    updateBattleRhythmAnimation(timeLeft, plays1, plays2) {
+        const rhythmEl = document.getElementById('battleRhythm');
+        if (!rhythmEl) return;
+
+        const totalPlays = Math.max(1, plays1 + plays2);
+        const diff = plays1 - plays2;
+        const leadRatio = Math.abs(diff) / totalPlays;
+        const impactPulse = timeLeft % 4 === 0;
+        const clashWindow = Math.abs(diff) <= Math.max(2, totalPlays * 0.04);
+        const phaseClass = timeLeft % 2 === 0 ? 'beat-a' : 'beat-b';
+        const intensity = Math.min(1, 0.35 + leadRatio * 3 + (this.battleDuration - timeLeft) / Math.max(1, this.battleDuration));
+
+        let leftApproach = 0;
+        let rightApproach = 0;
+
+        rhythmEl.style.setProperty('--battle-intensity', intensity.toFixed(2));
+        rhythmEl.classList.remove(
+            'beat-a', 'beat-b', 'left-attack', 'right-attack', 'pressure-left', 'pressure-right',
+            'impact-pulse', 'clash', 'climax'
+        );
+        rhythmEl.classList.add(phaseClass);
+
+        if (leadRatio >= 0.16) {
+            rhythmEl.classList.add(diff > 0 ? 'left-attack' : 'right-attack');
+            if (diff > 0) {
+                leftApproach = 24;
+                rightApproach = 10;
+            } else {
+                leftApproach = 10;
+                rightApproach = 24;
+            }
+        } else if (leadRatio >= 0.08) {
+            rhythmEl.classList.add(diff > 0 ? 'pressure-left' : 'pressure-right');
+            if (diff > 0) {
+                leftApproach = 14;
+                rightApproach = 8;
+            } else {
+                leftApproach = 8;
+                rightApproach = 14;
+            }
+        }
+
+        const closeEngagement = clashWindow || (leadRatio >= 0.16 && impactPulse);
+        if (closeEngagement) {
+            rhythmEl.classList.add('clash');
+            leftApproach = Math.max(leftApproach, 26);
+            rightApproach = Math.max(rightApproach, 26);
+        }
+
+        if (impactPulse) {
+            rhythmEl.classList.add('impact-pulse');
+        }
+
+        if (timeLeft <= 10) {
+            rhythmEl.classList.add('climax');
+            leftApproach += 4;
+            rightApproach += 4;
+        }
+
+        rhythmEl.style.setProperty('--left-approach', `${leftApproach}px`);
+        rhythmEl.style.setProperty('--right-approach', `${rightApproach}px`);
+    },
+
+    goToPracticeSelection() {
+        try {
+            if (typeof window !== 'undefined' && window.location) {
+                const url = new URL(window.location.href);
+                url.searchParams.set('mode', 'practice');
+                window.location.href = `${url.pathname}${url.search}`;
+                return;
+            }
+        } catch (error) {
+            console.warn('No se pudo redirigir a práctica:', error);
+        }
+        window.location.reload();
+    },
+
     async endBattle(match, health1, health2, isPlayer1, plays1, plays2) {
         const winner = plays1 > plays2 ? 1 : 2;
         const userWon = (isPlayer1 && winner === 1) || (!isPlayer1 && winner === 2);
@@ -872,8 +975,8 @@ const GameEngine = {
                         <p>Billetera plataforma: ${platformWallet}</p>
                     </div>
                 ` : ''}
-                <button onclick="location.reload()" class="btn-primary btn-large">
-                    Jugar de Nuevo
+                <button onclick="${match.match_type === 'practice' ? 'GameEngine.goToPracticeSelection()' : 'location.reload()'}" class="btn-primary btn-large">
+                    ${match.match_type === 'practice' ? 'Continuar en práctica' : 'Jugar de Nuevo'}
                 </button>
             </div>
         `;
