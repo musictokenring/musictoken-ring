@@ -33,6 +33,9 @@ function showToast(message, type = 'info') {
 // =========================================
 
 let currentAudio = null;
+let dashboardRegion = 'latam';
+let dashboardCarouselOffset = 0;
+const dashboardRegionQueries = { latam: 'latin', us: 'billboard', eu: 'europe top' };
 
 function togglePreview(url, button) {
     if (currentAudio && currentAudio.src === url) {
@@ -144,24 +147,52 @@ function searchDeezer(query, resultsElementId = 'searchResults') {
 // DISPLAY SEARCH RESULTS
 // =========================================
 
-function displaySearchResults(tracks, resultsDiv) {
+async function fetchTrackStreams(trackId) {
+    try {
+        const response = await fetch(`https://api.deezer.com/v1/tracks/${trackId}/streams?interval=5m`);
+        if (!response.ok) throw new Error('No stream endpoint');
+        const data = await response.json();
+        return {
+            current: Number(data.current_streams || 0),
+            avg24h: Number(data.avg_24h || 0)
+        };
+    } catch {
+        return { current: 0, avg24h: 0 };
+    }
+}
+
+function getTrackIndicator(streams, avg24h) {
+    if (!avg24h || !streams) return '';
+    if (streams > avg24h * 1.05) return '<span class="stream-indicator up">▲</span>';
+    if (streams < avg24h * 0.95) return '<span class="stream-indicator down">▼</span>';
+    return '<span class="stream-indicator neutral">•</span>';
+}
+
+async function displaySearchResults(tracks, resultsDiv) {
+    const enrichedTracks = await Promise.all(tracks.map(async (track) => {
+        const streamData = await fetchTrackStreams(track.id);
+        return { track, streamData };
+    }));
+
     let html = '';
-    
-    tracks.forEach(track => {
+    enrichedTracks.forEach(({ track, streamData }) => {
         const trackData = {
             id: track.id,
             name: track.title,
             artist: track.artist.name,
             image: track.album.cover_big,
-            preview: track.preview
+            preview: track.preview,
+            current_streams: streamData.current,
+            avg_24h: streamData.avg24h
         };
-        
+        const indicator = getTrackIndicator(streamData.current, streamData.avg24h);
+
         html += `
             <div class="track-item" onclick='handleTrackSelect(${JSON.stringify(trackData).replace(/'/g, "&#39;")})'>
                 <img src="${track.album.cover_medium}" alt="${track.title}">
                 <div class="track-info">
                     <div class="track-name">${track.title}</div>
-                    <div class="track-artist">${track.artist.name}</div>
+                    <div class="track-artist">${track.artist.name} ${indicator}</div>
                 </div>
                 ${track.preview ? `
                     <button class="btn-preview" onclick="event.stopPropagation(); togglePreview('${track.preview}', this)">
@@ -171,8 +202,77 @@ function displaySearchResults(tracks, resultsDiv) {
             </div>
         `;
     });
-    
+
     resultsDiv.innerHTML = html;
+}
+
+function formatDeltaArrow(current, avg24h) {
+    if (!avg24h || !current) return '<span class="stream-delta neutral">• 0%</span>';
+    const delta = ((current - avg24h) / avg24h) * 100;
+    if (delta >= 0) return `<span class="stream-delta up">▲ ${delta.toFixed(1)}%</span>`;
+    return `<span class="stream-delta down">▼ ${Math.abs(delta).toFixed(1)}%</span>`;
+}
+
+async function loadDashboardRegion(region) {
+    dashboardRegion = region;
+    dashboardCarouselOffset = 0;
+    const list = document.getElementById('streamDashboardTrackList');
+    if (!list) return;
+
+    list.innerHTML = '<p style="padding:16px; color:#9CA3AF;">Cargando top tracks...</p>';
+    const query = dashboardRegionQueries[region] || 'music';
+
+    const callbackName = `dashboardCallback_${Date.now()}`;
+    window[callbackName] = async function(data) {
+        delete window[callbackName];
+        const scriptEl = document.getElementById(callbackName);
+        if (scriptEl) scriptEl.remove();
+
+        const tracks = (data?.data || []).slice(0, 8);
+        const tracksWithStream = await Promise.all(tracks.map(async track => {
+            const streamData = await fetchTrackStreams(track.id);
+            return { track, streamData };
+        }));
+
+        list.innerHTML = tracksWithStream.map(({ track, streamData }) => `
+            <article class="stream-card">
+                <img src="${track.album?.cover_medium}" alt="${track.title}">
+                <div class="stream-card-info">
+                    <strong>${track.title}</strong>
+                    <span>${track.artist?.name || ''}</span>
+                    ${formatDeltaArrow(streamData.current, streamData.avg24h)}
+                </div>
+            </article>
+        `).join('');
+        updateDashboardCarousel();
+    };
+
+    const script = document.createElement('script');
+    script.id = callbackName;
+    script.src = `https://api.deezer.com/search?q=${encodeURIComponent(query)}&limit=8&output=jsonp&callback=${callbackName}`;
+    script.onerror = () => {
+        delete window[callbackName];
+        list.innerHTML = '<p style="padding:16px; color:#EF4444;">No se pudo cargar el dashboard.</p>';
+    };
+    document.head.appendChild(script);
+}
+
+function updateDashboardCarousel() {
+    const track = document.getElementById('streamDashboardTrackList');
+    if (!track) return;
+    track.scrollTo({ left: dashboardCarouselOffset * 260, behavior: 'smooth' });
+}
+
+function moveDashboardCarousel(direction) {
+    dashboardCarouselOffset = Math.max(0, dashboardCarouselOffset + direction);
+    updateDashboardCarousel();
+}
+
+function setDashboardRegion(region) {
+    document.querySelectorAll('.stream-region-tab').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.region === region);
+    });
+    loadDashboardRegion(region);
 }
 
 // =========================================
@@ -213,6 +313,8 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
     
+    loadDashboardRegion(dashboardRegion);
+    setInterval(() => loadDashboardRegion(dashboardRegion), 300000);
     console.log('🎵 Search system initialized!');
 });
 
@@ -226,3 +328,6 @@ window.stopAllPreviews = stopAllPreviews;
 window.searchDeezer = searchDeezer;
 window.displaySearchResults = displaySearchResults;
 window.handleTrackSelect = handleTrackSelect;
+
+window.setDashboardRegion = setDashboardRegion;
+window.moveDashboardCarousel = moveDashboardCarousel;
