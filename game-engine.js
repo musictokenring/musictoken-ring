@@ -737,7 +737,7 @@ const GameEngine = {
                             <span class="timer" id="battleTimer">60</span>
                         </div>
                         <div id="battleRhythm" class="battle-rhythm beat-a" aria-label="Animación de batalla musical">
-                            <div class="rhythm-fighter left" id="rhythmFighterLeft" aria-hidden="true">
+                            <div class="rhythm-fighter left" aria-hidden="true">
                                 <span class="fighter-head"></span>
                                 <span class="fighter-body"></span>
                                 <span class="fighter-arm front"></span>
@@ -747,7 +747,12 @@ const GameEngine = {
                                 <span class="fighter-hit" id="leftHitFx">♪</span>
                             </div>
                             <div class="rhythm-stage" aria-hidden="true"></div>
-                            <div class="rhythm-fighter right" id="rhythmFighterRight" aria-hidden="true">
+                            <div class="rhythm-clash" aria-hidden="true">
+                                <span class="clash-core"></span>
+                                <span class="clash-ring"></span>
+                                <span class="clash-ring second"></span>
+                            </div>
+                            <div class="rhythm-fighter right" aria-hidden="true">
                                 <span class="fighter-head"></span>
                                 <span class="fighter-body"></span>
                                 <span class="fighter-arm front"></span>
@@ -833,13 +838,33 @@ const GameEngine = {
         const rhythmEl = document.getElementById('battleRhythm');
         if (!rhythmEl) return;
 
+        const totalPlays = Math.max(1, plays1 + plays2);
+        const diff = plays1 - plays2;
+        const leadRatio = Math.abs(diff) / totalPlays;
+        const impactPulse = timeLeft % 4 === 0;
+        const clashWindow = Math.abs(diff) <= Math.max(2, totalPlays * 0.04);
         const phaseClass = timeLeft % 2 === 0 ? 'beat-a' : 'beat-b';
-        rhythmEl.classList.remove('beat-a', 'beat-b', 'left-attack', 'right-attack', 'climax');
+        const intensity = Math.min(1, 0.35 + leadRatio * 3 + (this.battleDuration - timeLeft) / Math.max(1, this.battleDuration));
+
+        rhythmEl.style.setProperty('--battle-intensity', intensity.toFixed(2));
+        rhythmEl.classList.remove(
+            'beat-a', 'beat-b', 'left-attack', 'right-attack', 'pressure-left', 'pressure-right',
+            'impact-pulse', 'clash', 'climax'
+        );
         rhythmEl.classList.add(phaseClass);
 
-        const diff = plays1 - plays2;
-        if (Math.abs(diff) > 1) {
+        if (leadRatio >= 0.16) {
             rhythmEl.classList.add(diff > 0 ? 'left-attack' : 'right-attack');
+        } else if (leadRatio >= 0.08) {
+            rhythmEl.classList.add(diff > 0 ? 'pressure-left' : 'pressure-right');
+        }
+
+        if (clashWindow) {
+            rhythmEl.classList.add('clash');
+        }
+
+        if (impactPulse) {
+            rhythmEl.classList.add('impact-pulse');
         }
 
         if (timeLeft <= 10) {
