@@ -179,6 +179,27 @@ Reemplaza el emoji 🥊 en header con tu logo:
 </h1>
 ```
 
+
+## 🛠️ Resolver de conflictos de PR (force)
+
+Si necesitas forzar la resolución de conflictos contra `main` en tu rama actual:
+
+```bash
+bash scripts/resolve-pr20-force.sh main ours origin
+```
+
+> Usa `bash ...` explícitamente para evitar problemas de permisos/entorno en Codespaces.
+
+Opciones útiles:
+
+```bash
+# Simulación sin cambios
+bash scripts/resolve-pr20-force.sh main ours origin --dry-run
+
+# Resolver usando la versión remota en conflictos
+bash scripts/resolve-pr20-force.sh main theirs origin
+```
+
 ## 🧪 Testing
 
 ### Test Búsqueda
