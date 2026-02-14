@@ -595,6 +595,14 @@
                 }
 
                 const urlParams = new URLSearchParams(window.location.search);
+                const modeParam = urlParams.get('mode');
+                if (modeParam && ['quick', 'private', 'practice', 'tournament'].includes(modeParam)) {
+                    selectMode(modeParam);
+                    if (modeParam === 'practice') {
+                        showToast('Elige otra canción para continuar en práctica.', 'info');
+                    }
+                }
+
                 const roomParam = urlParams.get('room');
                 if (roomParam) {
                     selectMode('private');
