@@ -142,12 +142,16 @@ fi
 
 node --check game-engine.js >/dev/null
 
-if git diff --cached --quiet; then
-  echo "[info] Nothing staged after merge resolution."
-  exit 0
+if git rev-parse -q --verify MERGE_HEAD >/dev/null 2>&1; then
+  git add -A
+  git commit --allow-empty -m "Resolve merge conflicts with ${BASE_BRANCH} using ${STRATEGY} strategy"
+else
+  if git diff --cached --quiet; then
+    echo "[info] Nothing staged after merge resolution and no merge in progress."
+    exit 0
+  fi
+  git commit -m "Resolve merge conflicts with ${BASE_BRANCH} using ${STRATEGY} strategy"
 fi
-
-git commit -m "Resolve merge conflicts with ${BASE_BRANCH} using ${STRATEGY} strategy"
 
 if [[ "$NO_PUSH" -eq 0 ]]; then
   git push "$REMOTE" "$TARGET_BRANCH"

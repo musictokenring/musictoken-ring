@@ -153,12 +153,17 @@ fi
 
 node --check game-engine.js >/dev/null
 
-if git diff --cached --quiet; then
-  echo "[info] Nothing staged after resolution."
-  exit 0
+# In merge mode, commit even if resulting tree matches HEAD (valid merge resolution case).
+if git rev-parse -q --verify MERGE_HEAD >/dev/null 2>&1; then
+  git add -A
+  git commit --allow-empty -m "Resolve PR #${PR_NUMBER} conflicts using ${STRATEGY} strategy"
+else
+  if git diff --cached --quiet; then
+    echo "[info] Nothing staged after resolution and no merge in progress."
+    exit 0
+  fi
+  git commit -m "Resolve PR #${PR_NUMBER} conflicts using ${STRATEGY} strategy"
 fi
-
-git commit -m "Resolve PR #${PR_NUMBER} conflicts using ${STRATEGY} strategy"
 
 if [[ "$NO_PUSH" -eq 0 ]]; then
   git push "$REMOTE" "$HEAD_REF"
