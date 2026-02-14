@@ -1,10 +1,10 @@
-import fs from 'node:fs';
-import path from 'node:path';
+import fs from 'fs';
+import path from 'path';
 
-const rootDir = process.cwd();
-const outDir = path.join(rootDir, 'dist');
+const ROOT = process.cwd();
+const OUT = path.join(ROOT, 'dist');
 
-const filesToCopy = [
+const files = [
   'index.html',
   'privacy.html',
   'terms.html',
@@ -13,27 +13,27 @@ const filesToCopy = [
   'game-engine.js'
 ];
 
-const directoriesToCopy = [
+const dirs = [
   'styles',
   'src',
   'config'
 ];
 
-fs.rmSync(outDir, { recursive: true, force: true });
-fs.mkdirSync(outDir, { recursive: true });
+fs.rmSync(OUT, { recursive: true, force: true });
+fs.mkdirSync(OUT, { recursive: true });
 
-for (const file of filesToCopy) {
-  const sourceFile = path.join(rootDir, file);
-  if (fs.existsSync(sourceFile)) {
-    fs.copyFileSync(sourceFile, path.join(outDir, file));
+for (const file of files) {
+  const src = path.join(ROOT, file);
+  if (fs.existsSync(src)) {
+    fs.copyFileSync(src, path.join(OUT, file));
   }
 }
 
-for (const directory of directoriesToCopy) {
-  const sourceDirectory = path.join(rootDir, directory);
-  const targetDirectory = path.join(outDir, directory);
-  if (fs.existsSync(sourceDirectory)) {
-    fs.cpSync(sourceDirectory, targetDirectory, { recursive: true });
+for (const dir of dirs) {
+  const src = path.join(ROOT, dir);
+  const dst = path.join(OUT, dir);
+  if (fs.existsSync(src)) {
+    fs.cpSync(src, dst, { recursive: true });
   }
 }
 
