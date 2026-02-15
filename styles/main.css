@@ -162,7 +162,39 @@ body {
 
 .stream-region-tab.active { color: #fff; border-color: var(--accent-green); }
 
-.stream-carousel-wrap { display: flex; gap: 10px; align-items: center; }
+.stream-carousel-wrap {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    position: relative;
+}
+
+.stream-carousel-wrap::before,
+.stream-carousel-wrap::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: 42px;
+    z-index: 2;
+    pointer-events: none;
+    transition: opacity 0.25s ease;
+}
+
+.stream-carousel-wrap::before {
+    left: 42px;
+    background: linear-gradient(90deg, rgba(26, 26, 26, 0.95), rgba(26, 26, 26, 0));
+}
+
+.stream-carousel-wrap::after {
+    right: 42px;
+    background: linear-gradient(270deg, rgba(26, 26, 26, 0.95), rgba(26, 26, 26, 0));
+}
+
+.stream-carousel-wrap.glow-active::before,
+.stream-carousel-wrap.glow-active::after {
+    opacity: 0.25;
+}
 
 .stream-carousel-track {
     display: flex;
@@ -170,6 +202,36 @@ body {
     overflow-x: auto;
     scroll-behavior: smooth;
     flex: 1;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+    padding-bottom: 4px;
+    cursor: grab;
+    position: relative;
+}
+
+.stream-carousel-track::-webkit-scrollbar {
+    display: none;
+}
+
+.stream-carousel-track:active {
+    cursor: grabbing;
+}
+
+.stream-carousel-track::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -35%;
+    width: 35%;
+    height: 100%;
+    background: linear-gradient(110deg, transparent 0%, rgba(59, 130, 246, 0.12) 45%, transparent 100%);
+    opacity: 0;
+    pointer-events: none;
+    transform: skewX(-16deg);
+}
+
+.stream-carousel-wrap.glow-active .stream-carousel-track::after {
+    animation: streamGlowSlide 0.9s ease;
 }
 
 .stream-card {
@@ -190,6 +252,20 @@ body {
 .stream-delta.down, .stream-indicator.down { color: var(--accent-red); }
 .stream-delta.neutral, .stream-indicator.neutral { color: var(--text-secondary); }
 .stream-indicator { margin-left: 6px; font-weight: 700; }
+
+@keyframes streamGlowSlide {
+    0% {
+        left: -35%;
+        opacity: 0;
+    }
+    25% {
+        opacity: 1;
+    }
+    100% {
+        left: 115%;
+        opacity: 0;
+    }
+}
 
 /* === MAIN CONTENT === */
 .main {
@@ -2127,6 +2203,12 @@ body {
 @media (max-width: 768px) {
     .stream-card { min-width: 200px; }
     .stream-carousel-nav { display: none; }
+    .stream-carousel-wrap::before {
+        left: 0;
+    }
+    .stream-carousel-wrap::after {
+        right: 0;
+    }
     .login-wall-title {
         font-size: 28px;
     }

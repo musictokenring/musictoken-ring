@@ -35,6 +35,8 @@ function showToast(message, type = 'info') {
 let currentAudio = null;
 let dashboardRegion = 'latam';
 let dashboardCarouselOffset = 0;
+let dashboardGlowTimeout = null;
+let dashboardDragInitialized = false;
 const dashboardRegionQueries = { latam: 'latin', us: 'billboard', eu: 'europe top' };
 
 function togglePreview(url, button) {
@@ -260,12 +262,62 @@ async function loadDashboardRegion(region) {
 function updateDashboardCarousel() {
     const track = document.getElementById('streamDashboardTrackList');
     if (!track) return;
-    track.scrollTo({ left: dashboardCarouselOffset * 260, behavior: 'smooth' });
+    const scrollStep = Math.max(220, Math.floor(track.clientWidth * 0.55));
+    track.scrollTo({ left: dashboardCarouselOffset * scrollStep, behavior: 'smooth' });
+    triggerDashboardGlow();
 }
 
 function moveDashboardCarousel(direction) {
     dashboardCarouselOffset = Math.max(0, dashboardCarouselOffset + direction);
     updateDashboardCarousel();
+}
+
+function triggerDashboardGlow() {
+    const wrap = document.querySelector('.stream-carousel-wrap');
+    if (!wrap) return;
+    wrap.classList.remove('glow-active');
+    void wrap.offsetWidth;
+    wrap.classList.add('glow-active');
+
+    if (dashboardGlowTimeout) clearTimeout(dashboardGlowTimeout);
+    dashboardGlowTimeout = setTimeout(() => {
+        wrap.classList.remove('glow-active');
+    }, 900);
+}
+
+function initDashboardDragScroll() {
+    if (dashboardDragInitialized) return;
+    const track = document.getElementById('streamDashboardTrackList');
+    if (!track) return;
+
+    let isDown = false;
+    let startX = 0;
+    let scrollLeft = 0;
+
+    track.addEventListener('pointerdown', (e) => {
+        isDown = true;
+        startX = e.clientX;
+        scrollLeft = track.scrollLeft;
+        track.setPointerCapture(e.pointerId);
+    });
+
+    track.addEventListener('pointermove', (e) => {
+        if (!isDown) return;
+        const walk = (e.clientX - startX) * 1.2;
+        track.scrollLeft = scrollLeft - walk;
+        triggerDashboardGlow();
+    });
+
+    const stopDrag = () => {
+        isDown = false;
+    };
+
+    track.addEventListener('pointerup', stopDrag);
+    track.addEventListener('pointercancel', stopDrag);
+    track.addEventListener('pointerleave', stopDrag);
+    track.addEventListener('scroll', triggerDashboardGlow, { passive: true });
+
+    dashboardDragInitialized = true;
 }
 
 function setDashboardRegion(region) {
@@ -314,6 +366,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     
     loadDashboardRegion(dashboardRegion);
+    initDashboardDragScroll();
     setInterval(() => loadDashboardRegion(dashboardRegion), 300000);
     console.log('🎵 Search system initialized!');
 });
