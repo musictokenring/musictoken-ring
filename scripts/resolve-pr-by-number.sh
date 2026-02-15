@@ -202,7 +202,10 @@ HOTSPOTS=(
   "scripts/resolve-pr-conflicts.sh"
   "vercel.json"
   "scripts/vercel-build.mjs"
+ codex/add-wall-street-of-beats-module-az9fkd
   "package.json"
+
+ main
 )
 
 for f in "${HOTSPOTS[@]}"; do
@@ -223,7 +226,11 @@ if git ls-files -u | grep -q .; then
 fi
 
 marker_check_files=()
+ codex/add-wall-street-of-beats-module-az9fkd
 for f in game-engine.js styles/main.css index.html scripts/resolve-pr-conflicts.sh vercel.json scripts/vercel-build.mjs package.json; do
+
+for f in game-engine.js styles/main.css index.html scripts/resolve-pr-conflicts.sh vercel.json scripts/vercel-build.mjs; do
+ main
   [[ -f "$f" ]] && marker_check_files+=("$f")
 done
 

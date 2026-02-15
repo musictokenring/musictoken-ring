@@ -1,10 +1,28 @@
 {
   "version": 2,
+ codex/add-wall-street-of-beats-module-az9fkd
   "framework": null,
   "buildCommand": "",
   "outputDirectory": ".",
+
+ codex/add-wall-street-of-beats-module-n47bbo
+  "routes": [
+    { "handle": "filesystem" },
+    { "src": "/(.*)", "dest": "/index.html" }
+  ],
+  "outputDirectory": "dist"
+
+ codex/add-wall-street-of-beats-module-f9ujhn
+  "outputDirectory": "dist",
+
+ main
+ main
   "routes": [
     { "handle": "filesystem" },
     { "src": "/(.*)", "dest": "/index.html" }
   ]
+ codex/add-wall-street-of-beats-module-az9fkd
+
+ main
+ main
 }

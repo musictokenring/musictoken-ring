@@ -118,6 +118,79 @@ body {
     background: var(--bg-card);
 }
 
+
+.slogan {
+    font-size: 14px;
+    font-weight: 700;
+    color: #fff;
+    display: block;
+    white-space: nowrap;
+}
+
+.stream-dashboard {
+    margin-bottom: 28px;
+    padding: 16px;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: 14px;
+}
+
+.stream-dashboard-header h2 {
+    font-size: 20px;
+}
+
+.stream-dashboard-header p {
+    color: var(--text-secondary);
+    font-size: 13px;
+    margin-bottom: 10px;
+}
+
+.stream-region-tabs {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 14px;
+}
+
+.stream-region-tab {
+    border: 1px solid var(--border-color);
+    background: var(--bg-card);
+    color: var(--text-secondary);
+    border-radius: 999px;
+    padding: 6px 12px;
+    cursor: pointer;
+}
+
+.stream-region-tab.active { color: #fff; border-color: var(--accent-green); }
+
+.stream-carousel-wrap { display: flex; gap: 10px; align-items: center; }
+
+.stream-carousel-track {
+    display: flex;
+    gap: 12px;
+    overflow-x: auto;
+    scroll-behavior: smooth;
+    flex: 1;
+}
+
+.stream-card {
+    min-width: 240px;
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    padding: 10px;
+    display: flex;
+    gap: 10px;
+}
+.stream-card img { width: 56px; height: 56px; border-radius: 8px; }
+.stream-card-info { display:flex; flex-direction:column; }
+.stream-card-info strong { font-size: 13px; }
+.stream-card-info span { color: var(--text-secondary); font-size: 12px; }
+.stream-carousel-nav { background: var(--bg-card); color:#fff; border:1px solid var(--border-color); border-radius:50%; width:34px; height:34px; cursor:pointer; }
+.stream-delta.up, .stream-indicator.up { color: var(--accent-green); }
+.stream-delta.down, .stream-indicator.down { color: var(--accent-red); }
+.stream-delta.neutral, .stream-indicator.neutral { color: var(--text-secondary); }
+.stream-indicator { margin-left: 6px; font-weight: 700; }
+
 /* === MAIN CONTENT === */
 .main {
     padding: 48px 0;
@@ -2015,6 +2088,7 @@ body {
 
 /* === RESPONSIVE === */
 @media (max-width: 1024px) {
+    .slogan { display: none; }
     .battle-arena-grid {
         grid-template-columns: 1fr;
     }
@@ -2051,6 +2125,8 @@ body {
 }
 
 @media (max-width: 768px) {
+    .stream-card { min-width: 200px; }
+    .stream-carousel-nav { display: none; }
     .login-wall-title {
         font-size: 28px;
     }
