@@ -2,7 +2,12 @@ import fs from 'fs';
 import path from 'path';
 
 const ROOT = process.cwd();
-const OUT_DIRS = ['public', 'dist'];
+const PRIMARY_OUT = 'public';
+const outputs = [PRIMARY_OUT];
+
+if (process.env.ALSO_BUILD_DIST === '1') {
+  outputs.push('dist');
+}
 
 const files = [
   'index.html',
@@ -19,26 +24,26 @@ const dirs = [
   'config'
 ];
 
-for (const outName of OUT_DIRS) {
-  const OUT = path.join(ROOT, outName);
+for (const outName of outputs) {
+  const outDir = path.join(ROOT, outName);
 
-  fs.rmSync(OUT, { recursive: true, force: true });
-  fs.mkdirSync(OUT, { recursive: true });
+  fs.rmSync(outDir, { recursive: true, force: true });
+  fs.mkdirSync(outDir, { recursive: true });
 
   for (const file of files) {
     const src = path.join(ROOT, file);
     if (fs.existsSync(src)) {
-      fs.copyFileSync(src, path.join(OUT, file));
+      fs.copyFileSync(src, path.join(outDir, file));
     }
   }
 
   for (const dir of dirs) {
     const src = path.join(ROOT, dir);
-    const dst = path.join(OUT, dir);
+    const dst = path.join(outDir, dir);
     if (fs.existsSync(src)) {
       fs.cpSync(src, dst, { recursive: true });
     }
   }
 }
 
-console.log('Built static output in public/ and dist/');
+console.log(`Built static output in ${outputs.join(' and ')}/`);
