@@ -164,6 +164,8 @@ HOTSPOTS=(
   "styles/main.css"
   "index.html"
   "scripts/resolve-pr-conflicts.sh"
+  "vercel.json"
+  "scripts/vercel-build.mjs"
 )
 
 for f in "${HOTSPOTS[@]}"; do
@@ -187,12 +189,19 @@ if git ls-files -u | grep -q .; then
   exit 6
 fi
 
-if rg -n '^(<<<<<<<|=======|>>>>>>>)' game-engine.js styles/main.css index.html scripts/resolve-pr-conflicts.sh >/dev/null 2>&1; then
+marker_check_files=()
+for f in game-engine.js styles/main.css index.html scripts/resolve-pr-conflicts.sh vercel.json scripts/vercel-build.mjs; do
+  [[ -f "$f" ]] && marker_check_files+=("$f")
+done
+
+if [[ ${#marker_check_files[@]} -gt 0 ]] && rg -n '^(<<<<<<<|=======|>>>>>>>)' "${marker_check_files[@]}" >/dev/null 2>&1; then
   echo "[error] Conflict markers found after resolution" >&2
   exit 7
 fi
 
-node --check game-engine.js >/dev/null
+if [[ -f game-engine.js ]]; then
+  node --check game-engine.js >/dev/null
+fi
 
 if git rev-parse -q --verify MERGE_HEAD >/dev/null 2>&1; then
   git add -A
