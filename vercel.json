@@ -1,5 +1,9 @@
 {
   "version": 2,
+ codex/add-wall-street-of-beats-module-f9ujhn
+  "outputDirectory": "dist",
+
+ main
   "routes": [
     { "handle": "filesystem" },
     { "src": "/(.*)", "dest": "/index.html" }
