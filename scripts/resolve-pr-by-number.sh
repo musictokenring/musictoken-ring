@@ -13,6 +13,9 @@ Options:
   --remote <name>         Git remote (default: origin)
   --head <branch>         Override PR head branch (skip API lookup for head)
   --base <branch>         Override PR base branch (skip API lookup for base)
+  --prefer-main-files <csv>
+                          If base is main, force these files to use incoming/main side
+                          (default: vercel.json,scripts/vercel-build.mjs,package.json)
   --no-push               Do not push after commit
   --keep-current-merge    Reuse current merge even if branch differs (advanced)
   -h, --help              Show help
@@ -24,6 +27,7 @@ STRATEGY="ours"
 REMOTE="origin"
 HEAD_REF=""
 BASE_REF=""
+PREFER_MAIN_FILES_CSV="vercel.json,scripts/vercel-build.mjs,package.json"
 NO_PUSH=0
 KEEP_CURRENT_MERGE=0
 
@@ -34,6 +38,7 @@ while [[ $# -gt 0 ]]; do
     --remote) REMOTE="${2:-origin}"; shift 2 ;;
     --head) HEAD_REF="${2:-}"; shift 2 ;;
     --base) BASE_REF="${2:-}"; shift 2 ;;
+    --prefer-main-files) PREFER_MAIN_FILES_CSV="${2:-$PREFER_MAIN_FILES_CSV}"; shift 2 ;;
     --no-push) NO_PUSH=1; shift ;;
     --keep-current-merge) KEEP_CURRENT_MERGE=1; shift ;;
     -h|--help) usage; exit 0 ;;
@@ -105,7 +110,38 @@ if [[ -z "$HEAD_REF" || -z "$BASE_REF" ]]; then
   lookup_pr_refs
 fi
 
+IFS=',' read -r -a PREFER_MAIN_FILES <<< "$PREFER_MAIN_FILES_CSV"
+
+should_prefer_main_side() {
+  local file="$1"
+  [[ "$BASE_REF" != "main" ]] && return 1
+
+  for pf in "${PREFER_MAIN_FILES[@]}"; do
+    pf="${pf// /}"
+    [[ -z "$pf" ]] && continue
+    if [[ "$pf" == "$file" ]]; then
+      return 0
+    fi
+  done
+
+  return 1
+}
+
+resolve_file_with_policy() {
+  local file="$1"
+  local chosen="$STRATEGY"
+
+  if should_prefer_main_side "$file"; then
+    chosen="theirs"
+  fi
+
+  git checkout "--$chosen" -- "$file"
+  git add "$file"
+  echo "[info] resolved: $file (side=$chosen)"
+}
+
 echo "[info] pr=$PR_NUMBER head=$HEAD_REF base=$BASE_REF strategy=$STRATEGY remote=$REMOTE"
+echo "[info] prefer-main-files=$PREFER_MAIN_FILES_CSV"
 
 CURRENT_BRANCH="$(git rev-parse --abbrev-ref HEAD)"
 MERGE_IN_PROGRESS=0
@@ -164,21 +200,19 @@ HOTSPOTS=(
   "styles/main.css"
   "index.html"
   "scripts/resolve-pr-conflicts.sh"
+  "vercel.json"
+  "scripts/vercel-build.mjs"
 )
 
 for f in "${HOTSPOTS[@]}"; do
   if git ls-files -u -- "$f" | grep -q .; then
-    git checkout "--$STRATEGY" -- "$f"
-    git add "$f"
-    echo "[info] resolved hotspot: $f"
+    resolve_file_with_policy "$f"
   fi
 done
 
 while IFS= read -r f; do
   [[ -z "$f" ]] && continue
-  git checkout "--$STRATEGY" -- "$f"
-  git add "$f"
-  echo "[info] resolved remaining: $f"
+  resolve_file_with_policy "$f"
 done < <(git diff --name-only --diff-filter=U)
 
 if git ls-files -u | grep -q .; then
@@ -187,12 +221,19 @@ if git ls-files -u | grep -q .; then
   exit 6
 fi
 
-if rg -n '^(<<<<<<<|=======|>>>>>>>)' game-engine.js styles/main.css index.html scripts/resolve-pr-conflicts.sh >/dev/null 2>&1; then
+marker_check_files=()
+for f in game-engine.js styles/main.css index.html scripts/resolve-pr-conflicts.sh vercel.json scripts/vercel-build.mjs; do
+  [[ -f "$f" ]] && marker_check_files+=("$f")
+done
+
+if [[ ${#marker_check_files[@]} -gt 0 ]] && rg -n '^(<<<<<<<|=======|>>>>>>>)' "${marker_check_files[@]}" >/dev/null 2>&1; then
   echo "[error] Conflict markers found after resolution" >&2
   exit 7
 fi
 
-node --check game-engine.js >/dev/null
+if [[ -f game-engine.js ]]; then
+  node --check game-engine.js >/dev/null
+fi
 
 if git rev-parse -q --verify MERGE_HEAD >/dev/null 2>&1; then
   git add -A
