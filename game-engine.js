@@ -14,6 +14,7 @@ const GameEngine = {
     platformFeeRate: 0.3,
     jackpotRate: 0.1,
     platformRevenueTarget: 100000,
+    songsEloTableAvailable: true,
     userAudio: null,
     victoryAudio: null,
     connectedWallet: null,
@@ -1377,42 +1378,78 @@ const GameEngine = {
     },
 
     async refreshSongEloScores() {
+        if (!this.songsEloTableAvailable) {
+            return;
+        }
+
         try {
             const tracks = await this.fetchChartTracks();
             const top = (tracks || []).slice(0, 24);
             for (const track of top) {
                 const avg24h = Math.max(1, Math.round((track.rank || 1000) / 1000));
-                await supabaseClient
+                const { error } = await supabaseClient
                     .from('songs_elo')
                     .upsert({
                         track_id: String(track.id),
                         elo_score: avg24h,
                         last_update: new Date().toISOString()
                     }, { onConflict: 'track_id' });
+
+                if (error) {
+                    if (error.code === 'PGRST205' || error.message?.includes('relation') || error.message?.includes('songs_elo')) {
+                        this.songsEloTableAvailable = false;
+                        console.warn('La tabla songs_elo no existe en Supabase. Se desactiva el refresh automático de ELO.');
+                        break;
+                    }
+                    throw error;
+                }
             }
-            localStorage.setItem('mtr_last_elo_refresh', new Date().toISOString());
+
+            if (this.songsEloTableAvailable) {
+                localStorage.setItem('mtr_last_elo_refresh', new Date().toISOString());
+            }
         } catch (error) {
             console.warn('No se pudo refrescar songs_elo:', error);
         }
     },
 
     async getSongElo(trackId) {
+        if (!this.songsEloTableAvailable) {
+            return 1000;
+        }
+
         try {
-            const { data } = await supabaseClient
+            const { data, error } = await supabaseClient
                 .from('songs_elo')
                 .select('elo_score')
                 .eq('track_id', String(trackId))
                 .maybeSingle();
 
+            if (error) {
+                if (error.code === 'PGRST205' || error.message?.includes('relation') || error.message?.includes('songs_elo')) {
+                    this.songsEloTableAvailable = false;
+                    return 1000;
+                }
+                throw error;
+            }
+
             if (data?.elo_score) return Number(data.elo_score);
 
-            await supabaseClient
+            const { error: upsertError } = await supabaseClient
                 .from('songs_elo')
                 .upsert({
                     track_id: String(trackId),
                     elo_score: 1000,
                     last_update: new Date().toISOString()
                 }, { onConflict: 'track_id' });
+
+            if (upsertError) {
+                if (upsertError.code === 'PGRST205' || upsertError.message?.includes('relation') || upsertError.message?.includes('songs_elo')) {
+                    this.songsEloTableAvailable = false;
+                }
+                return 1000;
+            }
+
             return 1000;
         } catch {
             return 1000;
