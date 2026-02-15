@@ -292,6 +292,10 @@ async function loadPlayerProfile(user) {
             }
         }
     } catch (error) {
+        if (error?.name === 'AbortError' || String(error?.message || '').includes('aborted')) {
+            console.warn('Carga de perfil cancelada (AbortError).');
+            return;
+        }
         console.error('Error loading player profile:', error);
         setProfileValue('profileBalance', 'No disponible');
     }
@@ -329,10 +333,18 @@ document.addEventListener('DOMContentLoaded', async () => {
     await processOAuthCallbackIfNeeded();
     
     // Get current session
-    const { data: { session } } = await supabaseClient.auth.getSession();
-    
-    // Update UI
-    updateAuthUI(session);
+    try {
+        const { data: { session } } = await supabaseClient.auth.getSession();
+
+        // Update UI
+        updateAuthUI(session);
+    } catch (error) {
+        if (error?.name === 'AbortError' || String(error?.message || '').includes('aborted')) {
+            console.warn('Inicialización de sesión cancelada (AbortError).');
+            return;
+        }
+        console.error('Error inicializando sesión:', error);
+    }
     
     console.log('✅ Auth system ready!');
 });

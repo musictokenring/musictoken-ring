@@ -89,6 +89,10 @@ const GameEngine = {
                 this.updateBalanceDisplay();
             }
         } catch (error) {
+            if (error?.name === 'AbortError' || String(error?.message || '').includes('aborted')) {
+                console.warn('Carga de balance cancelada (AbortError).');
+                return;
+            }
             console.error('Error loading balance:', error);
         }
     },
@@ -1396,7 +1400,12 @@ const GameEngine = {
                     }, { onConflict: 'track_id' });
 
                 if (error) {
-                    if (error.code === 'PGRST205' || error.message?.includes('relation') || error.message?.includes('songs_elo')) {
+                    if (
+                        error.code === 'PGRST205' ||
+                        error.status === 404 ||
+                        error.message?.includes('relation') ||
+                        error.message?.includes('songs_elo')
+                    ) {
                         this.songsEloTableAvailable = false;
                         console.warn('La tabla songs_elo no existe en Supabase. Se desactiva el refresh automático de ELO.');
                         break;
