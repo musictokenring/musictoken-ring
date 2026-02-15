@@ -37,6 +37,7 @@ let dashboardRegion = 'latam';
 let dashboardCarouselOffset = 0;
 let dashboardGlowTimeout = null;
 let dashboardDragInitialized = false;
+let deezerStreamsEndpointAvailable = true;
 const dashboardRegionQueries = { latam: 'latin', us: 'billboard', eu: 'europe top' };
 
 function togglePreview(url, button) {
@@ -150,6 +151,10 @@ function searchDeezer(query, resultsElementId = 'searchResults') {
 // =========================================
 
 async function fetchTrackStreams(trackId) {
+    if (!deezerStreamsEndpointAvailable) {
+        return { current: 0, avg24h: 0 };
+    }
+
     try {
         const response = await fetch(`https://api.deezer.com/v1/tracks/${trackId}/streams?interval=5m`);
         if (!response.ok) throw new Error('No stream endpoint');
@@ -158,7 +163,11 @@ async function fetchTrackStreams(trackId) {
             current: Number(data.current_streams || 0),
             avg24h: Number(data.avg_24h || 0)
         };
-    } catch {
+    } catch (error) {
+        if (error instanceof TypeError) {
+            deezerStreamsEndpointAvailable = false;
+            console.warn('El endpoint de streams de Deezer no está disponible en navegador (CORS). Se desactiva para evitar errores repetidos.');
+        }
         return { current: 0, avg24h: 0 };
     }
 }

@@ -243,7 +243,7 @@ async function loadPlayerProfile(user) {
             supabaseClient.from('user_balances').select('balance').eq('user_id', user.id).maybeSingle(),
             supabaseClient
                 .from('matches')
-                .select('id, winner, match_type, total_pot, player1_id, player2_id, player1_bet, player2_bet, player1_streams, player2_streams, finished_at, status')
+                .select('id, winner, match_type, total_pot, player1_id, player2_id, player1_bet, player2_bet, finished_at, status')
                 .or(`player1_id.eq.${user.id},player2_id.eq.${user.id}`)
                 .eq('status', 'finished')
                 .order('finished_at', { ascending: false })
@@ -260,10 +260,7 @@ async function loadPlayerProfile(user) {
         }).length;
         const losses = Math.max(0, totalMatches - wins);
         const winRate = totalMatches > 0 ? ((wins / totalMatches) * 100).toFixed(1) : '0.0';
-        const totalStreams = matches.reduce((acc, m) => {
-            const isP1 = m.player1_id === user.id;
-            return acc + (isP1 ? (m.player1_streams || 0) : (m.player2_streams || 0));
-        }, 0);
+        const totalStreams = 0;
         const totalWagered = matches.reduce((acc, m) => {
             const isP1 = m.player1_id === user.id;
             return acc + (isP1 ? (m.player1_bet || 0) : (m.player2_bet || 0));
