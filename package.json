@@ -1,0 +1,11 @@
+{
+  "name": "musictoken-ring",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Static frontend for MusicToken Ring",
+  "scripts": {
+    "build": "echo 'Static site: no build required'",
+    "preview": "npx serve .",
+    "check": "node -e \"console.log('ok')\""
+  }
+}

@@ -1331,24 +1331,36 @@ const GameEngine = {
         return 'PENDIENTE_CONFIGURAR';
     },
 
-    calculateMatchPayouts(totalPot) {
-        if (!totalPot) {
-            return { platformFee: 0, winnerPayout: 0 };
+    calculatePoolSplit(totalAmount, feeRate = this.platformFeeRate) {
+        if (!totalAmount) {
+            return { platformFee: 0, netPool: 0 };
         }
-        const platformFee = Math.round(totalPot * 0.3);
-        const winnerPayout = Math.max(0, Math.round(totalPot * 0.7));
-        return { platformFee, winnerPayout };
+
+        const normalizedFeeRate = Math.max(0, Math.min(1, Number(feeRate) || 0));
+        const platformFee = Math.round(totalAmount * normalizedFeeRate);
+        const netPool = Math.max(0, totalAmount - platformFee);
+
+        return { platformFee, netPool };
+    },
+
+    calculateMatchPayouts(totalPot) {
+        const split = this.calculatePoolSplit(totalPot, this.platformFeeRate);
+        return {
+            platformFee: split.platformFee,
+            winnerPayout: split.netPool
+        };
     },
 
     calculateTournamentEntry(entryFee) {
-        const platformFee = Math.round(entryFee * this.platformFeeRate);
+        const split = this.calculatePoolSplit(entryFee, this.platformFeeRate);
+        const platformFee = split.platformFee;
         const threshold = this.platformRevenueTarget * 0.9;
         const currentRevenue = this.getPlatformRevenue();
         const jackpotContribution = currentRevenue >= threshold
             ? Math.round(platformFee * this.jackpotRate)
             : 0;
         const platformNet = Math.max(0, platformFee - jackpotContribution);
-        const prizeContribution = entryFee - platformFee;
+        const prizeContribution = split.netPool;
         return {
             platformFee,
             jackpotContribution,
