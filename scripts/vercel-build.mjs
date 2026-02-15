@@ -2,7 +2,7 @@ import fs from 'fs';
 import path from 'path';
 
 const ROOT = process.cwd();
-const OUT = path.join(ROOT, 'public');
+const OUT = path.join(ROOT, 'dist');
 
 const files = [
   'index.html',
@@ -37,4 +37,9 @@ for (const dir of dirs) {
   }
 }
 
-console.log('Built static output in public/');
+console.log('Built static output in dist/');
+
+const PUBLIC_OUT = path.join(ROOT, 'public');
+fs.rmSync(PUBLIC_OUT, { recursive: true, force: true });
+fs.cpSync(OUT, PUBLIC_OUT, { recursive: true });
+console.log('Mirrored static output in public/');
