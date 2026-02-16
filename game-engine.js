@@ -14,7 +14,7 @@ const GameEngine = {
     platformFeeRate: 0.3,
     jackpotRate: 0.1,
     platformRevenueTarget: 100000,
-    songsEloTableAvailable: true,
+    songsEloTableAvailable: Boolean(window?.MTR_ENABLE_SONGS_ELO),
     initialized: false,
     initPromise: null,
     eloRefreshIntervalId: null,
@@ -1290,7 +1290,7 @@ const GameEngine = {
     },
 
     async connectWallet() {
-        if (!window.ethereum) {
+        if (!window.ethereum || !window.ethereum.isMetaMask) {
             showToast('Instala MetaMask para conectar tu billetera', 'error');
             return;
         }
