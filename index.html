@@ -25,6 +25,28 @@
             BATTLE_DURATION: 60,
             BACKEND_API: 'https://musictoken-backend.onrender.com'
         };
+        function extractMetaMaskErrorMessage(reason) {
+            if (!reason) return '';
+            const direct = String(reason?.message || reason || '');
+            const cause = String(reason?.cause?.message || '');
+            return `${direct} ${cause}`.toLowerCase();
+        }
+
+        function isMetaMaskUnavailableError(reason) {
+            const message = extractMetaMaskErrorMessage(reason);
+            return message.includes('metamask extension not found') ||
+                message.includes('failed to connect to metamask');
+        }
+
+        window.addEventListener('unhandledrejection', (event) => {
+            if (!isMetaMaskUnavailableError(event.reason)) return;
+            event.preventDefault();
+            console.warn('MetaMask no está disponible en este navegador.');
+            if (typeof showToast === 'function') {
+                showToast('MetaMask no está disponible. Instala la extensión para conectar tu wallet.', 'error');
+            }
+        });
+
         const PLATFORM_WALLET_ADDRESSES = {
             polygon: '0x75376BC58830f27415402875D26B73A6BE8E2253',
             optimism: '0x75376BC58830f27415402875D26B73A6BE8E2253',
