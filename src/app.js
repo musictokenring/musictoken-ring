@@ -37,13 +37,24 @@ let dashboardRegion = 'latam';
 let dashboardCarouselOffset = 0;
 let dashboardGlowTimeout = null;
 let dashboardDragInitialized = false;
- codex/fix-cors-policy-issue-with-deezer-api-4acmrk
 let deezerStreamsEndpointAvailable = Boolean(window?.MTR_ENABLE_DEEZER_STREAMS);
-
-let deezerStreamsEndpointAvailable = true;
- feature/wall-street-v2
 let deezerStreamsCircuitOpen = false;
 const dashboardRegionQueries = { latam: 'latin', us: 'billboard', eu: 'europe top' };
+
+function isMetaMaskExtensionMissingError(reason) {
+    const message = String(reason?.message || reason || '').toLowerCase();
+    return message.includes('metamask extension not found') || message.includes('failed to connect to metamask');
+}
+
+window.addEventListener('unhandledrejection', (event) => {
+    if (!isMetaMaskExtensionMissingError(event.reason)) {
+        return;
+    }
+
+    event.preventDefault();
+    console.warn('MetaMask no está disponible en este navegador.');
+    showToast('MetaMask no está disponible. Instala la extensión para conectar tu wallet.', 'error');
+});
 
 function togglePreview(url, button) {
     if (currentAudio && currentAudio.src === url) {
