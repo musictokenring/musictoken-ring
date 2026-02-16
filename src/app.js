@@ -38,7 +38,9 @@ let dashboardCarouselOffset = 0;
 let dashboardGlowTimeout = null;
 let dashboardDragInitialized = false;
 let deezerStreamsEndpointAvailable = Boolean(window?.MTR_ENABLE_DEEZER_STREAMS);
+ feature/wall-street-v2
 let deezerStreamsCircuitOpen = false;
+ main
 const dashboardRegionQueries = { latam: 'latin', us: 'billboard', eu: 'europe top' };
 
 function isMetaMaskExtensionMissingError(reason) {
@@ -167,17 +169,14 @@ function searchDeezer(query, resultsElementId = 'searchResults') {
 // =========================================
 
 async function fetchTrackStreams(trackId) {
-    if (!deezerStreamsEndpointAvailable || deezerStreamsCircuitOpen) {
+    if (!deezerStreamsEndpointAvailable) {
         return { current: 0, avg24h: 0 };
     }
-
-    deezerStreamsCircuitOpen = true;
 
     try {
         const response = await fetch(`https://api.deezer.com/v1/tracks/${trackId}/streams?interval=5m`);
         if (!response.ok) throw new Error('No stream endpoint');
         const data = await response.json();
-        deezerStreamsCircuitOpen = false;
         return {
             current: Number(data.current_streams || 0),
             avg24h: Number(data.avg_24h || 0)
@@ -189,7 +188,6 @@ async function fetchTrackStreams(trackId) {
         } else {
             console.warn('Se desactiva endpoint de streams de Deezer tras error de red/respuesta:', error);
         }
-        deezerStreamsCircuitOpen = false;
         return { current: 0, avg24h: 0 };
     }
 }
