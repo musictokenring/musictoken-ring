@@ -38,7 +38,25 @@ let dashboardCarouselOffset = 0;
 let dashboardGlowTimeout = null;
 let dashboardDragInitialized = false;
 let deezerStreamsEndpointAvailable = Boolean(window?.MTR_ENABLE_DEEZER_STREAMS);
+ feature/wall-street-v2
+let deezerStreamsCircuitOpen = false;
+ main
 const dashboardRegionQueries = { latam: 'latin', us: 'billboard', eu: 'europe top' };
+
+function isMetaMaskExtensionMissingError(reason) {
+    const message = String(reason?.message || reason || '').toLowerCase();
+    return message.includes('metamask extension not found') || message.includes('failed to connect to metamask');
+}
+
+window.addEventListener('unhandledrejection', (event) => {
+    if (!isMetaMaskExtensionMissingError(event.reason)) {
+        return;
+    }
+
+    event.preventDefault();
+    console.warn('MetaMask no está disponible en este navegador.');
+    showToast('MetaMask no está disponible. Instala la extensión para conectar tu wallet.', 'error');
+});
 
 function togglePreview(url, button) {
     if (currentAudio && currentAudio.src === url) {
@@ -220,10 +238,24 @@ async function displaySearchResults(tracks, resultsDiv) {
 }
 
 function formatDeltaArrow(current, avg24h) {
-    if (!avg24h || !current) return '<span class="stream-delta neutral">• 0%</span>';
+    if (!avg24h || !current) return '<span class="stream-delta neutral">• N/D</span>';
     const delta = ((current - avg24h) / avg24h) * 100;
     if (delta >= 0) return `<span class="stream-delta up">▲ ${delta.toFixed(1)}%</span>`;
     return `<span class="stream-delta down">▼ ${Math.abs(delta).toFixed(1)}%</span>`;
+}
+
+function formatDashboardStat(track, streamData, totalRank) {
+    if (streamData?.current && streamData?.avg24h) {
+        return formatDeltaArrow(streamData.current, streamData.avg24h);
+    }
+
+    const rank = Number(track?.rank || 0);
+    if (rank > 0 && totalRank > 0) {
+        const rankShare = (rank / totalRank) * 100;
+        return `<span class="stream-delta neutral">• ${rankShare.toFixed(1)}% del top</span>`;
+    }
+
+    return '<span class="stream-delta neutral">• N/D</span>';
 }
 
 async function loadDashboardRegion(region) {
@@ -242,10 +274,15 @@ async function loadDashboardRegion(region) {
         if (scriptEl) scriptEl.remove();
 
         const tracks = (data?.data || []).slice(0, 8);
-        const tracksWithStream = await Promise.all(tracks.map(async track => {
-            const streamData = await fetchTrackStreams(track.id);
-            return { track, streamData };
-        }));
+        const shouldFetchStreams = deezerStreamsEndpointAvailable && !deezerStreamsCircuitOpen;
+        const tracksWithStream = shouldFetchStreams
+            ? await Promise.all(tracks.map(async (track) => {
+                const streamData = await fetchTrackStreams(track.id);
+                return { track, streamData };
+            }))
+            : tracks.map((track) => ({ track, streamData: null }));
+
+        const totalRank = tracksWithStream.reduce((sum, { track }) => sum + Number(track?.rank || 0), 0);
 
         list.innerHTML = tracksWithStream.map(({ track, streamData }) => `
             <article class="stream-card">
@@ -253,7 +290,7 @@ async function loadDashboardRegion(region) {
                 <div class="stream-card-info">
                     <strong>${track.title}</strong>
                     <span>${track.artist?.name || ''}</span>
-                    ${formatDeltaArrow(streamData.current, streamData.avg24h)}
+                    ${formatDashboardStat(track, streamData, totalRank)}
                 </div>
             </article>
         `).join('');
