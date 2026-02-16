@@ -37,7 +37,10 @@ let dashboardRegion = 'latam';
 let dashboardCarouselOffset = 0;
 let dashboardGlowTimeout = null;
 let dashboardDragInitialized = false;
+ codex/find-reason-for-0%-songs-statistic-9amkhv
+
  codex/find-reason-for-0%-songs-statistic-so425n
+ feature/wall-street-v2
 const runtimeGlobal = typeof window !== 'undefined' ? window : (typeof globalThis !== 'undefined' ? globalThis : {});
 
 function readOwnBooleanFlag(obj, flagName) {
@@ -48,6 +51,8 @@ function readOwnBooleanFlag(obj, flagName) {
         return descriptor.value === true;
     } catch (error) {
         console.warn(`No se pudo leer el flag ${flagName}. Se usa false por defecto.`, error);
+ codex/find-reason-for-0%-songs-statistic-9amkhv
+
 
  codex/find-reason-for-0%-songs-statistic-aklz7k
 const runtimeGlobal = typeof window !== 'undefined' ? window : (typeof globalThis !== 'undefined' ? globalThis : {});
@@ -59,9 +64,13 @@ function readBooleanFeatureFlag(flagName) {
     } catch (error) {
         console.warn(`No se pudo leer feature flag ${flagName}. Se usa valor por defecto en false.`, error);
  feature/wall-street-v2
+ feature/wall-street-v2
         return false;
     }
 }
+
+ codex/find-reason-for-0%-songs-statistic-9amkhv
+let deezerStreamsEndpointAvailable = readOwnBooleanFlag(runtimeGlobal, 'MTR_ENABLE_DEEZER_STREAMS');
 
  codex/find-reason-for-0%-songs-statistic-so425n
 let deezerStreamsEndpointAvailable = readOwnBooleanFlag(runtimeGlobal, 'MTR_ENABLE_DEEZER_STREAMS');
@@ -77,6 +86,7 @@ const runtimeGlobal = typeof window !== 'undefined' ? window : (typeof globalThi
 let deezerStreamsEndpointAvailable = Boolean(runtimeGlobal.MTR_ENABLE_DEEZER_STREAMS);
 
 let deezerStreamsEndpointAvailable = Boolean(window?.MTR_ENABLE_DEEZER_STREAMS);
+ feature/wall-street-v2
  feature/wall-street-v2
  feature/wall-street-v2
  feature/wall-street-v2
@@ -288,6 +298,8 @@ function formatDeltaArrow(current, avg24h) {
 }
 
 function formatDashboardStat(track, streamData, totalRank) {
+ codex/find-reason-for-0%-songs-statistic-9amkhv
+
  codex/find-reason-for-0%-songs-statistic-so425n
 
  codex/find-reason-for-0%-songs-statistic-aklz7k
@@ -298,11 +310,14 @@ function formatDashboardStat(track, streamData, totalRank) {
  feature/wall-street-v2
  feature/wall-street-v2
  feature/wall-street-v2
+ feature/wall-street-v2
     if (streamData && streamData.current && streamData.avg24h) {
         return formatDeltaArrow(streamData.current, streamData.avg24h);
     }
 
     const rank = Number((track && track.rank) || 0);
+ codex/find-reason-for-0%-songs-statistic-9amkhv
+
  codex/find-reason-for-0%-songs-statistic-so425n
 
  codex/find-reason-for-0%-songs-statistic-aklz7k
@@ -319,6 +334,7 @@ function formatDashboardStat(track, streamData, totalRank) {
  feature/wall-street-v2
  feature/wall-street-v2
  feature/wall-street-v2
+ feature/wall-street-v2
     if (rank > 0 && totalRank > 0) {
         const rankShare = (rank / totalRank) * 100;
         return `<span class="stream-delta neutral">• ${rankShare.toFixed(1)}% del top</span>`;
@@ -327,11 +343,14 @@ function formatDashboardStat(track, streamData, totalRank) {
     return '<span class="stream-delta neutral">• N/D</span>';
 }
 
+ codex/find-reason-for-0%-songs-statistic-9amkhv
+
  codex/find-reason-for-0%-songs-statistic-so425n
 
  codex/find-reason-for-0%-songs-statistic-aklz7k
 
  codex/find-reason-for-0%-songs-statistic-qvefvv
+ feature/wall-street-v2
  feature/wall-street-v2
  feature/wall-street-v2
 function getFallbackDashboardTracks(region) {
@@ -381,11 +400,14 @@ function renderDashboardTracks(list, tracksWithStream) {
     updateDashboardCarousel();
 }
 
+ codex/find-reason-for-0%-songs-statistic-9amkhv
+
  codex/find-reason-for-0%-songs-statistic-so425n
 
  codex/find-reason-for-0%-songs-statistic-aklz7k
 
 
+ feature/wall-street-v2
  feature/wall-street-v2
  feature/wall-street-v2
  feature/wall-street-v2
@@ -415,6 +437,8 @@ async function loadDashboardRegion(region) {
         const scriptEl = document.getElementById(callbackName);
         if (scriptEl) scriptEl.remove();
 
+ codex/find-reason-for-0%-songs-statistic-9amkhv
+
  codex/find-reason-for-0%-songs-statistic-so425n
 
  codex/find-reason-for-0%-songs-statistic-aklz7k
@@ -422,11 +446,24 @@ async function loadDashboardRegion(region) {
  codex/find-reason-for-0%-songs-statistic-qvefvv
  feature/wall-street-v2
  feature/wall-street-v2
+ feature/wall-street-v2
         const tracks = ((data && data.data) || []).slice(0, 8);
         if (!tracks.length) {
             renderDashboardTracks(list, getFallbackDashboardTracks(region).map((track) => ({ track, streamData: null })));
             return;
         }
+ codex/find-reason-for-0%-songs-statistic-9amkhv
+
+        const shouldFetchStreams = deezerStreamsEndpointAvailable && !deezerStreamsCircuitOpen;
+        const tracksWithStream = shouldFetchStreams
+            ? await Promise.all(tracks.map(async (track) => {
+                const streamData = await fetchTrackStreams(track.id);
+                return { track, streamData };
+            }))
+            : tracks.map((track) => ({ track, streamData: null }));
+
+        renderDashboardTracks(list, tracksWithStream);
+
  codex/find-reason-for-0%-songs-statistic-so425n
 
         const shouldFetchStreams = deezerStreamsEndpointAvailable && !deezerStreamsCircuitOpen;
@@ -488,6 +525,7 @@ async function loadDashboardRegion(region) {
             </article>
         `).join('');
         updateDashboardCarousel();
+ feature/wall-street-v2
  feature/wall-street-v2
  feature/wall-street-v2
  feature/wall-street-v2
