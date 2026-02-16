@@ -37,7 +37,12 @@ let dashboardRegion = 'latam';
 let dashboardCarouselOffset = 0;
 let dashboardGlowTimeout = null;
 let dashboardDragInitialized = false;
+ codex/find-reason-for-0%-songs-statistic-mitu7z
+const runtimeGlobal = typeof window !== 'undefined' ? window : (typeof globalThis !== 'undefined' ? globalThis : {});
+let deezerStreamsEndpointAvailable = Boolean(runtimeGlobal.MTR_ENABLE_DEEZER_STREAMS);
+
 let deezerStreamsEndpointAvailable = Boolean(window?.MTR_ENABLE_DEEZER_STREAMS);
+ feature/wall-street-v2
  feature/wall-street-v2
 let deezerStreamsCircuitOpen = false;
  main
@@ -245,11 +250,19 @@ function formatDeltaArrow(current, avg24h) {
 }
 
 function formatDashboardStat(track, streamData, totalRank) {
+ codex/find-reason-for-0%-songs-statistic-mitu7z
+    if (streamData && streamData.current && streamData.avg24h) {
+        return formatDeltaArrow(streamData.current, streamData.avg24h);
+    }
+
+    const rank = Number((track && track.rank) || 0);
+
     if (streamData?.current && streamData?.avg24h) {
         return formatDeltaArrow(streamData.current, streamData.avg24h);
     }
 
     const rank = Number(track?.rank || 0);
+ feature/wall-street-v2
     if (rank > 0 && totalRank > 0) {
         const rankShare = (rank / totalRank) * 100;
         return `<span class="stream-delta neutral">• ${rankShare.toFixed(1)}% del top</span>`;
@@ -282,7 +295,11 @@ async function loadDashboardRegion(region) {
             }))
             : tracks.map((track) => ({ track, streamData: null }));
 
+ codex/find-reason-for-0%-songs-statistic-mitu7z
+        const totalRank = tracksWithStream.reduce((sum, { track }) => sum + Number((track && track.rank) || 0), 0);
+
         const totalRank = tracksWithStream.reduce((sum, { track }) => sum + Number(track?.rank || 0), 0);
+ feature/wall-street-v2
 
         list.innerHTML = tracksWithStream.map(({ track, streamData }) => `
             <article class="stream-card">
