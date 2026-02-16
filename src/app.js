@@ -37,7 +37,11 @@ let dashboardRegion = 'latam';
 let dashboardCarouselOffset = 0;
 let dashboardGlowTimeout = null;
 let dashboardDragInitialized = false;
+ codex/fix-cors-policy-issue-with-deezer-api-4acmrk
+let deezerStreamsEndpointAvailable = Boolean(window?.MTR_ENABLE_DEEZER_STREAMS);
+
 let deezerStreamsEndpointAvailable = true;
+ feature/wall-street-v2
 let deezerStreamsCircuitOpen = false;
 const dashboardRegionQueries = { latam: 'latin', us: 'billboard', eu: 'europe top' };
 
@@ -168,9 +172,11 @@ async function fetchTrackStreams(trackId) {
             avg24h: Number(data.avg_24h || 0)
         };
     } catch (error) {
+        deezerStreamsEndpointAvailable = false;
         if (error instanceof TypeError) {
-            deezerStreamsEndpointAvailable = false;
             console.warn('El endpoint de streams de Deezer no está disponible en navegador (CORS). Se desactiva para evitar errores repetidos.');
+        } else {
+            console.warn('Se desactiva endpoint de streams de Deezer tras error de red/respuesta:', error);
         }
         deezerStreamsCircuitOpen = false;
         return { current: 0, avg24h: 0 };

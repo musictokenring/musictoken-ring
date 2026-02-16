@@ -15,6 +15,9 @@ const GameEngine = {
     jackpotRate: 0.1,
     platformRevenueTarget: 100000,
     songsEloTableAvailable: true,
+    initialized: false,
+    initPromise: null,
+    eloRefreshIntervalId: null,
     userAudio: null,
     victoryAudio: null,
     connectedWallet: null,
@@ -30,14 +33,24 @@ const GameEngine = {
     // ==========================================
     
     async init() {
-        console.log('🎮 Game Engine initializing...');
-        this.loadPracticeDemoBalance();
-        await this.loadUserBalance();
-        await this.loadGameConfig();
-        this.loadStoredWallet();
-        this.setupRealtimeSubscriptions();
-        this.scheduleEloRefresh();
-        console.log('✅ Game Engine ready!');
+        if (this.initialized) return;
+        if (this.initPromise) return this.initPromise;
+
+        this.initPromise = (async () => {
+            console.log('🎮 Game Engine initializing...');
+            this.loadPracticeDemoBalance();
+            await this.loadUserBalance();
+            await this.loadGameConfig();
+            this.loadStoredWallet();
+            this.setupRealtimeSubscriptions();
+            this.scheduleEloRefresh();
+            this.initialized = true;
+            console.log('✅ Game Engine ready!');
+        })().finally(() => {
+            this.initPromise = null;
+        });
+
+        return this.initPromise;
     },
 
     loadPracticeDemoBalance() {
@@ -1377,8 +1390,9 @@ const GameEngine = {
 
 
     scheduleEloRefresh() {
+        if (this.eloRefreshIntervalId) return;
         this.refreshSongEloScores();
-        setInterval(() => this.refreshSongEloScores(), 2 * 60 * 60 * 1000);
+        this.eloRefreshIntervalId = setInterval(() => this.refreshSongEloScores(), 2 * 60 * 60 * 1000);
     },
 
     async refreshSongEloScores() {
@@ -1435,7 +1449,7 @@ const GameEngine = {
                 .maybeSingle();
 
             if (error) {
-                if (error.code === 'PGRST205' || error.message?.includes('relation') || error.message?.includes('songs_elo')) {
+                if (error.code === 'PGRST205' || error.status === 404 || error.message?.includes('relation') || error.message?.includes('songs_elo')) {
                     this.songsEloTableAvailable = false;
                     return 1000;
                 }
@@ -1453,7 +1467,7 @@ const GameEngine = {
                 }, { onConflict: 'track_id' });
 
             if (upsertError) {
-                if (upsertError.code === 'PGRST205' || upsertError.message?.includes('relation') || upsertError.message?.includes('songs_elo')) {
+                if (upsertError.code === 'PGRST205' || upsertError.status === 404 || upsertError.message?.includes('relation') || upsertError.message?.includes('songs_elo')) {
                     this.songsEloTableAvailable = false;
                 }
                 return 1000;
