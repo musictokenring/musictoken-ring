@@ -35,6 +35,14 @@ function showToast(message, type = 'info') {
 let currentAudio = null;
 let dashboardRegion = 'latam';
 let dashboardCarouselOffset = 0;
+let dashboardGlowTimeout = null;
+let dashboardDragInitialized = false;
+ codex/fix-cors-policy-issue-with-deezer-api-4acmrk
+let deezerStreamsEndpointAvailable = Boolean(window?.MTR_ENABLE_DEEZER_STREAMS);
+
+let deezerStreamsEndpointAvailable = true;
+ feature/wall-street-v2
+let deezerStreamsCircuitOpen = false;
 const dashboardRegionQueries = { latam: 'latin', us: 'billboard', eu: 'europe top' };
 
 function togglePreview(url, button) {
@@ -148,15 +156,29 @@ function searchDeezer(query, resultsElementId = 'searchResults') {
 // =========================================
 
 async function fetchTrackStreams(trackId) {
+    if (!deezerStreamsEndpointAvailable || deezerStreamsCircuitOpen) {
+        return { current: 0, avg24h: 0 };
+    }
+
+    deezerStreamsCircuitOpen = true;
+
     try {
         const response = await fetch(`https://api.deezer.com/v1/tracks/${trackId}/streams?interval=5m`);
         if (!response.ok) throw new Error('No stream endpoint');
         const data = await response.json();
+        deezerStreamsCircuitOpen = false;
         return {
             current: Number(data.current_streams || 0),
             avg24h: Number(data.avg_24h || 0)
         };
-    } catch {
+    } catch (error) {
+        deezerStreamsEndpointAvailable = false;
+        if (error instanceof TypeError) {
+            console.warn('El endpoint de streams de Deezer no está disponible en navegador (CORS). Se desactiva para evitar errores repetidos.');
+        } else {
+            console.warn('Se desactiva endpoint de streams de Deezer tras error de red/respuesta:', error);
+        }
+        deezerStreamsCircuitOpen = false;
         return { current: 0, avg24h: 0 };
     }
 }
@@ -260,12 +282,62 @@ async function loadDashboardRegion(region) {
 function updateDashboardCarousel() {
     const track = document.getElementById('streamDashboardTrackList');
     if (!track) return;
-    track.scrollTo({ left: dashboardCarouselOffset * 260, behavior: 'smooth' });
+    const scrollStep = Math.max(220, Math.floor(track.clientWidth * 0.55));
+    track.scrollTo({ left: dashboardCarouselOffset * scrollStep, behavior: 'smooth' });
+    triggerDashboardGlow();
 }
 
 function moveDashboardCarousel(direction) {
     dashboardCarouselOffset = Math.max(0, dashboardCarouselOffset + direction);
     updateDashboardCarousel();
+}
+
+function triggerDashboardGlow() {
+    const wrap = document.querySelector('.stream-carousel-wrap');
+    if (!wrap) return;
+    wrap.classList.remove('glow-active');
+    void wrap.offsetWidth;
+    wrap.classList.add('glow-active');
+
+    if (dashboardGlowTimeout) clearTimeout(dashboardGlowTimeout);
+    dashboardGlowTimeout = setTimeout(() => {
+        wrap.classList.remove('glow-active');
+    }, 900);
+}
+
+function initDashboardDragScroll() {
+    if (dashboardDragInitialized) return;
+    const track = document.getElementById('streamDashboardTrackList');
+    if (!track) return;
+
+    let isDown = false;
+    let startX = 0;
+    let scrollLeft = 0;
+
+    track.addEventListener('pointerdown', (e) => {
+        isDown = true;
+        startX = e.clientX;
+        scrollLeft = track.scrollLeft;
+        track.setPointerCapture(e.pointerId);
+    });
+
+    track.addEventListener('pointermove', (e) => {
+        if (!isDown) return;
+        const walk = (e.clientX - startX) * 1.2;
+        track.scrollLeft = scrollLeft - walk;
+        triggerDashboardGlow();
+    });
+
+    const stopDrag = () => {
+        isDown = false;
+    };
+
+    track.addEventListener('pointerup', stopDrag);
+    track.addEventListener('pointercancel', stopDrag);
+    track.addEventListener('pointerleave', stopDrag);
+    track.addEventListener('scroll', triggerDashboardGlow, { passive: true });
+
+    dashboardDragInitialized = true;
 }
 
 function setDashboardRegion(region) {
@@ -314,6 +386,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     
     loadDashboardRegion(dashboardRegion);
+    initDashboardDragScroll();
     setInterval(() => loadDashboardRegion(dashboardRegion), 300000);
     console.log('🎵 Search system initialized!');
 });

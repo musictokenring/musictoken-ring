@@ -8,6 +8,8 @@ function openAuthModal() {
     document.getElementById('authModal')?.classList.remove('hidden');
 }
 
+let isLoadingPlayerProfile = false;
+
 function closeAuthModal() {
     document.getElementById('authModal')?.classList.add('hidden');
 }
@@ -199,9 +201,8 @@ function updateAuthUI(session) {
         }
         
         // Inicializar GameEngine si existe
-        if (typeof GameEngine !== 'undefined' && !GameEngine.initialized) {
+        if (typeof GameEngine !== 'undefined') {
             GameEngine.init();
-            GameEngine.initialized = true;
         }
         
     } else {
@@ -225,6 +226,9 @@ function updateAuthUI(session) {
 }
 
 async function loadPlayerProfile(user) {
+    if (isLoadingPlayerProfile) return;
+    isLoadingPlayerProfile = true;
+
     const profileName = document.getElementById('profileDisplayName');
     const profileEmail = document.getElementById('profileEmail');
     const profileSince = document.getElementById('profileSince');
@@ -239,16 +243,35 @@ async function loadPlayerProfile(user) {
     }
 
     try {
-        const [{ data: balanceData }, { data: matchesData, error: matchesError }] = await Promise.all([
-            supabaseClient.from('user_balances').select('balance').eq('user_id', user.id).maybeSingle(),
-            supabaseClient
+        const { data: balanceData } = await supabaseClient
+            .from('user_balances')
+            .select('balance')
+            .eq('user_id', user.id)
+            .maybeSingle();
+
+        let matchesData = [];
+        let matchesError = null;
+
+        const baseMatchQuery = () => supabaseClient
+            .from('matches')
+            .select('id, winner, match_type, total_pot, player1_id, player2_id, player1_bet, player2_bet, finished_at, status')
+            .or(`player1_id.eq.${user.id},player2_id.eq.${user.id}`)
+            .eq('status', 'finished')
+            .order('finished_at', { ascending: false })
+            .limit(50);
+
+        ({ data: matchesData, error: matchesError } = await baseMatchQuery());
+
+        if (matchesError && matchesError.code === '42703') {
+            console.warn('Esquema de columnas de matches desactualizado. Reintentando con consulta mínima:', matchesError.message);
+            ({ data: matchesData, error: matchesError } = await supabaseClient
                 .from('matches')
-                .select('id, winner, match_type, total_pot, player1_id, player2_id, player1_bet, player2_bet, player1_streams, player2_streams, finished_at, status')
+                .select('id, winner, match_type, player1_id, player2_id, player1_bet, player2_bet, finished_at, status')
                 .or(`player1_id.eq.${user.id},player2_id.eq.${user.id}`)
                 .eq('status', 'finished')
                 .order('finished_at', { ascending: false })
-                .limit(50)
-        ]);
+                .limit(50));
+        }
 
         if (matchesError) throw matchesError;
 
@@ -260,10 +283,7 @@ async function loadPlayerProfile(user) {
         }).length;
         const losses = Math.max(0, totalMatches - wins);
         const winRate = totalMatches > 0 ? ((wins / totalMatches) * 100).toFixed(1) : '0.0';
-        const totalStreams = matches.reduce((acc, m) => {
-            const isP1 = m.player1_id === user.id;
-            return acc + (isP1 ? (m.player1_streams || 0) : (m.player2_streams || 0));
-        }, 0);
+        const totalStreams = 0;
         const totalWagered = matches.reduce((acc, m) => {
             const isP1 = m.player1_id === user.id;
             return acc + (isP1 ? (m.player1_bet || 0) : (m.player2_bet || 0));
@@ -295,8 +315,14 @@ async function loadPlayerProfile(user) {
             }
         }
     } catch (error) {
+        if (error?.name === 'AbortError' || String(error?.message || '').includes('aborted')) {
+            console.warn('Carga de perfil cancelada (AbortError).');
+            return;
+        }
         console.error('Error loading player profile:', error);
         setProfileValue('profileBalance', 'No disponible');
+    } finally {
+        isLoadingPlayerProfile = false;
     }
 }
 
@@ -332,10 +358,18 @@ document.addEventListener('DOMContentLoaded', async () => {
     await processOAuthCallbackIfNeeded();
     
     // Get current session
-    const { data: { session } } = await supabaseClient.auth.getSession();
-    
-    // Update UI
-    updateAuthUI(session);
+    try {
+        const { data: { session } } = await supabaseClient.auth.getSession();
+
+        // Update UI
+        updateAuthUI(session);
+    } catch (error) {
+        if (error?.name === 'AbortError' || String(error?.message || '').includes('aborted')) {
+            console.warn('Inicialización de sesión cancelada (AbortError).');
+            return;
+        }
+        console.error('Error inicializando sesión:', error);
+    }
     
     console.log('✅ Auth system ready!');
 });

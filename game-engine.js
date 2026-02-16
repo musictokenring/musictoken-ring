@@ -14,6 +14,10 @@ const GameEngine = {
     platformFeeRate: 0.3,
     jackpotRate: 0.1,
     platformRevenueTarget: 100000,
+    songsEloTableAvailable: true,
+    initialized: false,
+    initPromise: null,
+    eloRefreshIntervalId: null,
     userAudio: null,
     victoryAudio: null,
     connectedWallet: null,
@@ -29,14 +33,24 @@ const GameEngine = {
     // ==========================================
     
     async init() {
-        console.log('🎮 Game Engine initializing...');
-        this.loadPracticeDemoBalance();
-        await this.loadUserBalance();
-        await this.loadGameConfig();
-        this.loadStoredWallet();
-        this.setupRealtimeSubscriptions();
-        this.scheduleEloRefresh();
-        console.log('✅ Game Engine ready!');
+        if (this.initialized) return;
+        if (this.initPromise) return this.initPromise;
+
+        this.initPromise = (async () => {
+            console.log('🎮 Game Engine initializing...');
+            this.loadPracticeDemoBalance();
+            await this.loadUserBalance();
+            await this.loadGameConfig();
+            this.loadStoredWallet();
+            this.setupRealtimeSubscriptions();
+            this.scheduleEloRefresh();
+            this.initialized = true;
+            console.log('✅ Game Engine ready!');
+        })().finally(() => {
+            this.initPromise = null;
+        });
+
+        return this.initPromise;
     },
 
     loadPracticeDemoBalance() {
@@ -88,6 +102,10 @@ const GameEngine = {
                 this.updateBalanceDisplay();
             }
         } catch (error) {
+            if (error?.name === 'AbortError' || String(error?.message || '').includes('aborted')) {
+                console.warn('Carga de balance cancelada (AbortError).');
+                return;
+            }
             console.error('Error loading balance:', error);
         }
     },
@@ -1331,24 +1349,36 @@ const GameEngine = {
         return 'PENDIENTE_CONFIGURAR';
     },
 
-    calculateMatchPayouts(totalPot) {
-        if (!totalPot) {
-            return { platformFee: 0, winnerPayout: 0 };
+    calculatePoolSplit(totalAmount, feeRate = this.platformFeeRate) {
+        if (!totalAmount) {
+            return { platformFee: 0, netPool: 0 };
         }
-        const platformFee = Math.round(totalPot * 0.3);
-        const winnerPayout = Math.max(0, Math.round(totalPot * 0.7));
-        return { platformFee, winnerPayout };
+
+        const normalizedFeeRate = Math.max(0, Math.min(1, Number(feeRate) || 0));
+        const platformFee = Math.round(totalAmount * normalizedFeeRate);
+        const netPool = Math.max(0, totalAmount - platformFee);
+
+        return { platformFee, netPool };
+    },
+
+    calculateMatchPayouts(totalPot) {
+        const split = this.calculatePoolSplit(totalPot, this.platformFeeRate);
+        return {
+            platformFee: split.platformFee,
+            winnerPayout: split.netPool
+        };
     },
 
     calculateTournamentEntry(entryFee) {
-        const platformFee = Math.round(entryFee * this.platformFeeRate);
+        const split = this.calculatePoolSplit(entryFee, this.platformFeeRate);
+        const platformFee = split.platformFee;
         const threshold = this.platformRevenueTarget * 0.9;
         const currentRevenue = this.getPlatformRevenue();
         const jackpotContribution = currentRevenue >= threshold
             ? Math.round(platformFee * this.jackpotRate)
             : 0;
         const platformNet = Math.max(0, platformFee - jackpotContribution);
-        const prizeContribution = entryFee - platformFee;
+        const prizeContribution = split.netPool;
         return {
             platformFee,
             jackpotContribution,
@@ -1360,47 +1390,89 @@ const GameEngine = {
 
 
     scheduleEloRefresh() {
+        if (this.eloRefreshIntervalId) return;
         this.refreshSongEloScores();
-        setInterval(() => this.refreshSongEloScores(), 2 * 60 * 60 * 1000);
+        this.eloRefreshIntervalId = setInterval(() => this.refreshSongEloScores(), 2 * 60 * 60 * 1000);
     },
 
     async refreshSongEloScores() {
+        if (!this.songsEloTableAvailable) {
+            return;
+        }
+
         try {
             const tracks = await this.fetchChartTracks();
             const top = (tracks || []).slice(0, 24);
             for (const track of top) {
                 const avg24h = Math.max(1, Math.round((track.rank || 1000) / 1000));
-                await supabaseClient
+                const { error } = await supabaseClient
                     .from('songs_elo')
                     .upsert({
                         track_id: String(track.id),
                         elo_score: avg24h,
                         last_update: new Date().toISOString()
                     }, { onConflict: 'track_id' });
+
+                if (error) {
+                    if (
+                        error.code === 'PGRST205' ||
+                        error.status === 404 ||
+                        error.message?.includes('relation') ||
+                        error.message?.includes('songs_elo')
+                    ) {
+                        this.songsEloTableAvailable = false;
+                        console.warn('La tabla songs_elo no existe en Supabase. Se desactiva el refresh automático de ELO.');
+                        break;
+                    }
+                    throw error;
+                }
             }
-            localStorage.setItem('mtr_last_elo_refresh', new Date().toISOString());
+
+            if (this.songsEloTableAvailable) {
+                localStorage.setItem('mtr_last_elo_refresh', new Date().toISOString());
+            }
         } catch (error) {
             console.warn('No se pudo refrescar songs_elo:', error);
         }
     },
 
     async getSongElo(trackId) {
+        if (!this.songsEloTableAvailable) {
+            return 1000;
+        }
+
         try {
-            const { data } = await supabaseClient
+            const { data, error } = await supabaseClient
                 .from('songs_elo')
                 .select('elo_score')
                 .eq('track_id', String(trackId))
                 .maybeSingle();
 
+            if (error) {
+                if (error.code === 'PGRST205' || error.status === 404 || error.message?.includes('relation') || error.message?.includes('songs_elo')) {
+                    this.songsEloTableAvailable = false;
+                    return 1000;
+                }
+                throw error;
+            }
+
             if (data?.elo_score) return Number(data.elo_score);
 
-            await supabaseClient
+            const { error: upsertError } = await supabaseClient
                 .from('songs_elo')
                 .upsert({
                     track_id: String(trackId),
                     elo_score: 1000,
                     last_update: new Date().toISOString()
                 }, { onConflict: 'track_id' });
+
+            if (upsertError) {
+                if (upsertError.code === 'PGRST205' || upsertError.status === 404 || upsertError.message?.includes('relation') || upsertError.message?.includes('songs_elo')) {
+                    this.songsEloTableAvailable = false;
+                }
+                return 1000;
+            }
+
             return 1000;
         } catch {
             return 1000;
