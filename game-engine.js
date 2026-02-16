@@ -27,6 +27,7 @@ const GameEngine = {
     currentPrivateMatchId: null,
     practiceDemoBalance: 0,
     practiceDemoInitialBalance: 1000,
+    songsEloDisableKey: 'mtr_songs_elo_disabled_until',
     
     // ==========================================
     // INICIALIZACIÓN
@@ -38,6 +39,7 @@ const GameEngine = {
 
         this.initPromise = (async () => {
             console.log('🎮 Game Engine initializing...');
+            this.loadSongsEloAvailability();
             this.loadPracticeDemoBalance();
             await this.loadUserBalance();
             await this.loadGameConfig();
@@ -51,6 +53,22 @@ const GameEngine = {
         });
 
         return this.initPromise;
+    },
+
+    loadSongsEloAvailability() {
+        const raw = localStorage.getItem(this.songsEloDisableKey);
+        if (!raw) return;
+        const disabledUntil = Number(raw);
+        if (Number.isFinite(disabledUntil) && Date.now() < disabledUntil) {
+            this.songsEloTableAvailable = false;
+        } else {
+            localStorage.removeItem(this.songsEloDisableKey);
+        }
+    },
+
+    disableSongsEloTableForOneDay() {
+        this.songsEloTableAvailable = false;
+        localStorage.setItem(this.songsEloDisableKey, String(Date.now() + 24 * 60 * 60 * 1000));
     },
 
     loadPracticeDemoBalance() {
@@ -1420,7 +1438,7 @@ const GameEngine = {
                         error.message?.includes('relation') ||
                         error.message?.includes('songs_elo')
                     ) {
-                        this.songsEloTableAvailable = false;
+                        this.disableSongsEloTableForOneDay();
                         console.warn('La tabla songs_elo no existe en Supabase. Se desactiva el refresh automático de ELO.');
                         break;
                     }
@@ -1450,7 +1468,7 @@ const GameEngine = {
 
             if (error) {
                 if (error.code === 'PGRST205' || error.status === 404 || error.message?.includes('relation') || error.message?.includes('songs_elo')) {
-                    this.songsEloTableAvailable = false;
+                    this.disableSongsEloTableForOneDay();
                     return 1000;
                 }
                 throw error;
@@ -1468,7 +1486,7 @@ const GameEngine = {
 
             if (upsertError) {
                 if (upsertError.code === 'PGRST205' || upsertError.status === 404 || upsertError.message?.includes('relation') || upsertError.message?.includes('songs_elo')) {
-                    this.songsEloTableAvailable = false;
+                    this.disableSongsEloTableForOneDay();
                 }
                 return 1000;
             }
