@@ -37,11 +37,16 @@ let dashboardRegion = 'latam';
 let dashboardCarouselOffset = 0;
 let dashboardGlowTimeout = null;
 let dashboardDragInitialized = false;
+ codex/find-reason-for-0%-songs-statistic-qvefvv
+const runtimeGlobal = typeof window !== 'undefined' ? window : (typeof globalThis !== 'undefined' ? globalThis : {});
+let deezerStreamsEndpointAvailable = Boolean(runtimeGlobal.MTR_ENABLE_DEEZER_STREAMS);
+
  codex/find-reason-for-0%-songs-statistic-mitu7z
 const runtimeGlobal = typeof window !== 'undefined' ? window : (typeof globalThis !== 'undefined' ? globalThis : {});
 let deezerStreamsEndpointAvailable = Boolean(runtimeGlobal.MTR_ENABLE_DEEZER_STREAMS);
 
 let deezerStreamsEndpointAvailable = Boolean(window?.MTR_ENABLE_DEEZER_STREAMS);
+ feature/wall-street-v2
  feature/wall-street-v2
  feature/wall-street-v2
 let deezerStreamsCircuitOpen = false;
@@ -250,18 +255,24 @@ function formatDeltaArrow(current, avg24h) {
 }
 
 function formatDashboardStat(track, streamData, totalRank) {
+ codex/find-reason-for-0%-songs-statistic-qvefvv
+
  codex/find-reason-for-0%-songs-statistic-mitu7z
+ feature/wall-street-v2
     if (streamData && streamData.current && streamData.avg24h) {
         return formatDeltaArrow(streamData.current, streamData.avg24h);
     }
 
     const rank = Number((track && track.rank) || 0);
+ codex/find-reason-for-0%-songs-statistic-qvefvv
+
 
     if (streamData?.current && streamData?.avg24h) {
         return formatDeltaArrow(streamData.current, streamData.avg24h);
     }
 
     const rank = Number(track?.rank || 0);
+ feature/wall-street-v2
  feature/wall-street-v2
     if (rank > 0 && totalRank > 0) {
         const rankShare = (rank / totalRank) * 100;
@@ -271,6 +282,56 @@ function formatDashboardStat(track, streamData, totalRank) {
     return '<span class="stream-delta neutral">• N/D</span>';
 }
 
+ codex/find-reason-for-0%-songs-statistic-qvefvv
+function getFallbackDashboardTracks(region) {
+    const fallbackByRegion = {
+        latam: [
+            { title: 'Luna', artist: { name: 'Feid' }, album: { cover_medium: 'https://e-cdns-images.dzcdn.net/images/cover/9f4c9025e2f4f4be85a8d0f95f3bc5fe/250x250-000000-80-0-0.jpg' }, rank: 1000 },
+            { title: 'Si Antes Te Hubiera Conocido', artist: { name: 'KAROL G' }, album: { cover_medium: 'https://e-cdns-images.dzcdn.net/images/cover/4aa4b9f4674f7f9f7428962456f31cc7/250x250-000000-80-0-0.jpg' }, rank: 940 },
+            { title: 'Perro Negro', artist: { name: 'Bad Bunny' }, album: { cover_medium: 'https://e-cdns-images.dzcdn.net/images/cover/236f9df9f6f95cc8c6f0707dbe6839df/250x250-000000-80-0-0.jpg' }, rank: 900 }
+        ],
+        us: [
+            { title: 'Espresso', artist: { name: 'Sabrina Carpenter' }, album: { cover_medium: 'https://e-cdns-images.dzcdn.net/images/cover/94bfaf6f3b278ba8e56ef8fca0ca65a4/250x250-000000-80-0-0.jpg' }, rank: 1000 },
+            { title: 'Lose Control', artist: { name: 'Teddy Swims' }, album: { cover_medium: 'https://e-cdns-images.dzcdn.net/images/cover/c025cd9e3f0980d7f33173f66c66fdfd/250x250-000000-80-0-0.jpg' }, rank: 960 },
+            { title: 'Beautiful Things', artist: { name: 'Benson Boone' }, album: { cover_medium: 'https://e-cdns-images.dzcdn.net/images/cover/4ff4d2e2e89ae5fd3df5e6eabf78f8f6/250x250-000000-80-0-0.jpg' }, rank: 920 }
+        ],
+        eu: [
+            { title: "Stumblin' In", artist: { name: 'Cyril' }, album: { cover_medium: 'https://e-cdns-images.dzcdn.net/images/cover/3f4b8cf4be2f16ebf3d6f8cfad8aa7c1/250x250-000000-80-0-0.jpg' }, rank: 1000 },
+            { title: 'Mwaki', artist: { name: 'Zerb' }, album: { cover_medium: 'https://e-cdns-images.dzcdn.net/images/cover/cc8f20c021f39d8444ec4f7f6d1d6e57/250x250-000000-80-0-0.jpg' }, rank: 950 },
+            { title: 'Texas Hold ’Em', artist: { name: 'Beyoncé' }, album: { cover_medium: 'https://e-cdns-images.dzcdn.net/images/cover/c5dfcb2f5a13f5327dd58476fdd0f9ed/250x250-000000-80-0-0.jpg' }, rank: 910 }
+        ]
+    };
+
+    return fallbackByRegion[region] || fallbackByRegion.latam;
+}
+
+function renderDashboardTracks(list, tracksWithStream) {
+    const totalRank = tracksWithStream.reduce((sum, item) => sum + Number(((item && item.track) && item.track.rank) || 0), 0);
+
+    list.innerHTML = tracksWithStream.map(({ track, streamData }) => {
+        const album = (track && track.album) || {};
+        const artist = (track && track.artist) || {};
+        const cover = album.cover_medium || '';
+        const title = (track && track.title) || 'Sin título';
+        const artistName = artist.name || 'Artista desconocido';
+
+        return `
+            <article class="stream-card">
+                <img src="${cover}" alt="${title}">
+                <div class="stream-card-info">
+                    <strong>${title}</strong>
+                    <span>${artistName}</span>
+                    ${formatDashboardStat(track, streamData, totalRank)}
+                </div>
+            </article>
+        `;
+    }).join('');
+
+    updateDashboardCarousel();
+}
+
+
+ feature/wall-street-v2
 async function loadDashboardRegion(region) {
     dashboardRegion = region;
     dashboardCarouselOffset = 0;
@@ -281,10 +342,38 @@ async function loadDashboardRegion(region) {
     const query = dashboardRegionQueries[region] || 'music';
 
     const callbackName = `dashboardCallback_${Date.now()}`;
+    let completed = false;
+    const timeoutId = setTimeout(() => {
+        if (completed) return;
+        completed = true;
+        delete window[callbackName];
+        renderDashboardTracks(list, getFallbackDashboardTracks(region).map((track) => ({ track, streamData: null })));
+    }, 7000);
+
     window[callbackName] = async function(data) {
+        if (completed) return;
+        completed = true;
+        clearTimeout(timeoutId);
         delete window[callbackName];
         const scriptEl = document.getElementById(callbackName);
         if (scriptEl) scriptEl.remove();
+
+ codex/find-reason-for-0%-songs-statistic-qvefvv
+        const tracks = ((data && data.data) || []).slice(0, 8);
+        if (!tracks.length) {
+            renderDashboardTracks(list, getFallbackDashboardTracks(region).map((track) => ({ track, streamData: null })));
+            return;
+        }
+
+        const shouldFetchStreams = deezerStreamsEndpointAvailable && !deezerStreamsCircuitOpen;
+        const tracksWithStream = shouldFetchStreams
+            ? await Promise.all(tracks.map(async (track) => {
+                const streamData = await fetchTrackStreams(track.id);
+                return { track, streamData };
+            }))
+            : tracks.map((track) => ({ track, streamData: null }));
+
+        renderDashboardTracks(list, tracksWithStream);
 
         const tracks = (data?.data || []).slice(0, 8);
         const shouldFetchStreams = deezerStreamsEndpointAvailable && !deezerStreamsCircuitOpen;
@@ -312,14 +401,18 @@ async function loadDashboardRegion(region) {
             </article>
         `).join('');
         updateDashboardCarousel();
+ feature/wall-street-v2
     };
 
     const script = document.createElement('script');
     script.id = callbackName;
     script.src = `https://api.deezer.com/search?q=${encodeURIComponent(query)}&limit=8&output=jsonp&callback=${callbackName}`;
     script.onerror = () => {
+        if (completed) return;
+        completed = true;
+        clearTimeout(timeoutId);
         delete window[callbackName];
-        list.innerHTML = '<p style="padding:16px; color:#EF4444;">No se pudo cargar el dashboard.</p>';
+        renderDashboardTracks(list, getFallbackDashboardTracks(region).map((track) => ({ track, streamData: null })));
     };
     document.head.appendChild(script);
 }
