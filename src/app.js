@@ -37,6 +37,7 @@ let dashboardRegion = 'latam';
 let dashboardCarouselOffset = 0;
 let dashboardGlowTimeout = null;
 let dashboardDragInitialized = false;
+ codex/find-reason-for-0%-songs-statistic-so425n
 const runtimeGlobal = typeof window !== 'undefined' ? window : (typeof globalThis !== 'undefined' ? globalThis : {});
 
 function readOwnBooleanFlag(obj, flagName) {
@@ -47,12 +48,42 @@ function readOwnBooleanFlag(obj, flagName) {
         return descriptor.value === true;
     } catch (error) {
         console.warn(`No se pudo leer el flag ${flagName}. Se usa false por defecto.`, error);
+
+ codex/find-reason-for-0%-songs-statistic-aklz7k
+const runtimeGlobal = typeof window !== 'undefined' ? window : (typeof globalThis !== 'undefined' ? globalThis : {});
+
+function readBooleanFeatureFlag(flagName) {
+    try {
+        if (!runtimeGlobal || !(flagName in runtimeGlobal)) return false;
+        return runtimeGlobal[flagName] === true;
+    } catch (error) {
+        console.warn(`No se pudo leer feature flag ${flagName}. Se usa valor por defecto en false.`, error);
+ feature/wall-street-v2
         return false;
     }
 }
 
+ codex/find-reason-for-0%-songs-statistic-so425n
 let deezerStreamsEndpointAvailable = readOwnBooleanFlag(runtimeGlobal, 'MTR_ENABLE_DEEZER_STREAMS');
+
+let deezerStreamsEndpointAvailable = readBooleanFeatureFlag('MTR_ENABLE_DEEZER_STREAMS');
+
+ codex/find-reason-for-0%-songs-statistic-qvefvv
+const runtimeGlobal = typeof window !== 'undefined' ? window : (typeof globalThis !== 'undefined' ? globalThis : {});
+let deezerStreamsEndpointAvailable = Boolean(runtimeGlobal.MTR_ENABLE_DEEZER_STREAMS);
+
+ codex/find-reason-for-0%-songs-statistic-mitu7z
+const runtimeGlobal = typeof window !== 'undefined' ? window : (typeof globalThis !== 'undefined' ? globalThis : {});
+let deezerStreamsEndpointAvailable = Boolean(runtimeGlobal.MTR_ENABLE_DEEZER_STREAMS);
+
+let deezerStreamsEndpointAvailable = Boolean(window?.MTR_ENABLE_DEEZER_STREAMS);
+ feature/wall-street-v2
+ feature/wall-street-v2
+ feature/wall-street-v2
+ feature/wall-street-v2
+ feature/wall-street-v2
 let deezerStreamsCircuitOpen = false;
+ main
 const dashboardRegionQueries = { latam: 'latin', us: 'billboard', eu: 'europe top' };
 
 function isMetaMaskExtensionMissingError(reason) {
@@ -181,17 +212,14 @@ function searchDeezer(query, resultsElementId = 'searchResults') {
 // =========================================
 
 async function fetchTrackStreams(trackId) {
-    if (!deezerStreamsEndpointAvailable || deezerStreamsCircuitOpen) {
+    if (!deezerStreamsEndpointAvailable) {
         return { current: 0, avg24h: 0 };
     }
-
-    deezerStreamsCircuitOpen = true;
 
     try {
         const response = await fetch(`https://api.deezer.com/v1/tracks/${trackId}/streams?interval=5m`);
         if (!response.ok) throw new Error('No stream endpoint');
         const data = await response.json();
-        deezerStreamsCircuitOpen = false;
         return {
             current: Number(data.current_streams || 0),
             avg24h: Number(data.avg_24h || 0)
@@ -203,7 +231,6 @@ async function fetchTrackStreams(trackId) {
         } else {
             console.warn('Se desactiva endpoint de streams de Deezer tras error de red/respuesta:', error);
         }
-        deezerStreamsCircuitOpen = false;
         return { current: 0, avg24h: 0 };
     }
 }
@@ -261,11 +288,37 @@ function formatDeltaArrow(current, avg24h) {
 }
 
 function formatDashboardStat(track, streamData, totalRank) {
+ codex/find-reason-for-0%-songs-statistic-so425n
+
+ codex/find-reason-for-0%-songs-statistic-aklz7k
+
+ codex/find-reason-for-0%-songs-statistic-qvefvv
+
+ codex/find-reason-for-0%-songs-statistic-mitu7z
+ feature/wall-street-v2
+ feature/wall-street-v2
+ feature/wall-street-v2
     if (streamData && streamData.current && streamData.avg24h) {
         return formatDeltaArrow(streamData.current, streamData.avg24h);
     }
 
     const rank = Number((track && track.rank) || 0);
+ codex/find-reason-for-0%-songs-statistic-so425n
+
+ codex/find-reason-for-0%-songs-statistic-aklz7k
+
+ codex/find-reason-for-0%-songs-statistic-qvefvv
+
+
+    if (streamData?.current && streamData?.avg24h) {
+        return formatDeltaArrow(streamData.current, streamData.avg24h);
+    }
+
+    const rank = Number(track?.rank || 0);
+ feature/wall-street-v2
+ feature/wall-street-v2
+ feature/wall-street-v2
+ feature/wall-street-v2
     if (rank > 0 && totalRank > 0) {
         const rankShare = (rank / totalRank) * 100;
         return `<span class="stream-delta neutral">• ${rankShare.toFixed(1)}% del top</span>`;
@@ -274,6 +327,13 @@ function formatDashboardStat(track, streamData, totalRank) {
     return '<span class="stream-delta neutral">• N/D</span>';
 }
 
+ codex/find-reason-for-0%-songs-statistic-so425n
+
+ codex/find-reason-for-0%-songs-statistic-aklz7k
+
+ codex/find-reason-for-0%-songs-statistic-qvefvv
+ feature/wall-street-v2
+ feature/wall-street-v2
 function getFallbackDashboardTracks(region) {
     const fallbackByRegion = {
         latam: [
@@ -321,6 +381,14 @@ function renderDashboardTracks(list, tracksWithStream) {
     updateDashboardCarousel();
 }
 
+ codex/find-reason-for-0%-songs-statistic-so425n
+
+ codex/find-reason-for-0%-songs-statistic-aklz7k
+
+
+ feature/wall-street-v2
+ feature/wall-street-v2
+ feature/wall-street-v2
 async function loadDashboardRegion(region) {
     dashboardRegion = region;
     dashboardCarouselOffset = 0;
@@ -347,11 +415,19 @@ async function loadDashboardRegion(region) {
         const scriptEl = document.getElementById(callbackName);
         if (scriptEl) scriptEl.remove();
 
+ codex/find-reason-for-0%-songs-statistic-so425n
+
+ codex/find-reason-for-0%-songs-statistic-aklz7k
+
+ codex/find-reason-for-0%-songs-statistic-qvefvv
+ feature/wall-street-v2
+ feature/wall-street-v2
         const tracks = ((data && data.data) || []).slice(0, 8);
         if (!tracks.length) {
             renderDashboardTracks(list, getFallbackDashboardTracks(region).map((track) => ({ track, streamData: null })));
             return;
         }
+ codex/find-reason-for-0%-songs-statistic-so425n
 
         const shouldFetchStreams = deezerStreamsEndpointAvailable && !deezerStreamsCircuitOpen;
         const tracksWithStream = shouldFetchStreams
@@ -362,6 +438,59 @@ async function loadDashboardRegion(region) {
             : tracks.map((track) => ({ track, streamData: null }));
 
         renderDashboardTracks(list, tracksWithStream);
+
+ codex/find-reason-for-0%-songs-statistic-aklz7k
+
+        const shouldFetchStreams = deezerStreamsEndpointAvailable && !deezerStreamsCircuitOpen;
+        const tracksWithStream = shouldFetchStreams
+            ? await Promise.all(tracks.map(async (track) => {
+                const streamData = await fetchTrackStreams(track.id);
+                return { track, streamData };
+            }))
+            : tracks.map((track) => ({ track, streamData: null }));
+
+        renderDashboardTracks(list, tracksWithStream);
+
+
+        const shouldFetchStreams = deezerStreamsEndpointAvailable && !deezerStreamsCircuitOpen;
+        const tracksWithStream = shouldFetchStreams
+            ? await Promise.all(tracks.map(async (track) => {
+                const streamData = await fetchTrackStreams(track.id);
+                return { track, streamData };
+            }))
+            : tracks.map((track) => ({ track, streamData: null }));
+
+        renderDashboardTracks(list, tracksWithStream);
+
+        const tracks = (data?.data || []).slice(0, 8);
+        const shouldFetchStreams = deezerStreamsEndpointAvailable && !deezerStreamsCircuitOpen;
+        const tracksWithStream = shouldFetchStreams
+            ? await Promise.all(tracks.map(async (track) => {
+                const streamData = await fetchTrackStreams(track.id);
+                return { track, streamData };
+            }))
+            : tracks.map((track) => ({ track, streamData: null }));
+
+ codex/find-reason-for-0%-songs-statistic-mitu7z
+        const totalRank = tracksWithStream.reduce((sum, { track }) => sum + Number((track && track.rank) || 0), 0);
+
+        const totalRank = tracksWithStream.reduce((sum, { track }) => sum + Number(track?.rank || 0), 0);
+ feature/wall-street-v2
+
+        list.innerHTML = tracksWithStream.map(({ track, streamData }) => `
+            <article class="stream-card">
+                <img src="${track.album?.cover_medium}" alt="${track.title}">
+                <div class="stream-card-info">
+                    <strong>${track.title}</strong>
+                    <span>${track.artist?.name || ''}</span>
+                    ${formatDashboardStat(track, streamData, totalRank)}
+                </div>
+            </article>
+        `).join('');
+        updateDashboardCarousel();
+ feature/wall-street-v2
+ feature/wall-street-v2
+ feature/wall-street-v2
     };
 
     const script = document.createElement('script');
