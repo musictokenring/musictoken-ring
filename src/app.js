@@ -37,6 +37,8 @@ let dashboardRegion = 'latam';
 let dashboardCarouselOffset = 0;
 let dashboardGlowTimeout = null;
 let dashboardDragInitialized = false;
+ codex/find-reason-for-0%-songs-statistic-7dg0q0
+
  codex/find-reason-for-0%-songs-statistic-09svhr
 
  codex/find-reason-for-0%-songs-statistic-osd0jc
@@ -46,6 +48,7 @@ let dashboardDragInitialized = false;
  codex/find-reason-for-0%-songs-statistic-9amkhv
 
  codex/find-reason-for-0%-songs-statistic-so425n
+ feature/wall-street-v2
  feature/wall-street-v2
  feature/wall-street-v2
  feature/wall-street-v2
@@ -60,6 +63,8 @@ function readOwnBooleanFlag(obj, flagName) {
         return descriptor.value === true;
     } catch (error) {
         console.warn(`No se pudo leer el flag ${flagName}. Se usa false por defecto.`, error);
+ codex/find-reason-for-0%-songs-statistic-7dg0q0
+
  codex/find-reason-for-0%-songs-statistic-09svhr
 
  codex/find-reason-for-0%-songs-statistic-osd0jc
@@ -83,8 +88,25 @@ function readBooleanFeatureFlag(flagName) {
  feature/wall-street-v2
  feature/wall-street-v2
  feature/wall-street-v2
+ feature/wall-street-v2
         return false;
     }
+}
+
+ codex/find-reason-for-0%-songs-statistic-7dg0q0
+let deezerStreamsEndpointAvailable = readOwnBooleanFlag(runtimeGlobal, 'MTR_ENABLE_DEEZER_STREAMS');
+let deezerStreamsCircuitOpen = false;
+function getDashboardRegionQueries() {
+    const defaultQueries = { latam: 'latin', us: 'billboard', eu: 'europe top' };
+    const externalQueries = runtimeGlobal && runtimeGlobal.MTR_DASHBOARD_REGION_QUERIES;
+    if (externalQueries && typeof externalQueries === 'object') {
+        const merged = { latam: defaultQueries.latam, us: defaultQueries.us, eu: defaultQueries.eu };
+        if (externalQueries.latam) merged.latam = externalQueries.latam;
+        if (externalQueries.us) merged.us = externalQueries.us;
+        if (externalQueries.eu) merged.eu = externalQueries.eu;
+        return merged;
+    }
+    return defaultQueries;
 }
 
  codex/find-reason-for-0%-songs-statistic-09svhr
@@ -157,6 +179,7 @@ let deezerStreamsEndpointAvailable = Boolean(window?.MTR_ENABLE_DEEZER_STREAMS);
 let deezerStreamsCircuitOpen = false;
  main
 const dashboardRegionQueries = { latam: 'latin', us: 'billboard', eu: 'europe top' };
+ feature/wall-street-v2
  feature/wall-street-v2
  feature/wall-street-v2
  feature/wall-street-v2
@@ -364,6 +387,8 @@ function formatDeltaArrow(current, avg24h) {
 }
 
 function formatDashboardStat(track, streamData, totalRank) {
+ codex/find-reason-for-0%-songs-statistic-7dg0q0
+
  codex/find-reason-for-0%-songs-statistic-09svhr
 
  codex/find-reason-for-0%-songs-statistic-osd0jc
@@ -386,11 +411,14 @@ function formatDashboardStat(track, streamData, totalRank) {
  feature/wall-street-v2
  feature/wall-street-v2
  feature/wall-street-v2
+ feature/wall-street-v2
     if (streamData && streamData.current && streamData.avg24h) {
         return formatDeltaArrow(streamData.current, streamData.avg24h);
     }
 
     const rank = Number((track && track.rank) || 0);
+ codex/find-reason-for-0%-songs-statistic-7dg0q0
+
  codex/find-reason-for-0%-songs-statistic-09svhr
 
  codex/find-reason-for-0%-songs-statistic-osd0jc
@@ -419,6 +447,7 @@ function formatDashboardStat(track, streamData, totalRank) {
  feature/wall-street-v2
  feature/wall-street-v2
  feature/wall-street-v2
+ feature/wall-street-v2
     if (rank > 0 && totalRank > 0) {
         const rankShare = (rank / totalRank) * 100;
         return `<span class="stream-delta neutral">• ${rankShare.toFixed(1)}% del top</span>`;
@@ -426,6 +455,8 @@ function formatDashboardStat(track, streamData, totalRank) {
 
     return '<span class="stream-delta neutral">• N/D</span>';
 }
+
+ codex/find-reason-for-0%-songs-statistic-7dg0q0
 
  codex/find-reason-for-0%-songs-statistic-09svhr
 
@@ -440,6 +471,7 @@ function formatDashboardStat(track, streamData, totalRank) {
  codex/find-reason-for-0%-songs-statistic-aklz7k
 
  codex/find-reason-for-0%-songs-statistic-qvefvv
+ feature/wall-street-v2
  feature/wall-street-v2
  feature/wall-street-v2
  feature/wall-street-v2
@@ -493,6 +525,8 @@ function renderDashboardTracks(list, tracksWithStream) {
     updateDashboardCarousel();
 }
 
+ codex/find-reason-for-0%-songs-statistic-7dg0q0
+
  codex/find-reason-for-0%-songs-statistic-09svhr
 
  codex/find-reason-for-0%-songs-statistic-osd0jc
@@ -506,6 +540,7 @@ function renderDashboardTracks(list, tracksWithStream) {
  codex/find-reason-for-0%-songs-statistic-aklz7k
 
 
+ feature/wall-street-v2
  feature/wall-street-v2
  feature/wall-street-v2
  feature/wall-street-v2
@@ -540,6 +575,8 @@ async function loadDashboardRegion(region) {
         const scriptEl = document.getElementById(callbackName);
         if (scriptEl) scriptEl.remove();
 
+ codex/find-reason-for-0%-songs-statistic-7dg0q0
+
  codex/find-reason-for-0%-songs-statistic-09svhr
 
  codex/find-reason-for-0%-songs-statistic-osd0jc
@@ -558,11 +595,24 @@ async function loadDashboardRegion(region) {
  feature/wall-street-v2
  feature/wall-street-v2
  feature/wall-street-v2
+ feature/wall-street-v2
         const tracks = ((data && data.data) || []).slice(0, 8);
         if (!tracks.length) {
             renderDashboardTracks(list, getFallbackDashboardTracks(region).map((track) => ({ track, streamData: null })));
             return;
         }
+ codex/find-reason-for-0%-songs-statistic-7dg0q0
+
+        const shouldFetchStreams = deezerStreamsEndpointAvailable && !deezerStreamsCircuitOpen;
+        const tracksWithStream = shouldFetchStreams
+            ? await Promise.all(tracks.map(async (track) => {
+                const streamData = await fetchTrackStreams(track.id);
+                return { track, streamData };
+            }))
+            : tracks.map((track) => ({ track, streamData: null }));
+
+        renderDashboardTracks(list, tracksWithStream);
+
  codex/find-reason-for-0%-songs-statistic-09svhr
 
         const shouldFetchStreams = deezerStreamsEndpointAvailable && !deezerStreamsCircuitOpen;
@@ -672,6 +722,7 @@ async function loadDashboardRegion(region) {
             </article>
         `).join('');
         updateDashboardCarousel();
+ feature/wall-street-v2
  feature/wall-street-v2
  feature/wall-street-v2
  feature/wall-street-v2
@@ -818,6 +869,10 @@ if (document.readyState === 'loading') {
 }
 
 window.addEventListener('pageshow', () => {
+ codex/find-reason-for-0%-songs-statistic-7dg0q0
+    const dashboardList = document.getElementById('streamDashboardTrackList');
+    if (dashboardList && dashboardList.children.length === 0) {
+
  codex/find-reason-for-0%-songs-statistic-09svhr
     const dashboardList = document.getElementById('streamDashboardTrackList');
     if (dashboardList && dashboardList.children.length === 0) {
@@ -827,6 +882,7 @@ window.addEventListener('pageshow', () => {
     if (dashboardList && dashboardList.children.length === 0) {
 
     if (document.getElementById('streamDashboardTrackList')?.children.length === 0) {
+ feature/wall-street-v2
  feature/wall-street-v2
  feature/wall-street-v2
         loadDashboardRegion(dashboardRegion);
