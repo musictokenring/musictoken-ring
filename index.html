@@ -634,10 +634,14 @@
     <script src="./auth-system.js"></script>
     <script src="./game-engine.js"></script>
     <script>window.MTR_INLINE_TOP_STREAMS_ACTIVE = true;</script>
+ codex/fix-text-loop-in-track-cards-feizke
+    <script src="./src/app.js?v=20260217b"></script>
+
  codex/fix-text-loop-in-track-cards-2zg6a6
     <script src="./src/app.js?v=20260217a"></script>
 
     <script src="./src/app.js?v=20260216l"></script>
+ feature/wall-street-v2
  feature/wall-street-v2
 
     <script>
@@ -692,6 +696,31 @@
                 return text;
             }
 
+ codex/fix-text-loop-in-track-cards-feizke
+            function sanitizeDashboardCards() {
+                var list = getDashboardList();
+                if (!list) return;
+                var cards = list.querySelectorAll('.stream-card');
+                for (var i = 0; i < cards.length; i++) {
+                    var info = cards[i].querySelector('.stream-card-info');
+                    if (!info) continue;
+                    var strong = info.querySelector('strong');
+                    var spans = info.querySelectorAll('span');
+                    if (!strong || spans.length < 2) continue;
+
+                    var artist = spans[0];
+                    var stat = spans[1];
+
+                    strong.textContent = clean(strong.textContent || 'Sin título') || 'Sin título';
+                    artist.textContent = clean(artist.textContent || 'Artista') || 'Artista';
+                    stat.textContent = clean(stat.textContent || '• N/D') || '• N/D';
+
+                    while (info.childNodes.length > 3) {
+                        info.removeChild(info.lastChild);
+                    }
+                }
+            }
+
             var fallbackCover = 'data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%2264%22 height=%2264%22 viewBox=%220 0 64 64%22%3E%3Crect width=%2264%22 height=%2264%22 rx=%2210%22 fill=%22%232f3542%22/%3E%3Ctext x=%2232%22 y=%2239%22 text-anchor=%22middle%22 font-size=%2226%22%3E%F0%9F%8E%B5%3C/text%3E%3C/svg%3E';
 
             function render(region) {
@@ -718,6 +747,35 @@
                         this.src = fallbackCover;
                     };
                 }
+                sanitizeDashboardCards();
+
+            var fallbackCover = 'data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%2264%22 height=%2264%22 viewBox=%220 0 64 64%22%3E%3Crect width=%2264%22 height=%2264%22 rx=%2210%22 fill=%22%232f3542%22/%3E%3Ctext x=%2232%22 y=%2239%22 text-anchor=%22middle%22 font-size=%2226%22%3E%F0%9F%8E%B5%3C/text%3E%3C/svg%3E';
+
+            function render(region) {
+                var list = getDashboardList();
+                if (!list) return;
+                var tracks = tracksByRegion(region);
+                var html = '';
+                for (var i = 0; i < tracks.length; i++) {
+                    var t = tracks[i];
+                    var cover = t.cover || fallbackCover;
+                    html += '<article class="stream-card">' +
+                        '<img src="' + cover + '" alt="' + clean(t.title) + '">' +
+                        '<div class="stream-card-info">' +
+                        '<strong>' + clean(t.title) + '</strong>' +
+                        '<span>' + clean(t.artist) + '</span>' +
+                        '<span class="stream-delta neutral">' + clean(t.stat) + '</span>' +
+                        '</div></article>';
+                }
+                list.innerHTML = html;
+                var covers = list.querySelectorAll('img');
+                for (var j = 0; j < covers.length; j++) {
+                    covers[j].onerror = function () {
+                        this.onerror = null;
+                        this.src = fallbackCover;
+                    };
+                }
+ feature/wall-street-v2
                 window.moveDashboardCarousel(0);
             }
 
@@ -741,6 +799,11 @@
 
             document.addEventListener('DOMContentLoaded', function () {
                 render('latam');
+ codex/fix-text-loop-in-track-cards-feizke
+                sanitizeDashboardCards();
+                setInterval(sanitizeDashboardCards, 2000);
+
+ feature/wall-street-v2
             });
         })();
 
