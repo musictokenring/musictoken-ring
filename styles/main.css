@@ -235,18 +235,19 @@ body {
 }
 
 .stream-card {
-    min-width: 240px;
+    flex: 0 0 min(340px, calc((100% - 24px) / 3));
+    min-width: 260px;
     background: var(--bg-card);
     border: 1px solid var(--border-color);
     border-radius: 12px;
-    padding: 10px;
+    padding: 14px;
     display: flex;
-    gap: 10px;
+    gap: 12px;
 }
-.stream-card img { width: 56px; height: 56px; border-radius: 8px; }
+.stream-card img { width: 64px; height: 64px; border-radius: 10px; }
 .stream-card-info { display:flex; flex-direction:column; }
-.stream-card-info strong { font-size: 13px; }
-.stream-card-info span { color: var(--text-secondary); font-size: 12px; }
+.stream-card-info strong { font-size: 16px; line-height: 1.2; }
+.stream-card-info span { color: var(--text-secondary); font-size: 14px; }
 .stream-carousel-nav { background: var(--bg-card); color:#fff; border:1px solid var(--border-color); border-radius:50%; width:34px; height:34px; cursor:pointer; }
 .stream-delta.up, .stream-indicator.up { color: var(--accent-green); }
 .stream-delta.down, .stream-indicator.down { color: var(--accent-red); }
