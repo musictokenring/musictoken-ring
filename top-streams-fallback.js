@@ -7,6 +7,65 @@
     return document.getElementById('streamDashboardTrackList');
   }
 
+ codex/fix-unexpected-token-for-error-k5yd8g
+  function cleanDashboardText(value, fallback) {
+    var text = String(value || '');
+    text = text
+      .replace(/codex\/[\w.-]+/gi, '')
+      .replace(/feature\/[\w.-]+/gi, '')
+      .replace(/\s{2,}/g, ' ')
+      .trim();
+    return text || (fallback || '');
+  }
+
+  function sanitizeDashboardCards() {
+    var list = getList();
+    if (!list) return;
+    var cards = list.querySelectorAll('.stream-card');
+    for (var i = 0; i < cards.length; i++) {
+      var info = cards[i].querySelector('.stream-card-info');
+      if (!info) continue;
+
+      var strong = info.querySelector('strong');
+      if (!strong) continue;
+
+      var spans = info.querySelectorAll('span');
+      var artistSpan = spans[0] || null;
+      var statSpan = spans[1] || null;
+
+      if (!artistSpan) {
+        artistSpan = document.createElement('span');
+        info.appendChild(artistSpan);
+      }
+      if (!statSpan) {
+        statSpan = document.createElement('span');
+        statSpan.className = 'stream-delta neutral';
+        info.appendChild(statSpan);
+      }
+
+      strong.textContent = cleanDashboardText(strong.textContent, 'Sin título');
+      artistSpan.textContent = cleanDashboardText(artistSpan.textContent, 'Artista');
+      statSpan.textContent = cleanDashboardText(statSpan.textContent, '• N/D');
+
+      while (info.children.length > 3) {
+        info.removeChild(info.lastElementChild);
+      }
+    }
+  }
+
+  function protectDashboardFromInjectedText() {
+    var list = getList();
+    if (!list || list.dataset.sanitizeGuard === '1') return;
+    list.dataset.sanitizeGuard = '1';
+
+    var observer = new MutationObserver(function () {
+      sanitizeDashboardCards();
+    });
+    observer.observe(list, { childList: true, subtree: true, characterData: true });
+  }
+
+
+ feature/wall-street-v2
   function fallbackTracks(r) {
     var byRegion = {
       latam: [
@@ -42,6 +101,17 @@
     for (var i = 0; i < items.length; i++) {
       var t = items[i] || {};
       html += '<article class="stream-card">' +
+ codex/fix-unexpected-token-for-error-k5yd8g
+        '<img src="' + (t.cover || '') + '" alt="' + cleanDashboardText(t.title, 'Track') + '">' +
+        '<div class="stream-card-info">' +
+        '<strong>' + cleanDashboardText(t.title, 'Sin título') + '</strong>' +
+        '<span>' + cleanDashboardText(t.artist, 'Artista') + '</span>' +
+        '<span class="stream-delta neutral">' + cleanDashboardText(t.stat, '• N/D') + '</span>' +
+        '</div></article>';
+    }
+    list.innerHTML = html;
+    sanitizeDashboardCards();
+
         '<img src="' + (t.cover || '') + '" alt="' + (t.title || 'Track') + '">' +
         '<div class="stream-card-info">' +
         '<strong>' + (t.title || 'Sin título') + '</strong>' +
@@ -50,6 +120,7 @@
         '</div></article>';
     }
     list.innerHTML = html;
+ feature/wall-street-v2
     applyCarouselPosition();
   }
 
@@ -95,10 +166,17 @@
           stat = '• ' + ((rank / totalRank) * 100).toFixed(1) + '% del top';
         }
         items.push({
+ codex/fix-unexpected-token-for-error-k5yd8g
+          title: cleanDashboardText(row.title, 'Sin título'),
+          artist: cleanDashboardText(row.artist && row.artist.name, 'Artista'),
+          cover: row.album && row.album.cover_medium ? row.album.cover_medium : '',
+          stat: cleanDashboardText(stat, '• N/D')
+
           title: row.title || 'Sin título',
           artist: row.artist && row.artist.name ? row.artist.name : 'Artista',
           cover: row.album && row.album.cover_medium ? row.album.cover_medium : '',
           stat: stat
+ feature/wall-street-v2
         });
       }
       if (!items.length) items = fallbackTracks(r);
@@ -131,6 +209,12 @@
   };
 
   function boot() {
+ codex/fix-unexpected-token-for-error-k5yd8g
+    protectDashboardFromInjectedText();
+    sanitizeDashboardCards();
+    setInterval(sanitizeDashboardCards, 2000);
+
+ feature/wall-street-v2
     render(fallbackTracks(region));
     loadFromDeezer(region);
   }
