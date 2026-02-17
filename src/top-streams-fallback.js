@@ -10,6 +10,8 @@
   function fallbackTracks(r) {
     var byRegion = {
       latam: [
+ codex/find-reason-for-0%-songs-statistic-usqut1
+
  codex/find-reason-for-0%-songs-statistic-ho6y47
 
  codex/find-reason-for-0%-songs-statistic-kq346f
@@ -19,6 +21,7 @@
  codex/find-reason-for-0%-songs-statistic-c0lumz
 
  codex/find-reason-for-0%-songs-statistic-7dg0q0
+ feature/wall-street-v2
  feature/wall-street-v2
  feature/wall-street-v2
  feature/wall-street-v2
@@ -36,6 +39,8 @@
         { title: "Stumblin' In", artist: 'Cyril', cover: 'https://e-cdns-images.dzcdn.net/images/cover/3f4b8cf4be2f16ebf3d6f8cfad8aa7c1/250x250-000000-80-0-0.jpg', stat: '• 35.0% del top' },
         { title: 'Mwaki', artist: 'Zerb', cover: 'https://e-cdns-images.dzcdn.net/images/cover/cc8f20c021f39d8444ec4f7f6d1d6e57/250x250-000000-80-0-0.jpg', stat: '• 33.2% del top' },
         { title: 'Texas Hold ’Em', artist: 'Beyoncé', cover: 'https://e-cdns-images.dzcdn.net/images/cover/c5dfcb2f5a13f5327dd58476fdd0f9ed/250x250-000000-80-0-0.jpg', stat: '• 31.8% del top' }
+ codex/find-reason-for-0%-songs-statistic-usqut1
+
  codex/find-reason-for-0%-songs-statistic-ho6y47
 
  codex/find-reason-for-0%-songs-statistic-kq346f
@@ -63,10 +68,13 @@
  feature/wall-street-v2
  feature/wall-street-v2
  feature/wall-street-v2
+ feature/wall-street-v2
       ]
     };
     return byRegion[r] || byRegion.latam;
   }
+
+ codex/find-reason-for-0%-songs-statistic-usqut1
 
  codex/find-reason-for-0%-songs-statistic-ho6y47
  codex/find-reason-for-0%-songs-statistic-kq346f
@@ -80,12 +88,15 @@
  feature/wall-street-v2
  feature/wall-street-v2
  feature/wall-street-v2
+ feature/wall-street-v2
   function applyCarouselPosition() {
     var list = getList();
     if (!list) return;
     var step = Math.max(220, Math.floor(list.clientWidth * 0.55));
     list.scrollTo({ left: offset * step, behavior: 'smooth' });
   }
+
+ codex/find-reason-for-0%-songs-statistic-usqut1
 
  codex/find-reason-for-0%-songs-statistic-ho6y47
 
@@ -96,6 +107,7 @@
  codex/find-reason-for-0%-songs-statistic-c0lumz
 
 
+ feature/wall-street-v2
  feature/wall-street-v2
  feature/wall-street-v2
  feature/wall-street-v2
@@ -112,6 +124,8 @@
         '<div class="stream-card-info">' +
         '<strong>' + (t.title || 'Sin título') + '</strong>' +
         '<span>' + (t.artist || 'Artista') + '</span>' +
+ codex/find-reason-for-0%-songs-statistic-usqut1
+
  codex/find-reason-for-0%-songs-statistic-ho6y47
 
  codex/find-reason-for-0%-songs-statistic-kq346f
@@ -125,11 +139,14 @@
  feature/wall-street-v2
  feature/wall-street-v2
  feature/wall-street-v2
+ feature/wall-street-v2
         '<span class="stream-delta neutral">' + (t.stat || '• N/D') + '</span>' +
         '</div></article>';
     }
     list.innerHTML = html;
     applyCarouselPosition();
+ codex/find-reason-for-0%-songs-statistic-usqut1
+
  codex/find-reason-for-0%-songs-statistic-ho6y47
 
  codex/find-reason-for-0%-songs-statistic-kq346f
@@ -144,6 +161,7 @@
     }
     list.innerHTML = html;
     moveDashboardCarousel(0);
+ feature/wall-street-v2
  feature/wall-street-v2
  feature/wall-street-v2
  feature/wall-street-v2
@@ -180,6 +198,8 @@
 
       var items = [];
       var rows = (data && data.data) ? data.data : [];
+ codex/find-reason-for-0%-songs-statistic-usqut1
+
  codex/find-reason-for-0%-songs-statistic-ho6y47
 
  codex/find-reason-for-0%-songs-statistic-kq346f
@@ -189,6 +209,7 @@
  codex/find-reason-for-0%-songs-statistic-c0lumz
 
  codex/find-reason-for-0%-songs-statistic-7dg0q0
+ feature/wall-street-v2
  feature/wall-street-v2
  feature/wall-street-v2
  feature/wall-street-v2
@@ -210,6 +231,8 @@
           artist: row.artist && row.artist.name ? row.artist.name : 'Artista',
           cover: row.album && row.album.cover_medium ? row.album.cover_medium : '',
           stat: stat
+ codex/find-reason-for-0%-songs-statistic-usqut1
+
  codex/find-reason-for-0%-songs-statistic-ho6y47
 
  codex/find-reason-for-0%-songs-statistic-kq346f
@@ -225,6 +248,7 @@
           title: row.title || 'Sin título',
           artist: row.artist && row.artist.name ? row.artist.name : 'Artista',
           cover: row.album && row.album.cover_medium ? row.album.cover_medium : ''
+ feature/wall-street-v2
  feature/wall-street-v2
  feature/wall-street-v2
  feature/wall-street-v2
@@ -255,6 +279,8 @@
   };
 
   window.moveDashboardCarousel = function (direction) {
+ codex/find-reason-for-0%-songs-statistic-usqut1
+
  codex/find-reason-for-0%-songs-statistic-ho6y47
 
  codex/find-reason-for-0%-songs-statistic-kq346f
@@ -268,10 +294,13 @@
  feature/wall-street-v2
  feature/wall-street-v2
  feature/wall-street-v2
+feature/wall-street-v2
     if (typeof direction === 'number') {
       offset = Math.max(0, offset + direction);
     }
     applyCarouselPosition();
+ codex/find-reason-for-0%-songs-statistic-usqut1
+
  codex/find-reason-for-0%-songs-statistic-ho6y47
 
  codex/find-reason-for-0%-songs-statistic-kq346f
@@ -288,6 +317,7 @@
     }
     var step = Math.max(220, Math.floor(list.clientWidth * 0.55));
     list.scrollTo({ left: offset * step, behavior: 'smooth' });
+ feature/wall-street-v2
  feature/wall-street-v2
  feature/wall-street-v2
  feature/wall-street-v2
