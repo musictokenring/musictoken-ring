@@ -634,6 +634,9 @@
     <script src="./auth-system.js"></script>
     <script src="./game-engine.js"></script>
     <script>window.MTR_INLINE_TOP_STREAMS_ACTIVE = true;</script>
+ codex/fix-text-loop-in-track-cards-c4727p
+    <script src="./src/app.js?v=20260217c"></script>
+
  codex/fix-text-loop-in-track-cards-feizke
     <script src="./src/app.js?v=20260217b"></script>
 
@@ -641,6 +644,7 @@
     <script src="./src/app.js?v=20260217a"></script>
 
     <script src="./src/app.js?v=20260216l"></script>
+ feature/wall-street-v2
  feature/wall-street-v2
  feature/wall-street-v2
 
@@ -696,6 +700,53 @@
                 return text;
             }
 
+ codex/fix-text-loop-in-track-cards-c4727p
+            function purgeInjectedArtifacts() {
+                var list = getDashboardList();
+                if (!list) return;
+                var targets = list.querySelectorAll('.stream-card-info strong, .stream-card-info span');
+                for (var i = 0; i < targets.length; i++) {
+                    var node = targets[i];
+                    var cleaned = clean(node.textContent || '');
+                    if (!cleaned && node.matches('span.stream-delta')) cleaned = '• N/D';
+                    if (!cleaned && node.matches('span:not(.stream-delta)')) cleaned = 'Artista';
+                    if (!cleaned && node.matches('strong')) cleaned = 'Sin título';
+                    node.textContent = cleaned;
+                }
+            }
+
+            function protectDashboardFromInjectedText() {
+                var list = getDashboardList();
+                if (!list || list.dataset.protected === '1') return;
+                list.dataset.protected = '1';
+                var observer = new MutationObserver(function () {
+                    purgeInjectedArtifacts();
+                });
+                observer.observe(list, { childList: true, subtree: true, characterData: true });
+            }
+
+            function sanitizeDashboardCards() {
+                var list = getDashboardList();
+                if (!list) return;
+                var cards = list.querySelectorAll('.stream-card');
+                for (var i = 0; i < cards.length; i++) {
+                    var info = cards[i].querySelector('.stream-card-info');
+                    if (!info) continue;
+                    var strong = info.querySelector('strong');
+                    var spans = info.querySelectorAll('span');
+                    if (!strong || spans.length < 2) continue;
+
+                    var artist = spans[0];
+                    var stat = spans[1];
+
+                    strong.textContent = clean(strong.textContent || 'Sin título') || 'Sin título';
+                    artist.textContent = clean(artist.textContent || 'Artista') || 'Artista';
+                    stat.textContent = clean(stat.textContent || '• N/D') || '• N/D';
+
+                    while (info.childNodes.length > 3) {
+                        info.removeChild(info.lastChild);
+                    }
+
  codex/fix-text-loop-in-track-cards-feizke
             function sanitizeDashboardCards() {
                 var list = getDashboardList();
@@ -746,6 +797,7 @@
                         this.onerror = null;
                         this.src = fallbackCover;
                     };
+ feature/wall-street-v2
                 }
                 sanitizeDashboardCards();
 
@@ -775,6 +827,10 @@
                         this.src = fallbackCover;
                     };
                 }
+ codex/fix-text-loop-in-track-cards-c4727p
+                sanitizeDashboardCards();
+
+ feature/wall-street-v2
  feature/wall-street-v2
                 window.moveDashboardCarousel(0);
             }
@@ -799,10 +855,17 @@
 
             document.addEventListener('DOMContentLoaded', function () {
                 render('latam');
+ codex/fix-text-loop-in-track-cards-c4727p
+                sanitizeDashboardCards();
+                protectDashboardFromInjectedText();
+                purgeInjectedArtifacts();
+                setInterval(function () { sanitizeDashboardCards(); purgeInjectedArtifacts(); }, 1200);
+
  codex/fix-text-loop-in-track-cards-feizke
                 sanitizeDashboardCards();
                 setInterval(sanitizeDashboardCards, 2000);
 
+ feature/wall-street-v2
  feature/wall-street-v2
             });
         })();
