@@ -6,6 +6,10 @@
   "scripts": {
     "build": "echo \"Static site: no build required\"",
     "preview": "npx serve .",
+ codex/fix-unexpected-token-for-error-5njbl3
     "check": "node --check app.js && node --check top-streams-fallback.js && node --check app-20260217f.js && node --check top-streams-fallback-20260217f.js && node --check src/app.js && node --check src/top-streams-fallback.js && node -e \"const fs=require(\\\"fs\\\");const files=[\\\"index.html\\\",\\\"app.js\\\",\\\"top-streams-fallback.js\\\",\\\"app-20260217f.js\\\",\\\"top-streams-fallback-20260217f.js\\\",\\\"src/app.js\\\",\\\"src/top-streams-fallback.js\\\",\\\"styles/main.css\\\"];const bad=[/codex\\\\/find-reason/gi,/feature\\\\/wall-street-v2/gi,/^(<<<<<<<|=======|>>>>>>>)/gm];let fail=false;for(const f of files){const t=fs.readFileSync(f,\\\"utf8\\\");for(const re of bad){if(re.test(t)){console.error(\\\"BLOCKED_PATTERN\\\",f,re);fail=true;}}}if(fail)process.exit(1);console.log(\\\"guard-ok\\\");\""
+
+    "check": "node --check app.js && node --check top-streams-fallback.js && node --check src/app.js && node --check src/top-streams-fallback.js && node -e \"const fs=require('fs');const files=['index.html','app.js','top-streams-fallback.js','src/app.js','src/top-streams-fallback.js','styles/main.css'];const bad=[/codex\\/find-reason/gi,/feature\\/wall-street-v2/gi,/^(<<<<<<<|=======|>>>>>>>)/gm];let fail=false;for(const f of files){const t=fs.readFileSync(f,'utf8');for(const re of bad){if(re.test(t)){console.error('BLOCKED_PATTERN',f,re);fail=true;}}}if(fail)process.exit(1);console.log('guard-ok');\""
+ feature/wall-street-v2
   }
 }

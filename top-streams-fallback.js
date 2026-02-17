@@ -7,6 +7,7 @@
     return document.getElementById('streamDashboardTrackList');
   }
 
+ codex/fix-unexpected-token-for-error-5njbl3
   function cleanDashboardText(value, fallback) {
     var text = String(value || '');
     text = text
@@ -63,6 +64,8 @@
     observer.observe(list, { childList: true, subtree: true, characterData: true });
   }
 
+
+ feature/wall-street-v2
   function fallbackTracks(r) {
     var byRegion = {
       latam: [
@@ -98,6 +101,7 @@
     for (var i = 0; i < items.length; i++) {
       var t = items[i] || {};
       html += '<article class="stream-card">' +
+ codex/fix-unexpected-token-for-error-5njbl3
         '<img src="' + (t.cover || '') + '" alt="' + cleanDashboardText(t.title, 'Track') + '">' +
         '<div class="stream-card-info">' +
         '<strong>' + cleanDashboardText(t.title, 'Sin título') + '</strong>' +
@@ -107,6 +111,16 @@
     }
     list.innerHTML = html;
     sanitizeDashboardCards();
+
+        '<img src="' + (t.cover || '') + '" alt="' + (t.title || 'Track') + '">' +
+        '<div class="stream-card-info">' +
+        '<strong>' + (t.title || 'Sin título') + '</strong>' +
+        '<span>' + (t.artist || 'Artista') + '</span>' +
+        '<span class="stream-delta neutral">' + (t.stat || '• N/D') + '</span>' +
+        '</div></article>';
+    }
+    list.innerHTML = html;
+ feature/wall-street-v2
     applyCarouselPosition();
   }
 
@@ -152,10 +166,17 @@
           stat = '• ' + ((rank / totalRank) * 100).toFixed(1) + '% del top';
         }
         items.push({
+ codex/fix-unexpected-token-for-error-5njbl3
           title: cleanDashboardText(row.title, 'Sin título'),
           artist: cleanDashboardText(row.artist && row.artist.name, 'Artista'),
           cover: row.album && row.album.cover_medium ? row.album.cover_medium : '',
           stat: cleanDashboardText(stat, '• N/D')
+
+          title: row.title || 'Sin título',
+          artist: row.artist && row.artist.name ? row.artist.name : 'Artista',
+          cover: row.album && row.album.cover_medium ? row.album.cover_medium : '',
+          stat: stat
+ feature/wall-street-v2
         });
       }
       if (!items.length) items = fallbackTracks(r);
@@ -188,9 +209,12 @@
   };
 
   function boot() {
+ codex/fix-unexpected-token-for-error-5njbl3
     protectDashboardFromInjectedText();
     sanitizeDashboardCards();
     setInterval(sanitizeDashboardCards, 2000);
+
+ feature/wall-street-v2
     render(fallbackTracks(region));
     loadFromDeezer(region);
   }
