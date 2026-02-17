@@ -8,7 +8,8 @@ function openAuthModal() {
     document.getElementById('authModal')?.classList.remove('hidden');
 }
 
-let isLoadingPlayerProfile = false;
+const playerProfileLoadStateByUser = new Map();
+let activeProfileUserId = null;
 
 function closeAuthModal() {
     document.getElementById('authModal')?.classList.add('hidden');
@@ -226,8 +227,20 @@ function updateAuthUI(session) {
 }
 
 async function loadPlayerProfile(user) {
-    if (isLoadingPlayerProfile) return;
-    isLoadingPlayerProfile = true;
+    if (!user?.id) return;
+
+    activeProfileUserId = user.id;
+
+    const existingState = playerProfileLoadStateByUser.get(user.id);
+    if (existingState?.inFlight) {
+        existingState.needsReload = true;
+        return existingState.promise;
+    }
+
+    const state = { inFlight: true, needsReload: false, promise: null };
+    playerProfileLoadStateByUser.set(user.id, state);
+
+    const isStaleResult = () => activeProfileUserId !== user.id;
 
     const profileName = document.getElementById('profileDisplayName');
     const profileEmail = document.getElementById('profileEmail');
@@ -242,6 +255,7 @@ async function loadPlayerProfile(user) {
         profileSince.textContent = new Date(user.created_at).toLocaleDateString('es-ES');
     }
 
+    const runLoad = async () => {
     try {
         const { data: balanceData } = await supabaseClient
             .from('user_balances')
@@ -289,6 +303,10 @@ async function loadPlayerProfile(user) {
             return acc + (isP1 ? (m.player1_bet || 0) : (m.player2_bet || 0));
         }, 0);
 
+        if (isStaleResult()) {
+            return;
+        }
+
         setProfileValue('profileBalance', `${Math.round(balanceData?.balance || 0)} $MTOKEN`);
         setProfileValue('profileMatches', `${totalMatches}`);
         setProfileValue('profileWins', `${wins}`);
@@ -320,10 +338,23 @@ async function loadPlayerProfile(user) {
             return;
         }
         console.error('Error loading player profile:', error);
-        setProfileValue('profileBalance', 'No disponible');
+        if (!isStaleResult()) {
+            setProfileValue('profileBalance', 'No disponible');
+        }
     } finally {
-        isLoadingPlayerProfile = false;
+        state.inFlight = false;
+        if (state.needsReload && !isStaleResult()) {
+            state.needsReload = false;
+            state.inFlight = true;
+            state.promise = runLoad();
+            return;
+        }
+        playerProfileLoadStateByUser.delete(user.id);
     }
+    };
+
+    state.promise = runLoad();
+    return state.promise;
 }
 
 function setProfileValue(id, value) {
