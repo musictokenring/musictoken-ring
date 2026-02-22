@@ -6,7 +6,7 @@
     <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
     <meta http-equiv="Pragma" content="no-cache">
     <meta http-equiv="Expires" content="0">
-    <meta name="mtr-build" content="20260222b">
+    <meta name="mtr-build" content="20260222f">
     <title>MusicToken Ring - Music Battle Arena</title>
    
     <!-- Fonts -->
@@ -63,8 +63,11 @@
             solana: 'AavRs1c4CmBDcJ2KzTh5C8btwbLv7CnCRbA6EpEJqaNr',
             bitcoin: 'bc1qtjwwj5lwsn4r5pjg8l30r4s5p843g4p344tr6a'
         };
-        window.MTR_BUILD_ID = '20260222b';
+        window.MTR_BUILD_ID = '20260222f';
         console.log('🎵 MusicToken Ring loaded! build=' + window.MTR_BUILD_ID);
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.getRegistrations().then((regs) => regs.forEach((r) => r.unregister()));
+        }
     </script>
 </head>
 <body>
@@ -636,11 +639,12 @@
     </footer>
 
     <!-- Scripts -->
-    <script src="./auth-system.js"></script>
-    <script src="./game-engine.js"></script>
+    <script src="./auth-system.js?v=20260222f"></script>
+    <script src="./game-engine.js?v=20260222f"></script>
     <script>window.MTR_INLINE_TOP_STREAMS_ACTIVE = true;</script>
-    <script src="./app.js?v=20260222b"></script>
-    <script src="./top-streams-fallback.js?v=20260222b"></script>
+    <script src="./app.js?v=20260222f"></script>
+    <script src="./top-streams-fallback.js?v=20260222f"></script>
+    <script src="./emergency-controls.js?v=20260222f"></script>
 
 
 
