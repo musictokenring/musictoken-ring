@@ -180,6 +180,28 @@ Reemplaza el emoji 🥊 en header con tu logo:
 ```
 
 
+## 🚑 Cuando GitHub pide "Resolve conflicts" (sin editar marcas manualmente)
+
+Si una fusión queda atorada y aparecen conflictos en `index.html` o scripts runtime, **no edites markers a mano**.
+
+Usa:
+
+```bash
+bash scripts/resolve-current-conflicts.sh ours
+```
+
+Qué hace:
+- resuelve hotspots runtime con estrategia `ours` (o `theirs`),
+- resuelve el resto de archivos en conflicto con la misma estrategia,
+- ejecuta `npm run check`,
+- crea el merge commit automáticamente (`git commit --no-edit`).
+
+Si quieres priorizar cambios de la otra rama:
+
+```bash
+bash scripts/resolve-current-conflicts.sh theirs
+```
+
 ## 🛠️ Resolver de conflictos de PR (force)
 
 Si necesitas forzar la resolución de conflictos contra `main` en tu rama actual:
