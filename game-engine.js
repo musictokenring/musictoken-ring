@@ -1747,3 +1747,27 @@ document.addEventListener('DOMContentLoaded', () => {
         console.log('🎮 GameEngine loaded!');
     }
 });
+
+// Fallback UI handlers: keep mode buttons functional even if inline script fails to parse.
+if (typeof window !== 'undefined' && typeof window.selectMode !== 'function') {
+    window.selectMode = function selectModeFallback(mode) {
+        const modeSelector = document.getElementById('modeSelector');
+        const songSelection = document.getElementById('songSelection');
+        const modeTitle = document.getElementById('modeTitle');
+        const titles = {
+            quick: 'Modo Rápido',
+            private: 'Sala Privada',
+            practice: 'Modo Práctica',
+            tournament: 'Modo Torneo'
+        };
+
+        window.currentMode = mode;
+        if (modeSelector) modeSelector.classList.add('hidden');
+        if (songSelection) songSelection.classList.remove('hidden');
+        if (modeTitle) modeTitle.textContent = titles[mode] || 'Modo de Juego';
+
+        if (window.GameEngine && typeof window.GameEngine.updatePracticeBetDisplay === 'function') {
+            window.GameEngine.updatePracticeBetDisplay();
+        }
+    };
+}
