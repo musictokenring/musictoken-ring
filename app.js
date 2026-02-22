@@ -540,6 +540,35 @@ window.searchDeezer = searchDeezer;
 window.displaySearchResults = displaySearchResults;
 window.handleTrackSelect = handleTrackSelect;
 
+// Fallbacks: keep mode buttons functional even if inline scripts fail to parse/load.
+if (typeof window.selectMode !== 'function') {
+    window.selectMode = function selectModeFallback(mode) {
+        const modeSelector = document.getElementById('modeSelector');
+        const songSelection = document.getElementById('songSelection');
+        const modeTitle = document.getElementById('modeTitle');
+        const titles = {
+            quick: '⚔️ Modo Rápido',
+            private: '🎪 Sala Privada',
+            tournament: '🏆 Torneo',
+            practice: '🎯 Práctica'
+        };
+
+        if (modeSelector) modeSelector.classList.add('hidden');
+        if (songSelection) songSelection.classList.remove('hidden');
+        if (modeTitle) modeTitle.textContent = titles[mode] || '🎮 Seleccionar Modo';
+        window.currentMode = mode || null;
+    };
+}
+
+if (typeof window.backToModes !== 'function') {
+    window.backToModes = function backToModesFallback() {
+        const modeSelector = document.getElementById('modeSelector');
+        const songSelection = document.getElementById('songSelection');
+        if (songSelection) songSelection.classList.add('hidden');
+        if (modeSelector) modeSelector.classList.remove('hidden');
+    };
+}
+
 if (!window.MTR_INLINE_TOP_STREAMS_ACTIVE) {
     window.setDashboardRegion = setDashboardRegion;
     window.moveDashboardCarousel = moveDashboardCarousel;
