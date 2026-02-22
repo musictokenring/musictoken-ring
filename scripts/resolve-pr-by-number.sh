@@ -84,7 +84,13 @@ EOF2
     return 2
   fi
 
-  pr_json="$(curl -fsSL "https://api.github.com/repos/${owner}/${repo}/pulls/${PR_NUMBER}")"
+  PR_API_URL="https://api.github.com/repos/${owner}/${repo}/pulls/${PR_NUMBER}"
+  AUTH_TOKEN="${GITHUB_TOKEN:-${GH_TOKEN:-}}"
+  if [[ -n "$AUTH_TOKEN" ]]; then
+    pr_json="$(curl -fsSL -H "Authorization: Bearer ${AUTH_TOKEN}" -H "Accept: application/vnd.github+json" "$PR_API_URL")"
+  else
+    pr_json="$(curl -fsSL "$PR_API_URL")"
+  fi
 
   read -r HEAD_REF BASE_REF <<EOF2
 $(python3 - <<'PY' "$pr_json"

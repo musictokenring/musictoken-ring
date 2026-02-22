@@ -1,0 +1,44 @@
+name: Auto Resolve PR Conflicts
+
+on:
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: 'PR number to resolve'
+        required: true
+        type: string
+      strategy:
+        description: 'Conflict strategy'
+        required: true
+        default: ours
+        type: choice
+        options:
+          - ours
+          - theirs
+
+permissions:
+  contents: write
+  pull-requests: read
+
+jobs:
+  resolve:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Auto-resolve conflicts for PR
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          bash scripts/resolve-pr-by-number.sh \
+            --pr "${{ github.event.inputs.pr_number }}" \
+            --strategy "${{ github.event.inputs.strategy }}" \
+            --remote origin

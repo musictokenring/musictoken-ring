@@ -184,6 +184,22 @@ Reemplaza el emoji 🥊 en header con tu logo:
 
 ## ✅ Solución real (sin web editor y sin tocar markers)
 
+### Opción A: desde GitHub (sin terminal local)
+
+Si no sabes dónde correr comandos, hazlo directo en GitHub Actions:
+
+1. Ve a **Actions** en tu repo.
+2. Abre el workflow **Auto Resolve PR Conflicts**.
+3. Click en **Run workflow**.
+4. Ingresa:
+   - `pr_number`: número del PR (ej. `87`)
+   - `strategy`: `ours`
+5. Ejecuta. El workflow intentará resolver y empujar el commit a la rama del PR.
+
+Después vuelve al PR: si todo salió bien, desaparece el estado de "Resolve conflicts" sin editar código manualmente.
+
+### Opción B: por terminal (si la tienes)
+
 Cuando GitHub muestre conflictos en un PR, resuélvelos por CLI en la rama del PR y empuja el resultado:
 
 ```bash
