@@ -215,6 +215,23 @@ bash scripts/resolve-pr-by-number.sh --pr 20 --strategy ours --remote origin
 bash scripts/resolve-pr-by-number.sh --pr 21 --strategy ours --remote origin
 ```
 
+
+## ✅ Control de integridad antes de fusionar
+
+Para evitar que entren marcas de conflictos o artefactos de ramas al runtime:
+
+```bash
+npm run check
+```
+
+Este check ahora valida:
+- sintaxis de `app.js` y `top-streams-fallback.js` (raíz y `src/`),
+- marcadores de conflicto (`<<<<<<<`, `=======`, `>>>>>>>`) en **todos** los archivos versionados,
+- includes únicos de runtime en `index.html`,
+- consistencia de versión entre `mtr-build`, `window.MTR_BUILD_ID` y `?v=` de scripts.
+
+Además, GitHub Actions ejecuta automáticamente esta validación en cada PR/push para bloquear fusiones contaminadas.
+
 ## 🧪 Testing
 
 ### Test Búsqueda
