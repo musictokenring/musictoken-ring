@@ -64,6 +64,37 @@
             bitcoin: 'bc1qtjwwj5lwsn4r5pjg8l30r4s5p843g4p344tr6a'
         };
         window.MTR_BUILD_ID = '20260222c';
+
+        // Critical UI fallbacks: keep mode buttons functional even if a later script fails to parse/load.
+        if (typeof window.selectMode !== 'function') {
+            window.selectMode = function selectModeCriticalFallback(mode) {
+                var modeSelector = document.getElementById('modeSelector');
+                var songSelection = document.getElementById('songSelection');
+                var modeTitle = document.getElementById('modeTitle');
+                var titles = {
+                    quick: 'Modo Rápido',
+                    private: 'Sala Privada',
+                    practice: 'Modo Práctica',
+                    tournament: 'Modo Torneo'
+                };
+
+                window.currentMode = mode || null;
+                if (modeSelector) modeSelector.classList.add('hidden');
+                if (songSelection) songSelection.classList.remove('hidden');
+                if (modeTitle) modeTitle.textContent = titles[mode] || 'Modo de Juego';
+            };
+        }
+
+        if (typeof window.backToModes !== 'function') {
+            window.backToModes = function backToModesCriticalFallback() {
+                var modeSelector = document.getElementById('modeSelector');
+                var songSelection = document.getElementById('songSelection');
+                if (songSelection) songSelection.classList.add('hidden');
+                if (modeSelector) modeSelector.classList.remove('hidden');
+                window.currentMode = null;
+            };
+        }
+
         console.log('🎵 MusicToken Ring loaded! build=' + window.MTR_BUILD_ID);
     </script>
 </head>
