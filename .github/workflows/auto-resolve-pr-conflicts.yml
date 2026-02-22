@@ -15,6 +15,14 @@ on:
         options:
           - ours
           - theirs
+      head_ref:
+        description: 'Optional: PR head branch (override API lookup)'
+        required: false
+        type: string
+      base_ref:
+        description: 'Optional: PR base branch (override API lookup)'
+        required: false
+        type: string
 
 permissions:
   contents: write
@@ -24,24 +32,48 @@ jobs:
   resolve:
     runs-on: ubuntu-latest
     steps:
-      - name: Resolve PR refs from GitHub API
+      - name: Resolve PR refs from GitHub API (or manual override)
         id: prrefs
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          INPUT_HEAD: ${{ github.event.inputs.head_ref }}
+          INPUT_BASE: ${{ github.event.inputs.base_ref }}
         run: |
-          PR_API_URL="https://api.github.com/repos/${{ github.repository }}/pulls/${{ github.event.inputs.pr_number }}"
-          pr_json="$(curl -fsSL -H "Authorization: Bearer ${GITHUB_TOKEN}" -H "Accept: application/vnd.github+json" "$PR_API_URL")"
+          set -euo pipefail
 
-          head_ref="$(python3 - <<'PY' "$pr_json"
+          if [[ -n "${INPUT_HEAD}" && -n "${INPUT_BASE}" ]]; then
+            echo "head_ref=${INPUT_HEAD}" >> "$GITHUB_OUTPUT"
+            echo "base_ref=${INPUT_BASE}" >> "$GITHUB_OUTPUT"
+            echo "[info] Using manual refs head=${INPUT_HEAD} base=${INPUT_BASE}"
+            exit 0
+          fi
+
+          PR_API_URL="https://api.github.com/repos/${{ github.repository }}/pulls/${{ github.event.inputs.pr_number }}"
+          tmp_json="$(mktemp)"
+          http_code="$(curl -sS -o "$tmp_json" -w "%{http_code}" -H "Authorization: Bearer ${GITHUB_TOKEN}" -H "Accept: application/vnd.github+json" "$PR_API_URL")"
+
+          if [[ "$http_code" != "200" ]]; then
+            echo "[error] GitHub API lookup failed for PR #${{ github.event.inputs.pr_number }} (HTTP ${http_code})." >&2
+            echo "[error] Response body:" >&2
+            cat "$tmp_json" >&2
+            echo "[hint] Re-run workflow providing head_ref and base_ref manually from PR header." >&2
+            exit 22
+          fi
+
+          head_ref="$(python3 - <<'PY' "$tmp_json"
 import json, sys
-j=json.loads(sys.argv[1])
+p=sys.argv[1]
+with open(p, 'r', encoding='utf-8') as f:
+    j=json.load(f)
 print(j.get('head',{}).get('ref',''))
 PY
 )"
 
-          base_ref="$(python3 - <<'PY' "$pr_json"
+          base_ref="$(python3 - <<'PY' "$tmp_json"
 import json, sys
-j=json.loads(sys.argv[1])
+p=sys.argv[1]
+with open(p, 'r', encoding='utf-8') as f:
+    j=json.load(f)
 print(j.get('base',{}).get('ref',''))
 PY
 )"
