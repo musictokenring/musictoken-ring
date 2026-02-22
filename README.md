@@ -185,9 +185,9 @@ Reemplaza el emoji 🥊 en header con tu logo:
 ### Dónde estás parado ahora (para no confundirte)
 
 En la pantalla de run de Actions:
-- estado rojo + `Process completed with exit code 22` = falló el paso de lookup API del PR,
-- **no** significa que el frontend esté roto,
-- significa que hay que re-ejecutar el workflow con datos manuales de rama (`head_ref`, `base_ref`) o revisar permisos.
+- estado rojo = falló la automatización de merge (no el frontend),
+- lo más común era dependencia de lookup API del PR,
+- para eliminar ese punto frágil, ahora el workflow pide `head_ref` y `base_ref` manuales.
 
 ## ✅ Solución real (sin web editor y sin tocar markers)
 
@@ -200,6 +200,8 @@ Si no sabes dónde correr comandos, hazlo directo en GitHub Actions:
 3. Click en **Run workflow**.
 4. Ingresa:
    - `pr_number`: número del PR (ej. `87`)
+   - `head_ref`: rama **from** del PR (ej. `codex/fix-code-issues-and-reverse-broken-merges-v0e0um`)
+   - `base_ref`: rama **into** del PR (ej. `feature/wall-street-v2`)
    - `strategy`: `ours`
 5. Ejecuta. El workflow intentará resolver y empujar el commit a la rama del PR.
 
@@ -207,8 +209,7 @@ Si el run sale en rojo:
 - abre el run y revisa el paso que falló,
 - si dice `Author identity unknown`, vuelve a ejecutar con la versión nueva del workflow (ya configura `user.name` y `user.email` del bot),
 - si dice `Permission denied to push`, revisa en **Settings → Actions → General → Workflow permissions** que esté en **Read and write permissions**,
-- si ves `Process completed with exit code 22`, el lookup de API para el PR falló (permisos/API). Re-ejecuta el workflow llenando también `head_ref` y `base_ref` manualmente (copiados del encabezado del PR: `base <- head`),
-- si falla muy rápido con script no encontrado, usa la versión nueva del workflow que primero resuelve `head/base` del PR y hace checkout de la rama del PR antes de ejecutar el resolver.
+- si dice `scripts/resolve-pr-by-number.sh not found`, significa que esa rama `head_ref` no tiene los scripts nuevos; usa la rama correcta o actualiza esa rama.
 
 Después vuelve al PR: si todo salió bien, desaparece el estado de "Resolve conflicts" sin editar código manualmente.
 

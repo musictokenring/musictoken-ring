@@ -4,7 +4,15 @@ on:
   workflow_dispatch:
     inputs:
       pr_number:
-        description: 'PR number to resolve'
+        description: 'PR number to resolve (for logging/commit message)'
+        required: true
+        type: string
+      head_ref:
+        description: 'PR head branch (from "from ..." in PR header)'
+        required: true
+        type: string
+      base_ref:
+        description: 'PR base branch (from "into ..." in PR header)'
         required: true
         type: string
       strategy:
@@ -15,14 +23,6 @@ on:
         options:
           - ours
           - theirs
-      head_ref:
-        description: 'Optional: PR head branch (override API lookup)'
-        required: false
-        type: string
-      base_ref:
-        description: 'Optional: PR base branch (override API lookup)'
-        required: false
-        type: string
 
 permissions:
   contents: write
@@ -32,65 +32,10 @@ jobs:
   resolve:
     runs-on: ubuntu-latest
     steps:
-      - name: Resolve PR refs from GitHub API (or manual override)
-        id: prrefs
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          INPUT_HEAD: ${{ github.event.inputs.head_ref }}
-          INPUT_BASE: ${{ github.event.inputs.base_ref }}
-        run: |
-          set -euo pipefail
-
-          if [[ -n "${INPUT_HEAD}" && -n "${INPUT_BASE}" ]]; then
-            echo "head_ref=${INPUT_HEAD}" >> "$GITHUB_OUTPUT"
-            echo "base_ref=${INPUT_BASE}" >> "$GITHUB_OUTPUT"
-            echo "[info] Using manual refs head=${INPUT_HEAD} base=${INPUT_BASE}"
-            exit 0
-          fi
-
-          PR_API_URL="https://api.github.com/repos/${{ github.repository }}/pulls/${{ github.event.inputs.pr_number }}"
-          tmp_json="$(mktemp)"
-          http_code="$(curl -sS -o "$tmp_json" -w "%{http_code}" -H "Authorization: Bearer ${GITHUB_TOKEN}" -H "Accept: application/vnd.github+json" "$PR_API_URL")"
-
-          if [[ "$http_code" != "200" ]]; then
-            echo "[error] GitHub API lookup failed for PR #${{ github.event.inputs.pr_number }} (HTTP ${http_code})." >&2
-            echo "[error] Response body:" >&2
-            cat "$tmp_json" >&2
-            echo "[hint] Re-run workflow providing head_ref and base_ref manually from PR header." >&2
-            exit 22
-          fi
-
-          head_ref="$(python3 - <<'PY' "$tmp_json"
-import json, sys
-p=sys.argv[1]
-with open(p, 'r', encoding='utf-8') as f:
-    j=json.load(f)
-print(j.get('head',{}).get('ref',''))
-PY
-)"
-
-          base_ref="$(python3 - <<'PY' "$tmp_json"
-import json, sys
-p=sys.argv[1]
-with open(p, 'r', encoding='utf-8') as f:
-    j=json.load(f)
-print(j.get('base',{}).get('ref',''))
-PY
-)"
-
-          if [[ -z "$head_ref" || -z "$base_ref" ]]; then
-            echo "[error] Could not determine head/base for PR #${{ github.event.inputs.pr_number }}" >&2
-            exit 1
-          fi
-
-          echo "head_ref=$head_ref" >> "$GITHUB_OUTPUT"
-          echo "base_ref=$base_ref" >> "$GITHUB_OUTPUT"
-          echo "[info] PR refs head=$head_ref base=$base_ref"
-
       - name: Checkout PR head branch
         uses: actions/checkout@v4
         with:
-          ref: ${{ steps.prrefs.outputs.head_ref }}
+          ref: ${{ github.event.inputs.head_ref }}
           fetch-depth: 0
 
       - name: Setup Node
@@ -111,9 +56,4 @@ PY
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          bash scripts/resolve-pr-by-number.sh \
-            --pr "${{ github.event.inputs.pr_number }}" \
-            --head "${{ steps.prrefs.outputs.head_ref }}" \
-            --base "${{ steps.prrefs.outputs.base_ref }}" \
-            --strategy "${{ github.event.inputs.strategy }}" \
-            --remote origin
+          bash scripts/resolve-pr-by-number.sh             --pr "${{ github.event.inputs.pr_number }}"             --head "${{ github.event.inputs.head_ref }}"             --base "${{ github.event.inputs.base_ref }}"             --strategy "${{ github.event.inputs.strategy }}"             --remote origin
