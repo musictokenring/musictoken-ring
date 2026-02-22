@@ -1,3 +1,10 @@
+(function (global) {
+    if (global.__MTR_APP_JS_LOADED__) {
+        console.warn('app.js already loaded; skipping duplicate initialization.');
+        return;
+    }
+    global.__MTR_APP_JS_LOADED__ = true;
+
 // =========================================
 // APP.JS - MusicToken Ring
 // Funciones auxiliares de búsqueda y audio
@@ -537,3 +544,5 @@ if (!window.MTR_INLINE_TOP_STREAMS_ACTIVE) {
     window.setDashboardRegion = setDashboardRegion;
     window.moveDashboardCarousel = moveDashboardCarousel;
 }
+
+})(typeof window !== 'undefined' ? window : (typeof globalThis !== 'undefined' ? globalThis : this));
