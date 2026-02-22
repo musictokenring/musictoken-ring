@@ -569,6 +569,76 @@ if (typeof window.backToModes !== 'function') {
     };
 }
 
+function fallbackToast(message, type = 'info') {
+    if (typeof window.showToast === 'function') {
+        window.showToast(message, type);
+        return;
+    }
+    console[type === 'error' ? 'error' : 'log'](message);
+}
+
+function fallbackBetAmount() {
+    return Number(document.getElementById('betAmount')?.value || 100);
+}
+
+if (typeof window.searchSong !== 'function') {
+    window.searchSong = function searchSongFallback() {
+        const query = document.getElementById('songSearch')?.value || '';
+        if (!query.trim()) return fallbackToast('Escribe una canción o artista', 'error');
+        if (typeof window.searchDeezer === 'function') return window.searchDeezer(query, 'searchResults');
+        fallbackToast('Buscador no disponible aún. Recarga la página.', 'error');
+    };
+}
+
+if (typeof window.startPractice !== 'function') {
+    window.startPractice = async function startPracticeFallback() {
+        if (window.GameEngine && typeof window.GameEngine.startPractice === 'function') {
+            return window.GameEngine.startPractice(window.selectedSong || null);
+        }
+        fallbackToast('Modo práctica no disponible todavía. Recarga la página.', 'error');
+    };
+}
+
+if (typeof window.startQuickMatch !== 'function') {
+    window.startQuickMatch = async function startQuickMatchFallback() {
+        if (window.GameEngine && typeof window.GameEngine.startQuickMatchmaking === 'function') {
+            return window.GameEngine.startQuickMatchmaking(window.selectedSong || null, fallbackBetAmount());
+        }
+        fallbackToast('Matchmaking no disponible todavía. Recarga la página.', 'error');
+    };
+}
+
+if (typeof window.createRoom !== 'function') {
+    window.createRoom = async function createRoomFallback() {
+        if (window.GameEngine && typeof window.GameEngine.createPrivateRoom === 'function') {
+            return window.GameEngine.createPrivateRoom(window.selectedSong || null, fallbackBetAmount());
+        }
+        fallbackToast('Crear sala no disponible todavía. Recarga la página.', 'error');
+    };
+}
+
+if (typeof window.joinRoom !== 'function') {
+    window.joinRoom = async function joinRoomFallback() {
+        const code = (document.getElementById('joinRoomCode')?.value || '').trim().toUpperCase();
+        if (!code) return fallbackToast('Ingresa un código de sala', 'error');
+        if (window.GameEngine && typeof window.GameEngine.joinPrivateRoom === 'function') {
+            return window.GameEngine.joinPrivateRoom(code, window.selectedSong || null, fallbackBetAmount());
+        }
+        fallbackToast('Unirse a sala no disponible todavía. Recarga la página.', 'error');
+    };
+}
+
+if (typeof window.joinTournamentMode !== 'function') {
+    window.joinTournamentMode = async function joinTournamentModeFallback() {
+        const tournamentId = (document.getElementById('tournamentId')?.value || '').trim();
+        if (!tournamentId) return fallbackToast('Ingresa el ID del torneo', 'error');
+        if (window.GameEngine && typeof window.GameEngine.joinTournament === 'function') {
+            return window.GameEngine.joinTournament(tournamentId, window.selectedSong || null, fallbackBetAmount());
+        }
+        fallbackToast('Torneo no disponible todavía. Recarga la página.', 'error');
+    };
+}
+
 if (!window.MTR_INLINE_TOP_STREAMS_ACTIVE) {
     window.setDashboardRegion = setDashboardRegion;
     window.moveDashboardCarousel = moveDashboardCarousel;
