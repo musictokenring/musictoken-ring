@@ -182,6 +182,28 @@ Reemplaza el emoji 🥊 en header con tu logo:
 
 ## 🚑 Cuando GitHub pide "Resolve conflicts" (sin editar marcas manualmente)
 
+## ✅ Solución real (sin web editor y sin tocar markers)
+
+Cuando GitHub muestre conflictos en un PR, resuélvelos por CLI en la rama del PR y empuja el resultado:
+
+```bash
+git switch <rama-del-pr>
+git fetch origin
+bash scripts/merge-with-auto-resolve.sh origin/<rama-base-del-pr> ours
+git push origin HEAD
+```
+
+Para tu caso típico de pantalla (PR hacia `feature/wall-street-v2`), usa:
+
+```bash
+git switch codex/fix-code-issues-and-reverse-broken-merges-v0e0um
+git fetch origin
+bash scripts/merge-with-auto-resolve.sh origin/feature/wall-street-v2 ours
+git push origin HEAD
+```
+
+> Esto crea el commit de resolución en la rama del PR. Luego GitHub quita “Resolve conflicts” automáticamente.
+
 Si una fusión queda atorada y aparecen conflictos en `index.html` o scripts runtime, **no edites markers a mano**.
 
 Usa:
