@@ -198,6 +198,11 @@ Si no sabes dónde correr comandos, hazlo directo en GitHub Actions:
 
 Después vuelve al PR: si todo salió bien, desaparece el estado de "Resolve conflicts" sin editar código manualmente.
 
+**Importante (GitHub 2026):** si en **Actions** solo ves "Get started with GitHub Actions" y no aparece el workflow, normalmente significa que ese YAML todavía **no existe en la rama por defecto** del repo (o Actions está deshabilitado). En ese caso:
+- habilita Actions en Settings si aplica,
+- o primero incorpora `.github/workflows/auto-resolve-pr-conflicts.yml` en la rama por defecto,
+- o usa la Opción B por terminal mientras tanto.
+
 ### Opción B: por terminal (si la tienes)
 
 Cuando GitHub muestre conflictos en un PR, resuélvelos por CLI en la rama del PR y empuja el resultado:
