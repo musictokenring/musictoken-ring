@@ -634,13 +634,183 @@
     <script src="./auth-system.js"></script>
     <script src="./game-engine.js"></script>
     <script>window.MTR_INLINE_TOP_STREAMS_ACTIVE = true;</script>
+ codex/fix-code-issues-and-reverse-broken-merges-7wull6
     <script src="./app.js?v=20260222a"></script>
     <script src="./top-streams-fallback.js?v=20260222a"></script>
+
+    <script src="./app.js?v=20260217e"></script>
+    <script src="./top-streams-fallback.js?v=20260217e"></script>
+ feature/wall-street-v2
 
 
 
 
     <script>
+ codex/fix-code-issues-and-reverse-broken-merges-7wull6
+
+        // Dashboard inline fallback removed; using top-streams-fallback.js
+
+
+        (function () {
+            var dashboardRegion = 'latam';
+            var dashboardOffset = 0;
+
+            function getDashboardList() {
+                return document.getElementById('streamDashboardTrackList');
+            }
+
+            function tracksByRegion(region) {
+                var data = {
+                    latam: [
+                        { title: 'Luna', artist: 'Feid', cover: 'https://e-cdns-images.dzcdn.net/images/cover/9f4c9025e2f4f4be85a8d0f95f3bc5fe/250x250-000000-80-0-0.jpg', stat: '• 18.4% del top' },
+                        { title: 'Si Antes Te Hubiera Conocido', artist: 'KAROL G', cover: 'https://e-cdns-images.dzcdn.net/images/cover/4aa4b9f4674f7f9f7428962456f31cc7/250x250-000000-80-0-0.jpg', stat: '• 15.9% del top' },
+                        { title: 'Perro Negro', artist: 'Bad Bunny', cover: 'https://e-cdns-images.dzcdn.net/images/cover/236f9df9f6f95cc8c6f0707dbe6839df/250x250-000000-80-0-0.jpg', stat: '• 14.8% del top' },
+                        { title: 'La Falda', artist: 'Myke Towers', cover: 'https://e-cdns-images.dzcdn.net/images/cover/3aebce9e3ec736beee8da30258aab6fa/250x250-000000-80-0-0.jpg', stat: '• 12.9% del top' },
+                        { title: 'Gata Only', artist: 'FloyyMenor', cover: 'https://e-cdns-images.dzcdn.net/images/cover/83d2abea3f2826f384749fd84d836c8e/250x250-000000-80-0-0.jpg', stat: '• 11.3% del top' },
+                        { title: 'Puntería', artist: 'Shakira', cover: 'https://e-cdns-images.dzcdn.net/images/cover/3f1582203c1667b663219c2f47825550/250x250-000000-80-0-0.jpg', stat: '• 10.2% del top' },
+                        { title: 'QLO', artist: 'Young Miko', cover: 'https://e-cdns-images.dzcdn.net/images/cover/f15d8bc1ecf71ac95f640117f4d5e585/250x250-000000-80-0-0.jpg', stat: '• 8.7% del top' },
+                        { title: 'Adivino', artist: 'Bad Bunny', cover: 'https://e-cdns-images.dzcdn.net/images/cover/e1d6d6c45f7ec902f9b2e8db0f9d377f/250x250-000000-80-0-0.jpg', stat: '• 7.8% del top' }
+                    ],
+                    us: [
+                        { title: 'Espresso', artist: 'Sabrina Carpenter', cover: 'https://e-cdns-images.dzcdn.net/images/cover/94bfaf6f3b278ba8e56ef8fca0ca65a4/250x250-000000-80-0-0.jpg', stat: '• 17.8% del top' },
+                        { title: 'Lose Control', artist: 'Teddy Swims', cover: 'https://e-cdns-images.dzcdn.net/images/cover/c025cd9e3f0980d7f33173f66c66fdfd/250x250-000000-80-0-0.jpg', stat: '• 15.9% del top' },
+                        { title: 'Beautiful Things', artist: 'Benson Boone', cover: 'https://e-cdns-images.dzcdn.net/images/cover/4ff4d2e2e89ae5fd3df5e6eabf78f8f6/250x250-000000-80-0-0.jpg', stat: '• 14.4% del top' },
+                        { title: 'Too Sweet', artist: 'Hozier', cover: 'https://e-cdns-images.dzcdn.net/images/cover/7100802cbf6de021bf33f6f502838177/250x250-000000-80-0-0.jpg', stat: '• 13.2% del top' },
+                        { title: 'Fortnight', artist: 'Taylor Swift', cover: 'https://e-cdns-images.dzcdn.net/images/cover/46dc36370b32276115be5f66f8f70855/250x250-000000-80-0-0.jpg', stat: '• 11.6% del top' },
+                        { title: 'I Had Some Help', artist: 'Post Malone', cover: 'https://e-cdns-images.dzcdn.net/images/cover/2b9d74ac9e3b4fe26c7c0e59101cf15f/250x250-000000-80-0-0.jpg', stat: '• 10.1% del top' },
+                        { title: 'Birds of a Feather', artist: 'Billie Eilish', cover: 'https://e-cdns-images.dzcdn.net/images/cover/221551f4f4d74f6d20f4f2af2cfcbf60/250x250-000000-80-0-0.jpg', stat: '• 9.0% del top' },
+                        { title: 'Please Please Please', artist: 'Sabrina Carpenter', cover: 'https://e-cdns-images.dzcdn.net/images/cover/0e3f4d3ac048f6a8b6b91f44389f6515/250x250-000000-80-0-0.jpg', stat: '• 8.0% del top' }
+                    ],
+                    eu: [
+                        { title: "Stumblin' In", artist: 'Cyril', cover: 'https://e-cdns-images.dzcdn.net/images/cover/3f4b8cf4be2f16ebf3d6f8cfad8aa7c1/250x250-000000-80-0-0.jpg', stat: '• 18.2% del top' },
+                        { title: 'Mwaki', artist: 'Zerb', cover: 'https://e-cdns-images.dzcdn.net/images/cover/cc8f20c021f39d8444ec4f7f6d1d6e57/250x250-000000-80-0-0.jpg', stat: '• 16.5% del top' },
+                        { title: 'Texas Hold Em', artist: 'Beyonce', cover: 'https://e-cdns-images.dzcdn.net/images/cover/c5dfcb2f5a13f5327dd58476fdd0f9ed/250x250-000000-80-0-0.jpg', stat: '• 14.6% del top' },
+                        { title: 'Pedro', artist: 'Jaxomy', cover: 'https://e-cdns-images.dzcdn.net/images/cover/7fe2fcc56bcf8b188ad1a2b8ad34ec08/250x250-000000-80-0-0.jpg', stat: '• 12.9% del top' },
+                        { title: 'We Pray', artist: 'Coldplay', cover: 'https://e-cdns-images.dzcdn.net/images/cover/88fbf030f40bb08f61aa11d77ec2a3f8/250x250-000000-80-0-0.jpg', stat: '• 11.0% del top' },
+                        { title: 'MILLION DOLLAR BABY', artist: 'Tommy Richman', cover: 'https://e-cdns-images.dzcdn.net/images/cover/53ef5b98c4f886d86fbf2deb4228bb0e/250x250-000000-80-0-0.jpg', stat: '• 9.8% del top' },
+                        { title: 'A Bar Song', artist: 'Shaboozey', cover: 'https://e-cdns-images.dzcdn.net/images/cover/18b0fef52ac2957e574c5f7a357f6ce2/250x250-000000-80-0-0.jpg', stat: '• 8.8% del top' },
+                        { title: 'Good Luck, Babe!', artist: 'Chappell Roan', cover: 'https://e-cdns-images.dzcdn.net/images/cover/d095db4ad8d9f6407781c38b3dd9df04/250x250-000000-80-0-0.jpg', stat: '• 8.2% del top' }
+                    ]
+                };
+                return data[region] || data.latam;
+            }
+
+            function clean(value) {
+                var text = String(value || '');
+                text = text.replace(/codex\/[^\s]+/gi, '').replace(/feature\/[^\s]+/gi, '').replace(/cargando\.{0,3}/gi, '').trim();
+                return text;
+            }
+
+            function purgeInjectedArtifacts() {
+                var list = getDashboardList();
+                if (!list) return;
+                var targets = list.querySelectorAll('.stream-card-info strong, .stream-card-info span');
+                for (var i = 0; i < targets.length; i++) {
+                    var node = targets[i];
+                    var cleaned = clean(node.textContent || '');
+                    if (!cleaned && node.matches('span.stream-delta')) cleaned = '• N/D';
+                    if (!cleaned && node.matches('span:not(.stream-delta)')) cleaned = 'Artista';
+                    if (!cleaned && node.matches('strong')) cleaned = 'Sin título';
+                    node.textContent = cleaned;
+                }
+            }
+
+            function protectDashboardFromInjectedText() {
+                var list = getDashboardList();
+                if (!list || list.dataset.protected === '1') return;
+                list.dataset.protected = '1';
+                var observer = new MutationObserver(function () {
+                    purgeInjectedArtifacts();
+                });
+                observer.observe(list, { childList: true, subtree: true, characterData: true });
+            }
+
+            function sanitizeDashboardCards() {
+                var list = getDashboardList();
+                if (!list) return;
+                var cards = list.querySelectorAll('.stream-card');
+                for (var i = 0; i < cards.length; i++) {
+                    var info = cards[i].querySelector('.stream-card-info');
+                    if (!info) continue;
+                    var strong = info.querySelector('strong');
+                    var spans = info.querySelectorAll('span');
+                    if (!strong || spans.length < 2) continue;
+
+                    var artist = spans[0];
+                    var stat = spans[1];
+
+                    strong.textContent = clean(strong.textContent || 'Sin título') || 'Sin título';
+                    artist.textContent = clean(artist.textContent || 'Artista') || 'Artista';
+                    stat.textContent = clean(stat.textContent || '• N/D') || '• N/D';
+
+                    while (info.childNodes.length > 3) {
+                        info.removeChild(info.lastChild);
+                    }
+
+                }
+            }
+
+            var fallbackCover = 'data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%2264%22 height=%2264%22 viewBox=%220 0 64 64%22%3E%3Crect width=%2264%22 height=%2264%22 rx=%2210%22 fill=%22%232f3542%22/%3E%3Ctext x=%2232%22 y=%2239%22 text-anchor=%22middle%22 font-size=%2226%22%3E%F0%9F%8E%B5%3C/text%3E%3C/svg%3E';
+            function render(region) {
+                var list = getDashboardList();
+                if (!list) return;
+                var tracks = tracksByRegion(region);
+                var html = '';
+                for (var i = 0; i < tracks.length; i++) {
+                    var t = tracks[i];
+                    var cover = t.cover || fallbackCover;
+                    html += '<article class="stream-card">' +
+                        '<img src="' + cover + '" alt="' + clean(t.title) + '">' +
+                        '<div class="stream-card-info">' +
+                        '<strong>' + clean(t.title) + '</strong>' +
+                        '<span>' + clean(t.artist) + '</span>' +
+                        '<span class="stream-delta neutral">' + clean(t.stat) + '</span>' +
+                        '</div></article>';
+                }
+                list.innerHTML = html;
+                var covers = list.querySelectorAll('img');
+                for (var j = 0; j < covers.length; j++) {
+                    covers[j].onerror = function () {
+                        this.onerror = null;
+                        this.src = fallbackCover;
+                    };
+                }
+                sanitizeDashboardCards();
+
+                window.moveDashboardCarousel(0);
+            }
+
+            window.setDashboardRegion = function (region) {
+                dashboardRegion = region || 'latam';
+                var btns = document.querySelectorAll('.stream-region-tab');
+                for (var i = 0; i < btns.length; i++) {
+                    var b = btns[i];
+                    b.classList.toggle('active', b.dataset && b.dataset.region === dashboardRegion);
+                }
+                render(dashboardRegion);
+            };
+
+            window.moveDashboardCarousel = function (direction) {
+                var list = getDashboardList();
+                if (!list) return;
+                if (typeof direction === 'number') dashboardOffset = Math.max(0, dashboardOffset + direction);
+                var step = Math.max(220, Math.floor(list.clientWidth * 0.55));
+                list.scrollTo({ left: dashboardOffset * step, behavior: 'smooth' });
+            };
+
+            document.addEventListener('DOMContentLoaded', function () {
+                render('latam');
+                sanitizeDashboardCards();
+                protectDashboardFromInjectedText();
+                purgeInjectedArtifacts();
+                setInterval(function () { sanitizeDashboardCards(); purgeInjectedArtifacts(); }, 1200);
+
+                sanitizeDashboardCards();
+                setInterval(sanitizeDashboardCards, 2000);
+
+            });
+        })();
+ feature/wall-street-v2
         // Variables globales
         let selectedSong = null;
         let currentMode = null;
