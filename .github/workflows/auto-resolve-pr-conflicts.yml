@@ -24,9 +24,41 @@ jobs:
   resolve:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout repository
+      - name: Resolve PR refs from GitHub API
+        id: prrefs
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          PR_API_URL="https://api.github.com/repos/${{ github.repository }}/pulls/${{ github.event.inputs.pr_number }}"
+          pr_json="$(curl -fsSL -H "Authorization: Bearer ${GITHUB_TOKEN}" -H "Accept: application/vnd.github+json" "$PR_API_URL")"
+
+          head_ref="$(python3 - <<'PY' "$pr_json"
+import json, sys
+j=json.loads(sys.argv[1])
+print(j.get('head',{}).get('ref',''))
+PY
+)"
+
+          base_ref="$(python3 - <<'PY' "$pr_json"
+import json, sys
+j=json.loads(sys.argv[1])
+print(j.get('base',{}).get('ref',''))
+PY
+)"
+
+          if [[ -z "$head_ref" || -z "$base_ref" ]]; then
+            echo "[error] Could not determine head/base for PR #${{ github.event.inputs.pr_number }}" >&2
+            exit 1
+          fi
+
+          echo "head_ref=$head_ref" >> "$GITHUB_OUTPUT"
+          echo "base_ref=$base_ref" >> "$GITHUB_OUTPUT"
+          echo "[info] PR refs head=$head_ref base=$base_ref"
+
+      - name: Checkout PR head branch
         uses: actions/checkout@v4
         with:
+          ref: ${{ steps.prrefs.outputs.head_ref }}
           fetch-depth: 0
 
       - name: Setup Node
@@ -39,11 +71,17 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
+      - name: Validate resolver script exists
+        run: |
+          test -f scripts/resolve-pr-by-number.sh || (echo "[error] scripts/resolve-pr-by-number.sh not found on PR head branch" >&2; exit 1)
+
       - name: Auto-resolve conflicts for PR
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           bash scripts/resolve-pr-by-number.sh \
             --pr "${{ github.event.inputs.pr_number }}" \
+            --head "${{ steps.prrefs.outputs.head_ref }}" \
+            --base "${{ steps.prrefs.outputs.base_ref }}" \
             --strategy "${{ github.event.inputs.strategy }}" \
             --remote origin

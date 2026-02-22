@@ -199,7 +199,8 @@ Si no sabes dónde correr comandos, hazlo directo en GitHub Actions:
 Si el run sale en rojo:
 - abre el run y revisa el paso que falló,
 - si dice `Author identity unknown`, vuelve a ejecutar con la versión nueva del workflow (ya configura `user.name` y `user.email` del bot),
-- si dice `Permission denied to push`, revisa en **Settings → Actions → General → Workflow permissions** que esté en **Read and write permissions**.
+- si dice `Permission denied to push`, revisa en **Settings → Actions → General → Workflow permissions** que esté en **Read and write permissions**,
+- si falla muy rápido con script no encontrado, usa la versión nueva del workflow que primero resuelve `head/base` del PR y hace checkout de la rama del PR antes de ejecutar el resolver.
 
 Después vuelve al PR: si todo salió bien, desaparece el estado de "Resolve conflicts" sin editar código manualmente.
 
