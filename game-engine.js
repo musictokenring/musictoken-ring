@@ -1748,26 +1748,127 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 });
 
-// Fallback UI handlers: keep mode buttons functional even if inline script fails to parse.
-if (typeof window !== 'undefined' && typeof window.selectMode !== 'function') {
-    window.selectMode = function selectModeFallback(mode) {
-        const modeSelector = document.getElementById('modeSelector');
-        const songSelection = document.getElementById('songSelection');
-        const modeTitle = document.getElementById('modeTitle');
-        const titles = {
-            quick: 'Modo Rápido',
-            private: 'Sala Privada',
-            practice: 'Modo Práctica',
-            tournament: 'Modo Torneo'
-        };
-
-        window.currentMode = mode;
-        if (modeSelector) modeSelector.classList.add('hidden');
-        if (songSelection) songSelection.classList.remove('hidden');
-        if (modeTitle) modeTitle.textContent = titles[mode] || 'Modo de Juego';
-
-        if (window.GameEngine && typeof window.GameEngine.updatePracticeBetDisplay === 'function') {
-            window.GameEngine.updatePracticeBetDisplay();
+// Fallback UI handlers: keep core buttons functional even if inline script fails to parse.
+if (typeof window !== 'undefined') {
+    function fallbackToast(message, type = 'info') {
+        if (typeof window.showToast === 'function') {
+            window.showToast(message, type);
+            return;
         }
-    };
+        console[type === 'error' ? 'error' : 'log'](message);
+    }
+
+    function fallbackBetAmount() {
+        return Number(document.getElementById('betAmount')?.value || 100);
+    }
+
+    function updateActionButtonsFallback(mode) {
+        const buttonsDiv = document.getElementById('actionButtons');
+        if (!buttonsDiv) return;
+
+        if (mode === 'quick') {
+            buttonsDiv.innerHTML = '<button onclick="startQuickMatch()" class="btn-primary btn-large" id="startQuickBtn">⚔️ Buscar Rival</button>';
+        } else if (mode === 'private') {
+            buttonsDiv.innerHTML = '<button onclick="createRoom()" class="btn-primary" id="createRoomBtn">🎪 Crear Sala</button><div class="or-divider">o</div><div class="join-room-group"><input type="text" id="joinRoomCode" placeholder="Código" class="room-code-input" maxlength="6"><button onclick="joinRoom()" class="btn-secondary" id="joinRoomBtn">Unirse</button></div>';
+        } else if (mode === 'practice') {
+            buttonsDiv.innerHTML = '<button onclick="startPractice()" class="btn-primary btn-large" id="startPracticeBtn">🎯 Iniciar Práctica</button>';
+        } else if (mode === 'tournament') {
+            buttonsDiv.innerHTML = '<div class="join-room-group"><input type="text" id="tournamentId" placeholder="ID de torneo" class="room-code-input"><button onclick="joinTournamentMode()" class="btn-primary" id="joinTournamentBtn">🏆 Unirme</button></div>';
+        }
+    }
+
+    if (typeof window.selectMode !== 'function') {
+        window.selectMode = function selectModeFallback(mode) {
+            const modeSelector = document.getElementById('modeSelector');
+            const songSelection = document.getElementById('songSelection');
+            const modeTitle = document.getElementById('modeTitle');
+            const titles = {
+                quick: 'Modo Rápido',
+                private: 'Sala Privada',
+                practice: 'Modo Práctica',
+                tournament: 'Modo Torneo'
+            };
+
+            window.currentMode = mode;
+            if (modeSelector) modeSelector.classList.add('hidden');
+            if (songSelection) songSelection.classList.remove('hidden');
+            if (modeTitle) modeTitle.textContent = titles[mode] || 'Modo de Juego';
+            updateActionButtonsFallback(mode);
+
+            if (window.GameEngine && typeof window.GameEngine.updatePracticeBetDisplay === 'function') {
+                window.GameEngine.updatePracticeBetDisplay();
+            }
+        };
+    }
+
+    if (typeof window.backToModes !== 'function') {
+        window.backToModes = function backToModesFallback() {
+            const modeSelector = document.getElementById('modeSelector');
+            const songSelection = document.getElementById('songSelection');
+            if (songSelection) songSelection.classList.add('hidden');
+            if (modeSelector) modeSelector.classList.remove('hidden');
+            window.currentMode = null;
+        };
+    }
+
+    if (typeof window.searchSong !== 'function') {
+        window.searchSong = function searchSongFallback() {
+            const query = document.getElementById('songSearch')?.value || '';
+            if (!query.trim()) return fallbackToast('Escribe una canción o artista', 'error');
+            if (typeof window.searchDeezer === 'function') return window.searchDeezer(query, 'searchResults');
+            fallbackToast('Buscador no disponible aún. Recarga la página.', 'error');
+        };
+    }
+
+    if (typeof window.startPractice !== 'function') {
+        window.startPractice = async function startPracticeFallback() {
+            if (window.GameEngine && typeof window.GameEngine.startPractice === 'function') {
+                return window.GameEngine.startPractice(window.selectedSong || null);
+            }
+            if (window.GameEngine && typeof window.GameEngine.startPracticeMatch === 'function') {
+                return window.GameEngine.startPracticeMatch(window.selectedSong || null, fallbackBetAmount());
+            }
+            fallbackToast('Modo práctica no disponible todavía. Recarga la página.', 'error');
+        };
+    }
+
+    if (typeof window.startQuickMatch !== 'function') {
+        window.startQuickMatch = async function startQuickMatchFallback() {
+            if (window.GameEngine && typeof window.GameEngine.startQuickMatchmaking === 'function') {
+                return window.GameEngine.startQuickMatchmaking(window.selectedSong || null, fallbackBetAmount());
+            }
+            fallbackToast('Matchmaking no disponible todavía. Recarga la página.', 'error');
+        };
+    }
+
+    if (typeof window.createRoom !== 'function') {
+        window.createRoom = async function createRoomFallback() {
+            if (window.GameEngine && typeof window.GameEngine.createPrivateRoom === 'function') {
+                return window.GameEngine.createPrivateRoom(window.selectedSong || null, fallbackBetAmount());
+            }
+            fallbackToast('Crear sala no disponible todavía. Recarga la página.', 'error');
+        };
+    }
+
+    if (typeof window.joinRoom !== 'function') {
+        window.joinRoom = async function joinRoomFallback() {
+            const code = (document.getElementById('joinRoomCode')?.value || '').trim().toUpperCase();
+            if (!code) return fallbackToast('Ingresa un código de sala', 'error');
+            if (window.GameEngine && typeof window.GameEngine.joinPrivateRoom === 'function') {
+                return window.GameEngine.joinPrivateRoom(code, window.selectedSong || null, fallbackBetAmount());
+            }
+            fallbackToast('Unirse a sala no disponible todavía. Recarga la página.', 'error');
+        };
+    }
+
+    if (typeof window.joinTournamentMode !== 'function') {
+        window.joinTournamentMode = async function joinTournamentModeFallback() {
+            const tournamentId = (document.getElementById('tournamentId')?.value || '').trim();
+            if (!tournamentId) return fallbackToast('Ingresa el ID del torneo', 'error');
+            if (window.GameEngine && typeof window.GameEngine.joinTournament === 'function') {
+                return window.GameEngine.joinTournament(tournamentId, window.selectedSong || null, fallbackBetAmount());
+            }
+            fallbackToast('Torneo no disponible todavía. Recarga la página.', 'error');
+        };
+    }
 }
