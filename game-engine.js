@@ -1561,39 +1561,63 @@ const GameEngine = {
         return '';
     },
 
-    async backendRequest(path, payload = {}) {
-        const base = this.getBackendApiBase();
-        if (!base) {
-            showToast('Backend API no configurada', 'error');
-            return null;
+    getBackendCandidates() {
+        const configuredBase = (this.getBackendApiBase() || '').trim().replace(/\/$/, '');
+        const sameOriginBase = window.location.origin;
+
+        const candidates = [];
+        if (configuredBase) candidates.push(configuredBase);
+
+        // Fallback útil cuando el backend está detrás del mismo dominio y el CORS de un host externo falla.
+        if (!configuredBase || configuredBase !== sameOriginBase) {
+            candidates.push(sameOriginBase);
         }
+
+        return [...new Set(candidates)];
+    },
+
+    async backendRequest(path, payload = {}) {
+        const backendCandidates = this.getBackendCandidates();
 
         const { data: { session } } = await supabaseClient.auth.getSession();
         const token = session?.access_token;
 
-        const response = await fetch(`${base}${path}`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                ...(token ? { Authorization: `Bearer ${token}` } : {})
-            },
-            body: JSON.stringify(payload)
-        });
+        let networkError = null;
 
-        let data = null;
-        try {
-            data = await response.json();
-        } catch {
-            data = null;
+        for (const base of backendCandidates) {
+            try {
+                const response = await fetch(`${base}${path}`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        ...(token ? { Authorization: `Bearer ${token}` } : {})
+                    },
+                    body: JSON.stringify(payload)
+                });
+
+                let data = null;
+                try {
+                    data = await response.json();
+                } catch {
+                    data = null;
+                }
+
+                if (!response.ok) {
+                    const message = data?.message || `Error ${response.status}`;
+                    showToast(message, 'error');
+                    return null;
+                }
+
+                return data;
+            } catch (error) {
+                networkError = error;
+                console.warn(`Backend request failed against ${base}${path}:`, error);
+            }
         }
 
-        if (!response.ok) {
-            const message = data?.message || `Error ${response.status}`;
-            showToast(message, 'error');
-            return null;
-        }
-
-        return data;
+        console.error('Backend request failed for all candidates:', networkError);
+        showToast('No se pudo conectar al backend (CORS/red). Intenta recargar o usar el mismo dominio del backend.', 'error');
+        return null;
     },
 
     async verifyDepositAndCredit(txHash, options = {}) {
