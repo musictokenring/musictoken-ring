@@ -652,6 +652,10 @@
 
 
         (function () {
+            if (window.MTR_INLINE_TOP_STREAMS_ACTIVE) {
+                return;
+            }
+
             var dashboardRegion = 'latam';
             var dashboardOffset = 0;
 
