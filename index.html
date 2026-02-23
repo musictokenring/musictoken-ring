@@ -29,6 +29,7 @@
             BATTLE_DURATION: 60,
             BACKEND_API: 'https://musictoken-backend.onrender.com'
         };
+        window.CONFIG = CONFIG;
         function extractMetaMaskErrorMessage(reason) {
             if (!reason) return '';
             const direct = String(reason?.message || reason || '');

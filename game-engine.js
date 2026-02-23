@@ -1556,9 +1556,9 @@ const GameEngine = {
     // ==========================================
 
     getBackendApiBase() {
-        if (window.CONFIG?.BACKEND_API) return window.CONFIG.BACKEND_API;
-        if (window.APP_BACKEND_API) return window.APP_BACKEND_API;
-        return '';
+        const runtimeConfig = window.CONFIG || (typeof CONFIG !== 'undefined' ? CONFIG : null);
+        const configuredBase = runtimeConfig?.BACKEND_API || window.APP_BACKEND_API || '';
+        return String(configuredBase || '').trim().replace(/\/$/, '');
     },
 
     async backendRequest(path, payload = {}) {
