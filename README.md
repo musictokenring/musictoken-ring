@@ -379,5 +379,5 @@ Desarrollado para MusicToken Ring
 ### Premios automáticos on-chain (MTR)
 1. Define `PRIZE_SIGNER_PRIVATE_KEY` y opcionalmente `BASE_RPC_URL` en backend.
 2. Usa `backend/prize-service.js` para firmar `transfer` ERC-20 con viem.
-3. Monta el router de ejemplo `backend/prize-api.js` para exponer `POST /api/prizes/send`.
+3. Monta el router `backend/prize-api.js` para exponer `POST /api/prizes/send`.
 4. Frontend envía `winner`, `amount`, `matchId`, `network`, `token` y `tokenAddress` al cerrar batalla.

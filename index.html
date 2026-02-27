@@ -1294,10 +1294,17 @@
             }, [formattedBalance]);
 
             useEffect(() => {
-                if (!address) return;
-                localStorage.setItem('mtr_wallet', address);
-                localStorage.setItem('mtr_wallet_chain', 'base');
-                window.__mtrConnectedWallet = address;
+                if (address) {
+                    localStorage.setItem('mtr_wallet', address);
+                    localStorage.setItem('mtr_wallet_chain', 'base');
+                    window.__mtrConnectedWallet = address;
+                    return;
+                }
+
+                window.__mtrConnectedWallet = null;
+                window.__mtrOnChainBalance = 0;
+                localStorage.removeItem('mtr_wallet');
+                localStorage.removeItem('mtr_wallet_chain');
             }, [address]);
 
             if (isConnected && address) {
