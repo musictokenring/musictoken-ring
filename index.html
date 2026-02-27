@@ -687,6 +687,9 @@
 
 
         (function () {
+            if (window.MTR_INLINE_TOP_STREAMS_ACTIVE) {
+                return;
+            }
             if (window.__MTR_TOP_STREAMS_EXTERNAL__) {
                 return;
             }

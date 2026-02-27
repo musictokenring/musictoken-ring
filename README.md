@@ -48,6 +48,28 @@ Esta sección es una guía rápida para cualquier usuario que quiera usar la app
 - ✅ Navega dashboard (tabs + carrusel).
 - ✅ Genera cotización y solicitud de cashout.
 
+
+## 🛠️ Troubleshooting (Codex patch conflict)
+
+Si una tarea de Codex falla con el error:
+
+> `Failed to apply patch ... setup script and agent modify the same files`
+
+usa este flujo para recuperar la rama y reintentar:
+
+```bash
+# 1) Ver plan (sin tocar nada)
+./scripts/recover-codex-patch-conflict.sh
+
+# 2) Ejecutar limpieza total contra origin/<rama>
+./scripts/recover-codex-patch-conflict.sh --force
+
+# 3) Validar estado local
+npm run check
+```
+
+> ⚠️ `--force` elimina cambios no comiteados y archivos no trackeados.
+
 ## 📁 Estructura del Proyecto
 
 ```
