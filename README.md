@@ -94,6 +94,20 @@ Si te quedó una rama/PR sobrante, también la puedes borrar remoto en el mismo 
 > Requisitos: working tree limpio y `origin` configurado.
 
 
+## 🧹 Cerrar 5 PRs atascados de una vez (alinear + cerrar)
+
+Si tienes varios PR abiertos al mismo tiempo, puedes alinear algunos al hotfix y cerrar otros en la misma ejecución:
+
+```bash
+./scripts/align-and-close-prs.sh   --anchor origin/hotfix-mtr-address-main   --align-prs 135,137   --close-prs 138,139,140
+```
+
+Modo simulación (sin tocar remoto):
+
+```bash
+./scripts/align-and-close-prs.sh --dry-run --align-prs 135,137 --close-prs 138,139,140
+```
+
 ## 📁 Estructura del Proyecto
 
 ```
