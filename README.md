@@ -2,6 +2,52 @@
 
 Frontend completo para la plataforma de batallas musicales con blockchain.
 
+## 📘 Manual de uso (usuario final)
+
+Esta sección es una guía rápida para cualquier usuario que quiera usar la app sin entrar en detalles técnicos.
+
+### 1) Entrar a la app
+- Abre la URL del frontend en tu navegador.
+- Espera a que cargue el dashboard principal (cards de streams y secciones de juego).
+
+### 2) Conectar wallet
+- Haz clic en **Connect Wallet**.
+- Autoriza la conexión en MetaMask (u otra wallet compatible).
+- Verifica que aparezca tu dirección y/o balance en pantalla.
+
+### 3) Recargar saldo (depósito verificable)
+- Realiza la transferencia on-chain a la wallet/plataforma indicada.
+- Copia el `txHash` de tu transacción.
+- En la app, pega el `txHash` y ejecuta **Verify Deposit**.
+- Si la validación es correcta, verás tu saldo actualizado.
+
+### 4) Participar en modos de juego
+- Selecciona el modo deseado (por ejemplo: quick, private o tournament).
+- Elige tracks/participación según el flujo de ese modo.
+- Confirma los pasos solicitados por la interfaz para iniciar.
+
+### 5) Revisar dashboard de streams
+- Cambia entre regiones/pestañas del dashboard.
+- Usa las flechas del carrusel para navegar cards.
+- Confirma que los datos se refrescan sin congelarse.
+
+### 6) Retirar ganancias (cashout)
+- Ve a la sección de retiro.
+- Usa **Quote Cashout** para cotizar fee y monto neto.
+- Si estás de acuerdo, confirma con **Request Cashout**.
+- Guarda el identificador de solicitud para seguimiento.
+
+### 7) Buenas prácticas para evitar errores
+- No abras varias sesiones con la misma wallet en muchas pestañas a la vez.
+- Si algo no responde, recarga la página una vez y vuelve a intentar.
+- Si persiste, abre consola (F12) y comparte el error con soporte.
+
+### Checklist rápido de funcionamiento
+- ✅ Conecta wallet.
+- ✅ Verifica depósito con `txHash`.
+- ✅ Navega dashboard (tabs + carrusel).
+- ✅ Genera cotización y solicitud de cashout.
+
 ## 📁 Estructura del Proyecto
 
 ```

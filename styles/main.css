@@ -542,6 +542,37 @@ body {
     color: var(--text-secondary);
     font-size: 12px;
 }
+
+.basescan-actions {
+    display: grid;
+    gap: 10px;
+}
+
+.btn-basescan {
+    display: inline-flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 10px 14px;
+    border-radius: 10px;
+    background: #2563eb;
+    color: #fff;
+    text-decoration: none;
+    font-weight: 600;
+    font-size: 13px;
+    transition: background 0.2s ease, transform 0.2s ease;
+}
+
+.btn-basescan:hover {
+    background: #1d4ed8;
+    transform: translateY(-1px);
+}
+
+.btn-basescan svg {
+    width: 16px;
+    height: 16px;
+    fill: currentColor;
+}
 .feature-item {
     background: var(--bg-secondary);
     padding: 16px;
@@ -1137,6 +1168,10 @@ body {
 
 /* === BUTTONS === */
 .btn-primary {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    text-decoration: none;
     padding: 14px 32px;
     background: linear-gradient(135deg, #2563eb, #3b82f6);
     border: none;
@@ -1167,6 +1202,10 @@ body {
 }
 
 .btn-secondary {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    text-decoration: none;
     padding: 12px 24px;
     background: var(--bg-card);
     border: 1px solid var(--border-color);
@@ -1181,6 +1220,12 @@ body {
 
 .btn-secondary:hover {
     border-color: var(--accent-green);
+}
+
+.settlement-grid .btn-primary,
+.settlement-grid .btn-secondary {
+    width: 100%;
+    text-align: center;
 }
 
 /* === AUTH BUTTON & USER PROFILE === */
