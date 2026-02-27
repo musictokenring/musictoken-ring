@@ -1168,6 +1168,10 @@ body {
 
 /* === BUTTONS === */
 .btn-primary {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    text-decoration: none;
     padding: 14px 32px;
     background: var(--accent-green);
     border: none;
@@ -1197,6 +1201,10 @@ body {
 }
 
 .btn-secondary {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    text-decoration: none;
     padding: 12px 24px;
     background: var(--bg-card);
     border: 1px solid var(--border-color);
@@ -1211,6 +1219,12 @@ body {
 
 .btn-secondary:hover {
     border-color: var(--accent-green);
+}
+
+.settlement-grid .btn-primary,
+.settlement-grid .btn-secondary {
+    width: 100%;
+    text-align: center;
 }
 
 /* === AUTH BUTTON & USER PROFILE === */
