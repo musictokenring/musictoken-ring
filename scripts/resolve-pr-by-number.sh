@@ -10,32 +10,43 @@ Required:
 
 Options:
   --strategy <mode>       Conflict strategy: ours|theirs (default: ours)
-  --remote <name>         Git remote (default: origin)
+  --remote <name>         Git remote name (default: origin)
+  --remote-url <url>      Configure/set remote URL before resolving
   --head <branch>         Override PR head branch (skip API lookup for head)
   --base <branch>         Override PR base branch (skip API lookup for base)
   --no-push               Do not push after commit
   --keep-current-merge    Reuse current merge even if branch differs (advanced)
+  --offline-current-merge Resolve only the current in-progress merge; skip fetch/switch/reset
   -h, --help              Show help
+
+Example:
+  scripts/resolve-pr-by-number.sh --pr 124 --head feature/wall-street-v2 --base main --strategy ours
+  scripts/resolve-pr-by-number.sh --pr 127 --remote-url https://github.com/musictokenring/musictoken-ring.git --head codex/fix-merge-issues-and-update-frontend-sjngcd --base hotfix-mtr-address-main --strategy ours
+  scripts/resolve-pr-by-number.sh --pr 127 --head codex/fix-merge-issues-and-update-frontend-sjngcd --base hotfix-mtr-address-main --strategy ours --offline-current-merge
 USAGE
 }
 
 PR_NUMBER=""
 STRATEGY="ours"
 REMOTE="origin"
+REMOTE_URL_OVERRIDE=""
 HEAD_REF=""
 BASE_REF=""
 NO_PUSH=0
 KEEP_CURRENT_MERGE=0
+OFFLINE_CURRENT_MERGE=0
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --pr) PR_NUMBER="${2:-}"; shift 2 ;;
     --strategy) STRATEGY="${2:-ours}"; shift 2 ;;
     --remote) REMOTE="${2:-origin}"; shift 2 ;;
+    --remote-url) REMOTE_URL_OVERRIDE="${2:-}"; shift 2 ;;
     --head) HEAD_REF="${2:-}"; shift 2 ;;
     --base) BASE_REF="${2:-}"; shift 2 ;;
     --no-push) NO_PUSH=1; shift ;;
     --keep-current-merge) KEEP_CURRENT_MERGE=1; shift ;;
+    --offline-current-merge) OFFLINE_CURRENT_MERGE=1; shift ;;
     -h|--help) usage; exit 0 ;;
     *) echo "[error] Unknown argument: $1" >&2; usage; exit 1 ;;
   esac
@@ -57,12 +68,38 @@ if ! git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
   exit 1
 fi
 
-if ! git remote get-url "$REMOTE" >/dev/null 2>&1; then
-  echo "[error] Remote '$REMOTE' not configured" >&2
-  exit 1
+if [[ "$OFFLINE_CURRENT_MERGE" -eq 1 ]]; then
+  if ! git rev-parse -q --verify MERGE_HEAD >/dev/null 2>&1; then
+    echo "[error] --offline-current-merge requires an active merge conflict state" >&2
+    exit 1
+  fi
+  MERGE_IN_PROGRESS=1
+  CURRENT_BRANCH="$(git rev-parse --abbrev-ref HEAD)"
+  if [[ -n "$HEAD_REF" && "$CURRENT_BRANCH" != "$HEAD_REF" && "$KEEP_CURRENT_MERGE" -eq 0 ]]; then
+    echo "[error] Current branch '$CURRENT_BRANCH' does not match --head '$HEAD_REF'. Use --keep-current-merge to force." >&2
+    exit 1
+  fi
 fi
 
-REMOTE_URL="$(git remote get-url "$REMOTE")"
+if [[ "$OFFLINE_CURRENT_MERGE" -eq 0 ]]; then
+  if [[ -n "$REMOTE_URL_OVERRIDE" ]]; then
+    if git remote get-url "$REMOTE" >/dev/null 2>&1; then
+      git remote set-url "$REMOTE" "$REMOTE_URL_OVERRIDE"
+    else
+      git remote add "$REMOTE" "$REMOTE_URL_OVERRIDE"
+    fi
+  fi
+
+  if ! git remote get-url "$REMOTE" >/dev/null 2>&1; then
+    echo "[error] Remote '$REMOTE' not configured" >&2
+    echo "[hint] Pass --remote-url https://github.com/<owner>/<repo>.git" >&2
+    exit 1
+  fi
+
+  REMOTE_URL="$(git remote get-url "$REMOTE")"
+else
+  REMOTE_URL=""
+fi
 
 lookup_pr_refs() {
   local owner repo pr_json
@@ -84,7 +121,16 @@ EOF2
     return 2
   fi
 
+  set +e
   pr_json="$(curl -fsSL "https://api.github.com/repos/${owner}/${repo}/pulls/${PR_NUMBER}")"
+  curl_rc=$?
+  set -e
+  if [[ $curl_rc -ne 0 || -z "$pr_json" ]]; then
+    echo "[error] Could not query GitHub API for PR #$PR_NUMBER." >&2
+    echo "[hint] Retry with explicit refs, e.g.:" >&2
+    echo "       scripts/resolve-pr-by-number.sh --pr $PR_NUMBER --head feature/wall-street-v2 --base main --strategy ours" >&2
+    return 4
+  fi
 
   read -r HEAD_REF BASE_REF <<EOF2
 $(python3 - <<'PY' "$pr_json"
@@ -101,15 +147,17 @@ EOF2
   fi
 }
 
-if [[ -z "$HEAD_REF" || -z "$BASE_REF" ]]; then
+if [[ "$OFFLINE_CURRENT_MERGE" -eq 0 && ( -z "$HEAD_REF" || -z "$BASE_REF" ) ]]; then
   lookup_pr_refs
 fi
 
-echo "[info] pr=$PR_NUMBER head=$HEAD_REF base=$BASE_REF strategy=$STRATEGY remote=$REMOTE"
+echo "[info] pr=$PR_NUMBER head=${HEAD_REF:-<current>} base=${BASE_REF:-<current>} strategy=$STRATEGY remote=$REMOTE offline=$OFFLINE_CURRENT_MERGE"
 
 CURRENT_BRANCH="$(git rev-parse --abbrev-ref HEAD)"
-MERGE_IN_PROGRESS=0
-if git rev-parse -q --verify MERGE_HEAD >/dev/null 2>&1; then
+if [[ "${MERGE_IN_PROGRESS:-0}" -ne 1 ]]; then
+  MERGE_IN_PROGRESS=0
+fi
+if [[ "$OFFLINE_CURRENT_MERGE" -eq 0 ]] && git rev-parse -q --verify MERGE_HEAD >/dev/null 2>&1; then
   MERGE_IN_PROGRESS=1
   if [[ "$CURRENT_BRANCH" != "$HEAD_REF" && "$KEEP_CURRENT_MERGE" -eq 0 ]]; then
     echo "[warn] Merge in progress on '$CURRENT_BRANCH', expected '$HEAD_REF'. Auto-aborting current merge."
@@ -120,9 +168,11 @@ if git rev-parse -q --verify MERGE_HEAD >/dev/null 2>&1; then
   fi
 fi
 
-git fetch "$REMOTE" --prune
+if [[ "$OFFLINE_CURRENT_MERGE" -eq 0 ]]; then
+  git fetch "$REMOTE" --prune
+fi
 
-if [[ "$MERGE_IN_PROGRESS" -eq 0 ]]; then
+if [[ "$OFFLINE_CURRENT_MERGE" -eq 0 && "$MERGE_IN_PROGRESS" -eq 0 ]]; then
   if git show-ref --verify --quiet "refs/heads/${HEAD_REF}"; then
     git switch "$HEAD_REF"
   elif git show-ref --verify --quiet "refs/remotes/${REMOTE}/${HEAD_REF}"; then
@@ -140,7 +190,7 @@ if [[ "$MERGE_IN_PROGRESS" -eq 0 ]]; then
   git reset --hard "${REMOTE}/${HEAD_REF}"
 
   set +e
-  git merge --no-ff "${REMOTE}/${BASE_REF}"
+  git merge --no-ff --no-edit "${REMOTE}/${BASE_REF}"
   MERGE_CODE=$?
   set -e
 
