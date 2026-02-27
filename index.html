@@ -52,7 +52,7 @@
         });
 
         const PLATFORM_WALLET_ADDRESSES = {
-            base: '0x75376BC58830f27415402875D26B73A6BE8E2253'
+            base: '0x99cd1eb32846c9027ed9cb8710066fa08791c33b'
         };
         window.MTR_BUILD_ID = '20260227mtr';
 
@@ -106,12 +106,7 @@
                     <span class="badge" id="balanceDisplay">Tu MTR: --</span>
                 </div>
 
-                <div class="wallet-section">
-                    <button type="button" id="walletConnectBtn" class="btn-secondary btn-wallet">
-                        Conectar Wallet
-                    </button>
-                    <span id="walletAddress" class="wallet-address hidden"></span>
-                </div>
+                <div id="walletApp" class="wallet-section"></div>
                 
                 <!-- AUTH BUTTON -->
                 <div id="authButton">
@@ -265,8 +260,16 @@
                 <div class="settlement-card">
                     <p>Token ERC-20 en Base. Liquidez lockeada en Aerodrome.</p>
                     <p>Contrato: 0x99cd1eb32846c9027ed9cb8710066fa08791c33b.</p>
-                    <p>Contrato verificado: 0x99cd1eb32846c9027ed9cb8710066fa08791c33b —Supply total: 99,990,000 MTR (<a target="_blank" rel="noopener noreferrer" href="https://basescan.org/address/0x99cd1eb32846c9027ed9cb8710066fa08791c33b">ver en Basescan</a>)</p>
-                    <p>Explorer: <a target="_blank" rel="noopener noreferrer" href="https://basescan.org/address/0x99cd1eb32846c9027ed9cb8710066fa08791c33b">https://basescan.org/address/0x99cd1eb32846c9027ed9cb8710066fa08791c33b</a></p>
+                    <div class="basescan-actions">
+                        <a class="btn-basescan" target="_blank" rel="noopener noreferrer" href="https://basescan.org/address/0x99cd1eb32846c9027ed9cb8710066fa08791c33b">
+                            <span>Ver Contrato</span>
+                            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 3h7v7h-2V6.41l-9.29 9.3-1.42-1.42 9.3-9.29H14V3z"></path><path d="M5 5h6v2H7v10h10v-4h2v6H5V5z"></path></svg>
+                        </a>
+                        <a class="btn-basescan" target="_blank" rel="noopener noreferrer" href="https://basescan.org/token/0x99cd1eb32846c9027ed9cb8710066fa08791c33b">
+                            <span>Ver Supply 99.99M MTR</span>
+                            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 3h7v7h-2V6.41l-9.29 9.3-1.42-1.42 9.3-9.29H14V3z"></path><path d="M5 5h6v2H7v10h10v-4h2v6H5V5z"></path></svg>
+                        </a>
+                    </div>
                 </div>
             </section>
 
@@ -1235,11 +1238,13 @@
     </script>
 
     <script type="module">
-        import { createConfig, http, connect, getAccount, watchAccount, reconnect, readContract } from 'https://esm.sh/@wagmi/core';
-        import { base } from 'https://esm.sh/wagmi/chains';
-        import { injected } from 'https://esm.sh/@wagmi/connectors';
-        import { walletConnect } from 'https://esm.sh/@wagmi/connectors';
-        import { formatUnits } from 'https://esm.sh/viem';
+        import React, { useEffect } from 'https://esm.sh/react@18.3.1';
+        import { createRoot } from 'https://esm.sh/react-dom@18.3.1/client';
+        import { QueryClient, QueryClientProvider } from 'https://esm.sh/@tanstack/react-query@5.66.9';
+        import { createConfig, http, WagmiProvider, useAccount, useConnect, useReadContract } from 'https://esm.sh/wagmi@2.16.7';
+        import { base } from 'https://esm.sh/wagmi@2.16.7/chains';
+        import { injected } from 'https://esm.sh/wagmi@2.16.7/connectors';
+        import { formatUnits } from 'https://esm.sh/viem@2.23.9';
 
         const MTR_TOKEN = '0x99cd1eb32846c9027ed9cb8710066fa08791c33b';
         const ERC20_ABI = [
@@ -1248,75 +1253,78 @@
 
         const wagmiConfig = createConfig({
             chains: [base],
-            connectors: [
-                injected({ target: 'metaMask' }),
-                walletConnect({ projectId: window.WALLETCONNECT_PROJECT_ID || 'demo-project-id' })
-            ],
+            connectors: [injected({ target: 'metaMask' })],
             transports: {
                 [base.id]: http('https://mainnet.base.org')
             }
         });
 
-        async function refreshMtrBalance(address) {
-            if (!address) return;
-            try {
-                console.log('[wallet] reading MTR balance', { address });
-                const balance = await readContract(wagmiConfig, {
-                    address: MTR_TOKEN,
-                    abi: ERC20_ABI,
-                    functionName: 'balanceOf',
-                    args: [address]
-                });
-                const formatted = Number(formatUnits(balance, 18)).toLocaleString('es-ES', { maximumFractionDigits: 4 });
+        const queryClient = new QueryClient();
+
+        function shortAddress(address) {
+            return `${address.slice(0, 6)}...${address.slice(-4)}`;
+        }
+
+        function WalletPanel() {
+            const { address, isConnected } = useAccount();
+            const { connect, connectors, isPending } = useConnect();
+            const { data: balance } = useReadContract({
+                address: MTR_TOKEN,
+                abi: ERC20_ABI,
+                functionName: 'balanceOf',
+                args: address ? [address] : undefined,
+                query: { enabled: Boolean(address) }
+            });
+
+            const formattedBalance = balance !== undefined
+                ? Number(formatUnits(balance, 18)).toLocaleString('es-ES', { maximumFractionDigits: 4 })
+                : '--';
+
+            useEffect(() => {
                 const badge = document.getElementById('balanceDisplay');
                 const userBalance = document.getElementById('userBalance');
-                if (badge) badge.textContent = `Tu MTR: ${formatted}`;
-                if (userBalance) userBalance.textContent = formatted;
-                console.log('[wallet] MTR balance updated', { formatted });
-            } catch (error) {
-                console.error('[wallet] balance read error', error);
-            }
-        }
+                const value = `${formattedBalance} MTR`;
+                if (badge) badge.textContent = `Tu MTR : ${value}`;
+                if (userBalance) userBalance.textContent = formattedBalance === '--' ? '0' : formattedBalance;
+            }, [formattedBalance]);
 
-        function renderWallet(account) {
-            const walletEl = document.getElementById('walletAddress');
-            const btnEl = document.getElementById('walletConnectBtn');
-            if (!walletEl || !btnEl) return;
-            if (account?.address) {
-                walletEl.textContent = `${account.address.slice(0, 6)}...${account.address.slice(-4)}`;
-                walletEl.classList.remove('hidden');
-                btnEl.textContent = 'Wallet conectada';
-                localStorage.setItem('mtr_wallet', account.address);
+            useEffect(() => {
+                if (!address) return;
+                localStorage.setItem('mtr_wallet', address);
                 localStorage.setItem('mtr_wallet_chain', 'base');
-                refreshMtrBalance(account.address);
-            } else {
-                walletEl.classList.add('hidden');
-                btnEl.textContent = 'Conectar Wallet';
+            }, [address]);
+
+            if (isConnected && address) {
+                return React.createElement(React.Fragment, null,
+                    React.createElement('button', { type: 'button', className: 'btn-secondary btn-wallet', disabled: true }, 'Wallet conectada'),
+                    React.createElement('span', { className: 'wallet-address' }, shortAddress(address))
+                );
             }
+
+            return React.createElement('button', {
+                type: 'button',
+                className: 'btn-secondary btn-wallet',
+                onClick: () => {
+                    const connector = connectors.find((item) => item.id === 'injected') || connectors[0];
+                    if (!connector) return;
+                    connect({ connector });
+                },
+                disabled: isPending
+            }, isPending ? 'Conectando...' : 'Conectar Wallet');
         }
 
-        async function connectWalletWagmi() {
-            try {
-                console.log('[wallet] connect requested via wagmi');
-                await connect(wagmiConfig, { connector: injected({ target: 'metaMask' }) });
-                renderWallet(getAccount(wagmiConfig));
-            } catch (error) {
-                console.error('[wallet] connect error', error);
-                if (typeof showToast === 'function') showToast('No se pudo conectar la wallet', 'error');
-            }
+        function WalletApp() {
+            return React.createElement(WagmiProvider, { config: wagmiConfig },
+                React.createElement(QueryClientProvider, { client: queryClient },
+                    React.createElement(WalletPanel)
+                )
+            );
         }
 
-        const btn = document.getElementById('walletConnectBtn');
-        if (btn) btn.addEventListener('click', connectWalletWagmi);
-
-        watchAccount(wagmiConfig, {
-            onChange(account) {
-                renderWallet(account);
-            }
-        });
-
-        await reconnect(wagmiConfig);
-        renderWallet(getAccount(wagmiConfig));
+        const walletRoot = document.getElementById('walletApp');
+        if (walletRoot) {
+            createRoot(walletRoot).render(React.createElement(WalletApp));
+        }
     </script>
 </body>
 </html>
