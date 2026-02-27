@@ -158,12 +158,15 @@ const GameEngine = {
     },
 
     getAvailableWalletBalance() {
+        const hasConnectedWallet = Boolean(window.__mtrConnectedWallet);
         const onChainBalance = Number(window.__mtrOnChainBalance || 0);
         const localBalance = Number(this.userBalance || 0);
-        if (Number.isFinite(onChainBalance) && onChainBalance > 0) {
-            return onChainBalance;
+
+        if (hasConnectedWallet && Number.isFinite(onChainBalance)) {
+            return Math.max(0, onChainBalance);
         }
-        return Number.isFinite(localBalance) ? localBalance : 0;
+
+        return Number.isFinite(localBalance) ? Math.max(0, localBalance) : 0;
     },
 
     hasSufficientBalance(betAmount) {
