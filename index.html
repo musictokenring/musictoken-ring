@@ -6,7 +6,7 @@
     <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
     <meta http-equiv="Pragma" content="no-cache">
     <meta http-equiv="Expires" content="0">
-    <meta name="mtr-build" content="20260222c">
+    <meta name="mtr-build" content="20260227mtr">
     <title>MusicToken Ring - Music Battle Arena</title>
    
     <!-- Fonts -->
@@ -52,18 +52,9 @@
         });
 
         const PLATFORM_WALLET_ADDRESSES = {
-            polygon: '0x75376BC58830f27415402875D26B73A6BE8E2253',
-            optimism: '0x75376BC58830f27415402875D26B73A6BE8E2253',
-            base: '0x75376BC58830f27415402875D26B73A6BE8E2253',
-            bnb: '0x75376BC58830f27415402875D26B73A6BE8E2253',
-            arbitrum: '0x75376BC58830f27415402875D26B73A6BE8E2253',
-            linea: '0x75376BC58830f27415402875D26B73A6BE8E2253',
-            ethereum: '0x75376BC58830f27415402875D26B73A6BE8E2253',
-            tron: 'TQMKLv12VA2kt2xH1edWNnQjgFGuzaLcVj',
-            solana: 'AavRs1c4CmBDcJ2KzTh5C8btwbLv7CnCRbA6EpEJqaNr',
-            bitcoin: 'bc1qtjwwj5lwsn4r5pjg8l30r4s5p843g4p344tr6a'
+            base: '0x75376BC58830f27415402875D26B73A6BE8E2253'
         };
-        window.MTR_BUILD_ID = '20260222c';
+        window.MTR_BUILD_ID = '20260227mtr';
 
         // Critical UI fallbacks: keep mode buttons functional even if a later script fails to parse/load.
         if (typeof window.selectMode !== 'function') {
@@ -112,12 +103,12 @@
                 <div class="header-badges">
                     <span class="badge">🎵 Deezer</span>
                     <span class="badge badge-live">🔴 Live</span>
-                    <span class="badge" id="balanceDisplay">💰 0 $MTOKEN</span>
+                    <span class="badge" id="balanceDisplay">Tu MTR: --</span>
                 </div>
 
                 <div class="wallet-section">
-                    <button type="button" onclick="connectWallet()" class="btn-secondary btn-wallet">
-                        🦊 Conectar Wallet
+                    <button type="button" id="walletConnectBtn" class="btn-secondary btn-wallet">
+                        Conectar Wallet
                     </button>
                     <span id="walletAddress" class="wallet-address hidden"></span>
                 </div>
@@ -183,7 +174,7 @@
                     <div class="login-wall-icon">🥊</div>
                     <h1 class="login-wall-title">Bienvenido a MusicToken Ring</h1>
                     <p class="login-wall-subtitle">
-                        Batalla con tus canciones favoritas, apuesta $MTOKEN y demuestra quién tiene mejor gusto musical
+                        Batalla con tus canciones favoritas, apuesta MTR y demuestra quién tiene mejor gusto musical
                     </p>
                     <button type="button" onclick="openAuthModal()" class="btn-primary btn-large">
                         Iniciar Sesión para Jugar
@@ -223,14 +214,13 @@
             </section>
 
             <section class="payments-showcase">
-                <p class="streaming-label">Redes y monedas soportadas para pagos</p>
+                <p class="streaming-label">Pagos en Base con MTR</p>
                 <div class="payment-controls">
-                    <label for="preferredNetwork" class="payment-label">Red preferida para comisiones</label>
+                    <label for="preferredNetwork" class="payment-label">Red Base para pagos</label>
                     <select id="preferredNetwork" class="payment-select" onchange="setPreferredNetwork(this.value)"></select>
                 </div>
                 <div class="currency-logos">
-                    <img src="https://cdn.jsdelivr.net/npm/simple-icons@latest/icons/polygon.svg" alt="Polygon" class="currency-logo" onerror="this.style.display='none'">
-                    <img src="https://cdn.jsdelivr.net/npm/simple-icons@latest/icons/ethereum.svg" alt="Ethereum" class="currency-logo" onerror="this.style.display='none'">
+                                        <img src="https://cdn.jsdelivr.net/npm/simple-icons@latest/icons/ethereum.svg" alt="Ethereum" class="currency-logo" onerror="this.style.display='none'">
                     <img src="https://cdn.jsdelivr.net/npm/simple-icons@latest/icons/optimism.svg" alt="Optimism" class="currency-logo" onerror="this.style.display='none'">
                     <img src="https://cdn.jsdelivr.net/npm/simple-icons@latest/icons/base.svg" alt="Base" class="currency-logo" onerror="this.style.display='none'">
                     <img src="https://cdn.jsdelivr.net/npm/simple-icons@latest/icons/bnbchain.svg" alt="BNB Chain" class="currency-logo" onerror="this.onerror=null;this.src='https://cdn.jsdelivr.net/npm/simple-icons@latest/icons/binance.svg';">
@@ -244,29 +234,39 @@
 
                 <div class="settlement-panel">
                     <div class="settlement-card">
-                        <h4>Recarga verificable (on-chain → saldo)</h4>
+                        <h4>Comprar MTR directo</h4>
                         <p class="settlement-help">
-                            Envía tus tokens a la wallet de la red seleccionada y pega el hash de transacción para validarlo con el backend.
+                            Compra MTR en Aerodrome y vuelve aquí: el saldo se actualiza automáticamente al conectar tu wallet en Base.
                         </p>
                         <div class="settlement-grid">
-                            <input id="depositTxHash" class="payment-input" type="text" placeholder="0x... hash de transacción">
-                            <input id="depositAmount" class="payment-input" type="number" min="1" placeholder="Monto enviado (opcional)">
+                            <a class="btn-primary" target="_blank" rel="noopener noreferrer" href="https://aerodrome.finance/swap?from=ETH&to=0x99cd1eb32846c9027ed9cb8710066fa08791c33b">Comprar MTR en Aerodrome</a>
+                            <p class="settlement-help">Contrato MTR: <a target="_blank" rel="noopener noreferrer" href="https://basescan.org/token/0x99cd1eb32846c9027ed9cb8710066fa08791c33b">0x99cd1eb32846c9027ed9cb8710066fa08791c33b</a></p>
                         </div>
-                        <button type="button" class="btn-secondary" onclick="verifyDepositTx()">✅ Verificar y acreditar recarga</button>
+                        
                     </div>
 
                     <div class="settlement-card">
-                        <h4>Liquidación de ganancias (MTOKEN → USD digital)</h4>
+                        <h4>Liquidación de ganancias (MTR → USD digital)</h4>
                         <p class="settlement-help">
                             Solicita retiro cuando tengas saldo. El backend cotiza con referencia USD y registra la comisión antes de liquidar.
                         </p>
                         <div class="settlement-grid">
-                            <input id="cashoutAmount" class="payment-input" type="number" min="1" placeholder="MTOKEN a retirar">
+                            <input id="cashoutAmount" class="payment-input" type="number" min="1" placeholder="MTR a retirar">
                             <button type="button" class="btn-secondary" onclick="quoteCashout()">📊 Cotizar en USD</button>
                         </div>
                         <p class="settlement-quote" id="cashoutQuote">Sin cotización aún.</p>
                         <button type="button" class="btn-primary" onclick="requestCashout()">💸 Solicitar retiro</button>
                     </div>
+                </div>
+            </section>
+
+            <section class="payments-showcase">
+                <p class="streaming-label">Sobre MTR</p>
+                <div class="settlement-card">
+                    <p>Token ERC-20 en Base. Liquidez lockeada en Aerodrome.</p>
+                    <p>Contrato: 0x99cd1eb32846c9027ed9cb8710066fa08791c33b.</p>
+                    <p>Contrato verificado: 0x99cd1eb32846c9027ed9cb8710066fa08791c33b —Supply total: 99,990,000 MTR (<a target="_blank" rel="noopener noreferrer" href="https://basescan.org/token/0x99cd1eb32846c9027ed9cb8710066fa08791c33b">ver en Basescan</a>)</p>
+                    <p>Explorer: <a target="_blank" rel="noopener noreferrer" href="https://basescan.org/token/0x99cd1eb32846c9027ed9cb8710066fa08791c33b">https://basescan.org/token/0x99cd1eb32846c9027ed9cb8710066fa08791c33b</a></p>
                 </div>
             </section>
 
@@ -378,8 +378,8 @@
                         <div class="bet-section">
                             <h3>💰 Tu Apuesta</h3>
                             <div class="bet-info">
-                                <span><span id="balanceLabel">Balance</span>: <strong id="userBalance">0</strong> $MTOKEN</span>
-                                <span>Mínimo: <strong id="minBet">100</strong> $MTOKEN</span>
+                                <span><span id="balanceLabel">Tu MTR</span>: <strong id="userBalance">0</strong> MTR</span>
+                                <span>Mínimo: <strong id="minBet">100</strong> MTR</span>
                             </div>
                             <input 
                                 type="number" 
@@ -603,7 +603,7 @@
                 <div class="profile-stat-card"><span>Derrotas</span><strong id="profileLosses">-</strong></div>
                 <div class="profile-stat-card"><span>Win Rate</span><strong id="profileWinRate">-</strong></div>
                 <div class="profile-stat-card"><span>Streams totales</span><strong id="profileStreams">-</strong></div>
-                <div class="profile-stat-card full"><span>MTOKEN apostados</span><strong id="profileWagered">-</strong></div>
+                <div class="profile-stat-card full"><span>MTR apostados</span><strong id="profileWagered">-</strong></div>
             </div>
 
             <div class="profile-recent-section">
@@ -670,8 +670,8 @@
     <script src="./auth-system.js"></script>
     <script src="./game-engine.js"></script>
     <script>window.MTR_INLINE_TOP_STREAMS_ACTIVE = true;</script>
-    <script src="./app.js?v=20260222c"></script>
-    <script src="./top-streams-fallback.js?v=20260222c"></script>
+    <script src="./app.js?v=20260227mtr"></script>
+    <script src="./top-streams-fallback.js?v=20260227mtr"></script>
 
 
 
@@ -902,9 +902,9 @@
             const selector = document.getElementById('preferredNetwork');
             if (!selector || typeof PLATFORM_WALLET_ADDRESSES === 'undefined') return;
 
-            const stored = localStorage.getItem('mtr_preferred_network') || 'polygon';
+            const stored = localStorage.getItem('mtr_preferred_network') || 'base';
             const options = Object.keys(PLATFORM_WALLET_ADDRESSES).map((network) => {
-                const label = network.charAt(0).toUpperCase() + network.slice(1);
+                const label = network === 'base' ? 'Base (8453)' : network.charAt(0).toUpperCase() + network.slice(1);
                 const selected = network === stored ? 'selected' : '';
                 return `<option value="${network}" ${selected}>${label}</option>`;
             }).join('');
@@ -916,7 +916,7 @@
         function setPreferredNetwork(network) {
             localStorage.setItem('mtr_preferred_network', network);
             renderWalletDirectory(network);
-            showToast(`Red preferida actualizada: ${network.toUpperCase()}`, 'success');
+            showToast(`Red activa: ${network.toUpperCase()} (chainId 8453)`, 'success');
         }
 
         function submitContactForm(event) {
@@ -940,7 +940,7 @@
             if (!walletDirectory || typeof PLATFORM_WALLET_ADDRESSES === 'undefined') return;
 
             const selector = document.getElementById('preferredNetwork');
-            const activeNetwork = selectedNetwork || selector?.value || localStorage.getItem('mtr_preferred_network') || 'polygon';
+            const activeNetwork = selectedNetwork || selector?.value || localStorage.getItem('mtr_preferred_network') || 'base';
             const selectedAddress = PLATFORM_WALLET_ADDRESSES[activeNetwork];
 
             if (!selectedAddress) {
@@ -1168,19 +1168,11 @@
             }
         }
 
-        function connectWallet() {
-            if (typeof GameEngine !== 'undefined') {
-                GameEngine.connectWallet();
-            } else {
-                showToast('GameEngine no está cargado', 'error');
-            }
-        }
-
         function showIncomingChallenge(challenge) {
             const modal = document.getElementById('challengeModal');
             const details = document.getElementById('challengeDetails');
             if (details) {
-                details.textContent = `${challenge.song.name} - ${challenge.song.artist} | Apuesta: ${challenge.betAmount} $MTOKEN`;
+                details.textContent = `${challenge.song.name} - ${challenge.song.artist} | Apuesta: ${challenge.betAmount} MTR`;
             }
             modal.classList.remove('hidden');
         }
@@ -1202,31 +1194,6 @@
             closeChallengeModal();
             showToast('Reto rechazado', 'info');
         }
-
-        async function verifyDepositTx() {
-            const txHash = document.getElementById('depositTxHash')?.value?.trim();
-            const expectedAmount = parseFloat(document.getElementById('depositAmount')?.value || '0');
-
-            if (!txHash) {
-                showToast('Ingresa el hash de la transacción', 'error');
-                return;
-            }
-
-            if (typeof GameEngine === 'undefined') {
-                showToast('GameEngine no está cargado', 'error');
-                return;
-            }
-
-            const result = await GameEngine.verifyDepositAndCredit(txHash, {
-                network: document.getElementById('preferredNetwork')?.value || 'polygon',
-                expectedAmount: expectedAmount > 0 ? expectedAmount : undefined
-            });
-
-            if (result?.ok) {
-                showToast(`Recarga acreditada: +${result.creditedAmount || result.amount || 0} $MTOKEN`, 'success');
-            }
-        }
-
         async function quoteCashout() {
             const amount = parseFloat(document.getElementById('cashoutAmount')?.value || '0');
             if (!amount || amount <= 0) {
@@ -1241,7 +1208,7 @@
             const quote = await GameEngine.getUsdSettlementQuote(amount);
             const quoteEl = document.getElementById('cashoutQuote');
             if (quoteEl && quote) {
-                quoteEl.textContent = `Referencia: 1 MTOKEN = $${quote.usdRate}. Neto estimado: $${quote.netUsd} (fee ${quote.feePercent}%).`;
+                quoteEl.textContent = `Referencia: 1 MTR = $${quote.usdRate}. Neto estimado: $${quote.netUsd} (fee ${quote.feePercent}%).`;
             }
         }
 
@@ -1257,7 +1224,7 @@
             }
 
             const payout = await GameEngine.requestCashout(amount, {
-                network: document.getElementById('preferredNetwork')?.value || 'polygon'
+                network: 'base'
             });
 
             if (payout?.ok) {
@@ -1265,6 +1232,91 @@
             }
         }
         window.showIncomingChallenge = showIncomingChallenge;
+    </script>
+
+    <script type="module">
+        import { createConfig, http, connect, getAccount, watchAccount, reconnect, readContract } from 'https://esm.sh/@wagmi/core';
+        import { base } from 'https://esm.sh/wagmi/chains';
+        import { injected } from 'https://esm.sh/@wagmi/connectors';
+        import { walletConnect } from 'https://esm.sh/@wagmi/connectors';
+        import { formatUnits } from 'https://esm.sh/viem';
+
+        const MTR_TOKEN = '0x99cd1eb32846c9027ed9cb8710066fa08791c33b';
+        const ERC20_ABI = [
+            { type: 'function', name: 'balanceOf', stateMutability: 'view', inputs: [{ name: 'account', type: 'address' }], outputs: [{ name: '', type: 'uint256' }] }
+        ];
+
+        const wagmiConfig = createConfig({
+            chains: [base],
+            connectors: [
+                injected({ target: 'metaMask' }),
+                walletConnect({ projectId: window.WALLETCONNECT_PROJECT_ID || 'demo-project-id' })
+            ],
+            transports: {
+                [base.id]: http('https://mainnet.base.org')
+            }
+        });
+
+        async function refreshMtrBalance(address) {
+            if (!address) return;
+            try {
+                console.log('[wallet] reading MTR balance', { address });
+                const balance = await readContract(wagmiConfig, {
+                    address: MTR_TOKEN,
+                    abi: ERC20_ABI,
+                    functionName: 'balanceOf',
+                    args: [address]
+                });
+                const formatted = Number(formatUnits(balance, 18)).toLocaleString('es-ES', { maximumFractionDigits: 4 });
+                const badge = document.getElementById('balanceDisplay');
+                const userBalance = document.getElementById('userBalance');
+                if (badge) badge.textContent = `Tu MTR: ${formatted}`;
+                if (userBalance) userBalance.textContent = formatted;
+                console.log('[wallet] MTR balance updated', { formatted });
+            } catch (error) {
+                console.error('[wallet] balance read error', error);
+            }
+        }
+
+        function renderWallet(account) {
+            const walletEl = document.getElementById('walletAddress');
+            const btnEl = document.getElementById('walletConnectBtn');
+            if (!walletEl || !btnEl) return;
+            if (account?.address) {
+                walletEl.textContent = `${account.address.slice(0, 6)}...${account.address.slice(-4)}`;
+                walletEl.classList.remove('hidden');
+                btnEl.textContent = 'Wallet conectada';
+                localStorage.setItem('mtr_wallet', account.address);
+                localStorage.setItem('mtr_wallet_chain', 'base');
+                refreshMtrBalance(account.address);
+            } else {
+                walletEl.classList.add('hidden');
+                btnEl.textContent = 'Conectar Wallet';
+            }
+        }
+
+        async function connectWalletWagmi() {
+            try {
+                console.log('[wallet] connect requested via wagmi');
+                await connect(wagmiConfig, { connector: injected({ target: 'metaMask' }) });
+                renderWallet(getAccount(wagmiConfig));
+            } catch (error) {
+                console.error('[wallet] connect error', error);
+                if (typeof showToast === 'function') showToast('No se pudo conectar la wallet', 'error');
+            }
+        }
+
+        const btn = document.getElementById('walletConnectBtn');
+        if (btn) btn.addEventListener('click', connectWalletWagmi);
+
+        watchAccount(wagmiConfig, {
+            onChange(account) {
+                renderWallet(account);
+            }
+        });
+
+        await reconnect(wagmiConfig);
+        renderWallet(getAccount(wagmiConfig));
     </script>
 </body>
 </html>
