@@ -4,16 +4,25 @@ set -euo pipefail
 usage() {
   cat <<'USAGE'
 Uso:
-  scripts/sync-and-push-branches.sh [--skip-check] <branch-1> <branch-2> [...]
+  scripts/sync-and-push-branches.sh [--skip-check] [--anchor <branch|HEAD>] [--delete-remote <branch> ...] <branch-1> <branch-2> [branch-3 ...]
 
 Qué hace:
   1) Verifica que el repo esté limpio.
   2) Ejecuta `npm run check` (salvo --skip-check).
-  3) Crea/actualiza cada rama indicada apuntando al commit actual.
-  4) Hace push de cada rama a origin.
+  3) Toma un commit ancla (HEAD por defecto, o --anchor <branch|HEAD>).
+  4) Fuerza cada rama objetivo para que apunte al mismo commit ancla.
+  5) Hace push forzado de esas ramas a origin.
+  6) Opcional: elimina ramas remotas sobrantes con --delete-remote.
 
-Ejemplo:
-  scripts/sync-and-push-branches.sh hotfix-mtr-address-main codex/pr-135-fix
+Ejemplos:
+  # Sincronizar 3 ramas al commit actual
+  scripts/sync-and-push-branches.sh hotfix-mtr-address-main codex/pr-135-fix codex/pr-138-fix
+
+  # Sincronizar usando una rama ancla explícita
+  scripts/sync-and-push-branches.sh --anchor hotfix-mtr-address-main codex/pr-135-fix codex/pr-137-fix
+
+  # Sincronizar y borrar rama remota sobrante
+  scripts/sync-and-push-branches.sh hotfix-mtr-address-main codex/pr-135-fix codex/pr-137-fix --delete-remote codex/pr-138-fix
 USAGE
 }
 
@@ -23,13 +32,42 @@ if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
 fi
 
 run_check=true
-if [[ "${1:-}" == "--skip-check" ]]; then
-  run_check=false
-  shift
-fi
+anchor_ref="HEAD"
+delete_remote_branches=()
+target_branches=()
 
-if [[ "$#" -lt 2 ]]; then
-  echo "❌ Debes indicar al menos 2 ramas para sincronizar y empujar." >&2
+while [[ "$#" -gt 0 ]]; do
+  case "$1" in
+    --skip-check)
+      run_check=false
+      shift
+      ;;
+    --anchor)
+      anchor_ref="${2:-}"
+      if [[ -z "$anchor_ref" ]]; then
+        echo "❌ --anchor requiere un valor." >&2
+        exit 1
+      fi
+      shift 2
+      ;;
+    --delete-remote)
+      branch_to_delete="${2:-}"
+      if [[ -z "$branch_to_delete" ]]; then
+        echo "❌ --delete-remote requiere un nombre de rama." >&2
+        exit 1
+      fi
+      delete_remote_branches+=("$branch_to_delete")
+      shift 2
+      ;;
+    *)
+      target_branches+=("$1")
+      shift
+      ;;
+  esac
+done
+
+if [[ "${#target_branches[@]}" -lt 2 ]]; then
+  echo "❌ Debes indicar al menos 2 ramas objetivo para sincronizar." >&2
   usage >&2
   exit 1
 fi
@@ -50,8 +88,13 @@ if [[ -n "$(git status --porcelain)" ]]; then
   exit 1
 fi
 
+if ! git rev-parse --verify "$anchor_ref" >/dev/null 2>&1; then
+  echo "❌ El ancla '$anchor_ref' no existe." >&2
+  exit 1
+fi
+
 current_branch="$(git rev-parse --abbrev-ref HEAD)"
-current_commit="$(git rev-parse --short HEAD)"
+anchor_commit="$(git rev-parse --short "$anchor_ref")"
 
 if [[ "$run_check" == true ]]; then
   echo "▶ Ejecutando validación: npm run check"
@@ -60,13 +103,21 @@ else
   echo "⚠️ Se omitió npm run check por --skip-check"
 fi
 
-echo "▶ Sincronizando ramas al commit $current_commit"
-for target_branch in "$@"; do
+echo "▶ Sincronizando ramas al commit ancla $anchor_commit ($anchor_ref)"
+for target_branch in "${target_branches[@]}"; do
   echo "  - $target_branch"
-  git branch -f "$target_branch" HEAD
-  git push -u origin "$target_branch"
+  git branch -f "$target_branch" "$anchor_ref"
+  git push -f -u origin "$target_branch"
 done
+
+if [[ "${#delete_remote_branches[@]}" -gt 0 ]]; then
+  echo "▶ Eliminando ramas remotas sobrantes"
+  for stale_branch in "${delete_remote_branches[@]}"; do
+    echo "  - $stale_branch"
+    git push origin --delete "$stale_branch"
+  done
+fi
 
 git checkout "$current_branch" >/dev/null 2>&1 || true
 
-echo "✅ Ramas sincronizadas y empujadas desde commit $current_commit"
+echo "✅ Sincronización completada. Todas las ramas objetivo apuntan a $anchor_commit"

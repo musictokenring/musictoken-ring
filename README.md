@@ -70,25 +70,29 @@ npm run check
 
 > ⚠️ `--force` elimina cambios no comiteados y archivos no trackeados.
 
-## 🚀 Desatascar y empujar 2 ramas al mismo fix
+## 🚀 Desatascar y alinear 3 (o más) ramas al mismo fix
 
-Cuando tengas dos PR/ramas atascadas y quieras publicar exactamente el mismo commit estable en ambas:
+Cuando tengas varias PR/ramas atascadas y quieras que todas apunten al mismo commit estable:
 
 ```bash
-# valida y empuja ambas ramas al commit actual
-./scripts/sync-and-push-branches.sh <rama-1> <rama-2>
-
-# ejemplo
-./scripts/sync-and-push-branches.sh hotfix-mtr-address-main codex/pr-135-fix
+# sincroniza 3 ramas al commit actual (HEAD)
+./scripts/sync-and-push-branches.sh hotfix-mtr-address-main codex/pr-135-fix codex/pr-137-fix
 ```
 
-Si ya validaste localmente y solo quieres empujar:
+Si prefieres usar una rama ancla explícita:
 
 ```bash
-./scripts/sync-and-push-branches.sh --skip-check <rama-1> <rama-2>
+./scripts/sync-and-push-branches.sh --anchor hotfix-mtr-address-main codex/pr-135-fix codex/pr-137-fix
+```
+
+Si te quedó una rama/PR sobrante, también la puedes borrar remoto en el mismo flujo:
+
+```bash
+./scripts/sync-and-push-branches.sh hotfix-mtr-address-main codex/pr-135-fix codex/pr-137-fix --delete-remote codex/pr-138-fix
 ```
 
 > Requisitos: working tree limpio y `origin` configurado.
+
 
 ## 📁 Estructura del Proyecto
 
