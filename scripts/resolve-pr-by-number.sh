@@ -16,6 +16,9 @@ Options:
   --no-push               Do not push after commit
   --keep-current-merge    Reuse current merge even if branch differs (advanced)
   -h, --help              Show help
+
+Example:
+  scripts/resolve-pr-by-number.sh --pr 124 --head feature/wall-street-v2 --base main --strategy ours
 USAGE
 }
 
@@ -84,7 +87,16 @@ EOF2
     return 2
   fi
 
+  set +e
   pr_json="$(curl -fsSL "https://api.github.com/repos/${owner}/${repo}/pulls/${PR_NUMBER}")"
+  curl_rc=$?
+  set -e
+  if [[ $curl_rc -ne 0 || -z "$pr_json" ]]; then
+    echo "[error] Could not query GitHub API for PR #$PR_NUMBER." >&2
+    echo "[hint] Retry with explicit refs, e.g.:" >&2
+    echo "       scripts/resolve-pr-by-number.sh --pr $PR_NUMBER --head feature/wall-street-v2 --base main --strategy ours" >&2
+    return 4
+  fi
 
   read -r HEAD_REF BASE_REF <<EOF2
 $(python3 - <<'PY' "$pr_json"
