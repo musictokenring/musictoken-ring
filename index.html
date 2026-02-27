@@ -258,8 +258,7 @@
             <section class="payments-showcase">
                 <p class="streaming-label">Sobre MTR</p>
                 <div class="settlement-card">
-                    <p>Token ERC-20 en Base. Liquidez lockeada en Aerodrome.</p>
-                    <p>Contrato: 0x99cd1eb32846c9027ed9cb8710066fa08791c33b.</p>
+                    <p>Token ERC-20 en Base con supply máximo de 99.99M MTR.</p>
                     <div class="basescan-actions">
                         <a class="btn-basescan" target="_blank" rel="noopener noreferrer" href="https://basescan.org/address/0x99cd1eb32846c9027ed9cb8710066fa08791c33b">
                             <span>Ver Contrato</span>
@@ -752,13 +751,7 @@
             }
 
             function protectDashboardFromInjectedText() {
-                var list = getDashboardList();
-                if (!list || list.dataset.protected === '1') return;
-                list.dataset.protected = '1';
-                var observer = new MutationObserver(function () {
-                    purgeInjectedArtifacts();
-                });
-                observer.observe(list, { childList: true, subtree: true, characterData: true });
+                return;
             }
 
             function sanitizeDashboardCards() {
@@ -834,16 +827,21 @@
                 list.scrollTo({ left: dashboardOffset * step, behavior: 'smooth' });
             };
 
+            function scrubUnexpectedBranchText() {
+                var nodes = document.querySelectorAll('.settlement-card p, .settlement-help, .settlement-card a, .stream-card-info strong, .stream-card-info span');
+                for (var i = 0; i < nodes.length; i++) {
+                    var text = String(nodes[i].textContent || '');
+                    if (/codex\//i.test(text) || /feature\//i.test(text)) {
+                        nodes[i].textContent = text.replace(/codex\/[^\s]+/gi, '').replace(/feature\/[^\s]+/gi, '').trim();
+                    }
+                }
+            }
+
             document.addEventListener('DOMContentLoaded', function () {
                 render('latam');
                 sanitizeDashboardCards();
-                protectDashboardFromInjectedText();
                 purgeInjectedArtifacts();
-                setInterval(function () { sanitizeDashboardCards(); purgeInjectedArtifacts(); }, 1200);
-
-                sanitizeDashboardCards();
-                setInterval(sanitizeDashboardCards, 2000);
-
+                scrubUnexpectedBranchText();
             });
         })();
         // Variables globales
@@ -1286,12 +1284,26 @@
                 const value = `${formattedBalance} MTR`;
                 if (badge) badge.textContent = `Tu MTR : ${value}`;
                 if (userBalance) userBalance.textContent = formattedBalance === '--' ? '0' : formattedBalance;
+
+                const numericBalance = balance !== undefined ? Number(formatUnits(balance, 18)) : 0;
+                window.__mtrOnChainBalance = Number.isFinite(numericBalance) ? numericBalance : 0;
+                window.dispatchEvent(new CustomEvent('mtr:onchain-balance', {
+                    detail: { balance: window.__mtrOnChainBalance }
+                }));
             }, [formattedBalance]);
 
             useEffect(() => {
-                if (!address) return;
-                localStorage.setItem('mtr_wallet', address);
-                localStorage.setItem('mtr_wallet_chain', 'base');
+                if (address) {
+                    localStorage.setItem('mtr_wallet', address);
+                    localStorage.setItem('mtr_wallet_chain', 'base');
+                    window.__mtrConnectedWallet = address;
+                    return;
+                }
+
+                window.__mtrConnectedWallet = null;
+                window.__mtrOnChainBalance = 0;
+                localStorage.removeItem('mtr_wallet');
+                localStorage.removeItem('mtr_wallet_chain');
             }, [address]);
 
             if (isConnected && address) {
