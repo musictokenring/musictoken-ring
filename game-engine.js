@@ -21,6 +21,7 @@ const GameEngine = {
     userAudio: null,
     victoryAudio: null,
     connectedWallet: null,
+    lastPrizeTxHash: null,
     quickMatchChannel: null,
     pendingChallenge: null,
     currentRoomCode: null,
@@ -151,7 +152,7 @@ const GameEngine = {
     updateBalanceDisplay() {
         const balanceEl = document.getElementById('balanceDisplay');
         if (balanceEl) {
-            balanceEl.textContent = `💰 ${this.userBalance} $MTOKEN`;
+            balanceEl.textContent = `💰 ${this.userBalance} MTR`;
         }
         const userBalanceEl = document.getElementById('userBalance');
         if (userBalanceEl) {
@@ -166,7 +167,7 @@ const GameEngine = {
     
     async joinQuickMatch(song, betAmount) {
         if (betAmount < this.minBet) {
-            showToast(`Apuesta mínima: ${this.minBet} $MTOKEN`, 'error');
+            showToast(`Apuesta mínima: ${this.minBet} MTR`, 'error');
             return;
         }
         
@@ -284,7 +285,7 @@ const GameEngine = {
         const challenge = this.pendingChallenge;
         if (!challenge) return;
         if (betAmount < challenge.betAmount) {
-            showToast(`La apuesta debe ser mínimo ${challenge.betAmount} $MTOKEN`, 'error');
+            showToast(`La apuesta debe ser mínimo ${challenge.betAmount} MTR`, 'error');
             return;
         }
         this.pendingChallenge = null;
@@ -458,7 +459,7 @@ const GameEngine = {
             }
             
             if (betAmount < match.player1_bet) {
-                showToast(`Apuesta mínima de la sala: ${match.player1_bet} $MTOKEN`, 'error');
+                showToast(`Apuesta mínima de la sala: ${match.player1_bet} MTR`, 'error');
                 return;
             }
             
@@ -568,7 +569,7 @@ const GameEngine = {
 
             const normalizedBet = Math.max(this.minBet, Math.round(demoBet || this.minBet));
             if (normalizedBet > this.practiceDemoBalance) {
-                showToast(`Saldo demo insuficiente. Disponible: ${this.practiceDemoBalance} $MTOKEN`, 'error');
+                showToast(`Saldo demo insuficiente. Disponible: ${this.practiceDemoBalance} MTR`, 'error');
                 return;
             }
 
@@ -602,7 +603,7 @@ const GameEngine = {
             
             if (error) throw error;
             
-            showToast(`¡Iniciando práctica con ${normalizedBet} $MTOKEN demo!`, 'success');
+            showToast(`¡Iniciando práctica con ${normalizedBet} MTR demo!`, 'success');
             await this.startMatch(match.id);
             
         } catch (error) {
@@ -655,7 +656,7 @@ const GameEngine = {
                 .single();
             
             if (betAmount < tournament.entry_fee) {
-                showToast(`Entry fee: ${tournament.entry_fee} $MTOKEN`, 'error');
+                showToast(`Entry fee: ${tournament.entry_fee} MTR`, 'error');
                 return;
             }
             
@@ -792,7 +793,7 @@ const GameEngine = {
                             </div>
                         </div>
                         <div class="battle-plays">🎧 Reproducciones: <span id="plays1">0</span></div>
-                        <div class="battle-bet">💰 ${match.player1_bet} $MTOKEN</div>
+                        <div class="battle-bet">💰 ${match.player1_bet} MTR</div>
                     </div>
                     
                     <!-- VS -->
@@ -837,7 +838,7 @@ const GameEngine = {
                             </div>
                         </div>
                         <div class="battle-plays">🎧 Reproducciones: <span id="plays2">0</span></div>
-                        <div class="battle-bet">💰 ${match.player2_bet} $MTOKEN</div>
+                        <div class="battle-bet">💰 ${match.player2_bet} MTR</div>
                     </div>
                 </div>
             </section>
@@ -1029,6 +1030,10 @@ const GameEngine = {
         if (match.match_type !== 'practice') {
             if (userWon) {
                 await this.updateBalance(payouts.winnerPayout, 'win', match.id);
+                const winnerWallet = this.connectedWallet || localStorage.getItem('mtr_wallet') || null;
+                if (winnerWallet) {
+                    await this.sendPrizeToWinner(winnerWallet, payouts.winnerPayout, match.id);
+                }
             }
             this.addToPlatformRevenue(payouts.platformFee);
             await this.logPlatformFeeTransaction(match.id, payouts.platformFee);
@@ -1050,7 +1055,7 @@ const GameEngine = {
         const winnerName = winner === 1 ? match.player1_song_name : match.player2_song_name;
         const prize = userWon ? payouts.winnerPayout : 0;
         const platformWallet = this.getPlatformWalletAddress();
-        const payoutNetwork = this.getPreferredNetwork();
+        const payoutNetwork = 'base';
         
         const container = document.querySelector('.container');
         container.innerHTML = `
@@ -1058,15 +1063,16 @@ const GameEngine = {
                 <div class="victory-icon">${userWon ? '🏆' : '😔'}</div>
                 <h1 class="victory-title">${userWon ? '¡VICTORIA!' : 'Derrota'}</h1>
                 <h2 class="victory-winner">${winnerName}</h2>
-                ${prize > 0 ? `<p class="victory-prize">+${prize} $MTOKEN</p>` : ''}
+                ${prize > 0 ? `<p class="victory-prize">+${prize} MTR</p>` : ''}
                 ${match.match_type !== 'practice' ? `
                     <div class="victory-breakdown">
-                        <p>Comisión plataforma: ${payouts.platformFee} $MTOKEN</p>
-                        <p>Pago al ganador: ${payouts.winnerPayout} $MTOKEN</p>
+                        <p>Comisión plataforma: ${payouts.platformFee} MTR</p>
+                        <p>Pago al ganador: ${payouts.winnerPayout} MTR</p>
                         <p>Red de cobro: ${payoutNetwork.toUpperCase()}</p>
                         <p>Billetera plataforma: ${platformWallet}</p>
                     </div>
                 ` : ''}
+                ${this.lastPrizeTxHash ? `<p class="victory-prize">✅ Premio enviado! Tx: <a href="https://basescan.org/tx/${this.lastPrizeTxHash}" target="_blank" rel="noopener noreferrer">Ver en Basescan</a></p>` : ''}
                 <button onclick="${match.match_type === 'practice' ? 'GameEngine.goToPracticeSelection()' : 'location.reload()'}" class="btn-primary btn-large">
                     ${match.match_type === 'practice' ? 'Continuar en práctica' : 'Jugar de Nuevo'}
                 </button>
@@ -1295,6 +1301,7 @@ const GameEngine = {
             return;
         }
         try {
+            console.log('[wallet] connectWallet() request');
             const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
             const chainIdHex = await window.ethereum.request({ method: 'eth_chainId' });
             const chainId = Number.parseInt(chainIdHex, 16);
@@ -1303,6 +1310,7 @@ const GameEngine = {
                 localStorage.setItem('mtr_wallet', accounts[0]);
                 localStorage.setItem('mtr_wallet_chain', this.getChainNameFromId(chainId));
                 this.updateWalletDisplay();
+                console.log('[wallet] connected', { address: accounts[0], chainId });
                 showToast('Wallet conectada', 'success');
             }
         } catch (error) {
@@ -1323,14 +1331,12 @@ const GameEngine = {
             1: 'ethereum',
             10: 'optimism',
             56: 'bnb',
-            137: 'polygon',
             42161: 'arbitrum',
             59144: 'linea',
             8453: 'base',
-            80001: 'polygon',
             11155111: 'ethereum'
         };
-        return map[chainId] || 'polygon';
+        return map[chainId] || 'base';
     },
 
 
@@ -1339,19 +1345,18 @@ const GameEngine = {
         if (configured) return configured;
 
         const connectedChain = localStorage.getItem('mtr_wallet_chain');
-        if (connectedChain) return connectedChain;
+        if (connectedChain === 'base') return connectedChain;
 
-        return 'polygon';
+        return 'base';
     },
 
     getPlatformWalletAddress() {
         const addresses = window.PLATFORM_WALLET_ADDRESSES || {};
         const preferredOrder = [
             this.getPreferredNetwork(),
-            'polygon',
+            'base',
             'ethereum',
             'optimism',
-            'base',
             'arbitrum',
             'bnb',
             'linea',
@@ -1561,39 +1566,63 @@ const GameEngine = {
         return '';
     },
 
-    async backendRequest(path, payload = {}) {
-        const base = this.getBackendApiBase();
-        if (!base) {
-            showToast('Backend API no configurada', 'error');
-            return null;
+    getBackendCandidates() {
+        const configuredBase = (this.getBackendApiBase() || '').trim().replace(/\/$/, '');
+        const sameOriginBase = window.location.origin;
+
+        const candidates = [];
+        if (configuredBase) candidates.push(configuredBase);
+
+        // Fallback útil cuando el backend está detrás del mismo dominio y el CORS de un host externo falla.
+        if (!configuredBase || configuredBase !== sameOriginBase) {
+            candidates.push(sameOriginBase);
         }
+
+        return [...new Set(candidates)];
+    },
+
+    async backendRequest(path, payload = {}) {
+        const backendCandidates = this.getBackendCandidates();
 
         const { data: { session } } = await supabaseClient.auth.getSession();
         const token = session?.access_token;
 
-        const response = await fetch(`${base}${path}`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                ...(token ? { Authorization: `Bearer ${token}` } : {})
-            },
-            body: JSON.stringify(payload)
-        });
+        let networkError = null;
 
-        let data = null;
-        try {
-            data = await response.json();
-        } catch {
-            data = null;
+        for (const base of backendCandidates) {
+            try {
+                const response = await fetch(`${base}${path}`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        ...(token ? { Authorization: `Bearer ${token}` } : {})
+                    },
+                    body: JSON.stringify(payload)
+                });
+
+                let data = null;
+                try {
+                    data = await response.json();
+                } catch {
+                    data = null;
+                }
+
+                if (!response.ok) {
+                    const message = data?.message || `Error ${response.status}`;
+                    showToast(message, 'error');
+                    return null;
+                }
+
+                return data;
+            } catch (error) {
+                networkError = error;
+                console.warn(`Backend request failed against ${base}${path}:`, error);
+            }
         }
 
-        if (!response.ok) {
-            const message = data?.message || `Error ${response.status}`;
-            showToast(message, 'error');
-            return null;
-        }
-
-        return data;
+        console.error('Backend request failed for all candidates:', networkError);
+        showToast('No se pudo conectar al backend (CORS/red). Intenta recargar o usar el mismo dominio del backend.', 'error');
+        return null;
     },
 
     async verifyDepositAndCredit(txHash, options = {}) {
@@ -1605,7 +1634,7 @@ const GameEngine = {
         try {
             const data = await this.backendRequest('/api/deposits/verify', {
                 txHash,
-                network: options.network || this.getPreferredNetwork(),
+                network: options.network || 'base',
                 expectedAmount: options.expectedAmount || null,
                 walletAddress: this.connectedWallet || localStorage.getItem('mtr_wallet') || null
             });
@@ -1631,7 +1660,7 @@ const GameEngine = {
         try {
             const data = await this.backendRequest('/api/settlement/quote', {
                 tokenAmount,
-                network: this.getPreferredNetwork()
+                network: 'base'
             });
             return data;
         } catch (error) {
@@ -1650,7 +1679,7 @@ const GameEngine = {
         try {
             const data = await this.backendRequest('/api/settlement/request-cashout', {
                 tokenAmount,
-                network: options.network || this.getPreferredNetwork(),
+                network: options.network || 'base',
                 walletAddress: this.connectedWallet || localStorage.getItem('mtr_wallet') || null,
                 stableCurrency: 'USDs'
             });
@@ -1668,6 +1697,27 @@ const GameEngine = {
         } catch (error) {
             console.error('Error requesting cashout:', error);
             showToast('No se pudo solicitar el retiro', 'error');
+            return null;
+        }
+    },
+
+    async sendPrizeToWinner(winnerAddress, amountMtr, matchId = null) {
+        if (!winnerAddress || !amountMtr) return null;
+        try {
+            console.log('[prize] Sending prize request to backend', { winnerAddress, amountMtr, matchId });
+            const data = await this.backendRequest('/api/prizes/send', {
+                winner: winnerAddress,
+                amount: amountMtr,
+                matchId,
+                network: 'base'
+            });
+            if (data?.txHash) {
+                this.lastPrizeTxHash = data.txHash;
+                console.log('[prize] Prize tx hash', data.txHash);
+            }
+            return data;
+        } catch (error) {
+            console.error('[prize] Error sending prize:', error);
             return null;
         }
     },
@@ -1747,3 +1797,128 @@ document.addEventListener('DOMContentLoaded', () => {
         console.log('🎮 GameEngine loaded!');
     }
 });
+
+// Fallback UI handlers: keep core buttons functional even if inline script fails to parse.
+if (typeof window !== 'undefined') {
+    function fallbackToast(message, type = 'info') {
+        if (typeof window.showToast === 'function') {
+            window.showToast(message, type);
+            return;
+        }
+        console[type === 'error' ? 'error' : 'log'](message);
+    }
+
+    function fallbackBetAmount() {
+        return Number(document.getElementById('betAmount')?.value || 100);
+    }
+
+    function updateActionButtonsFallback(mode) {
+        const buttonsDiv = document.getElementById('actionButtons');
+        if (!buttonsDiv) return;
+
+        if (mode === 'quick') {
+            buttonsDiv.innerHTML = '<button onclick="startQuickMatch()" class="btn-primary btn-large" id="startQuickBtn">⚔️ Buscar Rival</button>';
+        } else if (mode === 'private') {
+            buttonsDiv.innerHTML = '<button onclick="createRoom()" class="btn-primary" id="createRoomBtn">🎪 Crear Sala</button><div class="or-divider">o</div><div class="join-room-group"><input type="text" id="joinRoomCode" placeholder="Código" class="room-code-input" maxlength="6"><button onclick="joinRoom()" class="btn-secondary" id="joinRoomBtn">Unirse</button></div>';
+        } else if (mode === 'practice') {
+            buttonsDiv.innerHTML = '<button onclick="startPractice()" class="btn-primary btn-large" id="startPracticeBtn">🎯 Iniciar Práctica</button>';
+        } else if (mode === 'tournament') {
+            buttonsDiv.innerHTML = '<div class="join-room-group"><input type="text" id="tournamentId" placeholder="ID de torneo" class="room-code-input"><button onclick="joinTournamentMode()" class="btn-primary" id="joinTournamentBtn">🏆 Unirme</button></div>';
+        }
+    }
+
+    if (typeof window.selectMode !== 'function') {
+        window.selectMode = function selectModeFallback(mode) {
+            const modeSelector = document.getElementById('modeSelector');
+            const songSelection = document.getElementById('songSelection');
+            const modeTitle = document.getElementById('modeTitle');
+            const titles = {
+                quick: 'Modo Rápido',
+                private: 'Sala Privada',
+                practice: 'Modo Práctica',
+                tournament: 'Modo Torneo'
+            };
+
+            window.currentMode = mode;
+            if (modeSelector) modeSelector.classList.add('hidden');
+            if (songSelection) songSelection.classList.remove('hidden');
+            if (modeTitle) modeTitle.textContent = titles[mode] || 'Modo de Juego';
+            updateActionButtonsFallback(mode);
+
+            if (window.GameEngine && typeof window.GameEngine.updatePracticeBetDisplay === 'function') {
+                window.GameEngine.updatePracticeBetDisplay();
+            }
+        };
+    }
+
+    if (typeof window.backToModes !== 'function') {
+        window.backToModes = function backToModesFallback() {
+            const modeSelector = document.getElementById('modeSelector');
+            const songSelection = document.getElementById('songSelection');
+            if (songSelection) songSelection.classList.add('hidden');
+            if (modeSelector) modeSelector.classList.remove('hidden');
+            window.currentMode = null;
+        };
+    }
+
+    if (typeof window.searchSong !== 'function') {
+        window.searchSong = function searchSongFallback() {
+            const query = document.getElementById('songSearch')?.value || '';
+            if (!query.trim()) return fallbackToast('Escribe una canción o artista', 'error');
+            if (typeof window.searchDeezer === 'function') return window.searchDeezer(query, 'searchResults');
+            fallbackToast('Buscador no disponible aún. Recarga la página.', 'error');
+        };
+    }
+
+    if (typeof window.startPractice !== 'function') {
+        window.startPractice = async function startPracticeFallback() {
+            if (window.GameEngine && typeof window.GameEngine.startPractice === 'function') {
+                return window.GameEngine.startPractice(window.selectedSong || null);
+            }
+            if (window.GameEngine && typeof window.GameEngine.startPracticeMatch === 'function') {
+                return window.GameEngine.startPracticeMatch(window.selectedSong || null, fallbackBetAmount());
+            }
+            fallbackToast('Modo práctica no disponible todavía. Recarga la página.', 'error');
+        };
+    }
+
+    if (typeof window.startQuickMatch !== 'function') {
+        window.startQuickMatch = async function startQuickMatchFallback() {
+            if (window.GameEngine && typeof window.GameEngine.startQuickMatchmaking === 'function') {
+                return window.GameEngine.startQuickMatchmaking(window.selectedSong || null, fallbackBetAmount());
+            }
+            fallbackToast('Matchmaking no disponible todavía. Recarga la página.', 'error');
+        };
+    }
+
+    if (typeof window.createRoom !== 'function') {
+        window.createRoom = async function createRoomFallback() {
+            if (window.GameEngine && typeof window.GameEngine.createPrivateRoom === 'function') {
+                return window.GameEngine.createPrivateRoom(window.selectedSong || null, fallbackBetAmount());
+            }
+            fallbackToast('Crear sala no disponible todavía. Recarga la página.', 'error');
+        };
+    }
+
+    if (typeof window.joinRoom !== 'function') {
+        window.joinRoom = async function joinRoomFallback() {
+            const code = (document.getElementById('joinRoomCode')?.value || '').trim().toUpperCase();
+            if (!code) return fallbackToast('Ingresa un código de sala', 'error');
+            if (window.GameEngine && typeof window.GameEngine.joinPrivateRoom === 'function') {
+                return window.GameEngine.joinPrivateRoom(code, window.selectedSong || null, fallbackBetAmount());
+            }
+            fallbackToast('Unirse a sala no disponible todavía. Recarga la página.', 'error');
+        };
+    }
+
+    if (typeof window.joinTournamentMode !== 'function') {
+        window.joinTournamentMode = async function joinTournamentModeFallback() {
+            const tournamentId = (document.getElementById('tournamentId')?.value || '').trim();
+            if (!tournamentId) return fallbackToast('Ingresa el ID del torneo', 'error');
+            if (window.GameEngine && typeof window.GameEngine.joinTournament === 'function') {
+                return window.GameEngine.joinTournament(tournamentId, window.selectedSong || null, fallbackBetAmount());
+            }
+            fallbackToast('Torneo no disponible todavía. Recarga la página.', 'error');
+        };
+    }
+}

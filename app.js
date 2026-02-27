@@ -1,3 +1,10 @@
+(function (global) {
+    if (global.__MTR_APP_JS_LOADED__) {
+        console.warn('app.js already loaded; skipping duplicate initialization.');
+        return;
+    }
+    global.__MTR_APP_JS_LOADED__ = true;
+
 // =========================================
 // APP.JS - MusicToken Ring
 // Funciones auxiliares de búsqueda y audio
@@ -32,11 +39,11 @@ function showToast(message, type = 'info') {
 // AUDIO PREVIEW MANAGEMENT
 // =========================================
 
-let currentAudio = null;
-let dashboardRegion = 'latam';
-let dashboardCarouselOffset = 0;
-let dashboardGlowTimeout = null;
-let dashboardDragInitialized = false;
+var currentAudio = null;
+var dashboardRegion = 'latam';
+var dashboardCarouselOffset = 0;
+var dashboardGlowTimeout = null;
+var dashboardDragInitialized = false;
 const runtimeGlobal = typeof window !== 'undefined' ? window : (typeof globalThis !== 'undefined' ? globalThis : {});
 
 function readOwnBooleanFlag(obj, flagName) {
@@ -51,8 +58,8 @@ function readOwnBooleanFlag(obj, flagName) {
     }
 }
 
-let deezerStreamsEndpointAvailable = readOwnBooleanFlag(runtimeGlobal, 'MTR_ENABLE_DEEZER_STREAMS');
-let deezerStreamsCircuitOpen = false;
+var deezerStreamsEndpointAvailable = readOwnBooleanFlag(runtimeGlobal, 'MTR_ENABLE_DEEZER_STREAMS');
+var deezerStreamsCircuitOpen = false;
 function getDashboardRegionQueries() {
     const defaultQueries = { latam: 'latin', us: 'billboard', eu: 'europe top' };
     const externalQueries = runtimeGlobal && runtimeGlobal.MTR_DASHBOARD_REGION_QUERIES;
@@ -480,7 +487,7 @@ function handleTrackSelect(track) {
 // EVENT LISTENERS
 // =========================================
 
-let dashboardBootstrapDone = false;
+var dashboardBootstrapDone = false;
 
 function bootstrapAppSearchAndDashboard() {
     if (dashboardBootstrapDone) return;
@@ -533,7 +540,38 @@ window.searchDeezer = searchDeezer;
 window.displaySearchResults = displaySearchResults;
 window.handleTrackSelect = handleTrackSelect;
 
+// Fallbacks: keep mode buttons functional even if inline scripts fail to parse/load.
+if (typeof window.selectMode !== 'function') {
+    window.selectMode = function selectModeFallback(mode) {
+        const modeSelector = document.getElementById('modeSelector');
+        const songSelection = document.getElementById('songSelection');
+        const modeTitle = document.getElementById('modeTitle');
+        const titles = {
+            quick: '⚔️ Modo Rápido',
+            private: '🎪 Sala Privada',
+            tournament: '🏆 Torneo',
+            practice: '🎯 Práctica'
+        };
+
+        if (modeSelector) modeSelector.classList.add('hidden');
+        if (songSelection) songSelection.classList.remove('hidden');
+        if (modeTitle) modeTitle.textContent = titles[mode] || '🎮 Seleccionar Modo';
+        window.currentMode = mode || null;
+    };
+}
+
+if (typeof window.backToModes !== 'function') {
+    window.backToModes = function backToModesFallback() {
+        const modeSelector = document.getElementById('modeSelector');
+        const songSelection = document.getElementById('songSelection');
+        if (songSelection) songSelection.classList.add('hidden');
+        if (modeSelector) modeSelector.classList.remove('hidden');
+    };
+}
+
 if (!window.MTR_INLINE_TOP_STREAMS_ACTIVE) {
     window.setDashboardRegion = setDashboardRegion;
     window.moveDashboardCarousel = moveDashboardCarousel;
 }
+
+})(typeof window !== 'undefined' ? window : (typeof globalThis !== 'undefined' ? globalThis : this));
