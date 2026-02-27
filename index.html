@@ -754,10 +754,16 @@
                 var list = getDashboardList();
                 if (!list || list.dataset.protected === '1') return;
                 list.dataset.protected = '1';
+                var running = false;
                 var observer = new MutationObserver(function () {
-                    purgeInjectedArtifacts();
+                    if (running) return;
+                    running = true;
+                    requestAnimationFrame(function () {
+                        purgeInjectedArtifacts();
+                        running = false;
+                    });
                 });
-                observer.observe(list, { childList: true, subtree: true, characterData: true });
+                observer.observe(list, { childList: true, subtree: true });
             }
 
             function sanitizeDashboardCards() {
@@ -838,10 +844,7 @@
                 sanitizeDashboardCards();
                 protectDashboardFromInjectedText();
                 purgeInjectedArtifacts();
-                setInterval(function () { sanitizeDashboardCards(); purgeInjectedArtifacts(); }, 1200);
-
-                sanitizeDashboardCards();
-                setInterval(sanitizeDashboardCards, 2000);
+                setInterval(function () { sanitizeDashboardCards(); purgeInjectedArtifacts(); }, 4000);
 
             });
         })();
