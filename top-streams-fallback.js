@@ -1,4 +1,5 @@
 (function () {
+  window.__MTR_TOP_STREAMS_EXTERNAL__ = true;
   var region = 'latam';
   var offset = 0;
   var queries = { latam: 'latin', us: 'billboard', eu: 'europe top' };
