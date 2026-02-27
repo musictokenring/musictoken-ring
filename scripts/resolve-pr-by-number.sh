@@ -17,6 +17,7 @@ Options:
   --no-push               Do not push after commit
   --keep-current-merge    Reuse current merge even if branch differs (advanced)
   --offline-current-merge Resolve only the current in-progress merge; skip fetch/switch/reset
+  --finish-current-merge  Finalize the active merge on current branch (no PR lookup/fetch)
   -h, --help              Show help
 
 Example:
@@ -24,6 +25,7 @@ Example:
   scripts/resolve-pr-by-number.sh --pr 127 --remote-url https://github.com/musictokenring/musictoken-ring.git --head codex/fix-merge-issues-and-update-frontend-sjngcd --base hotfix-mtr-address-main --strategy ours
   scripts/resolve-pr-by-number.sh --pr 127 --head codex/fix-merge-issues-and-update-frontend-sjngcd --base hotfix-mtr-address-main --strategy ours --offline-current-merge
   scripts/resolve-pr-by-number.sh --pr 132 --head codex/fix-merge-issues-and-update-frontend-g7ox6z --base hotfix-mtr-address-main --strategy ours
+  scripts/resolve-pr-by-number.sh --finish-current-merge --strategy ours
 USAGE
 }
 
@@ -36,6 +38,7 @@ BASE_REF=""
 NO_PUSH=0
 KEEP_CURRENT_MERGE=0
 OFFLINE_CURRENT_MERGE=0
+FINISH_CURRENT_MERGE=0
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -61,13 +64,14 @@ while [[ $# -gt 0 ]]; do
     --no-push) NO_PUSH=1; shift ;;
     --keep-current-merge) KEEP_CURRENT_MERGE=1; shift ;;
     --offline-current-merge) OFFLINE_CURRENT_MERGE=1; shift ;;
+    --finish-current-merge) FINISH_CURRENT_MERGE=1; shift ;;
     -h|--help) usage; exit 0 ;;
     *) echo "[error] Unknown argument: $1" >&2; usage; exit 1 ;;
   esac
 done
 
-if [[ -z "$PR_NUMBER" ]]; then
-  echo "[error] --pr is required" >&2
+if [[ "$FINISH_CURRENT_MERGE" -eq 0 && -z "$PR_NUMBER" ]]; then
+  echo "[error] --pr is required (unless using --finish-current-merge)" >&2
   usage
   exit 1
 fi
@@ -80,6 +84,42 @@ fi
 if ! git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
   echo "[error] Not inside a git repository" >&2
   exit 1
+fi
+
+if [[ "$FINISH_CURRENT_MERGE" -eq 1 ]]; then
+  CURRENT_BRANCH="$(git rev-parse --abbrev-ref HEAD)"
+  if ! git rev-parse -q --verify MERGE_HEAD >/dev/null 2>&1; then
+    echo "[error] --finish-current-merge requires an active merge conflict state" >&2
+    exit 1
+  fi
+
+  while IFS= read -r f; do
+    [[ -z "$f" ]] && continue
+    git checkout "--$STRATEGY" -- "$f"
+    git add "$f"
+    echo "[info] resolved in finish-mode: $f"
+  done < <(git diff --name-only --diff-filter=U)
+
+  if git ls-files -u | grep -q .; then
+    echo "[error] Still unmerged files after finish-mode resolution" >&2
+    git status --short
+    exit 6
+  fi
+
+  git add -A
+  git commit --allow-empty -m "Finalize active merge using ${STRATEGY} strategy"
+
+  if [[ "$NO_PUSH" -eq 0 ]]; then
+    if git remote get-url "$REMOTE" >/dev/null 2>&1; then
+      git push "$REMOTE" "$CURRENT_BRANCH"
+      echo "[ok] Finish-mode merge pushed to ${REMOTE}/${CURRENT_BRANCH}"
+    else
+      echo "[warn] Remote '$REMOTE' not configured; merge committed locally only"
+    fi
+  else
+    echo "[ok] Finish-mode merge committed locally (push skipped)"
+  fi
+  exit 0
 fi
 
 if [[ "$OFFLINE_CURRENT_MERGE" -eq 1 ]]; then
