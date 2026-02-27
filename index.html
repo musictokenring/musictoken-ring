@@ -6,7 +6,7 @@
     <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
     <meta http-equiv="Pragma" content="no-cache">
     <meta http-equiv="Expires" content="0">
-    <meta name="mtr-build" content="20260227mtr">
+    <meta name="mtr-build" content="20260227mtr-hotfix-ui2">
     <title>MusicToken Ring - Music Battle Arena</title>
    
     <!-- Fonts -->
@@ -15,7 +15,7 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
    
     <!-- Styles -->
-    <link rel="stylesheet" href="./styles/main.css">
+    <link rel="stylesheet" href="./styles/main.css?v=20260227mtr-hotfix-ui2">
    
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🥊</text></svg>">
 
@@ -52,9 +52,9 @@
         });
 
         const PLATFORM_WALLET_ADDRESSES = {
-            base: '0x99cd1eb32846c9027ed9cb8710066fa08791c33b'
+            base: '0x75376BC58830f27415402875D26B73A6BE8E2253'
         };
-        window.MTR_BUILD_ID = '20260227mtr';
+        window.MTR_BUILD_ID = '20260227mtr-hotfix-ui2';
 
         // Critical UI fallbacks: keep mode buttons functional even if a later script fails to parse/load.
         if (typeof window.selectMode !== 'function') {
@@ -106,7 +106,12 @@
                     <span class="badge" id="balanceDisplay">Tu MTR: --</span>
                 </div>
 
-                <div id="walletApp" class="wallet-section"></div>
+                <div class="wallet-section">
+                    <button type="button" id="walletConnectBtn" class="btn-secondary btn-wallet">
+                        Conectar Wallet
+                    </button>
+                    <span id="walletAddress" class="wallet-address hidden"></span>
+                </div>
                 
                 <!-- AUTH BUTTON -->
                 <div id="authButton">
@@ -235,6 +240,7 @@
                         </p>
                         <div class="settlement-grid">
                             <a class="btn-primary" target="_blank" rel="noopener noreferrer" href="https://aerodrome.finance/swap?from=ETH&to=0x99cd1eb32846c9027ed9cb8710066fa08791c33b">Comprar MTR en Aerodrome</a>
+                            <a class="btn-basescan" target="_blank" rel="noopener noreferrer" href="https://basescan.org/address/0x99cd1eb32846c9027ed9cb8710066fa08791c33b">🔎 Ver contrato en Basescan</a>
                             <p class="settlement-help">Contrato MTR: <a target="_blank" rel="noopener noreferrer" href="https://basescan.org/address/0x99cd1eb32846c9027ed9cb8710066fa08791c33b">0x99cd1eb32846c9027ed9cb8710066fa08791c33b</a></p>
                         </div>
                         
@@ -258,17 +264,11 @@
             <section class="payments-showcase">
                 <p class="streaming-label">Sobre MTR</p>
                 <div class="settlement-card">
-                    <p>Token ERC-20 en Base con supply máximo de 99.99M MTR.</p>
-                    <div class="basescan-actions">
-                        <a class="btn-basescan" target="_blank" rel="noopener noreferrer" href="https://basescan.org/address/0x99cd1eb32846c9027ed9cb8710066fa08791c33b">
-                            <span>Ver Contrato</span>
-                            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 3h7v7h-2V6.41l-9.29 9.3-1.42-1.42 9.3-9.29H14V3z"></path><path d="M5 5h6v2H7v10h10v-4h2v6H5V5z"></path></svg>
-                        </a>
-                        <a class="btn-basescan" target="_blank" rel="noopener noreferrer" href="https://basescan.org/token/0x99cd1eb32846c9027ed9cb8710066fa08791c33b">
-                            <span>Ver Supply 99.99M MTR</span>
-                            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 3h7v7h-2V6.41l-9.29 9.3-1.42-1.42 9.3-9.29H14V3z"></path><path d="M5 5h6v2H7v10h10v-4h2v6H5V5z"></path></svg>
-                        </a>
-                    </div>
+                    <p>Token ERC-20 en Base. Liquidez lockeada en Aerodrome.</p>
+                    <p>Contrato: 0x99cd1eb32846c9027ed9cb8710066fa08791c33b.</p>
+                    <p>Contrato verificado: 0x99cd1eb32846c9027ed9cb8710066fa08791c33b —Supply total: 99,990,000 MTR.</p>
+                    <a class="btn-basescan" target="_blank" rel="noopener noreferrer" href="https://basescan.org/token/0x99cd1eb32846c9027ed9cb8710066fa08791c33b">📈 Ver token MTR en Basescan</a>
+                    <p>Explorer: <a target="_blank" rel="noopener noreferrer" href="https://basescan.org/address/0x99cd1eb32846c9027ed9cb8710066fa08791c33b">https://basescan.org/address/0x99cd1eb32846c9027ed9cb8710066fa08791c33b</a></p>
                 </div>
             </section>
 
@@ -672,8 +672,8 @@
     <script src="./auth-system.js"></script>
     <script src="./game-engine.js"></script>
     <script>window.MTR_INLINE_TOP_STREAMS_ACTIVE = true;</script>
-    <script src="./app.js?v=20260227mtr"></script>
-    <script src="./top-streams-fallback.js?v=20260227mtr"></script>
+    <script src="./app.js?v=20260227mtr-hotfix-ui2"></script>
+    <script src="./top-streams-fallback.js?v=20260227mtr-hotfix-ui2"></script>
 
 
 
@@ -690,7 +690,6 @@
             if (window.__MTR_TOP_STREAMS_EXTERNAL__) {
                 return;
             }
-
             var dashboardRegion = 'latam';
             var dashboardOffset = 0;
 
@@ -755,7 +754,13 @@
             }
 
             function protectDashboardFromInjectedText() {
-                return;
+                var list = getDashboardList();
+                if (!list || list.dataset.protected === '1') return;
+                list.dataset.protected = '1';
+                var observer = new MutationObserver(function () {
+                    purgeInjectedArtifacts();
+                });
+                observer.observe(list, { childList: true, subtree: true, characterData: true });
             }
 
             function sanitizeDashboardCards() {
@@ -831,21 +836,16 @@
                 list.scrollTo({ left: dashboardOffset * step, behavior: 'smooth' });
             };
 
-            function scrubUnexpectedBranchText() {
-                var nodes = document.querySelectorAll('.settlement-card p, .settlement-help, .settlement-card a, .stream-card-info strong, .stream-card-info span');
-                for (var i = 0; i < nodes.length; i++) {
-                    var text = String(nodes[i].textContent || '');
-                    if (/codex\//i.test(text) || /feature\//i.test(text)) {
-                        nodes[i].textContent = text.replace(/codex\/[^\s]+/gi, '').replace(/feature\/[^\s]+/gi, '').trim();
-                    }
-                }
-            }
-
             document.addEventListener('DOMContentLoaded', function () {
                 render('latam');
                 sanitizeDashboardCards();
+                protectDashboardFromInjectedText();
                 purgeInjectedArtifacts();
-                scrubUnexpectedBranchText();
+                setInterval(function () { sanitizeDashboardCards(); purgeInjectedArtifacts(); }, 1200);
+
+                sanitizeDashboardCards();
+                setInterval(sanitizeDashboardCards, 2000);
+
             });
         })();
         // Variables globales
@@ -1239,193 +1239,89 @@
         window.showIncomingChallenge = showIncomingChallenge;
     </script>
 
-    <script>
-        (function () {
-            const MTR_TOKEN = '0x99cd1eb32846c9027ed9cb8710066fa08791c33b';
-            const BASE_CHAIN_ID_HEX = '0x2105';
-            const BASE_RPC_URL = 'https://mainnet.base.org';
+    <script type="module">
+        import { createConfig, http, connect, getAccount, watchAccount, reconnect, readContract } from 'https://esm.sh/@wagmi/core';
+        import { base } from 'https://esm.sh/wagmi/chains';
+        import { injected } from 'https://esm.sh/@wagmi/connectors';
+        import { walletConnect } from 'https://esm.sh/@wagmi/connectors';
+        import { formatUnits } from 'https://esm.sh/viem';
 
-            function shortAddress(address) {
-                return `${address.slice(0, 6)}...${address.slice(-4)}`;
+        const MTR_TOKEN = '0x99cd1eb32846c9027ed9cb8710066fa08791c33b';
+        const ERC20_ABI = [
+            { type: 'function', name: 'balanceOf', stateMutability: 'view', inputs: [{ name: 'account', type: 'address' }], outputs: [{ name: '', type: 'uint256' }] }
+        ];
+
+        const wagmiConfig = createConfig({
+            chains: [base],
+            connectors: [
+                injected({ target: 'metaMask' }),
+                walletConnect({ projectId: window.WALLETCONNECT_PROJECT_ID || 'demo-project-id' })
+            ],
+            transports: {
+                [base.id]: http('https://mainnet.base.org')
             }
+        });
 
-            function setUiState(address, balanceText) {
-                const root = document.getElementById('walletApp');
+        async function refreshMtrBalance(address) {
+            if (!address) return;
+            try {
+                console.log('[wallet] reading MTR balance', { address });
+                const balance = await readContract(wagmiConfig, {
+                    address: MTR_TOKEN,
+                    abi: ERC20_ABI,
+                    functionName: 'balanceOf',
+                    args: [address]
+                });
+                const formatted = Number(formatUnits(balance, 18)).toLocaleString('es-ES', { maximumFractionDigits: 4 });
                 const badge = document.getElementById('balanceDisplay');
                 const userBalance = document.getElementById('userBalance');
-                if (badge) badge.textContent = `Tu MTR : ${balanceText} MTR`;
-                if (userBalance) userBalance.textContent = balanceText;
-
-                if (!root) return;
-
-                if (address) {
-                    root.innerHTML = `<button type="button" class="btn-secondary btn-wallet" disabled>Wallet conectada</button><span class="wallet-address">${shortAddress(address)}</span>`;
-                    return;
-                }
-
-                root.innerHTML = '<button type="button" class="btn-secondary btn-wallet" id="walletConnectBtn">Conectar Wallet</button>';
-                const btn = document.getElementById('walletConnectBtn');
-                if (!btn) return;
-                btn.addEventListener('click', connectWallet);
+                if (badge) badge.textContent = `Tu MTR: ${formatted}`;
+                if (userBalance) userBalance.textContent = formatted;
+                console.log('[wallet] MTR balance updated', { formatted });
+            } catch (error) {
+                console.error('[wallet] balance read error', error);
             }
+        }
 
-            function encodeBalanceOf(address) {
-                const clean = String(address || '').toLowerCase().replace(/^0x/, '');
-                return '0x70a08231' + clean.padStart(64, '0');
-            }
-
-            async function readOnChainBalance(address) {
-                if (!address) return 0;
-                const payload = {
-                    jsonrpc: '2.0',
-                    id: Date.now(),
-                    method: 'eth_call',
-                    params: [{ to: MTR_TOKEN, data: encodeBalanceOf(address) }, 'latest']
-                };
-                const response = await fetch(BASE_RPC_URL, {
-                    method: 'POST',
-                    headers: { 'content-type': 'application/json' },
-                    body: JSON.stringify(payload)
-                });
-                const data = await response.json();
-                const hex = data && data.result ? data.result : '0x0';
-                const raw = BigInt(hex);
-                return Number(raw) / 1e18;
-            }
-
-            function publishWallet(address, balance) {
-                if (address) {
-                    localStorage.setItem('mtr_wallet', address);
-                    localStorage.setItem('mtr_wallet_chain', 'base');
-                    window.__mtrConnectedWallet = address;
-                } else {
-                    localStorage.removeItem('mtr_wallet');
-                    localStorage.removeItem('mtr_wallet_chain');
-                    window.__mtrConnectedWallet = null;
-                }
-
-                window.__mtrOnChainBalance = Number.isFinite(balance) ? balance : 0;
-                window.dispatchEvent(new CustomEvent('mtr:onchain-balance', {
-                    detail: { balance: window.__mtrOnChainBalance }
-                }));
-            }
-
-            async function refreshWalletView(address) {
-                try {
-                    const balance = address ? await readOnChainBalance(address) : 0;
-                    const formatted = Number(balance || 0).toLocaleString('es-ES', { maximumFractionDigits: 4 });
-                    setUiState(address, formatted);
-                    publishWallet(address, Number(balance || 0));
-                } catch (error) {
-                    console.error('Wallet balance read failed:', error);
-                    setUiState(address, '0');
-                    publishWallet(address, 0);
-                }
-            }
-
-            async function ensureBaseNetwork() {
-                if (!window.ethereum) return;
-                const chainId = await window.ethereum.request({ method: 'eth_chainId' });
-                if (chainId && chainId.toLowerCase() === BASE_CHAIN_ID_HEX) return;
-                try {
-                    await window.ethereum.request({ method: 'wallet_switchEthereumChain', params: [{ chainId: BASE_CHAIN_ID_HEX }] });
-                } catch (error) {
-                    console.warn('No se pudo cambiar automáticamente a Base:', error);
-                }
-            }
-
-            async function connectWallet() {
-                if (!window.ethereum) {
-                    if (typeof window.showToast === 'function') {
-                        window.showToast('MetaMask no está disponible. Instala la extensión para conectar tu wallet.', 'error');
-                    }
-                    return;
-                }
-
-                try {
-                    await ensureBaseNetwork();
-                    const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
-                    const address = accounts && accounts[0] ? accounts[0] : null;
-                    await refreshWalletView(address);
-                } catch (error) {
-                    console.error('Wallet connection failed:', error);
-                    if (typeof window.showToast === 'function') {
-                        window.showToast('No se pudo conectar la wallet. Verifica MetaMask y red Base.', 'error');
-                    }
-                }
-            }
-
-            async function bootWallet() {
-                window.__mtrWalletUiMounted = true;
-                if (!window.ethereum) {
-                    setUiState(null, '0');
-                    publishWallet(null, 0);
-                    return;
-                }
-
-                const accounts = await window.ethereum.request({ method: 'eth_accounts' });
-                const address = accounts && accounts[0] ? accounts[0] : null;
-                await refreshWalletView(address);
-
-                window.ethereum.on('accountsChanged', async (nextAccounts) => {
-                    const nextAddress = nextAccounts && nextAccounts[0] ? nextAccounts[0] : null;
-                    await refreshWalletView(nextAddress);
-                });
-
-                window.ethereum.on('chainChanged', async () => {
-                    const nextAccounts = await window.ethereum.request({ method: 'eth_accounts' });
-                    const nextAddress = nextAccounts && nextAccounts[0] ? nextAccounts[0] : null;
-                    await refreshWalletView(nextAddress);
-                });
-            }
-
-            if (document.readyState === 'loading') {
-                document.addEventListener('DOMContentLoaded', bootWallet);
+        function renderWallet(account) {
+            const walletEl = document.getElementById('walletAddress');
+            const btnEl = document.getElementById('walletConnectBtn');
+            if (!walletEl || !btnEl) return;
+            if (account?.address) {
+                walletEl.textContent = `${account.address.slice(0, 6)}...${account.address.slice(-4)}`;
+                walletEl.classList.remove('hidden');
+                btnEl.textContent = 'Wallet conectada';
+                localStorage.setItem('mtr_wallet', account.address);
+                localStorage.setItem('mtr_wallet_chain', 'base');
+                refreshMtrBalance(account.address);
             } else {
-                bootWallet();
+                walletEl.classList.add('hidden');
+                btnEl.textContent = 'Conectar Wallet';
             }
-        })();
+        }
+
+        async function connectWalletWagmi() {
+            try {
+                console.log('[wallet] connect requested via wagmi');
+                await connect(wagmiConfig, { connector: injected({ target: 'metaMask' }) });
+                renderWallet(getAccount(wagmiConfig));
+            } catch (error) {
+                console.error('[wallet] connect error', error);
+                if (typeof showToast === 'function') showToast('No se pudo conectar la wallet', 'error');
+            }
+        }
+
+        const btn = document.getElementById('walletConnectBtn');
+        if (btn) btn.addEventListener('click', connectWalletWagmi);
+
+        watchAccount(wagmiConfig, {
+            onChange(account) {
+                renderWallet(account);
+            }
+        });
+
+        await reconnect(wagmiConfig);
+        renderWallet(getAccount(wagmiConfig));
     </script>
-
-    <script>
-        (function () {
-            function renderWalletFallback() {
-                var root = document.getElementById('walletApp');
-                if (!root || window.__mtrWalletUiMounted) return;
-                root.innerHTML = '<button type="button" class="btn-secondary btn-wallet" id="walletFallbackBtn">Conectar Wallet</button>';
-                var btn = document.getElementById('walletFallbackBtn');
-                if (!btn) return;
-                btn.addEventListener('click', async function () {
-                    if (!window.ethereum) {
-                        if (typeof window.showToast === 'function') {
-                            window.showToast('MetaMask no está disponible en este navegador.', 'error');
-                        }
-                        return;
-                    }
-                    try {
-                        var accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
-                        var address = accounts && accounts[0] ? accounts[0] : null;
-                        if (!address) return;
-                        window.__mtrConnectedWallet = address;
-                        localStorage.setItem('mtr_wallet', address);
-                        localStorage.setItem('mtr_wallet_chain', 'base');
-                        btn.textContent = address.slice(0, 6) + '...' + address.slice(-4);
-                        btn.disabled = true;
-                    } catch (error) {
-                        console.error('Fallback wallet connect failed:', error);
-                    }
-                });
-            }
-
-            if (document.readyState === 'loading') {
-                document.addEventListener('DOMContentLoaded', function () {
-                    setTimeout(renderWalletFallback, 1500);
-                });
-            } else {
-                setTimeout(renderWalletFallback, 1500);
-            }
-        })();
-    </script>
-
 </body>
 </html>

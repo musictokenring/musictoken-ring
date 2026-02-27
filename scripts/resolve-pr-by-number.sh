@@ -23,6 +23,7 @@ Example:
   scripts/resolve-pr-by-number.sh --pr 124 --head feature/wall-street-v2 --base main --strategy ours
   scripts/resolve-pr-by-number.sh --pr 127 --remote-url https://github.com/musictokenring/musictoken-ring.git --head codex/fix-merge-issues-and-update-frontend-sjngcd --base hotfix-mtr-address-main --strategy ours
   scripts/resolve-pr-by-number.sh --pr 127 --head codex/fix-merge-issues-and-update-frontend-sjngcd --base hotfix-mtr-address-main --strategy ours --offline-current-merge
+  scripts/resolve-pr-by-number.sh --pr 132 --head codex/fix-merge-issues-and-update-frontend-g7ox6z --base hotfix-mtr-address-main --strategy ours
 USAGE
 }
 
@@ -39,11 +40,24 @@ OFFLINE_CURRENT_MERGE=0
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --pr) PR_NUMBER="${2:-}"; shift 2 ;;
+    --pr=*) PR_NUMBER="${1#*=}"; shift ;;
     --strategy) STRATEGY="${2:-ours}"; shift 2 ;;
+    --strategy=*) STRATEGY="${1#*=}"; shift ;;
+    --s)
+      if [[ "${2:-}" == "trategy" ]]; then
+        STRATEGY="${3:-ours}"; shift 3
+      else
+        STRATEGY="${2:-ours}"; shift 2
+      fi
+      ;;
     --remote) REMOTE="${2:-origin}"; shift 2 ;;
+    --remote=*) REMOTE="${1#*=}"; shift ;;
     --remote-url) REMOTE_URL_OVERRIDE="${2:-}"; shift 2 ;;
+    --remote-url=*) REMOTE_URL_OVERRIDE="${1#*=}"; shift ;;
     --head) HEAD_REF="${2:-}"; shift 2 ;;
+    --head=*) HEAD_REF="${1#*=}"; shift ;;
     --base) BASE_REF="${2:-}"; shift 2 ;;
+    --base=*) BASE_REF="${1#*=}"; shift ;;
     --no-push) NO_PUSH=1; shift ;;
     --keep-current-merge) KEEP_CURRENT_MERGE=1; shift ;;
     --offline-current-merge) OFFLINE_CURRENT_MERGE=1; shift ;;
