@@ -393,3 +393,18 @@ const app = express()
 app.use(express.json())
 registerPrizeRoutes(app)
 ```
+
+
+### Reparación rápida desde terminal (sin edición manual)
+Si el entorno queda inconsistente tras merges o conflictos, ejecuta:
+
+```bash
+bash scripts/repair-mtr-integration.sh
+```
+
+Este script:
+- normaliza `backend/prize-api.js`,
+- elimina `backend/prize-api-example.js` si existe,
+- corrige estado wallet connect/disconnect en `index.html`,
+- aplica fallback estricto de saldo en `game-engine.js`,
+- y corre validaciones (`npm run check`, `node --check ...`).
