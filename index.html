@@ -27,7 +27,8 @@
             SUPABASE_URL: 'https://bscmgcnynbxalcuwdqlm.supabase.co',
             SUPABASE_ANON_KEY: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJzY21nY255bmJ4YWxjdXdkcWxtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzA0NTYwOTUsImV4cCI6MjA4NjAzMjA5NX0.1iasFQ5H0GmrFqi6poWNE1aZOtbmQuB113RCyg2BBK4',
             BATTLE_DURATION: 60,
-            BACKEND_API: 'https://musictoken-backend.onrender.com'
+            BACKEND_API: 'https://musictoken-backend.onrender.com',
+            WALLETCONNECT_PROJECT_ID: window.WALLETCONNECT_PROJECT_ID || ''
         };
         function extractMetaMaskErrorMessage(reason) {
             if (!reason) return '';
@@ -55,6 +56,42 @@
             base: '0x75376BC58830f27415402875D26B73A6BE8E2253'
         };
         window.MTR_BUILD_ID = '20260227mtr-hotfix-ui2';
+
+        async function checkBackendHealth() {
+            const badge = document.getElementById('backendStatusBadge');
+            if (!badge) return;
+            const apiBase = (window.CONFIG && window.CONFIG.BACKEND_API) || '';
+            if (!apiBase) {
+                badge.textContent = 'Backend: sin configuración';
+                badge.style.background = '#7F1D1D';
+                return;
+            }
+
+            badge.textContent = 'Backend: verificando...';
+            try {
+                const controller = new AbortController();
+                const timeout = setTimeout(() => controller.abort(), 5000);
+                const response = await fetch(`${apiBase}/health`, { method: 'GET', signal: controller.signal });
+                clearTimeout(timeout);
+
+                if (response.ok) {
+                    badge.textContent = 'Backend: online';
+                    badge.style.background = '#065F46';
+                } else {
+                    badge.textContent = `Backend: error ${response.status}`;
+                    badge.style.background = '#7F1D1D';
+                }
+            } catch (error) {
+                badge.textContent = 'Backend: sin respuesta';
+                badge.style.background = '#7F1D1D';
+                console.error('[health] backend unreachable', error);
+            }
+        }
+
+        window.addEventListener('DOMContentLoaded', () => {
+            checkBackendHealth();
+            setInterval(checkBackendHealth, 30000);
+        });
 
         // Critical UI fallbacks: keep mode buttons functional even if a later script fails to parse/load.
         if (typeof window.selectMode !== 'function') {
@@ -104,6 +141,7 @@
                     <span class="badge">🎵 Deezer</span>
                     <span class="badge badge-live">🔴 Live</span>
                     <span class="badge" id="balanceDisplay">Tu MTR: --</span>
+                    <span class="badge" id="backendStatusBadge">Backend: verificando...</span>
                 </div>
 
                 <div class="wallet-section">
@@ -687,6 +725,9 @@
 
 
         (function () {
+            if (window.MTR_INLINE_TOP_STREAMS_ACTIVE) {
+                return;
+            }
             if (window.__MTR_TOP_STREAMS_EXTERNAL__) {
                 return;
             }
@@ -1251,12 +1292,18 @@
             { type: 'function', name: 'balanceOf', stateMutability: 'view', inputs: [{ name: 'account', type: 'address' }], outputs: [{ name: '', type: 'uint256' }] }
         ];
 
+        const walletConnectProjectId = String((window.CONFIG && window.CONFIG.WALLETCONNECT_PROJECT_ID) || window.WALLETCONNECT_PROJECT_ID || '').trim();
+        const wagmiConnectors = [injected({ target: 'metaMask' })];
+
+        if (walletConnectProjectId && walletConnectProjectId !== 'demo-project-id') {
+            wagmiConnectors.push(walletConnect({ projectId: walletConnectProjectId }));
+        } else {
+            console.warn('[wallet] WalletConnect desactivado: falta WALLETCONNECT_PROJECT_ID válido.');
+        }
+
         const wagmiConfig = createConfig({
             chains: [base],
-            connectors: [
-                injected({ target: 'metaMask' }),
-                walletConnect({ projectId: window.WALLETCONNECT_PROJECT_ID || 'demo-project-id' })
-            ],
+            connectors: wagmiConnectors,
             transports: {
                 [base.id]: http('https://mainnet.base.org')
             }

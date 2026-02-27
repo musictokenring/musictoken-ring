@@ -48,6 +48,66 @@ Esta sección es una guía rápida para cualquier usuario que quiera usar la app
 - ✅ Navega dashboard (tabs + carrusel).
 - ✅ Genera cotización y solicitud de cashout.
 
+
+## 🛠️ Troubleshooting (Codex patch conflict)
+
+Si una tarea de Codex falla con el error:
+
+> `Failed to apply patch ... setup script and agent modify the same files`
+
+usa este flujo para recuperar la rama y reintentar:
+
+```bash
+# 1) Ver plan (sin tocar nada)
+./scripts/recover-codex-patch-conflict.sh
+
+# 2) Ejecutar limpieza total contra origin/<rama>
+./scripts/recover-codex-patch-conflict.sh --force
+
+# 3) Validar estado local
+npm run check
+```
+
+> ⚠️ `--force` elimina cambios no comiteados y archivos no trackeados.
+
+## 🚀 Desatascar y alinear 3 (o más) ramas al mismo fix
+
+Cuando tengas varias PR/ramas atascadas y quieras que todas apunten al mismo commit estable:
+
+```bash
+# sincroniza 3 ramas al commit actual (HEAD)
+./scripts/sync-and-push-branches.sh hotfix-mtr-address-main codex/pr-135-fix codex/pr-137-fix
+```
+
+Si prefieres usar una rama ancla explícita:
+
+```bash
+./scripts/sync-and-push-branches.sh --anchor hotfix-mtr-address-main codex/pr-135-fix codex/pr-137-fix
+```
+
+Si te quedó una rama/PR sobrante, también la puedes borrar remoto en el mismo flujo:
+
+```bash
+./scripts/sync-and-push-branches.sh hotfix-mtr-address-main codex/pr-135-fix codex/pr-137-fix --delete-remote codex/pr-138-fix
+```
+
+> Requisitos: working tree limpio y `origin` configurado.
+
+
+## 🧹 Cerrar 5 PRs atascados de una vez (alinear + cerrar)
+
+Si tienes varios PR abiertos al mismo tiempo, puedes alinear algunos al hotfix y cerrar otros en la misma ejecución:
+
+```bash
+./scripts/align-and-close-prs.sh   --anchor origin/hotfix-mtr-address-main   --align-prs 135,137   --close-prs 138,139,140
+```
+
+Modo simulación (sin tocar remoto):
+
+```bash
+./scripts/align-and-close-prs.sh --dry-run --align-prs 135,137 --close-prs 138,139,140
+```
+
 ## 📁 Estructura del Proyecto
 
 ```
