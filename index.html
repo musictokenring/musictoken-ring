@@ -6,7 +6,7 @@
     <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
     <meta http-equiv="Pragma" content="no-cache">
     <meta http-equiv="Expires" content="0">
-    <meta name="mtr-build" content="20260227mtre">
+    <meta name="mtr-build" content="20260227mtr-hotfix-ui2">
     <title>MusicToken Ring - Music Battle Arena</title>
    
     <!-- Fonts -->
@@ -15,7 +15,7 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
    
     <!-- Styles -->
-    <link rel="stylesheet" href="./styles/main.css?v=20260227mtre">
+    <link rel="stylesheet" href="./styles/main.css?v=20260227mtr-hotfix-ui2">
    
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🥊</text></svg>">
 
@@ -54,7 +54,7 @@
         const PLATFORM_WALLET_ADDRESSES = {
             base: '0x75376BC58830f27415402875D26B73A6BE8E2253'
         };
-        window.MTR_BUILD_ID = '20260227mtre';
+        window.MTR_BUILD_ID = '20260227mtr-hotfix-ui2';
 
         // Critical UI fallbacks: keep mode buttons functional even if a later script fails to parse/load.
         if (typeof window.selectMode !== 'function') {
@@ -240,8 +240,8 @@
                         </p>
                         <div class="settlement-grid">
                             <a class="btn-primary" target="_blank" rel="noopener noreferrer" href="https://aerodrome.finance/swap?from=ETH&to=0x99cd1eb32846c9027ed9cb8710066fa08791c33b">Comprar MTR en Aerodrome</a>
-                            <p class="settlement-help">Contrato oficial MTR en Base (checksum validado).</p>
-                            <a class="btn-secondary" target="_blank" rel="noopener noreferrer" href="https://basescan.org/token/0x99cd1eb32846c9027ed9cb8710066fa08791c33b">🔎 Ver token MTR y supply en Basescan</a>
+                            <a class="btn-basescan" target="_blank" rel="noopener noreferrer" href="https://basescan.org/address/0x99cd1eb32846c9027ed9cb8710066fa08791c33b">🔎 Ver contrato en Basescan</a>
+                            <p class="settlement-help">Contrato MTR: <a target="_blank" rel="noopener noreferrer" href="https://basescan.org/address/0x99cd1eb32846c9027ed9cb8710066fa08791c33b">0x99cd1eb32846c9027ed9cb8710066fa08791c33b</a></p>
                         </div>
                         
                     </div>
@@ -263,14 +263,12 @@
 
             <section class="payments-showcase">
                 <p class="streaming-label">Sobre MTR</p>
-                <div class="settlement-card" id="mtrInfoCard">
+                <div class="settlement-card">
                     <p>Token ERC-20 en Base. Liquidez lockeada en Aerodrome.</p>
                     <p>Contrato: 0x99cd1eb32846c9027ed9cb8710066fa08791c33b.</p>
                     <p>Contrato verificado: 0x99cd1eb32846c9027ed9cb8710066fa08791c33b —Supply total: 99,990,000 MTR.</p>
-                    <div class="settlement-grid">
-                        <a class="btn-primary" target="_blank" rel="noopener noreferrer" href="https://basescan.org/token/0x99cd1eb32846c9027ed9cb8710066fa08791c33b">📈 Ver token MTR en Basescan</a>
-                        <p class="settlement-help">Este botón abre el explorer del token para ver supply, holders y transacciones.</p>
-                    </div>
+                    <a class="btn-basescan" target="_blank" rel="noopener noreferrer" href="https://basescan.org/token/0x99cd1eb32846c9027ed9cb8710066fa08791c33b">📈 Ver token MTR en Basescan</a>
+                    <p>Explorer: <a target="_blank" rel="noopener noreferrer" href="https://basescan.org/address/0x99cd1eb32846c9027ed9cb8710066fa08791c33b">https://basescan.org/address/0x99cd1eb32846c9027ed9cb8710066fa08791c33b</a></p>
                 </div>
             </section>
 
@@ -674,8 +672,8 @@
     <script src="./auth-system.js"></script>
     <script src="./game-engine.js"></script>
     <script>window.MTR_INLINE_TOP_STREAMS_ACTIVE = true;</script>
-    <script src="./app.js?v=20260227mtre"></script>
-    <script src="./top-streams-fallback.js?v=20260227mtre"></script>
+    <script src="./app.js?v=20260227mtr-hotfix-ui2"></script>
+    <script src="./top-streams-fallback.js?v=20260227mtr-hotfix-ui2"></script>
 
 
 
@@ -689,6 +687,12 @@
 
 
         (function () {
+            if (window.MTR_INLINE_TOP_STREAMS_ACTIVE) {
+                return;
+            }
+            if (window.__MTR_TOP_STREAMS_EXTERNAL__) {
+                return;
+            }
             var dashboardRegion = 'latam';
             var dashboardOffset = 0;
 
