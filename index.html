@@ -751,19 +751,7 @@
             }
 
             function protectDashboardFromInjectedText() {
-                var list = getDashboardList();
-                if (!list || list.dataset.protected === '1') return;
-                list.dataset.protected = '1';
-                var running = false;
-                var observer = new MutationObserver(function () {
-                    if (running) return;
-                    running = true;
-                    requestAnimationFrame(function () {
-                        purgeInjectedArtifacts();
-                        running = false;
-                    });
-                });
-                observer.observe(list, { childList: true, subtree: true });
+                return;
             }
 
             function sanitizeDashboardCards() {
@@ -839,13 +827,21 @@
                 list.scrollTo({ left: dashboardOffset * step, behavior: 'smooth' });
             };
 
+            function scrubUnexpectedBranchText() {
+                var nodes = document.querySelectorAll('.settlement-card p, .settlement-help, .settlement-card a, .stream-card-info strong, .stream-card-info span');
+                for (var i = 0; i < nodes.length; i++) {
+                    var text = String(nodes[i].textContent || '');
+                    if (/codex\//i.test(text) || /feature\//i.test(text)) {
+                        nodes[i].textContent = text.replace(/codex\/[^\s]+/gi, '').replace(/feature\/[^\s]+/gi, '').trim();
+                    }
+                }
+            }
+
             document.addEventListener('DOMContentLoaded', function () {
                 render('latam');
                 sanitizeDashboardCards();
-                protectDashboardFromInjectedText();
                 purgeInjectedArtifacts();
-                setInterval(function () { sanitizeDashboardCards(); purgeInjectedArtifacts(); }, 4000);
-
+                scrubUnexpectedBranchText();
             });
         })();
         // Variables globales
