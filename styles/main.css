@@ -542,6 +542,37 @@ body {
     color: var(--text-secondary);
     font-size: 12px;
 }
+
+.basescan-actions {
+    display: grid;
+    gap: 10px;
+}
+
+.btn-basescan {
+    display: inline-flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 10px 14px;
+    border-radius: 10px;
+    background: #2563eb;
+    color: #fff;
+    text-decoration: none;
+    font-weight: 600;
+    font-size: 13px;
+    transition: background 0.2s ease, transform 0.2s ease;
+}
+
+.btn-basescan:hover {
+    background: #1d4ed8;
+    transform: translateY(-1px);
+}
+
+.btn-basescan svg {
+    width: 16px;
+    height: 16px;
+    fill: currentColor;
+}
 .feature-item {
     background: var(--bg-secondary);
     padding: 16px;
