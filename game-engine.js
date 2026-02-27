@@ -150,15 +150,29 @@ const GameEngine = {
     },
     
     updateBalanceDisplay() {
-        const balanceEl = document.getElementById('balanceDisplay');
-        if (balanceEl) {
-            balanceEl.textContent = `💰 ${this.userBalance} MTR`;
-        }
         const userBalanceEl = document.getElementById('userBalance');
         if (userBalanceEl) {
             userBalanceEl.textContent = this.userBalance;
         }
         this.updatePracticeBetDisplay();
+    },
+
+    getAvailableWalletBalance() {
+        const onChainBalance = Number(window.__mtrOnChainBalance || 0);
+        const localBalance = Number(this.userBalance || 0);
+        if (Number.isFinite(onChainBalance) && onChainBalance > 0) {
+            return onChainBalance;
+        }
+        return Number.isFinite(localBalance) ? localBalance : 0;
+    },
+
+    hasSufficientBalance(betAmount) {
+        const available = this.getAvailableWalletBalance();
+        if (Number(betAmount) > available) {
+            showToast(`Saldo insuficiente. Disponible: ${available.toLocaleString('es-ES', { maximumFractionDigits: 4 })} MTR`, 'error');
+            return false;
+        }
+        return true;
     },
     
     // ==========================================
@@ -171,8 +185,7 @@ const GameEngine = {
             return;
         }
         
-        if (betAmount > this.userBalance) {
-            showToast('Balance insuficiente', 'error');
+        if (!this.hasSufficientBalance(betAmount)) {
             return;
         }
         
@@ -370,6 +383,15 @@ const GameEngine = {
     // ==========================================
     
     async createPrivateRoom(song, betAmount) {
+        if (betAmount < this.minBet) {
+            showToast(`Apuesta mínima: ${this.minBet} MTR`, 'error');
+            return;
+        }
+
+        if (!this.hasSufficientBalance(betAmount)) {
+            return;
+        }
+
         try {
             const { data: { session } } = await supabaseClient.auth.getSession();
             
@@ -462,7 +484,10 @@ const GameEngine = {
                 showToast(`Apuesta mínima de la sala: ${match.player1_bet} MTR`, 'error');
                 return;
             }
-            
+
+            if (!this.hasSufficientBalance(betAmount)) {
+                return;
+            }
 
             const eloGate = await this.canMatchByElo(song.id, match.player1_song_id);
             if (!eloGate.allowed) {
@@ -657,6 +682,10 @@ const GameEngine = {
             
             if (betAmount < tournament.entry_fee) {
                 showToast(`Entry fee: ${tournament.entry_fee} MTR`, 'error');
+                return;
+            }
+
+            if (!this.hasSufficientBalance(betAmount)) {
                 return;
             }
             
@@ -1709,7 +1738,9 @@ const GameEngine = {
                 winner: winnerAddress,
                 amount: amountMtr,
                 matchId,
-                network: 'base'
+                network: 'base',
+                token: 'MTR',
+                tokenAddress: '0x99cd1eb32846c9027ed9cb8710066fa08791c33b'
             });
             if (data?.txHash) {
                 this.lastPrizeTxHash = data.txHash;
