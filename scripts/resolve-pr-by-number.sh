@@ -10,7 +10,8 @@ Required:
 
 Options:
   --strategy <mode>       Conflict strategy: ours|theirs (default: ours)
-  --remote <name>         Git remote (default: origin)
+  --remote <name>         Git remote name (default: origin)
+  --remote-url <url>      Configure/set remote URL before resolving
   --head <branch>         Override PR head branch (skip API lookup for head)
   --base <branch>         Override PR base branch (skip API lookup for base)
   --no-push               Do not push after commit
@@ -19,12 +20,14 @@ Options:
 
 Example:
   scripts/resolve-pr-by-number.sh --pr 124 --head feature/wall-street-v2 --base main --strategy ours
+  scripts/resolve-pr-by-number.sh --pr 127 --remote-url https://github.com/musictokenring/musictoken-ring.git --head codex/fix-merge-issues-and-update-frontend-sjngcd --base hotfix-mtr-address-main --strategy ours
 USAGE
 }
 
 PR_NUMBER=""
 STRATEGY="ours"
 REMOTE="origin"
+REMOTE_URL_OVERRIDE=""
 HEAD_REF=""
 BASE_REF=""
 NO_PUSH=0
@@ -35,6 +38,7 @@ while [[ $# -gt 0 ]]; do
     --pr) PR_NUMBER="${2:-}"; shift 2 ;;
     --strategy) STRATEGY="${2:-ours}"; shift 2 ;;
     --remote) REMOTE="${2:-origin}"; shift 2 ;;
+    --remote-url) REMOTE_URL_OVERRIDE="${2:-}"; shift 2 ;;
     --head) HEAD_REF="${2:-}"; shift 2 ;;
     --base) BASE_REF="${2:-}"; shift 2 ;;
     --no-push) NO_PUSH=1; shift ;;
@@ -60,8 +64,17 @@ if ! git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
   exit 1
 fi
 
+if [[ -n "$REMOTE_URL_OVERRIDE" ]]; then
+  if git remote get-url "$REMOTE" >/dev/null 2>&1; then
+    git remote set-url "$REMOTE" "$REMOTE_URL_OVERRIDE"
+  else
+    git remote add "$REMOTE" "$REMOTE_URL_OVERRIDE"
+  fi
+fi
+
 if ! git remote get-url "$REMOTE" >/dev/null 2>&1; then
   echo "[error] Remote '$REMOTE' not configured" >&2
+  echo "[hint] Pass --remote-url https://github.com/<owner>/<repo>.git" >&2
   exit 1
 fi
 
