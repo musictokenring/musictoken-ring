@@ -1239,114 +1239,152 @@
         window.showIncomingChallenge = showIncomingChallenge;
     </script>
 
-    <script type="module">
-        import React, { useEffect } from 'https://esm.sh/react@18.3.1';
-        import { createRoot } from 'https://esm.sh/react-dom@18.3.1/client';
-        import { QueryClient, QueryClientProvider } from 'https://esm.sh/@tanstack/react-query@5.66.9';
-        import { createConfig, http, WagmiProvider, useAccount, useConnect, useReadContract } from 'https://esm.sh/wagmi@2.16.7';
-        import { base } from 'https://esm.sh/wagmi@2.16.7/chains';
-        import { injected } from 'https://esm.sh/wagmi@2.16.7/connectors';
-        import { formatUnits } from 'https://esm.sh/viem@2.23.9';
+    <script>
+        (function () {
+            const MTR_TOKEN = '0x99cd1eb32846c9027ed9cb8710066fa08791c33b';
+            const BASE_CHAIN_ID_HEX = '0x2105';
+            const BASE_RPC_URL = 'https://mainnet.base.org';
 
-        const MTR_TOKEN = '0x99cd1eb32846c9027ed9cb8710066fa08791c33b';
-        const ERC20_ABI = [
-            { type: 'function', name: 'balanceOf', stateMutability: 'view', inputs: [{ name: 'account', type: 'address' }], outputs: [{ name: '', type: 'uint256' }] }
-        ];
-
-        const wagmiConfig = createConfig({
-            chains: [base],
-            connectors: [injected()],
-            transports: {
-                [base.id]: http('https://mainnet.base.org')
+            function shortAddress(address) {
+                return `${address.slice(0, 6)}...${address.slice(-4)}`;
             }
-        });
 
-        const queryClient = new QueryClient();
-
-        function shortAddress(address) {
-            return `${address.slice(0, 6)}...${address.slice(-4)}`;
-        }
-
-        function WalletPanel() {
-            const { address, isConnected } = useAccount();
-            const { connect, connectors, isPending } = useConnect();
-            const { data: balance } = useReadContract({
-                address: MTR_TOKEN,
-                abi: ERC20_ABI,
-                functionName: 'balanceOf',
-                args: address ? [address] : undefined,
-                query: { enabled: Boolean(address) }
-            });
-
-            const formattedBalance = balance !== undefined
-                ? Number(formatUnits(balance, 18)).toLocaleString('es-ES', { maximumFractionDigits: 4 })
-                : '--';
-
-            useEffect(() => {
+            function setUiState(address, balanceText) {
+                const root = document.getElementById('walletApp');
                 const badge = document.getElementById('balanceDisplay');
                 const userBalance = document.getElementById('userBalance');
-                const value = `${formattedBalance} MTR`;
-                if (badge) badge.textContent = `Tu MTR : ${value}`;
-                if (userBalance) userBalance.textContent = formattedBalance === '--' ? '0' : formattedBalance;
+                if (badge) badge.textContent = `Tu MTR : ${balanceText} MTR`;
+                if (userBalance) userBalance.textContent = balanceText;
 
-                const numericBalance = balance !== undefined ? Number(formatUnits(balance, 18)) : 0;
-                window.__mtrOnChainBalance = Number.isFinite(numericBalance) ? numericBalance : 0;
-                window.dispatchEvent(new CustomEvent('mtr:onchain-balance', {
-                    detail: { balance: window.__mtrOnChainBalance }
-                }));
-            }, [formattedBalance]);
+                if (!root) return;
 
-            useEffect(() => {
+                if (address) {
+                    root.innerHTML = `<button type="button" class="btn-secondary btn-wallet" disabled>Wallet conectada</button><span class="wallet-address">${shortAddress(address)}</span>`;
+                    return;
+                }
+
+                root.innerHTML = '<button type="button" class="btn-secondary btn-wallet" id="walletConnectBtn">Conectar Wallet</button>';
+                const btn = document.getElementById('walletConnectBtn');
+                if (!btn) return;
+                btn.addEventListener('click', connectWallet);
+            }
+
+            function encodeBalanceOf(address) {
+                const clean = String(address || '').toLowerCase().replace(/^0x/, '');
+                return '0x70a08231' + clean.padStart(64, '0');
+            }
+
+            async function readOnChainBalance(address) {
+                if (!address) return 0;
+                const payload = {
+                    jsonrpc: '2.0',
+                    id: Date.now(),
+                    method: 'eth_call',
+                    params: [{ to: MTR_TOKEN, data: encodeBalanceOf(address) }, 'latest']
+                };
+                const response = await fetch(BASE_RPC_URL, {
+                    method: 'POST',
+                    headers: { 'content-type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                const data = await response.json();
+                const hex = data && data.result ? data.result : '0x0';
+                const raw = BigInt(hex);
+                return Number(raw) / 1e18;
+            }
+
+            function publishWallet(address, balance) {
                 if (address) {
                     localStorage.setItem('mtr_wallet', address);
                     localStorage.setItem('mtr_wallet_chain', 'base');
                     window.__mtrConnectedWallet = address;
+                } else {
+                    localStorage.removeItem('mtr_wallet');
+                    localStorage.removeItem('mtr_wallet_chain');
+                    window.__mtrConnectedWallet = null;
+                }
+
+                window.__mtrOnChainBalance = Number.isFinite(balance) ? balance : 0;
+                window.dispatchEvent(new CustomEvent('mtr:onchain-balance', {
+                    detail: { balance: window.__mtrOnChainBalance }
+                }));
+            }
+
+            async function refreshWalletView(address) {
+                try {
+                    const balance = address ? await readOnChainBalance(address) : 0;
+                    const formatted = Number(balance || 0).toLocaleString('es-ES', { maximumFractionDigits: 4 });
+                    setUiState(address, formatted);
+                    publishWallet(address, Number(balance || 0));
+                } catch (error) {
+                    console.error('Wallet balance read failed:', error);
+                    setUiState(address, '0');
+                    publishWallet(address, 0);
+                }
+            }
+
+            async function ensureBaseNetwork() {
+                if (!window.ethereum) return;
+                const chainId = await window.ethereum.request({ method: 'eth_chainId' });
+                if (chainId && chainId.toLowerCase() === BASE_CHAIN_ID_HEX) return;
+                try {
+                    await window.ethereum.request({ method: 'wallet_switchEthereumChain', params: [{ chainId: BASE_CHAIN_ID_HEX }] });
+                } catch (error) {
+                    console.warn('No se pudo cambiar automáticamente a Base:', error);
+                }
+            }
+
+            async function connectWallet() {
+                if (!window.ethereum) {
+                    if (typeof window.showToast === 'function') {
+                        window.showToast('MetaMask no está disponible. Instala la extensión para conectar tu wallet.', 'error');
+                    }
                     return;
                 }
 
-                window.__mtrConnectedWallet = null;
-                window.__mtrOnChainBalance = 0;
-                localStorage.removeItem('mtr_wallet');
-                localStorage.removeItem('mtr_wallet_chain');
-            }, [address]);
-
-            if (isConnected && address) {
-                return React.createElement(React.Fragment, null,
-                    React.createElement('button', { type: 'button', className: 'btn-secondary btn-wallet', disabled: true }, 'Wallet conectada'),
-                    React.createElement('span', { className: 'wallet-address' }, shortAddress(address))
-                );
+                try {
+                    await ensureBaseNetwork();
+                    const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
+                    const address = accounts && accounts[0] ? accounts[0] : null;
+                    await refreshWalletView(address);
+                } catch (error) {
+                    console.error('Wallet connection failed:', error);
+                    if (typeof window.showToast === 'function') {
+                        window.showToast('No se pudo conectar la wallet. Verifica MetaMask y red Base.', 'error');
+                    }
+                }
             }
 
-            return React.createElement('button', {
-                type: 'button',
-                className: 'btn-secondary btn-wallet',
-                onClick: () => {
-                    const connector = connectors.find((item) => item.id === 'injected') || connectors[0];
-                    if (!connector) return;
-                    Promise.resolve(connect({ connector })).catch((error) => {
-                        console.error('Wallet connection failed:', error);
-                        if (typeof window.showToast === 'function') {
-                            window.showToast('No se pudo conectar la wallet. Verifica MetaMask y red Base.', 'error');
-                        }
-                    });
-                },
-                disabled: isPending
-            }, isPending ? 'Conectando...' : 'Conectar Wallet');
-        }
+            async function bootWallet() {
+                window.__mtrWalletUiMounted = true;
+                if (!window.ethereum) {
+                    setUiState(null, '0');
+                    publishWallet(null, 0);
+                    return;
+                }
 
-        function WalletApp() {
-            return React.createElement(WagmiProvider, { config: wagmiConfig },
-                React.createElement(QueryClientProvider, { client: queryClient },
-                    React.createElement(WalletPanel)
-                )
-            );
-        }
+                const accounts = await window.ethereum.request({ method: 'eth_accounts' });
+                const address = accounts && accounts[0] ? accounts[0] : null;
+                await refreshWalletView(address);
 
-        const walletRoot = document.getElementById('walletApp');
-        if (walletRoot) {
-            createRoot(walletRoot).render(React.createElement(WalletApp));
-            window.__mtrWalletUiMounted = true;
-        }
+                window.ethereum.on('accountsChanged', async (nextAccounts) => {
+                    const nextAddress = nextAccounts && nextAccounts[0] ? nextAccounts[0] : null;
+                    await refreshWalletView(nextAddress);
+                });
+
+                window.ethereum.on('chainChanged', async () => {
+                    const nextAccounts = await window.ethereum.request({ method: 'eth_accounts' });
+                    const nextAddress = nextAccounts && nextAccounts[0] ? nextAccounts[0] : null;
+                    await refreshWalletView(nextAddress);
+                });
+            }
+
+            if (document.readyState === 'loading') {
+                document.addEventListener('DOMContentLoaded', bootWallet);
+            } else {
+                bootWallet();
+            }
+        })();
     </script>
 
     <script>
