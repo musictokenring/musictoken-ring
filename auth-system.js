@@ -307,13 +307,13 @@ async function loadPlayerProfile(user) {
             return;
         }
 
-        setProfileValue('profileBalance', `${Math.round(balanceData?.balance || 0)} $MTOKEN`);
+        setProfileValue('profileBalance', `${Math.round(balanceData?.balance || 0)} MTR`);
         setProfileValue('profileMatches', `${totalMatches}`);
         setProfileValue('profileWins', `${wins}`);
         setProfileValue('profileLosses', `${losses}`);
         setProfileValue('profileWinRate', `${winRate}%`);
         setProfileValue('profileStreams', `${Math.round(totalStreams).toLocaleString('es-ES')}`);
-        setProfileValue('profileWagered', `${Math.round(totalWagered)} $MTOKEN`);
+        setProfileValue('profileWagered', `${Math.round(totalWagered)} MTR`);
 
         const recentMatches = document.getElementById('profileRecentMatches');
         if (recentMatches) {
@@ -327,7 +327,7 @@ async function loadPlayerProfile(user) {
                     const ownBet = isP1 ? (m.player1_bet || 0) : (m.player2_bet || 0);
                     return `<div class="profile-match ${won ? 'win' : 'loss'}">
                         <span>${won ? '✅ Victoria' : '❌ Derrota'} · ${mode}</span>
-                        <span>${ownBet} $MTOKEN</span>
+                        <span>${ownBet} MTR</span>
                     </div>`;
                 }).join('');
             }
