@@ -48,6 +48,48 @@ Esta sección es una guía rápida para cualquier usuario que quiera usar la app
 - ✅ Navega dashboard (tabs + carrusel).
 - ✅ Genera cotización y solicitud de cashout.
 
+
+## 🛠️ Troubleshooting (Codex patch conflict)
+
+Si una tarea de Codex falla con el error:
+
+> `Failed to apply patch ... setup script and agent modify the same files`
+
+usa este flujo para recuperar la rama y reintentar:
+
+```bash
+# 1) Ver plan (sin tocar nada)
+./scripts/recover-codex-patch-conflict.sh
+
+# 2) Ejecutar limpieza total contra origin/<rama>
+./scripts/recover-codex-patch-conflict.sh --force
+
+# 3) Validar estado local
+npm run check
+```
+
+> ⚠️ `--force` elimina cambios no comiteados y archivos no trackeados.
+
+## 🚀 Desatascar y empujar 2 ramas al mismo fix
+
+Cuando tengas dos PR/ramas atascadas y quieras publicar exactamente el mismo commit estable en ambas:
+
+```bash
+# valida y empuja ambas ramas al commit actual
+./scripts/sync-and-push-branches.sh <rama-1> <rama-2>
+
+# ejemplo
+./scripts/sync-and-push-branches.sh hotfix-mtr-address-main codex/pr-135-fix
+```
+
+Si ya validaste localmente y solo quieres empujar:
+
+```bash
+./scripts/sync-and-push-branches.sh --skip-check <rama-1> <rama-2>
+```
+
+> Requisitos: working tree limpio y `origin` configurado.
+
 ## 📁 Estructura del Proyecto
 
 ```
