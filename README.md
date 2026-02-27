@@ -102,6 +102,7 @@ Endpoints requeridos:
 - `POST /api/deposits/verify` - Verificar tx on-chain y acreditar recarga
 - `POST /api/settlement/quote` - Cotizar MTOKEN vs referencia USD para liquidación
 - `POST /api/settlement/request-cashout` - Solicitar retiro y registrar comisión
+- `POST /api/prizes/send` - Enviar premio on-chain al ganador (Base/MTR)
 
 ### Flujo recomendado de recarga verificable
 1. El usuario transfiere tokens a la wallet de plataforma de la red elegida.
@@ -373,3 +374,37 @@ Desarrollado para MusicToken Ring
 ---
 
 **¡Listo para hacer batallas musicales épicas!** 🎵🥊💰
+
+
+### Premios automáticos on-chain (MTR)
+1. Define `PRIZE_SIGNER_PRIVATE_KEY` y opcionalmente `BASE_RPC_URL` en backend.
+2. Usa `backend/prize-service.js` para firmar `transfer` ERC-20 con viem.
+3. Registra la ruta con `registerPrizeRoutes(app)` desde `backend/prize-api.js` para exponer `POST /api/prizes/send`.
+4. Frontend envía `winner`, `amount`, `matchId`, `network`, `token` y `tokenAddress` al cerrar batalla.
+
+
+Ejemplo de integración backend:
+
+```js
+const express = require('express')
+const { registerPrizeRoutes } = require('./backend/prize-api')
+
+const app = express()
+app.use(express.json())
+registerPrizeRoutes(app)
+```
+
+
+### Reparación rápida desde terminal (sin edición manual)
+Si el entorno queda inconsistente tras merges o conflictos, ejecuta:
+
+```bash
+bash scripts/repair-mtr-integration.sh
+```
+
+Este script:
+- normaliza `backend/prize-api.js`,
+- elimina `backend/prize-api-example.js` si existe,
+- corrige estado wallet connect/disconnect en `index.html`,
+- aplica fallback estricto de saldo en `game-engine.js`,
+- y corre validaciones (`npm run check`, `node --check ...`).
