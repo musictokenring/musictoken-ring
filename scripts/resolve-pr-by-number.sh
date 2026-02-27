@@ -140,7 +140,7 @@ if [[ "$MERGE_IN_PROGRESS" -eq 0 ]]; then
   git reset --hard "${REMOTE}/${HEAD_REF}"
 
   set +e
-  git merge --no-ff "${REMOTE}/${BASE_REF}"
+  git merge --no-ff --no-edit "${REMOTE}/${BASE_REF}"
   MERGE_CODE=$?
   set -e
 
