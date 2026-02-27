@@ -15,7 +15,7 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
    
     <!-- Styles -->
-    <link rel="stylesheet" href="./styles/main.css">
+    <link rel="stylesheet" href="./styles/main.css?v=20260227mtrd">
    
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🥊</text></svg>">
 
@@ -874,6 +874,8 @@
         document.addEventListener('DOMContentLoaded', async () => {
             initializePreferredNetwork();
             renderWalletDirectory();
+            sanitizeInjectedGitArtifacts();
+            sanitizePaymentsAndMtrCards();
 
             try {
                 const { data: { session } } = await supabaseClient.auth.getSession();
@@ -918,6 +920,74 @@
         function showModeSelector() {
             document.getElementById('loginWall').classList.add('hidden');
             document.getElementById('modeSelector').classList.remove('hidden');
+        }
+
+
+        function sanitizePaymentsAndMtrCards() {
+            const scope = document.querySelectorAll('.payments-showcase .settlement-card, .settlement-panel .settlement-card');
+            if (!scope.length) return;
+
+            const blocked = [
+                /codex\/[\w.-]+/i,
+                /feature\/[\w.-]+/i,
+                /origin\/[\w.-]+/i,
+                /branch\s+[\w./-]+/i,
+                /https?:\/\/basescan\.org\//i
+            ];
+
+            scope.forEach((card) => {
+                const elements = card.querySelectorAll('p, span, div');
+                elements.forEach((el) => {
+                    if (el.classList.contains('settlement-grid')) return;
+                    const textValue = (el.textContent || '').trim();
+                    if (!textValue) return;
+                    if (!blocked.some((rule) => rule.test(textValue))) return;
+
+                    if (el.querySelector('a,button,input')) {
+                        Array.from(el.childNodes).forEach((node) => {
+                            if (node.nodeType === Node.TEXT_NODE && blocked.some((rule) => rule.test(node.nodeValue || ''))) {
+                                node.nodeValue = '';
+                            }
+                        });
+                        return;
+                    }
+
+                    el.remove();
+                });
+
+                const walker = document.createTreeWalker(card, NodeFilter.SHOW_TEXT);
+                const textNodes = [];
+                while (walker.nextNode()) textNodes.push(walker.currentNode);
+                textNodes.forEach((node) => {
+                    const value = (node.nodeValue || '').trim();
+                    if (!value) return;
+                    if (!blocked.some((rule) => rule.test(value))) return;
+                    node.nodeValue = '';
+                });
+            });
+        }
+
+        function sanitizeInjectedGitArtifacts() {
+            const settlementPanel = document.querySelector('.settlement-panel');
+            if (!settlementPanel) return;
+
+            const blockedPatterns = [
+                /codex\/migrate-/i,
+                /feature\/wall-street-v2/i,
+                /origin\/(main|feature)/i,
+                /branch\s+[a-z0-9._\/-]+/i
+            ];
+
+            const walker = document.createTreeWalker(settlementPanel, NodeFilter.SHOW_TEXT);
+            const textNodes = [];
+            while (walker.nextNode()) textNodes.push(walker.currentNode);
+
+            textNodes.forEach((node) => {
+                const value = (node.nodeValue || '').trim();
+                if (!value) return;
+                if (!blockedPatterns.some((pattern) => pattern.test(value))) return;
+                node.nodeValue = '';
+            });
         }
 
         function initializePreferredNetwork() {
