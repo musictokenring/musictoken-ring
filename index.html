@@ -240,8 +240,8 @@
                             Compra MTR en Aerodrome y vuelve aquí: el saldo se actualiza automáticamente al conectar tu wallet en Base.
                         </p>
                         <div class="settlement-grid">
-                            <a class="btn-primary" target="_blank" rel="noopener noreferrer" href="https://aerodrome.finance/swap?from=ETH&to=0x99cd1eb32846c9027ed9cb88710066fa08791c33b">Comprar MTR en Aerodrome</a>
-                            <p class="settlement-help">Contrato MTR: <a target="_blank" rel="noopener noreferrer" href="https://basescan.org/address/0x99cd1eb32846c9027ed9cb88710066fa08791c33b">0x99cd1eb32846c9027ed9cb88710066fa08791c33b</a></p>
+                            <a class="btn-primary" target="_blank" rel="noopener noreferrer" href="https://aerodrome.finance/swap?from=ETH&to=0x99cd1eb32846c9027ed9cb8710066fa08791c33b">Comprar MTR en Aerodrome</a>
+                            <p class="settlement-help">Contrato MTR: <a target="_blank" rel="noopener noreferrer" href="https://basescan.org/address/0x99cd1eb32846c9027ed9cb8710066fa08791c33b">0x99cd1eb32846c9027ed9cb8710066fa08791c33b</a></p>
                         </div>
                         
                     </div>
@@ -265,8 +265,9 @@
                 <p class="streaming-label">Sobre MTR</p>
                 <div class="settlement-card">
                     <p>Token ERC-20 en Base. Liquidez lockeada en Aerodrome.</p>
-                    <p>Contrato: 0x99cd1eb32846c9027ed9cb88710066fa08791c33b.</p>
-                    <p>Explorer: <a target="_blank" rel="noopener noreferrer" href="https://basescan.org/address/0x99cd1eb32846c9027ed9cb88710066fa08791c33b">https://basescan.org/address/0x99cd1eb32846c9027ed9cb88710066fa08791c33b</a></p>
+                    <p>Contrato: 0x99cd1eb32846c9027ed9cb8710066fa08791c33b.</p>
+                    <p>Contrato verificado: 0x99cd1eb32846c9027ed9cb8710066fa08791c33b —Supply total: 99,990,000 MTR (<a target="_blank" rel="noopener noreferrer" href="https://basescan.org/address/0x99cd1eb32846c9027ed9cb8710066fa08791c33b">ver en Basescan</a>)</p>
+                    <p>Explorer: <a target="_blank" rel="noopener noreferrer" href="https://basescan.org/address/0x99cd1eb32846c9027ed9cb8710066fa08791c33b">https://basescan.org/address/0x99cd1eb32846c9027ed9cb8710066fa08791c33b</a></p>
                 </div>
             </section>
 
@@ -1251,7 +1252,7 @@
         import { walletConnect } from 'https://esm.sh/@wagmi/connectors';
         import { formatUnits } from 'https://esm.sh/viem';
 
-        const MTR_TOKEN = '0x99cd1eb32846c9027ed9cb88710066fa08791c33b';
+        const MTR_TOKEN = '0x99cd1eb32846c9027ed9cb8710066fa08791c33b';
         const ERC20_ABI = [
             { type: 'function', name: 'balanceOf', stateMutability: 'view', inputs: [{ name: 'account', type: 'address' }], outputs: [{ name: '', type: 'uint256' }] }
         ];

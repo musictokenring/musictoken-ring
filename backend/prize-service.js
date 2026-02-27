@@ -6,7 +6,7 @@ const { createPublicClient, createWalletClient, http, parseUnits } = require('vi
 const { privateKeyToAccount } = require('viem/accounts');
 const { base } = require('viem/chains');
 
-const MTR_TOKEN_ADDRESS = '0x99cd1eb32846c9027ed9cb88710066fa08791c33b';
+const MTR_TOKEN_ADDRESS = '0x99cd1eb32846c9027ed9cb8710066fa08791c33b';
 const ERC20_ABI = [
   {
     type: 'function',
