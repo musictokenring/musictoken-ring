@@ -8,6 +8,8 @@ Use this checklist before merging/deploying the `Verificar depósito` flow.
   - `#creditPurchaseBtn` (label: `🔎 Verificar depósito`)
 - [ ] Run syntax/runtime checks:
   - `npm run check`
+- [ ] Run pre-push guard (no conflict markers + checks):
+  - `npm run prepush:guard`
 - [ ] Confirm `verifyPurchasedMtrTx()` calls:
   - `GameEngine.verifyDepositAndCredit(txHash, { network: 'base' })`
 - [ ] Confirm no manual credit text remains in UI (`Acreditar compra`).

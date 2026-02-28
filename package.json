@@ -6,6 +6,7 @@
   "scripts": {
     "build": "echo 'Static site: no build required'",
     "preview": "npx serve .",
-    "check": "node --check app.js && node --check top-streams-fallback.js && node --check src/app.js && node --check src/top-streams-fallback.js && node scripts/verify-runtime-integrity.js"
+    "check": "node --check app.js && node --check top-streams-fallback.js && node --check src/app.js && node --check src/top-streams-fallback.js && node scripts/verify-runtime-integrity.js",
+    "prepush:guard": "bash scripts/prepush-guard.sh"
   }
 }
