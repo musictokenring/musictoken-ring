@@ -14,6 +14,8 @@ const blockedPatterns = [
   /codex\/find-reason/gi,
   /feature\/wall-street-v2/gi,
   /codex\/fix-unexpected-token-for-error/gi,
+  /codex\/[a-z0-9._#\/-]+/gi,
+  /refs\/heads\//gi,
   /^(<<<<<<<|=======|>>>>>>>)/gm
 ];
 
