@@ -4,18 +4,9 @@
   "private": true,
   "description": "Static frontend for MusicToken Ring",
   "scripts": {
-    "build": "echo 'Static site: no build required'",
+    "build": "npm run check",
     "preview": "npx serve .",
- codex/fix-issues-from-codex-review-on-pr-#117-h1vqdv
     "check": "node --check app.js && node --check top-streams-fallback.js && node --check src/app.js && node --check src/top-streams-fallback.js && node scripts/verify-runtime-integrity.js",
     "prepush:guard": "bash scripts/prepush-guard.sh"
-
-    "check": "node --check app.js && node --check top-streams-fallback.js && node --check src/app.js && node --check src/top-streams-fallback.js && node scripts/verify-runtime-integrity.js"
-  },
-  "dependencies": {
-    "wagmi": "^2.16.7",
-    "viem": "^2.23.9",
-    "@tanstack/react-query": "^5.66.9"
- codex/migrate-mtoken-to-mtr-on-base-chain-hbd77v
   }
 }
