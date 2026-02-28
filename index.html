@@ -236,12 +236,20 @@
                     <div class="settlement-card">
                         <h4>Comprar MTR directo</h4>
                         <p class="settlement-help">
-                            Compra MTR en Aerodrome y vuelve aquí: el saldo se actualiza automáticamente al conectar tu wallet en Base.
+                            Compra MTR en Aerodrome y vuelve aquí. Después registra el hash en "Acreditar compra" para sumar saldo jugable.
                         </p>
                         <div class="settlement-grid">
                             <a class="btn-primary" target="_blank" rel="noopener noreferrer" href="https://aerodrome.finance/swap?from=ETH&to=0x99cd1eb32846c9027ed9cb8710066fa08791c33b">Comprar MTR en Aerodrome</a>
+ codex/migrate-mtoken-to-mtr-on-base-chain-hbd77v
+                            <p class="settlement-help">Contrato oficial MTR en Base (checksum validado).</p>
+                            <a class="btn-secondary" target="_blank" rel="noopener noreferrer" href="https://basescan.org/token/0x99cd1eb32846c9027ed9cb8710066fa08791c33b">🔎 Ver token MTR y supply en Basescan</a>
+                            <p class="settlement-help">Contrato MTR: <a target="_blank" rel="noopener noreferrer" href="https://basescan.org/token/0x99cd1eb32846c9027ed9cb8710066fa08791c33b">0x99cd1eb32846c9027ed9cb8710066fa08791c33b</a></p>
+                            <input id="depositTxHash" class="payment-input" type="text" placeholder="Pega el hash de compra (0x...)" autocomplete="off">
+                            <button type="button" class="btn-secondary" id="creditPurchaseBtn" onclick="creditPurchasedMtr()">✅ Acreditar compra</button>
+
                             <a class="btn-basescan" target="_blank" rel="noopener noreferrer" href="https://basescan.org/address/0x99cd1eb32846c9027ed9cb8710066fa08791c33b">🔎 Ver contrato en Basescan</a>
                             <p class="settlement-help">Contrato MTR: <a target="_blank" rel="noopener noreferrer" href="https://basescan.org/address/0x99cd1eb32846c9027ed9cb8710066fa08791c33b">0x99cd1eb32846c9027ed9cb8710066fa08791c33b</a></p>
+ main
                         </div>
                         
                     </div>
@@ -267,8 +275,15 @@
                     <p>Token ERC-20 en Base. Liquidez lockeada en Aerodrome.</p>
                     <p>Contrato: 0x99cd1eb32846c9027ed9cb8710066fa08791c33b.</p>
                     <p>Contrato verificado: 0x99cd1eb32846c9027ed9cb8710066fa08791c33b —Supply total: 99,990,000 MTR.</p>
+ codex/migrate-mtoken-to-mtr-on-base-chain-hbd77v
+                    <div class="settlement-grid">
+                        <a class="btn-primary" target="_blank" rel="noopener noreferrer" href="https://basescan.org/token/0x99cd1eb32846c9027ed9cb8710066fa08791c33b">📈 Ver token MTR en Basescan</a>
+                        <p class="settlement-help">Este botón abre el explorer del token para ver supply, holders y transacciones.</p>
+                    </div>
+
                     <a class="btn-basescan" target="_blank" rel="noopener noreferrer" href="https://basescan.org/token/0x99cd1eb32846c9027ed9cb8710066fa08791c33b">📈 Ver token MTR en Basescan</a>
                     <p>Explorer: <a target="_blank" rel="noopener noreferrer" href="https://basescan.org/address/0x99cd1eb32846c9027ed9cb8710066fa08791c33b">https://basescan.org/address/0x99cd1eb32846c9027ed9cb8710066fa08791c33b</a></p>
+ main
                 </div>
             </section>
 
@@ -1325,7 +1340,40 @@
                 showToast(`Retiro solicitado: ${payout.requestId || 'ID pendiente'}`, 'success');
             }
         }
+
+        function isBaseTxHash(value) {
+            return /^0x([A-Fa-f0-9]{64})$/.test(value || '');
+        }
+
+        async function creditPurchasedMtr() {
+            const txInput = document.getElementById('depositTxHash');
+            const creditButton = document.getElementById('creditPurchaseBtn');
+            const txHash = txInput?.value?.trim();
+            if (!isBaseTxHash(txHash)) {
+                showToast('Pega un hash válido de Base (0x + 64 caracteres hex)', 'error');
+                return;
+            }
+            if (typeof GameEngine === 'undefined') {
+                showToast('GameEngine no está cargado', 'error');
+                return;
+            }
+
+            if (creditButton) creditButton.disabled = true;
+            try {
+                const result = await GameEngine.verifyDepositAndCredit(txHash, { network: 'base' });
+                if (result?.credited || typeof result?.newBalance === 'number') {
+                    showToast('Compra acreditada. Ya puedes usar tu saldo en partidas pagadas.', 'success');
+                    if (txInput) txInput.value = '';
+                } else if (result?.status) {
+                    showToast(`Estado de verificación: ${result.status}`, 'info');
+                }
+            } finally {
+                if (creditButton) creditButton.disabled = false;
+            }
+        }
+
         window.showIncomingChallenge = showIncomingChallenge;
+        window.creditPurchasedMtr = creditPurchasedMtr;
     </script>
 
     <script type="module">
