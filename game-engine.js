@@ -150,9 +150,9 @@ const GameEngine = {
     },
     
     updateBalanceDisplay() {
-        const balanceEl = document.getElementById('balanceDisplay');
+        const balanceEl = document.getElementById('appBalanceDisplay');
         if (balanceEl) {
-            balanceEl.textContent = `💰 ${this.userBalance} MTR`;
+            balanceEl.textContent = `Saldo jugable: ${this.userBalance} MTR`;
         }
         const userBalanceEl = document.getElementById('userBalance');
         if (userBalanceEl) {
@@ -1072,7 +1072,7 @@ const GameEngine = {
                         <p>Billetera plataforma: ${platformWallet}</p>
                     </div>
                 ` : ''}
-                ${this.lastPrizeTxHash ? `<p class="victory-prize">✅ Premio enviado! Tx: <a href="https://basescan.org/tx/${this.lastPrizeTxHash}" target="_blank" rel="noopener noreferrer">Ver en Basescan</a></p>` : ''}
+                ${this.lastPrizeTxHash ? `<p class="victory-prize">Premio enviado! Tx: <a href="https://basescan.org/tx/${this.lastPrizeTxHash}" target="_blank" rel="noopener noreferrer">${this.lastPrizeTxHash}</a></p>` : ''}
                 <button onclick="${match.match_type === 'practice' ? 'GameEngine.goToPracticeSelection()' : 'location.reload()'}" class="btn-primary btn-large">
                     ${match.match_type === 'practice' ? 'Continuar en práctica' : 'Jugar de Nuevo'}
                 </button>
@@ -1713,6 +1713,7 @@ const GameEngine = {
             });
             if (data?.txHash) {
                 this.lastPrizeTxHash = data.txHash;
+                showToast(`Premio enviado! Tx: ${data.txHash.slice(0, 10)}...`, 'success');
                 console.log('[prize] Prize tx hash', data.txHash);
             }
             return data;
