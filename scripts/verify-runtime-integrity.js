@@ -43,6 +43,19 @@ if (topRefs.length !== 1) {
   failed = true;
 }
 
+
+const inlineTopStreamsFlagRefs = [...indexHtml.matchAll(/window\.MTR_INLINE_TOP_STREAMS_ACTIVE\s*=\s*true/gi)];
+if (inlineTopStreamsFlagRefs.length !== 1) {
+  console.error('INVALID_INLINE_TOP_STREAMS_FLAG_COUNT', inlineTopStreamsFlagRefs.length);
+  failed = true;
+}
+
+const hasInlineDashboardGuard = /if\s*\(\s*window\.MTR_INLINE_TOP_STREAMS_ACTIVE\s*\)\s*\{\s*return;\s*\}/m.test(indexHtml);
+if (!hasInlineDashboardGuard) {
+  console.error('MISSING_INLINE_DASHBOARD_GUARD', 'Expected inline fallback early-return guard in index.html');
+  failed = true;
+}
+
 if (/src\/app\.js\?v=/i.test(indexHtml) || /src\/top-streams-fallback\.js\?v=/i.test(indexHtml)) {
   console.error('INVALID_SRC_RUNTIME_INCLUDE', 'Legacy /src runtime include found in index.html');
   failed = true;

@@ -542,6 +542,37 @@ body {
     color: var(--text-secondary);
     font-size: 12px;
 }
+
+.basescan-actions {
+    display: grid;
+    gap: 10px;
+}
+
+.btn-basescan {
+    display: inline-flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 10px 14px;
+    border-radius: 10px;
+    background: #2563eb;
+    color: #fff;
+    text-decoration: none;
+    font-weight: 600;
+    font-size: 13px;
+    transition: background 0.2s ease, transform 0.2s ease;
+}
+
+.btn-basescan:hover {
+    background: #1d4ed8;
+    transform: translateY(-1px);
+}
+
+.btn-basescan svg {
+    width: 16px;
+    height: 16px;
+    fill: currentColor;
+}
 .feature-item {
     background: var(--bg-secondary);
     padding: 16px;
@@ -1142,7 +1173,7 @@ body {
     justify-content: center;
     text-decoration: none;
     padding: 14px 32px;
-    background: var(--accent-green);
+    background: linear-gradient(135deg, #2563eb, #3b82f6);
     border: none;
     border-radius: 24px;
     color: white;
@@ -1154,8 +1185,9 @@ body {
 }
 
 .btn-primary:hover:not(:disabled) {
-    background: #1ed760;
+    filter: brightness(1.05);
     transform: scale(1.05);
+    box-shadow: 0 8px 24px rgba(37, 99, 235, 0.35);
 }
 
 .btn-primary:disabled {
@@ -2261,4 +2293,28 @@ body {
     .bet-quick {
         grid-template-columns: repeat(2, 1fr);
     }
+}
+
+
+.btn-basescan {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    width: 100%;
+    margin-top: 8px;
+    padding: 12px 16px;
+    border-radius: 12px;
+    text-decoration: none;
+    font-weight: 700;
+    color: #fff;
+    background: linear-gradient(135deg, #2563eb, #3b82f6);
+    border: 1px solid rgba(147, 197, 253, 0.45);
+    transition: transform 0.2s ease, box-shadow 0.2s ease, filter 0.2s ease;
+}
+
+.btn-basescan:hover {
+    transform: translateY(-1px);
+    filter: brightness(1.05);
+    box-shadow: 0 8px 24px rgba(37, 99, 235, 0.35);
 }
