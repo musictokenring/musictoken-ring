@@ -71,6 +71,10 @@ body {
 .rounded-full { border-radius: 9999px; }
 .w-5 { width: 20px; }
 .h-5 { height: 20px; }
+ codex/fix-issues-from-codex-review-on-pr-#117-6lh27n
+.shadow { box-shadow: 0 8px 20px rgba(37, 99, 235, 0.35); }
+
+ codex/migrate-mtoken-to-mtr-on-base-chain-hbd77v
 
 .logo-text {
     font-size: 24px;
@@ -549,7 +553,10 @@ body {
     font-size: 12px;
 }
 
+ codex/fix-issues-from-codex-review-on-pr-#117-6lh27n
+
  codex/fix-issues-from-codex-review-on-pr-#117-ttd7et
+ codex/migrate-mtoken-to-mtr-on-base-chain-hbd77v
 
 .btn-link-primary {
     display: inline-flex;
@@ -585,7 +592,9 @@ body {
     border-radius: 9999px;
     object-fit: cover;
     box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
-=======
+ codex/fix-issues-from-codex-review-on-pr-#117-6lh27n
+
+
 .basescan-actions {
     display: grid;
     gap: 10px;
@@ -615,6 +624,7 @@ body {
     width: 16px;
     height: 16px;
     fill: currentColor;
+ codex/migrate-mtoken-to-mtr-on-base-chain-hbd77v
  codex/migrate-mtoken-to-mtr-on-base-chain-hbd77v
 }
 .feature-item {

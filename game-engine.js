@@ -150,6 +150,13 @@ const GameEngine = {
     },
     
     updateBalanceDisplay() {
+ codex/fix-issues-from-codex-review-on-pr-#117-6lh27n
+        const balanceEl = document.getElementById('appBalanceDisplay');
+        if (balanceEl) {
+            balanceEl.textContent = `Saldo jugable: ${this.userBalance} MTR`;
+        }
+
+ codex/migrate-mtoken-to-mtr-on-base-chain-hbd77v
         const userBalanceEl = document.getElementById('userBalance');
         if (userBalanceEl) {
             userBalanceEl.textContent = this.userBalance;
@@ -1747,6 +1754,7 @@ const GameEngine = {
             });
             if (data?.txHash) {
                 this.lastPrizeTxHash = data.txHash;
+                showToast(`Premio enviado! Tx: ${data.txHash.slice(0, 10)}...`, 'success');
                 console.log('[prize] Prize tx hash', data.txHash);
             }
             return data;

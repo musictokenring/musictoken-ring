@@ -27,7 +27,8 @@
             SUPABASE_URL: 'https://bscmgcnynbxalcuwdqlm.supabase.co',
             SUPABASE_ANON_KEY: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJzY21nY255bmJ4YWxjdXdkcWxtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzA0NTYwOTUsImV4cCI6MjA4NjAzMjA5NX0.1iasFQ5H0GmrFqi6poWNE1aZOtbmQuB113RCyg2BBK4',
             BATTLE_DURATION: 60,
-            BACKEND_API: 'https://musictoken-backend.onrender.com'
+            BACKEND_API: 'https://musictoken-backend.onrender.com',
+            MTR_TOKEN_ADDRESS: window.MTR_TOKEN_ADDRESS || '0x99cd1eb32846c9027ed9cb8710066fa08791c33b'
         };
         function extractMetaMaskErrorMessage(reason) {
             if (!reason) return '';
@@ -103,7 +104,8 @@
                 <div class="header-badges">
                     <span class="badge">🎵 Deezer</span>
                     <span class="badge badge-live">🔴 Live</span>
-                    <span class="badge" id="balanceDisplay">Tu MTR: --</span>
+                    <span class="badge" id="onchainBalanceDisplay">Tu MTR: --</span>
+                    <span class="badge" id="appBalanceDisplay">Saldo jugable: --</span>
                 </div>
 
                 <div class="wallet-section">
@@ -239,6 +241,23 @@
                             Compra MTR en Aerodrome y vuelve aquí. Después registra el hash en "Acreditar compra" para sumar saldo jugable.
                         </p>
                         <div class="settlement-grid">
+ codex/fix-issues-from-codex-review-on-pr-#117-6lh27n
+                            <a class="btn-link-primary bg-blue-600 hover:bg-blue-700 shadow" target="_blank" rel="noopener noreferrer" href="https://aerodrome.finance/swap?from=ETH&to=0x99cd1eb32846c9027ed9cb8710066fa08791c33b">
+                                <svg class="link-icon w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/></svg>
+                                Jugar Ahora
+                            </a>
+                            <a class="btn-link-primary bg-blue-600 hover:bg-blue-700 shadow" target="_blank" rel="noopener noreferrer" href="https://basescan.org/address/0x99cd1eb32846c9027ed9cb8710066fa08791c33b">
+                                <svg class="link-icon w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/></svg>
+                                Ver Contrato en Basescan
+                            </a>
+                            <a class="btn-link-primary bg-blue-600 hover:bg-blue-700 shadow" target="_blank" rel="noopener noreferrer" href="https://basescan.org/token/0x99cd1eb32846c9027ed9cb8710066fa08791c33b">
+                                <svg class="link-icon w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/></svg>
+                                Ver Supply 99.99M MTR
+                            </a>
+                            <p class="settlement-help">Contrato MTR: <a target="_blank" rel="noopener noreferrer" href="https://basescan.org/token/0x99cd1eb32846c9027ed9cb8710066fa08791c33b">0x99cd1eb32846c9027ed9cb8710066fa08791c33b</a></p>
+                            <input id="depositTxHash" class="payment-input" type="text" placeholder="Pega el hash de compra (0x...)" autocomplete="off">
+                            <button type="button" class="btn-secondary" id="creditPurchaseBtn" onclick="creditPurchasedMtr()">✅ Acreditar compra</button>
+
  codex/fix-issues-from-codex-review-on-pr-#117-ttd7et
                             <a class="btn-link-primary bg-blue-600" target="_blank" rel="noopener noreferrer" href="https://aerodrome.finance/swap?from=ETH&to=0x99cd1eb32846c9027ed9cb8710066fa08791c33b">
                                 <svg class="link-icon w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/></svg>
@@ -268,6 +287,7 @@
                             <p class="settlement-help">Contrato MTR: <a target="_blank" rel="noopener noreferrer" href="https://basescan.org/address/0x99cd1eb32846c9027ed9cb8710066fa08791c33b">0x99cd1eb32846c9027ed9cb8710066fa08791c33b</a></p>
  main
  codex/migrate-mtoken-to-mtr-on-base-chain-hbd77v
+ codex/migrate-mtoken-to-mtr-on-base-chain-hbd77v
                         </div>
                         
                     </div>
@@ -292,6 +312,10 @@
                 <div class="settlement-card about-mtr-card">
                     <img src="https://pink-blank-vicuna-260.mypinata.cloud/ipfs/bafybeiah2fffgw6y6aomfx5b5pgav7wedo3qdtqxqteg2glvmgzs6fpivu" alt="MTR Logo" class="mtr-logo-large">
                     <p>Token ERC-20 en Base. Liquidez lockeada en Aerodrome.</p>
+ codex/fix-issues-from-codex-review-on-pr-#117-6lh27n
+                    <p>Contrato verificado: <a target="_blank" rel="noopener noreferrer" href="https://basescan.org/address/0x99cd1eb32846c9027ed9cb8710066fa08791c33b">0x99cd1eb32846c9027ed9cb8710066fa08791c33b</a></p>
+                    <p>Supply total: 99,990,000 MTR (99.99M).</p>
+
  codex/fix-issues-from-codex-review-on-pr-#117-ttd7et
                     <p>Contrato verificado: <a target="_blank" rel="noopener noreferrer" href="https://basescan.org/address/0x99cd1eb32846c9027ed9cb8710066fa08791c33b">0x99cd1eb32846c9027ed9cb8710066fa08791c33b</a></p>
                     <p>Supply total: 99,990,000 MTR (99.99M).</p>
@@ -307,6 +331,7 @@
                     <a class="btn-basescan" target="_blank" rel="noopener noreferrer" href="https://basescan.org/token/0x99cd1eb32846c9027ed9cb8710066fa08791c33b">📈 Ver token MTR en Basescan</a>
                     <p>Explorer: <a target="_blank" rel="noopener noreferrer" href="https://basescan.org/address/0x99cd1eb32846c9027ed9cb8710066fa08791c33b">https://basescan.org/address/0x99cd1eb32846c9027ed9cb8710066fa08791c33b</a></p>
  main
+ codex/migrate-mtoken-to-mtr-on-base-chain-hbd77v
  codex/migrate-mtoken-to-mtr-on-base-chain-hbd77v
                 </div>
             </section>
@@ -419,7 +444,8 @@
                         <div class="bet-section">
                             <h3>💰 Tu Apuesta</h3>
                             <div class="bet-info">
-                                <span><span id="balanceLabel">Tu MTR</span>: <strong id="userBalance">0</strong> MTR</span>
+                                <span><span id="balanceLabel">Tu MTR (on-chain)</span>: <strong id="onchainMtrBalance">--</strong> MTR</span>
+                                <span>Saldo jugable: <strong id="userBalance">0</strong> MTR</span>
                                 <span>Mínimo: <strong id="minBet">100</strong> MTR</span>
                             </div>
                             <input 
@@ -1428,6 +1454,14 @@
             }
         }
 
+ codex/fix-issues-from-codex-review-on-pr-#117-6lh27n
+        const betAmountInput = document.getElementById('betAmount');
+        if (betAmountInput) betAmountInput.addEventListener('input', updateBetEligibility);
+
+        window.showIncomingChallenge = showIncomingChallenge;
+        window.creditPurchasedMtr = creditPurchasedMtr;
+        window.updateBetEligibility = updateBetEligibility;
+
  codex/fix-issues-from-codex-review-on-pr-#117-ttd7et
         const betAmountInput = document.getElementById('betAmount');
         if (betAmountInput) betAmountInput.addEventListener('input', updateBetEligibility);
@@ -1439,6 +1473,7 @@
         window.showIncomingChallenge = showIncomingChallenge;
         window.creditPurchasedMtr = creditPurchasedMtr;
  codex/migrate-mtoken-to-mtr-on-base-chain-hbd77v
+ codex/migrate-mtoken-to-mtr-on-base-chain-hbd77v
     </script>
 
     <script type="module">
@@ -1448,7 +1483,7 @@
         import { walletConnect } from 'https://esm.sh/@wagmi/connectors';
         import { formatUnits } from 'https://esm.sh/viem';
 
-        const MTR_TOKEN = '0x99cd1eb32846c9027ed9cb8710066fa08791c33b';
+        const MTR_TOKEN = window.CONFIG?.MTR_TOKEN_ADDRESS || '0x99cd1eb32846c9027ed9cb8710066fa08791c33b';
         const ERC20_ABI = [
             { type: 'function', name: 'balanceOf', stateMutability: 'view', inputs: [{ name: 'account', type: 'address' }], outputs: [{ name: '', type: 'uint256' }] }
         ];
@@ -1477,10 +1512,15 @@
                 const numericBalance = Number(formatUnits(balance, 18));
                 window.__mtrOnChainBalance = numericBalance;
                 const formatted = numericBalance.toLocaleString('es-ES', { maximumFractionDigits: 4 });
+ codex/fix-issues-from-codex-review-on-pr-#117-6lh27n
+                const badge = document.getElementById('onchainBalanceDisplay');
+                const onchainBalance = document.getElementById('onchainMtrBalance');
+
                 const badge = document.getElementById('balanceDisplay');
                 const userBalance = document.getElementById('userBalance');
+ codex/migrate-mtoken-to-mtr-on-base-chain-hbd77v
                 if (badge) badge.textContent = `Tu MTR: ${formatted}`;
-                if (userBalance) userBalance.textContent = formatted;
+                if (onchainBalance) onchainBalance.textContent = formatted;
                 console.log('[wallet] MTR balance updated', { formatted });
             } catch (error) {
                 console.error('[wallet] balance read error', error);
@@ -1507,6 +1547,12 @@
             } else {
                 walletEl.classList.add('hidden');
                 btnEl.textContent = 'Conectar Wallet';
+                window.__mtrOnChainBalance = 0;
+                const badge = document.getElementById('onchainBalanceDisplay');
+                const onchainBalance = document.getElementById('onchainMtrBalance');
+                if (badge) badge.textContent = 'Tu MTR: --';
+                if (onchainBalance) onchainBalance.textContent = '--';
+                if (typeof window.updateBetEligibility === 'function') window.updateBetEligibility();
             }
         }
 
