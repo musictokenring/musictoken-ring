@@ -17,7 +17,7 @@
     <!-- Styles -->
     <link rel="stylesheet" href="./styles/main.css">
    
-    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🥊</text></svg>">
+    <link rel="icon" type="image/png" href="https://pink-blank-vicuna-260.mypinata.cloud/ipfs/bafybeie24pisqmw6teijdng4flzjwumgwpesilowjxq3kww3p7kxlmuywm">
 
     <!-- Supabase JS -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -95,7 +95,7 @@
         <div class="container">
             <div class="header-content">
                 <div class="logo">
-                    <span class="logo-icon">🥊</span>
+                    <img src="https://pink-blank-vicuna-260.mypinata.cloud/ipfs/bafybeiah2fffgw6y6aomfx5b5pgav7wedo3qdtqxqteg2glvmgzs6fpivu" alt="MTR Logo" class="logo-icon w-12 h-12 rounded-full">
                     <span class="logo-text">MusicToken Ring</span>
                 </div>
                 <h2 class="slogan">Music Token Ring – The Wall Street of Beats</h2>
@@ -236,20 +236,24 @@
                     <div class="settlement-card">
                         <h4>Comprar MTR directo</h4>
                         <p class="settlement-help">
-                            Compra MTR en Aerodrome y vuelve aquí: el saldo se actualiza automáticamente al conectar tu wallet en Base.
+                            Compra MTR en Aerodrome y vuelve aquí. Después registra el hash en "Acreditar compra" para sumar saldo jugable.
                         </p>
                         <div class="settlement-grid">
-                            <a class="btn-primary" target="_blank" rel="noopener noreferrer" href="https://aerodrome.finance/swap?from=ETH&to=0x99cd1eb32846c9027ed9cb8710066fa08791c33b">Comprar MTR en Aerodrome</a>
- codex/migrate-mtoken-to-mtr-on-base-chain-cp11cg
-                            <p class="settlement-help">Contrato oficial MTR en Base (checksum validado).</p>
-                            <a class="btn-secondary" target="_blank" rel="noopener noreferrer" href="https://basescan.org/token/0x99cd1eb32846c9027ed9cb8710066fa08791c33b">🔎 Ver token MTR y supply en Basescan</a>
-
- codex/migrate-mtoken-to-mtr-on-base-chain-9f5qe8
+                            <a class="btn-link-primary bg-blue-600" target="_blank" rel="noopener noreferrer" href="https://aerodrome.finance/swap?from=ETH&to=0x99cd1eb32846c9027ed9cb8710066fa08791c33b">
+                                <svg class="link-icon w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/></svg>
+                                Jugar Ahora
+                            </a>
+                            <a class="btn-link-primary bg-blue-600" target="_blank" rel="noopener noreferrer" href="https://basescan.org/address/0x99cd1eb32846c9027ed9cb8710066fa08791c33b">
+                                <svg class="link-icon w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/></svg>
+                                Ver Contrato en Basescan
+                            </a>
+                            <a class="btn-link-primary bg-blue-600" target="_blank" rel="noopener noreferrer" href="https://basescan.org/token/0x99cd1eb32846c9027ed9cb8710066fa08791c33b">
+                                <svg class="link-icon w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/></svg>
+                                Ver Supply 99.99M MTR
+                            </a>
                             <p class="settlement-help">Contrato MTR: <a target="_blank" rel="noopener noreferrer" href="https://basescan.org/token/0x99cd1eb32846c9027ed9cb8710066fa08791c33b">0x99cd1eb32846c9027ed9cb8710066fa08791c33b</a></p>
-
-                            <p class="settlement-help">Contrato MTR: <a target="_blank" rel="noopener noreferrer" href="https://basescan.org/address/0x99cd1eb32846c9027ed9cb8710066fa08791c33b">0x99cd1eb32846c9027ed9cb8710066fa08791c33b</a></p>
- feature/wall-street-v2
- feature/wall-street-v2
+                            <input id="depositTxHash" class="payment-input" type="text" placeholder="Pega el hash de compra (0x...)" autocomplete="off">
+                            <button type="button" class="btn-secondary" id="creditPurchaseBtn" onclick="creditPurchasedMtr()">✅ Acreditar compra</button>
                         </div>
                         
                     </div>
@@ -271,24 +275,11 @@
 
             <section class="payments-showcase">
                 <p class="streaming-label">Sobre MTR</p>
-                <div class="settlement-card">
+                <div class="settlement-card about-mtr-card">
+                    <img src="https://pink-blank-vicuna-260.mypinata.cloud/ipfs/bafybeiah2fffgw6y6aomfx5b5pgav7wedo3qdtqxqteg2glvmgzs6fpivu" alt="MTR Logo" class="mtr-logo-large">
                     <p>Token ERC-20 en Base. Liquidez lockeada en Aerodrome.</p>
-                    <p>Contrato: 0x99cd1eb32846c9027ed9cb8710066fa08791c33b.</p>
- codex/migrate-mtoken-to-mtr-on-base-chain-cp11cg
-                    <p>Contrato verificado: 0x99cd1eb32846c9027ed9cb8710066fa08791c33b —Supply total: 99,990,000 MTR.</p>
-                    <div class="settlement-grid">
-                        <a class="btn-primary" target="_blank" rel="noopener noreferrer" href="https://basescan.org/token/0x99cd1eb32846c9027ed9cb8710066fa08791c33b">📈 Ver token MTR en Basescan</a>
-                        <p class="settlement-help">Este botón abre el explorer del token para ver supply, holders y transacciones.</p>
-                    </div>
-
- codex/migrate-mtoken-to-mtr-on-base-chain-9f5qe8
-                    <p>Contrato verificado: 0x99cd1eb32846c9027ed9cb8710066fa08791c33b —Supply total: 99,990,000 MTR (<a target="_blank" rel="noopener noreferrer" href="https://basescan.org/token/0x99cd1eb32846c9027ed9cb8710066fa08791c33b">ver en Basescan</a>)</p>
-                    <p>Explorer: <a target="_blank" rel="noopener noreferrer" href="https://basescan.org/token/0x99cd1eb32846c9027ed9cb8710066fa08791c33b">https://basescan.org/token/0x99cd1eb32846c9027ed9cb8710066fa08791c33b</a></p>
-
-                    <p>Contrato verificado: 0x99cd1eb32846c9027ed9cb8710066fa08791c33b —Supply total: 99,990,000 MTR (<a target="_blank" rel="noopener noreferrer" href="https://basescan.org/address/0x99cd1eb32846c9027ed9cb8710066fa08791c33b">ver en Basescan</a>)</p>
-                    <p>Explorer: <a target="_blank" rel="noopener noreferrer" href="https://basescan.org/address/0x99cd1eb32846c9027ed9cb8710066fa08791c33b">https://basescan.org/address/0x99cd1eb32846c9027ed9cb8710066fa08791c33b</a></p>
- feature/wall-street-v2
- feature/wall-street-v2
+                    <p>Contrato verificado: <a target="_blank" rel="noopener noreferrer" href="https://basescan.org/address/0x99cd1eb32846c9027ed9cb8710066fa08791c33b">0x99cd1eb32846c9027ed9cb8710066fa08791c33b</a></p>
+                    <p>Supply total: 99,990,000 MTR (99.99M).</p>
                 </div>
             </section>
 
@@ -867,6 +858,7 @@
         })();
         // Variables globales
         let selectedSong = null;
+        window.__mtrOnChainBalance = Number(window.__mtrOnChainBalance || 0);
         let currentMode = null;
 
 
@@ -1021,6 +1013,9 @@
                         ⚔️ Buscar Rival
                     </button>
                 `;
+                const startQuickBtn = document.getElementById('startQuickBtn');
+                if (startQuickBtn) startQuickBtn.dataset.baseState = 'ready';
+                updateBetEligibility();
             } else if (mode === 'private') {
                 buttonsDiv.innerHTML = `
                     <button type="button" onclick="createRoom()" class="btn-primary" id="createRoomBtn" disabled>
@@ -1089,17 +1084,45 @@
                     btn.disabled = false;
                 }
             });
+            updateBetEligibility();
         }
 
         // Apuesta rápida
         function quickBet(amount) {
             document.getElementById('betAmount').value = amount;
+            updateBetEligibility();
+        }
+
+
+        function updateBetEligibility() {
+            const startQuickBtn = document.getElementById('startQuickBtn');
+            const betAmountEl = document.getElementById('betAmount');
+            const onchainBalance = Number(window.__mtrOnChainBalance || 0);
+            const bet = parseFloat(betAmountEl?.value || '0');
+            if (!startQuickBtn) return;
+
+            const canCoverBet = !!bet && onchainBalance >= bet;
+            if (startQuickBtn.dataset.baseState === 'ready') {
+                startQuickBtn.disabled = !canCoverBet;
+            }
+
+            if (!canCoverBet && bet > 0) {
+                startQuickBtn.title = 'Saldo on-chain insuficiente para la apuesta';
+            } else {
+                startQuickBtn.title = '';
+            }
         }
 
         // Iniciar según modo
         async function startQuickMatch() {
             if (!selectedSong) return;
             const bet = parseInt(document.getElementById('betAmount').value) || 100;
+            const onchainBalance = Number(window.__mtrOnChainBalance || 0);
+            if (onchainBalance < bet) {
+                showToast('Saldo on-chain insuficiente para esta apuesta', 'error');
+                updateBetEligibility();
+                return;
+            }
             if (typeof GameEngine !== 'undefined') {
                 await GameEngine.joinQuickMatch(selectedSong, bet);
             } else {
@@ -1253,11 +1276,48 @@
                 showToast(`Retiro solicitado: ${payout.requestId || 'ID pendiente'}`, 'success');
             }
         }
+
+        function isBaseTxHash(value) {
+            return /^0x([A-Fa-f0-9]{64})$/.test(value || '');
+        }
+
+        async function creditPurchasedMtr() {
+            const txInput = document.getElementById('depositTxHash');
+            const creditButton = document.getElementById('creditPurchaseBtn');
+            const txHash = txInput?.value?.trim();
+            if (!isBaseTxHash(txHash)) {
+                showToast('Pega un hash válido de Base (0x + 64 caracteres hex)', 'error');
+                return;
+            }
+            if (typeof GameEngine === 'undefined') {
+                showToast('GameEngine no está cargado', 'error');
+                return;
+            }
+
+            if (creditButton) creditButton.disabled = true;
+            try {
+                const result = await GameEngine.verifyDepositAndCredit(txHash, { network: 'base' });
+                if (result?.credited || typeof result?.newBalance === 'number') {
+                    showToast('Compra acreditada. Ya puedes usar tu saldo en partidas pagadas.', 'success');
+                    if (txInput) txInput.value = '';
+                } else if (result?.status) {
+                    showToast(`Estado de verificación: ${result.status}`, 'info');
+                }
+            } finally {
+                if (creditButton) creditButton.disabled = false;
+            }
+        }
+
+        const betAmountInput = document.getElementById('betAmount');
+        if (betAmountInput) betAmountInput.addEventListener('input', updateBetEligibility);
+
         window.showIncomingChallenge = showIncomingChallenge;
+        window.creditPurchasedMtr = creditPurchasedMtr;
+        window.updateBetEligibility = updateBetEligibility;
     </script>
 
     <script type="module">
-        import { createConfig, http, connect, getAccount, watchAccount, reconnect, readContract } from 'https://esm.sh/@wagmi/core';
+        import { createConfig, http, connect, getAccount, watchAccount, reconnect, readContract, switchChain } from 'https://esm.sh/@wagmi/core';
         import { base } from 'https://esm.sh/wagmi/chains';
         import { injected } from 'https://esm.sh/@wagmi/connectors';
         import { walletConnect } from 'https://esm.sh/@wagmi/connectors';
@@ -1289,7 +1349,9 @@
                     functionName: 'balanceOf',
                     args: [address]
                 });
-                const formatted = Number(formatUnits(balance, 18)).toLocaleString('es-ES', { maximumFractionDigits: 4 });
+                const numericBalance = Number(formatUnits(balance, 18));
+                window.__mtrOnChainBalance = numericBalance;
+                const formatted = numericBalance.toLocaleString('es-ES', { maximumFractionDigits: 4 });
                 const badge = document.getElementById('balanceDisplay');
                 const userBalance = document.getElementById('userBalance');
                 if (badge) badge.textContent = `Tu MTR: ${formatted}`;
@@ -1309,8 +1371,14 @@
                 walletEl.classList.remove('hidden');
                 btnEl.textContent = 'Wallet conectada';
                 localStorage.setItem('mtr_wallet', account.address);
-                localStorage.setItem('mtr_wallet_chain', 'base');
-                refreshMtrBalance(account.address);
+                localStorage.setItem('mtr_wallet_chain', String(account.chainId || 'unknown'));
+                if (account.chainId !== 8453) {
+                    window.__mtrOnChainBalance = 0;
+                    if (typeof showToast === 'function') showToast('Cambia a Base para MTR', 'error');
+                } else {
+                    refreshMtrBalance(account.address);
+                }
+                if (typeof window.updateBetEligibility === 'function') window.updateBetEligibility();
             } else {
                 walletEl.classList.add('hidden');
                 btnEl.textContent = 'Conectar Wallet';
@@ -1321,6 +1389,15 @@
             try {
                 console.log('[wallet] connect requested via wagmi');
                 await connect(wagmiConfig, { connector: injected({ target: 'metaMask' }) });
+                const account = getAccount(wagmiConfig);
+                if (account?.chainId && account.chainId !== 8453) {
+                    if (typeof showToast === 'function') showToast('Cambia a Base para MTR', 'error');
+                    try {
+                        await switchChain(wagmiConfig, { chainId: 8453 });
+                    } catch (switchError) {
+                        console.warn('[wallet] switch chain rejected', switchError);
+                    }
+                }
                 renderWallet(getAccount(wagmiConfig));
             } catch (error) {
                 console.error('[wallet] connect error', error);
