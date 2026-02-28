@@ -150,7 +150,10 @@ const GameEngine = {
     },
     
     updateBalanceDisplay() {
+ codex/fix-issues-from-codex-review-on-pr-#117-snau6z
+
  codex/fix-issues-from-codex-review-on-pr-#117-6lh27n
+ codex/migrate-mtoken-to-mtr-on-base-chain-hbd77v
         const balanceEl = document.getElementById('appBalanceDisplay');
         if (balanceEl) {
             balanceEl.textContent = `Saldo jugable: ${this.userBalance} MTR`;
