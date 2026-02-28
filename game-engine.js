@@ -1104,7 +1104,7 @@ const GameEngine = {
                         <p>Billetera plataforma: ${platformWallet}</p>
                     </div>
                 ` : ''}
-                ${this.lastPrizeTxHash ? `<p class="victory-prize">✅ Premio enviado! Tx: <a href="https://basescan.org/tx/${this.lastPrizeTxHash}" target="_blank" rel="noopener noreferrer">Ver en Basescan</a></p>` : ''}
+                ${this.lastPrizeTxHash ? `<p class="victory-prize">Premio enviado! Tx: <a href="https://basescan.org/tx/${this.lastPrizeTxHash}" target="_blank" rel="noopener noreferrer">${this.lastPrizeTxHash}</a></p>` : ''}
                 <button onclick="${match.match_type === 'practice' ? 'GameEngine.goToPracticeSelection()' : 'location.reload()'}" class="btn-primary btn-large">
                     ${match.match_type === 'practice' ? 'Continuar en práctica' : 'Jugar de Nuevo'}
                 </button>
