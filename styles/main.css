@@ -71,6 +71,10 @@ body {
 .rounded-full { border-radius: 9999px; }
 .w-5 { width: 20px; }
 .h-5 { height: 20px; }
+ codex/fix-issues-from-codex-review-on-pr-#117-h1vqdv
+.shadow { box-shadow: 0 8px 20px rgba(37, 99, 235, 0.35); }
+
+
  codex/fix-issues-from-codex-review-on-pr-#117-vm0jtz
 .shadow { box-shadow: 0 8px 20px rgba(37, 99, 235, 0.35); }
 
@@ -104,6 +108,7 @@ body {
 
  codex/migrate-mtoken-to-mtr-on-base-chain-hbd77v
 
+ codex/migrate-mtoken-to-mtr-on-base-chain-hbd77v
  codex/migrate-mtoken-to-mtr-on-base-chain-hbd77v
  codex/migrate-mtoken-to-mtr-on-base-chain-hbd77v
  codex/migrate-mtoken-to-mtr-on-base-chain-hbd77v
@@ -588,6 +593,8 @@ body {
     font-size: 12px;
 }
 
+ codex/fix-issues-from-codex-review-on-pr-#117-h1vqdv
+
  codex/fix-issues-from-codex-review-on-pr-#117-vm0jtz
 
  codex/fix-issues-from-codex-review-on-pr-#117-1unygy
@@ -605,6 +612,7 @@ body {
  codex/fix-issues-from-codex-review-on-pr-#117-6lh27n
 
  codex/fix-issues-from-codex-review-on-pr-#117-ttd7et
+ codex/migrate-mtoken-to-mtr-on-base-chain-hbd77v
  codex/migrate-mtoken-to-mtr-on-base-chain-hbd77v
  codex/migrate-mtoken-to-mtr-on-base-chain-hbd77v
  codex/migrate-mtoken-to-mtr-on-base-chain-hbd77v
@@ -648,6 +656,8 @@ body {
     border-radius: 9999px;
     object-fit: cover;
     box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
+ codex/fix-issues-from-codex-review-on-pr-#117-h1vqdv
+
  codex/fix-issues-from-codex-review-on-pr-#117-vm0jtz
 
  codex/fix-issues-from-codex-review-on-pr-#117-1unygy
@@ -694,6 +704,7 @@ body {
     width: 16px;
     height: 16px;
     fill: currentColor;
+ codex/migrate-mtoken-to-mtr-on-base-chain-hbd77v
  codex/migrate-mtoken-to-mtr-on-base-chain-hbd77v
  codex/migrate-mtoken-to-mtr-on-base-chain-hbd77v
  codex/migrate-mtoken-to-mtr-on-base-chain-hbd77v
@@ -1351,6 +1362,19 @@ body {
 
 .btn-secondary:hover {
     border-color: var(--accent-green);
+}
+
+
+.btn-secondary:disabled {
+    opacity: 0.65;
+    cursor: not-allowed;
+}
+
+.wallet-network-warning {
+    margin: 8px 0 0;
+    color: #ff6b6b;
+    font-size: 12px;
+    font-weight: 600;
 }
 
 .settlement-grid .btn-primary,

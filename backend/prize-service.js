@@ -6,10 +6,14 @@ const { createPublicClient, createWalletClient, http, parseUnits, isAddress } = 
 const { privateKeyToAccount } = require('viem/accounts');
 const { base } = require('viem/chains');
 
+ codex/fix-issues-from-codex-review-on-pr-#117-h1vqdv
+const MTR_TOKEN_ADDRESS = process.env.MTR_TOKEN_ADDRESS || '0x99cd1eb32846c9027ed9cb88710066fa08791c33b';
+
  codex/fix-issues-from-codex-review-on-pr-#117-vm0jtz
 const MTR_TOKEN_ADDRESS = process.env.MTR_TOKEN_ADDRESS || '0x99cd1eb32846c9027ed9cb88710066fa08791c33b';
 
 const MTR_TOKEN_ADDRESS = process.env.MTR_TOKEN_ADDRESS || '0x99cd1eb32846c9027ed9cb8710066fa08791c33b';
+ codex/migrate-mtoken-to-mtr-on-base-chain-hbd77v
  codex/migrate-mtoken-to-mtr-on-base-chain-hbd77v
 const ERC20_ABI = [
   {
