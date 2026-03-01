@@ -1029,10 +1029,8 @@
 
     <!-- VIEM WALLET MODULE -->
     <script type="module">
-        import { createPublicClient, createWalletClient, custom, http, formatUnits, isAddress, getAddress } from 'https://esm.sh/viem';
-        import { base } from 'https://esm.sh/viem/chains';
-
-        var EXPECTED_MTR_TOKEN = '0x99cd1eb32846c9027ed9cb8710066fa08791c33b';
+        import { createPublicClient, createWalletClient, custom, http, formatUnits, isAddress, getAddress } from 'https://esm.sh/viem@2';
+        import { base } from 'https://esm.sh/viem@2/chains';
 
         var EXPECTED_MTR_TOKEN = '0x99cd1eb32846c9027ed9cb8710066fa08791c33b';
         var MTR_TOKEN = window.CONFIG?.MTR_TOKEN_ADDRESS || EXPECTED_MTR_TOKEN;
@@ -1138,38 +1136,87 @@
         async function connectWallet() {
             if (!window.ethereum) {
                 console.warn('[wallet] window.ethereum not found — MetaMask not installed');
-                if (typeof showToast === 'function') showToast('Instala MetaMask para conectar tu wallet en Base', 'error');
+                if (typeof showToast === 'function') {
+                    showToast('Instala MetaMask para conectar tu wallet en Base', 'error');
+                } else {
+                    alert('Instala MetaMask para conectar tu wallet en Base');
+                }
                 return;
             }
             try {
                 console.log('[wallet] Requesting wallet connection...');
-                var walletClient = createWalletClient({ chain: base, transport: custom(window.ethereum) });
-                var addresses = await walletClient.requestAddresses();
-                connectedAddress = addresses[0] || null;
-                if (!connectedAddress) {
-                    console.warn('[wallet] No address returned');
-                    if (typeof showToast === 'function') showToast('No se obtuvo dirección de wallet', 'error');
-                    return;
+                
+                // Primero intentar con el método estándar de MetaMask
+                var accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
+                if (accounts && accounts.length > 0) {
+                    connectedAddress = accounts[0];
+                    console.log('[wallet] Connected via eth_requestAccounts:', connectedAddress);
+                } else {
+                    // Fallback a viem si eth_requestAccounts no funciona
+                    var walletClient = createWalletClient({ chain: base, transport: custom(window.ethereum) });
+                    var addresses = await walletClient.requestAddresses();
+                    connectedAddress = addresses[0] || null;
+                    if (!connectedAddress) {
+                        console.warn('[wallet] No address returned');
+                        if (typeof showToast === 'function') {
+                            showToast('No se obtuvo dirección de wallet', 'error');
+                        } else {
+                            alert('No se obtuvo dirección de wallet');
+                        }
+                        return;
+                    }
+                    console.log('[wallet] Connected via viem:', connectedAddress);
                 }
-                console.log('[wallet] Connected:', connectedAddress);
+                
                 var onBase = await ensureBaseChain();
                 renderWallet();
                 if (onBase) {
                     await refreshMtrBalance(connectedAddress);
-                    if (typeof showToast === 'function') showToast('Wallet conectada en Base ✓', 'success');
+                    if (typeof showToast === 'function') {
+                        showToast('Wallet conectada en Base ✓', 'success');
+                    }
                 } else {
-                    if (typeof showToast === 'function') showToast('Wallet conectada pero necesitas cambiar a Base (8453)', 'error');
+                    if (typeof showToast === 'function') {
+                        showToast('Wallet conectada pero necesitas cambiar a Base (8453)', 'error');
+                    }
                 }
             } catch (e) {
                 console.error('[wallet] connect error:', e);
                 var msg = 'No se pudo conectar la wallet';
-                if (e.code === 4001 || (e.message && e.message.includes('rejected'))) msg = 'Conexión rechazada por el usuario';
-                if (typeof showToast === 'function') showToast(msg, 'error');
+                if (e.code === 4001 || (e.message && e.message.includes('rejected'))) {
+                    msg = 'Conexión rechazada por el usuario';
+                } else if (e.message) {
+                    msg = 'Error: ' + e.message;
+                }
+                if (typeof showToast === 'function') {
+                    showToast(msg, 'error');
+                } else {
+                    alert(msg);
+                }
             }
         }
 
-        var btn = document.getElementById('walletConnectBtn');
-        if (btn) btn.addEventListener('click', connectWallet);
+        // Asegurar que el botón esté disponible antes de agregar el listener
+        function initWalletButton() {
+            var btn = document.getElementById('walletConnectBtn');
+            if (btn) {
+                btn.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    connectWallet();
+                });
+                console.log('[wallet] Botón Conectar Wallet inicializado');
+            } else {
+                console.warn('[wallet] Botón walletConnectBtn no encontrado, reintentando...');
+                setTimeout(initWalletButton, 500);
+            }
+        }
+        
+        // Inicializar cuando el DOM esté listo
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', initWalletButton);
+        } else {
+            initWalletButton();
+        }
 
         if (window.ethereum?.on) {
             window.ethereum.on('accountsChanged', async function (accounts) {
