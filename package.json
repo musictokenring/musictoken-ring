@@ -4,8 +4,10 @@
   "private": true,
   "description": "Static frontend for MusicToken Ring",
   "scripts": {
-    "build": "echo 'Static site: no build required'",
+    "build": "npm run check",
     "preview": "npx serve .",
-    "check": "node --check app.js && node --check top-streams-fallback.js && node --check src/app.js && node --check src/top-streams-fallback.js && node scripts/verify-runtime-integrity.js"
+    "check": "node --check app.js && node --check top-streams-fallback.js && node --check src/app.js && node --check src/top-streams-fallback.js && node scripts/verify-runtime-integrity.js",
+    "prepush:guard": "bash scripts/prepush-guard.sh",
+    "pr:clean": "bash scripts/create-clean-pr.sh --base main --strategy ours"
   }
 }

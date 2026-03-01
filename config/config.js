@@ -9,7 +9,7 @@ const CONFIG = {
     
     // Smart Contracts (actualizar después del deploy)
     CONTRACT_ADDRESS: '0xYourBattleContractAddress',
-    TOKEN_ADDRESS: '0x99cd1eb32846c9027ed9cb8710066fa08791c33b',
+    TOKEN_ADDRESS: '0x99cd1eb32846c9027ed9cb88710066fa08791c33b',
     
     // App Configuration
     BATTLE_DURATION: 60,  // segundos
