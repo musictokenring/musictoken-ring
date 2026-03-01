@@ -113,6 +113,7 @@
 
         .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.7); backdrop-filter: blur(4px); z-index: 99; }
         .modal-box { position: relative; z-index: 100; background: #0f0d2e; border: 1px solid rgba(0,243,255,0.15); border-radius: 16px; padding: 32px; max-width: 440px; width: 90%; margin: auto; }
+ v2-redesign
 
         .user-profile { display: flex; align-items: center; gap: 10px; padding: 6px 12px; border-radius: 10px; background: rgba(0,243,255,0.08); border: 1px solid rgba(0,243,255,0.2); cursor: pointer; transition: all 0.2s; }
         .user-profile:hover { background: rgba(0,243,255,0.15); }
@@ -123,6 +124,8 @@
         .btn-logout:hover { background: rgba(248,113,113,0.2); }
         .btn-login { padding: 8px 16px; border-radius: 8px; font-size: 14px; font-weight: 600; color: #c084fc; background: rgba(192,132,252,0.1); border: 1px solid rgba(192,132,252,0.25); cursor: pointer; transition: all 0.2s; }
         .btn-login:hover { background: rgba(192,132,252,0.2); }
+
+ main
     </style>
 </head>
 
@@ -228,12 +231,20 @@
                 <h3 class="text-xl font-bold text-cyan-400 neon-text-cyan mb-2">Comprar MTR</h3>
                 <p class="text-gray-400 text-sm mb-6">Compra MTR en Aerodrome (Base) y acredita tu saldo con el hash de la transacción.</p>
                 <div class="flex flex-wrap gap-3 mb-6">
+ v2-redesign
                     <a href="https://aerodrome.finance/swap?from=ETH&to=0x99cd1eb32846c9027ed9cb8710066fa08791c33b" target="_blank" rel="noopener noreferrer"
+
+                    <a href="https://aerodrome.finance/swap?from=ETH&to=0x99cd1eb32846c9027ed9cb88710066fa08791c33b" target="_blank" rel="noopener noreferrer"
+ main
                        class="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg text-sm font-semibold bg-cyan-500/15 border border-cyan-500/30 text-cyan-400 hover:bg-cyan-500/25 transition-all">
                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/></svg>
                         Swap en Aerodrome
                     </a>
+ v2-redesign
                     <a href="https://basescan.org/token/0x99cd1eb32846c9027ed9cb8710066fa08791c33b" target="_blank" rel="noopener noreferrer"
+
+                    <a href="https://basescan.org/token/0x99cd1eb32846c9027ed9cb88710066fa08791c33b" target="_blank" rel="noopener noreferrer"
+ main
                        class="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg text-sm font-semibold bg-white/5 border border-white/10 text-gray-300 hover:text-white hover:border-white/20 transition-all">
                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/></svg>
                         Ver en Basescan
@@ -446,8 +457,13 @@
                 <div class="text-sm text-gray-400 space-y-1">
                     <p>Token ERC-20 en <strong class="text-white">Base</strong> · Supply total: <strong class="text-white">99,990,000 MTR</strong> (99.99M)</p>
                     <p>Contrato:
+ v2-redesign
                         <a href="https://basescan.org/token/0x99cd1eb32846c9027ed9cb8710066fa08791c33b" target="_blank" rel="noopener noreferrer" class="text-cyan-400 hover:text-cyan-300 font-mono text-xs break-all">
                             0x99cd1eb32846c9027ed9cb8710066fa08791c33b
+
+                        <a href="https://basescan.org/token/0x99cd1eb32846c9027ed9cb88710066fa08791c33b" target="_blank" rel="noopener noreferrer" class="text-cyan-400 hover:text-cyan-300 font-mono text-xs break-all">
+                            0x99cd1eb32846c9027ed9cb88710066fa08791c33b
+ main
                         </a>
                     </p>
                 </div>
@@ -993,7 +1009,11 @@
         import { createPublicClient, createWalletClient, custom, http, formatUnits, isAddress, getAddress } from 'https://esm.sh/viem';
         import { base } from 'https://esm.sh/viem/chains';
 
+ v2-redesign
         var EXPECTED_MTR_TOKEN = '0x99cd1eb32846c9027ed9cb8710066fa08791c33b';
+
+        var EXPECTED_MTR_TOKEN = '0x99cd1eb32846c9027ed9cb88710066fa08791c33b';
+ main
         var MTR_TOKEN = window.CONFIG?.MTR_TOKEN_ADDRESS || EXPECTED_MTR_TOKEN;
         var publicClient = createPublicClient({ chain: base, transport: http('https://mainnet.base.org') });
         var connectedAddress = null;
