@@ -2,28 +2,32 @@
 
 /* Estilos para perfil de usuario y botón de salir - Fix posicionamiento */
 #authButton {
-    display: flex;
+    display: inline-flex;
     align-items: center;
+    justify-content: flex-end;
     gap: 12px;
     flex-wrap: nowrap;
-    height: 100%;
     padding: 0;
     margin: 0;
+    margin-left: auto;
+    min-width: fit-content;
+    vertical-align: middle;
 }
 
 .user-profile {
-    display: flex;
+    display: inline-flex;
     align-items: center;
+    justify-content: center;
     gap: 10px;
     background: transparent;
     border: none;
     cursor: pointer;
-    padding: 6px 10px;
+    padding: 0;
     border-radius: 8px;
     transition: background-color 0.2s ease;
     flex-shrink: 0;
-    height: fit-content;
     margin: 0;
+    vertical-align: middle;
 }
 
 .user-profile:hover {
@@ -37,21 +41,22 @@
     object-fit: cover;
     border: 2px solid rgba(255, 255, 255, 0.2);
     flex-shrink: 0;
-    display: block;
+    display: inline-block;
     margin: 0;
     padding: 0;
     vertical-align: middle;
+    align-self: center;
 }
 
 .user-info {
-    display: flex;
+    display: inline-flex;
     flex-direction: column;
     align-items: flex-start;
     justify-content: center;
     min-width: 0;
-    height: 100%;
     margin: 0;
     padding: 0;
+    vertical-align: middle;
 }
 
 .user-name {
@@ -62,12 +67,11 @@
     overflow: hidden;
     text-overflow: ellipsis;
     max-width: 150px;
-    line-height: 1.4;
+    line-height: 1.2;
     margin: 0;
     padding: 0;
-    display: flex;
-    align-items: center;
-    height: 100%;
+    display: block;
+    vertical-align: middle;
 }
 
 .btn-logout {
@@ -82,10 +86,10 @@
     transition: all 0.2s ease;
     white-space: nowrap;
     flex-shrink: 0;
-    margin-left: auto;
-    height: fit-content;
+    margin: 0;
+    height: auto;
     align-self: center;
-    line-height: 1.4;
+    line-height: 1.2;
 }
 
 .btn-logout:hover {
@@ -135,10 +139,6 @@
 #authButton {
     margin-left: auto;
     min-width: fit-content;
-    align-self: center;
-    display: flex;
-    align-items: center;
-    justify-content: flex-end;
 }
 
 /* Asegurar que el header tenga padding suficiente */
