@@ -80,13 +80,9 @@ function isMetaMaskExtensionMissingError(reason) {
 }
 
 window.addEventListener('unhandledrejection', (event) => {
-    if (!isMetaMaskExtensionMissingError(event.reason)) {
-        return;
-    }
-
+    if (!isMetaMaskExtensionMissingError(event.reason)) return;
     event.preventDefault();
-    console.warn('MetaMask no está disponible en este navegador.');
-    showToast('MetaMask no está disponible. Instala la extensión para conectar tu wallet.', 'error');
+    if (window.__mtrMetaMaskToastShown) return;
 });
 
 function togglePreview(url, button) {

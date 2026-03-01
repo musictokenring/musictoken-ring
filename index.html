@@ -47,10 +47,14 @@
             var message = extractMetaMaskErrorMessage(reason);
             return message.includes('metamask extension not found') || message.includes('failed to connect to metamask');
         }
+        var __mtrMetaMaskToastShown = false;
         window.addEventListener('unhandledrejection', function (event) {
             if (!isMetaMaskUnavailableError(event.reason)) return;
             event.preventDefault();
-            console.warn('MetaMask no está disponible en este navegador.');
+            if (__mtrMetaMaskToastShown) return;
+            __mtrMetaMaskToastShown = true;
+            console.warn('[wallet] MetaMask no disponible.');
+            setTimeout(function () { __mtrMetaMaskToastShown = false; }, 5000);
             if (typeof showToast === 'function') showToast('MetaMask no está disponible. Instala la extensión para conectar tu wallet.', 'error');
         });
 
@@ -133,6 +137,21 @@
         @keyframes bounce { 0% { transform: scale(0.3); opacity: 0; } 50% { transform: scale(1.1); } 100% { transform: scale(1); opacity: 1; } }
         @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.7; } }
 
+        .track-item { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-radius: 12px; background: rgba(15,15,40,0.6); border: 1px solid rgba(255,255,255,0.06); cursor: pointer; transition: all 0.25s ease; }
+        .track-item:hover { background: rgba(0,243,255,0.08); border-color: rgba(0,243,255,0.3); box-shadow: 0 0 20px rgba(0,243,255,0.1); transform: translateY(-1px); }
+        .track-item img { width: 52px; height: 52px; border-radius: 10px; object-fit: cover; flex-shrink: 0; border: 1px solid rgba(255,255,255,0.08); }
+        .track-info { flex: 1; min-width: 0; }
+        .track-name { font-size: 13px; font-weight: 600; color: #e2e8f0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .track-artist { font-size: 12px; color: #94a3b8; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .btn-preview { padding: 6px 12px; border-radius: 8px; font-size: 11px; font-weight: 700; color: #22d3ee; background: rgba(0,243,255,0.1); border: 1px solid rgba(0,243,255,0.2); cursor: pointer; transition: all 0.2s; flex-shrink: 0; white-space: nowrap; }
+        .btn-preview:hover { background: rgba(0,243,255,0.2); box-shadow: 0 0 10px rgba(0,243,255,0.2); }
+
+        .neon-scrollbar::-webkit-scrollbar { width: 6px; }
+        .neon-scrollbar::-webkit-scrollbar-track { background: rgba(15,15,40,0.4); border-radius: 3px; }
+        .neon-scrollbar::-webkit-scrollbar-thumb { background: rgba(0,243,255,0.3); border-radius: 3px; }
+        .neon-scrollbar::-webkit-scrollbar-thumb:hover { background: rgba(0,243,255,0.5); }
+        .neon-scrollbar { scrollbar-width: thin; scrollbar-color: rgba(0,243,255,0.3) rgba(15,15,40,0.4); }
+
     </style>
 </head>
 
@@ -148,9 +167,9 @@
                 </div>
 
                 <div class="flex items-center gap-2 sm:gap-4 text-sm">
-                    <span id="onchainBalanceDisplay" class="hidden sm:inline text-gray-400">On-chain: --</span>
-                    <span id="appBalanceDisplay" class="hidden sm:inline text-gray-400">Jugable: --</span>
-                    <span id="walletAddress" class="hidden text-cyan-300 font-mono text-xs"></span>
+                    <span id="onchainBalanceDisplay" class="hidden sm:inline px-2 py-1 rounded-md bg-cyan-500/10 text-cyan-400 text-xs font-semibold">On-chain: --</span>
+                    <span id="appBalanceDisplay" class="hidden sm:inline px-2 py-1 rounded-md bg-fuchsia-500/10 text-fuchsia-400 text-xs font-semibold">Jugable: --</span>
+                    <span id="walletAddress" class="hidden text-cyan-300 font-mono text-xs bg-cyan-500/10 px-2 py-1 rounded-md"></span>
                     <button type="button" id="walletConnectBtn" class="px-4 py-2 rounded-lg text-sm font-semibold bg-cyan-500/10 border border-cyan-500/30 text-cyan-400 hover:bg-cyan-500/20 transition-all duration-200 cursor-pointer">
                         Conectar Wallet
                     </button>
@@ -337,7 +356,7 @@
                                class="flex-1 px-4 py-3 rounded-lg bg-black/40 border border-white/10 text-white placeholder-gray-500 text-sm focus:outline-none focus:border-cyan-500/50 focus:ring-1 focus:ring-cyan-500/20 transition">
                         <button type="button" onclick="searchSong()" class="px-4 py-3 rounded-lg bg-cyan-500/15 border border-cyan-500/30 text-cyan-400 hover:bg-cyan-500/25 transition cursor-pointer">🔍</button>
                     </div>
-                    <div id="searchResults" class="grid grid-cols-2 gap-3 max-h-96 overflow-y-auto"></div>
+                    <div id="searchResults" class="grid grid-cols-1 gap-2 max-h-96 overflow-y-auto neon-scrollbar pr-1"></div>
                 </div>
 
                 <div class="space-y-6">
@@ -1051,12 +1070,25 @@
             var chainHex = await window.ethereum.request({ method: 'eth_chainId' });
             connectedChainId = Number.parseInt(chainHex, 16);
             if (connectedChainId === 8453) return true;
-            if (typeof showToast === 'function') showToast('Cambia a Base para MTR', 'error');
+            console.log('[wallet] Chain actual:', connectedChainId, '→ intentando switch a Base 8453');
+            if (typeof showToast === 'function') showToast('Cambiando a red Base...', 'info');
             try {
                 await window.ethereum.request({ method: 'wallet_switchEthereumChain', params: [{ chainId: '0x2105' }] });
                 connectedChainId = 8453;
+                if (typeof showToast === 'function') showToast('Conectado a Base ✓', 'success');
                 return true;
-            } catch (e) { console.warn('[wallet] switch rejected', e); return false; }
+            } catch (switchError) {
+                if (switchError.code === 4902) {
+                    try {
+                        await window.ethereum.request({ method: 'wallet_addEthereumChain', params: [{ chainId: '0x2105', chainName: 'Base', nativeCurrency: { name: 'ETH', symbol: 'ETH', decimals: 18 }, rpcUrls: ['https://mainnet.base.org'], blockExplorerUrls: ['https://basescan.org'] }] });
+                        connectedChainId = 8453;
+                        return true;
+                    } catch (addError) { console.error('[wallet] addChain failed', addError); }
+                }
+                console.warn('[wallet] switch rejected', switchError);
+                if (typeof showToast === 'function') showToast('Necesitas cambiar a Base manualmente en MetaMask', 'error');
+                return false;
+            }
         }
 
         async function refreshMtrBalance(address) {
