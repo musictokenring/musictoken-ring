@@ -1,25 +1,31 @@
 <!DOCTYPE html>
-<html lang="es">
+<html lang="es" class="scroll-smooth">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
     <meta http-equiv="Pragma" content="no-cache">
     <meta http-equiv="Expires" content="0">
-    <meta name="mtr-build" content="20260228mtr2">
+    <meta name="mtr-build" content="v2.0">
     <title>MusicToken Ring - Music Battle Arena</title>
-   
-    <!-- Fonts -->
+
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-   
-    <!-- Styles -->
-    <link rel="stylesheet" href="./styles/main.css?v=20260228mtr2">
-   
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: { sans: ['Inter', 'system-ui', 'sans-serif'] }
+                }
+            }
+        };
+    </script>
+
     <link rel="icon" type="image/png" href="https://pink-blank-vicuna-260.mypinata.cloud/ipfs/bafybeie24pisqmw6teijdng4flzjwumgwpesilowjxq3kww3p7kxlmuywm">
 
-    <!-- Supabase JS -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
     <script>
@@ -30,53 +36,39 @@
             BACKEND_API: 'https://musictoken-backend.onrender.com',
             MTR_TOKEN_ADDRESS: window.MTR_TOKEN_ADDRESS || '0x99cd1eb32846c9027ed9cb88710066fa08791c33b'
         };
+
         function extractMetaMaskErrorMessage(reason) {
             if (!reason) return '';
-            const direct = String(reason?.message || reason || '');
-            const cause = String(reason?.cause?.message || '');
-            return `${direct} ${cause}`.toLowerCase();
+            var direct = String(reason?.message || reason || '');
+            var cause = String(reason?.cause?.message || '');
+            return (direct + ' ' + cause).toLowerCase();
         }
-
         function isMetaMaskUnavailableError(reason) {
-            const message = extractMetaMaskErrorMessage(reason);
-            return message.includes('metamask extension not found') ||
-                message.includes('failed to connect to metamask');
+            var message = extractMetaMaskErrorMessage(reason);
+            return message.includes('metamask extension not found') || message.includes('failed to connect to metamask');
         }
-
-        window.addEventListener('unhandledrejection', (event) => {
+        window.addEventListener('unhandledrejection', function (event) {
             if (!isMetaMaskUnavailableError(event.reason)) return;
             event.preventDefault();
             console.warn('MetaMask no está disponible en este navegador.');
-            if (typeof showToast === 'function') {
-                showToast('MetaMask no está disponible. Instala la extensión para conectar tu wallet.', 'error');
-            }
+            if (typeof showToast === 'function') showToast('MetaMask no está disponible. Instala la extensión para conectar tu wallet.', 'error');
         });
 
-        const PLATFORM_WALLET_ADDRESSES = {
-            base: window.PLATFORM_WALLET_BASE_ADDRESS || '0x75376BC58830f27415402875D26B73A6BE8E2253'
-        };
-        window.MTR_BUILD_ID = '20260228mtr2';
+        var PLATFORM_WALLET_ADDRESSES = { base: window.PLATFORM_WALLET_BASE_ADDRESS || '0x75376BC58830f27415402875D26B73A6BE8E2253' };
+        window.MTR_BUILD_ID = 'v2.0';
 
-        // Critical UI fallbacks: keep mode buttons functional even if a later script fails to parse/load.
         if (typeof window.selectMode !== 'function') {
             window.selectMode = function selectModeCriticalFallback(mode) {
                 var modeSelector = document.getElementById('modeSelector');
                 var songSelection = document.getElementById('songSelection');
                 var modeTitle = document.getElementById('modeTitle');
-                var titles = {
-                    quick: 'Modo Rápido',
-                    private: 'Sala Privada',
-                    practice: 'Modo Práctica',
-                    tournament: 'Modo Torneo'
-                };
-
+                var titles = { quick: 'Modo Rápido', private: 'Sala Privada', practice: 'Modo Práctica', tournament: 'Modo Torneo' };
                 window.currentMode = mode || null;
                 if (modeSelector) modeSelector.classList.add('hidden');
                 if (songSelection) songSelection.classList.remove('hidden');
                 if (modeTitle) modeTitle.textContent = titles[mode] || 'Modo de Juego';
             };
         }
-
         if (typeof window.backToModes !== 'function') {
             window.backToModes = function backToModesCriticalFallback() {
                 var modeSelector = document.getElementById('modeSelector');
@@ -86,800 +78,591 @@
                 window.currentMode = null;
             };
         }
-
         console.log('🎵 MusicToken Ring loaded! build=' + window.MTR_BUILD_ID);
     </script>
 
-    <script>
-        function shouldBlockRenderedString(value) {
-            if (!value) return false;
-            return /(codex\/|refs\/heads\/)/i.test(String(value));
-        }
-
-        function pruneForbiddenTextNodes(root = document.body) {
-            if (!root) return;
-            const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, null);
-            const nodes = [];
-            while (walker.nextNode()) nodes.push(walker.currentNode);
-            nodes.forEach((node) => {
-                if (!node || !node.parentElement) return;
-                const parentTag = node.parentElement.tagName;
-                if (parentTag === 'SCRIPT' || parentTag === 'STYLE') return;
-                const raw = (node.nodeValue || '').trim();
-                if (!raw) return;
-                if (shouldBlockRenderedString(raw)) {
-                    node.remove();
-                }
-            });
-        }
-
-        function normalizeCriticalSectionsOnce(root = document.body) {
-            if (!root) return;
-            const keepFirst = (selector) => {
-                const nodes = root.querySelectorAll(selector);
-                nodes.forEach((n, idx) => { if (idx > 0) n.remove(); });
-            };
-
-            keepFirst('#creditPurchaseBtn');
-            keepFirst('#depositTxHash');
-            keepFirst('.about-mtr-card img.mtr-logo-large');
-            keepFirst('.header .logo img.logo-icon');
-            keepFirst('.header .logo .logo-text');
-            keepFirst('#onchainBalanceDisplay');
-            keepFirst('#appBalanceDisplay');
-            keepFirst('#walletNetworkWarning');
-            keepFirst('.about-mtr-card');
-
-            const firstSettlement = root.querySelector('.settlement-panel .settlement-card');
-            if (firstSettlement) {
-                ['a[href*="aerodrome.finance/swap"]', 'a[href*="basescan.org/address/"]', 'a[href*="basescan.org/token/"]'].forEach((sel) => {
-                    const nodes = firstSettlement.querySelectorAll(sel);
-                    nodes.forEach((n, idx) => { if (idx > 0) n.remove(); });
-                });
-            }
-
-            const aboutCard = root.querySelector('.about-mtr-card');
-            if (aboutCard) {
-                const seen = new Set();
-                aboutCard.querySelectorAll('p').forEach((p) => {
-                    const key = (p.textContent || '').replace(/\s+/g, ' ').trim().toLowerCase();
-                    if (!key || seen.has(key)) p.remove();
-                    else seen.add(key);
-                });
-            }
-        }
-
-        document.addEventListener('DOMContentLoaded', () => {
-            pruneForbiddenTextNodes(document.body);
-            normalizeCriticalSectionsOnce(document.body);
-            const observer = new MutationObserver(() => {
-                pruneForbiddenTextNodes(document.body);
-                normalizeCriticalSectionsOnce(document.body);
-            });
-            observer.observe(document.body, { childList: true, subtree: true });
-        });
-    </script>
-
     <style>
-        /* Fallback styles to avoid broken/plain rendering if cached CSS is stale */
-        .btn-link-primary{display:inline-flex;align-items:center;justify-content:center;gap:8px;padding:10px 14px;border-radius:10px;color:#fff;text-decoration:none;font-weight:700;background:#2563eb;box-shadow:0 8px 20px rgba(37,99,235,.35)}
-        .btn-link-primary:hover{background:#1d4ed8}
-        .w-12{width:48px}.h-12{height:48px}.rounded-full{border-radius:9999px}.w-5{width:20px}.h-5{height:20px}
-        .mtr-logo-large{width:110px;height:110px;border-radius:9999px;object-fit:cover}
+        body { background: linear-gradient(180deg, #030712 0%, #0f0d2e 35%, #0a0820 65%, #030712 100%); }
+        .neon-text-cyan { text-shadow: 0 0 10px rgba(0,243,255,0.5), 0 0 40px rgba(0,243,255,0.2); }
+        .neon-text-magenta { text-shadow: 0 0 10px rgba(236,72,153,0.5), 0 0 40px rgba(236,72,153,0.2); }
+        .neon-border-cyan { box-shadow: 0 0 15px rgba(0,243,255,0.15), inset 0 0 15px rgba(0,243,255,0.05); }
+        .neon-border-magenta { box-shadow: 0 0 15px rgba(236,72,153,0.15), inset 0 0 15px rgba(236,72,153,0.05); }
+        .card-glow:hover { box-shadow: 0 0 30px rgba(0,243,255,0.2), 0 0 60px rgba(0,243,255,0.1); transform: translateY(-4px); }
+        .card-glow-magenta:hover { box-shadow: 0 0 30px rgba(236,72,153,0.2), 0 0 60px rgba(236,72,153,0.1); transform: translateY(-4px); }
+        .card-glow-purple:hover { box-shadow: 0 0 30px rgba(168,85,247,0.2), 0 0 60px rgba(168,85,247,0.1); transform: translateY(-4px); }
+
+        .toast { padding: 12px 20px; border-radius: 10px; color: #fff; font-size: 14px; font-weight: 500; opacity: 0; transform: translateX(100%); transition: all 0.3s ease; backdrop-filter: blur(10px); max-width: 380px; }
+        .toast.show { opacity: 1; transform: translateX(0); }
+        .toast-info { background: rgba(6,182,212,0.9); border: 1px solid rgba(6,182,212,0.3); }
+        .toast-success { background: rgba(34,197,94,0.9); border: 1px solid rgba(34,197,94,0.3); }
+        .toast-error { background: rgba(239,68,68,0.9); border: 1px solid rgba(239,68,68,0.3); }
+
+        #streamDashboardTrackList { display: flex; gap: 16px; overflow-x: auto; scroll-behavior: smooth; padding: 8px 0; scrollbar-width: none; }
+        #streamDashboardTrackList::-webkit-scrollbar { display: none; }
+        .stream-card { flex: 0 0 180px; background: rgba(15,15,40,0.7); border: 1px solid rgba(0,243,255,0.1); border-radius: 12px; overflow: hidden; transition: all 0.3s ease; cursor: pointer; }
+        .stream-card:hover { border-color: rgba(0,243,255,0.3); box-shadow: 0 0 20px rgba(0,243,255,0.1); transform: translateY(-2px); }
+        .stream-card img { width: 100%; aspect-ratio: 1; object-fit: cover; }
+        .stream-card-info { padding: 10px 12px; }
+        .stream-card-info strong { display: block; font-size: 13px; color: #e2e8f0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .stream-card-info span { display: block; font-size: 12px; color: #94a3b8; }
+        .stream-card-info .stream-delta { color: #22d3ee; font-size: 11px; margin-top: 2px; }
+
+        .stream-region-tab { padding: 6px 16px; border-radius: 8px; font-size: 13px; font-weight: 600; color: #94a3b8; background: transparent; border: 1px solid rgba(148,163,184,0.15); cursor: pointer; transition: all 0.2s; }
+        .stream-region-tab:hover { color: #e2e8f0; border-color: rgba(0,243,255,0.3); }
+        .stream-region-tab.active { color: #22d3ee; background: rgba(0,243,255,0.1); border-color: rgba(0,243,255,0.3); }
+
+        .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.7); backdrop-filter: blur(4px); z-index: 99; }
+        .modal-box { position: relative; z-index: 100; background: #0f0d2e; border: 1px solid rgba(0,243,255,0.15); border-radius: 16px; padding: 32px; max-width: 440px; width: 90%; margin: auto; }
     </style>
-
 </head>
-<body>
-    <!-- Header -->
-    <header class="header">
-        <div class="container">
-            <div class="header-content">
-                <div class="logo">
-                    <img src="https://pink-blank-vicuna-260.mypinata.cloud/ipfs/bafybeiah2fffgw6y6aomfx5b5pgav7wedo3qdtqxqteg2glvmgzs6fpivu" alt="MTR Logo" class="logo-icon w-12 h-12 rounded-full" onerror="this.style.display='none'">
-                    <span class="logo-text">MusicToken Ring</span>
-                </div>
-                <h2 class="slogan">Music Token Ring – The Wall Street of Beats</h2>
-                
-                <div class="header-badges">
-                    <span class="badge">🎵 Deezer</span>
-                    <span class="badge badge-live">🔴 Live</span>
-                    <span class="badge" id="onchainBalanceDisplay">On-chain: --</span>
-                    <span class="badge" id="appBalanceDisplay">Jugable: --</span>
+
+<body class="min-h-screen text-white font-sans antialiased">
+
+    <!-- ==================== HEADER ==================== -->
+    <header class="sticky top-0 z-50 border-b border-white/5" style="background: rgba(3,7,18,0.85); backdrop-filter: blur(16px);">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex items-center justify-between h-16">
+                <div class="flex items-center gap-3">
+                    <img src="https://pink-blank-vicuna-260.mypinata.cloud/ipfs/bafybeiah2fffgw6y6aomfx5b5pgav7wedo3qdtqxqteg2glvmgzs6fpivu" alt="MTR" class="w-9 h-9 rounded-full ring-2 ring-cyan-500/30" onerror="this.style.display='none'">
+                    <span class="text-xl sm:text-2xl font-extrabold text-cyan-400 neon-text-cyan tracking-tight">MusicToken Ring</span>
                 </div>
 
-                <div class="wallet-section">
-                    <button type="button" id="walletConnectBtn" class="btn-secondary btn-wallet">
+                <div class="flex items-center gap-2 sm:gap-4 text-sm">
+                    <span id="onchainBalanceDisplay" class="hidden sm:inline text-gray-400">On-chain: --</span>
+                    <span id="appBalanceDisplay" class="hidden sm:inline text-gray-400">Jugable: --</span>
+                    <span id="walletAddress" class="hidden text-cyan-300 font-mono text-xs"></span>
+                    <button type="button" id="walletConnectBtn" class="px-4 py-2 rounded-lg text-sm font-semibold bg-cyan-500/10 border border-cyan-500/30 text-cyan-400 hover:bg-cyan-500/20 transition-all duration-200 cursor-pointer">
                         Conectar Wallet
                     </button>
-                    <span id="walletAddress" class="wallet-address hidden"></span>
-                </div>
-                <p id="walletNetworkWarning" class="wallet-network-warning hidden">
-                    ⚠️ Red incorrecta. Cambia a Base (8453) para jugar y verificar depósitos.
-                </p>
-                
-                <!-- AUTH BUTTON -->
-                <div id="authButton">
-                    <button type="button" onclick="openAuthModal()" class="btn-login">
-                        Iniciar Sesión
-                    </button>
+                    <div id="authButton">
+                        <button type="button" onclick="openAuthModal()" class="px-4 py-2 rounded-lg text-sm font-semibold bg-fuchsia-500/10 border border-fuchsia-500/30 text-fuchsia-400 hover:bg-fuchsia-500/20 transition-all duration-200 cursor-pointer">
+                            Iniciar Sesión
+                        </button>
+                    </div>
                 </div>
             </div>
         </div>
+        <p id="walletNetworkWarning" class="hidden text-center text-yellow-400 text-sm py-2 bg-yellow-500/10 border-t border-yellow-500/20">
+            ⚠️ Red incorrecta. Cambia a Base (8453) para jugar y verificar depósitos.
+        </p>
     </header>
 
-    <!-- Main Content -->
-    <main class="main">
-        <div class="container">
-            <section id="streamDashboard" class="stream-dashboard">
-                <div class="stream-dashboard-header">
-                    <h2>📈 Wall Street of Beats</h2>
-                    <p>Top streams por región (últimos 5 min)</p>
+    <!-- ==================== MAIN ==================== -->
+    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-20">
+
+        <!-- BATTLE ANIMATION -->
+        <div id="battle-animation" class="h-96 w-full max-w-5xl mx-auto my-12 relative overflow-hidden rounded-xl border border-cyan-500/30 bg-black/40 neon-border-cyan">
+            <canvas id="pulse-canvas" class="absolute inset-0 w-full h-full"></canvas>
+            <div class="absolute inset-0 flex flex-col items-center justify-center z-10 pointer-events-none">
+                <div class="text-5xl mb-4">🥊</div>
+                <h2 class="text-2xl sm:text-3xl font-bold text-white/90 neon-text-cyan mb-2">Batallas en vivo</h2>
+                <p class="text-cyan-300/60 text-sm font-medium tracking-wider uppercase">En desarrollo</p>
+            </div>
+        </div>
+
+        <!-- STREAM DASHBOARD -->
+        <section id="streamDashboard" class="mb-16">
+            <div class="flex flex-col sm:flex-row sm:items-end justify-between gap-4 mb-6">
+                <div>
+                    <h2 class="text-2xl font-bold text-white">📈 Wall Street of Beats</h2>
+                    <p class="text-gray-400 text-sm mt-1">Top streams por región (últimos 5 min)</p>
                 </div>
-                <div class="stream-region-tabs">
+                <div class="stream-region-tabs flex gap-2">
                     <button type="button" class="stream-region-tab active" data-region="latam" onclick="setDashboardRegion('latam')">Latam</button>
                     <button type="button" class="stream-region-tab" data-region="us" onclick="setDashboardRegion('us')">US</button>
                     <button type="button" class="stream-region-tab" data-region="eu" onclick="setDashboardRegion('eu')">EU</button>
                 </div>
-                <div class="stream-carousel-wrap">
-                    <button type="button" class="stream-carousel-nav" onclick="moveDashboardCarousel(-1)">‹</button>
-                    <div id="streamDashboardTrackList" class="stream-carousel-track">
-                        <article class="stream-card">
-                            <img src="https://e-cdns-images.dzcdn.net/images/cover/9f4c9025e2f4f4be85a8d0f95f3bc5fe/250x250-000000-80-0-0.jpg" alt="Luna">
-                            <div class="stream-card-info">
-                                <strong>Luna</strong>
-                                <span>Feid</span>
-                                <span class="stream-delta neutral">• 34.1% del top</span>
-                            </div>
-                        </article>
-                        <article class="stream-card">
-                            <img src="https://e-cdns-images.dzcdn.net/images/cover/4aa4b9f4674f7f9f7428962456f31cc7/250x250-000000-80-0-0.jpg" alt="Si Antes Te Hubiera Conocido">
-                            <div class="stream-card-info">
-                                <strong>Si Antes Te Hubiera Conocido</strong>
-                                <span>KAROL G</span>
-                                <span class="stream-delta neutral">• 33.0% del top</span>
-                            </div>
-                        </article>
-                        <article class="stream-card">
-                            <img src="https://e-cdns-images.dzcdn.net/images/cover/236f9df9f6f95cc8c6f0707dbe6839df/250x250-000000-80-0-0.jpg" alt="Perro Negro">
-                            <div class="stream-card-info">
-                                <strong>Perro Negro</strong>
-                                <span>Bad Bunny</span>
-                                <span class="stream-delta neutral">• 33.3% del top</span>
-                            </div>
-                        </article>
+            </div>
+            <div class="relative">
+                <button type="button" class="absolute -left-3 top-1/2 -translate-y-1/2 z-10 w-8 h-8 rounded-full bg-gray-800/80 border border-gray-700 text-gray-300 hover:text-cyan-400 hover:border-cyan-500/30 transition hidden sm:flex items-center justify-center" onclick="moveDashboardCarousel(-1)">‹</button>
+                <div id="streamDashboardTrackList" class="stream-carousel-track"></div>
+                <button type="button" class="absolute -right-3 top-1/2 -translate-y-1/2 z-10 w-8 h-8 rounded-full bg-gray-800/80 border border-gray-700 text-gray-300 hover:text-cyan-400 hover:border-cyan-500/30 transition hidden sm:flex items-center justify-center" onclick="moveDashboardCarousel(1)">›</button>
+            </div>
+        </section>
+
+        <!-- LOGIN WALL -->
+        <section id="loginWall" class="mb-16">
+            <div class="max-w-2xl mx-auto text-center py-16 px-8 rounded-2xl border border-white/5 bg-white/[0.02]">
+                <div class="text-6xl mb-6">🥊</div>
+                <h1 class="text-3xl sm:text-4xl font-extrabold text-white mb-4">Bienvenido a <span class="text-cyan-400 neon-text-cyan">MusicToken Ring</span></h1>
+                <p class="text-gray-400 text-lg mb-8 max-w-md mx-auto">
+                    Batalla con tus canciones favoritas, apuesta MTR y demuestra quién tiene mejor gusto musical.
+                </p>
+                <button type="button" onclick="openAuthModal()" class="px-8 py-3 rounded-xl text-lg font-bold bg-gradient-to-r from-cyan-500 to-fuchsia-500 text-white hover:opacity-90 transition-all duration-200 shadow-lg shadow-cyan-500/25 cursor-pointer">
+                    Iniciar Sesión para Jugar
+                </button>
+                <div class="grid grid-cols-2 sm:grid-cols-4 gap-4 mt-12">
+                    <div class="flex flex-col items-center gap-2 p-4 rounded-xl bg-white/[0.03] border border-white/5">
+                        <span class="text-2xl">⚔️</span>
+                        <span class="text-sm text-gray-300 font-medium">Modo Rápido</span>
                     </div>
-                    <button type="button" class="stream-carousel-nav" onclick="moveDashboardCarousel(1)">›</button>
+                    <div class="flex flex-col items-center gap-2 p-4 rounded-xl bg-white/[0.03] border border-white/5">
+                        <span class="text-2xl">🎵</span>
+                        <span class="text-sm text-gray-300 font-medium">Salas Privadas</span>
+                    </div>
+                    <div class="flex flex-col items-center gap-2 p-4 rounded-xl bg-white/[0.03] border border-white/5">
+                        <span class="text-2xl">🏆</span>
+                        <span class="text-sm text-gray-300 font-medium">Torneos</span>
+                    </div>
+                    <div class="flex flex-col items-center gap-2 p-4 rounded-xl bg-white/[0.03] border border-white/5">
+                        <span class="text-2xl">🎯</span>
+                        <span class="text-sm text-gray-300 font-medium">Práctica</span>
+                    </div>
                 </div>
-            </section>
-            
-            <!-- LOGIN WALL (mostrar si no está logueado) -->
-            <section id="loginWall" class="login-wall">
-                <div class="login-wall-content">
-                    <div class="login-wall-icon">🥊</div>
-                    <h1 class="login-wall-title">Bienvenido a MusicToken Ring</h1>
-                    <p class="login-wall-subtitle">
-                        Batalla con tus canciones favoritas, apuesta MTR y demuestra quién tiene mejor gusto musical
-                    </p>
-                    <button type="button" onclick="openAuthModal()" class="btn-primary btn-large">
-                        Iniciar Sesión para Jugar
+            </div>
+        </section>
+
+        <!-- PURCHASE CARD (SINGLE) -->
+        <section class="mb-16">
+            <div class="max-w-2xl mx-auto p-6 sm:p-8 rounded-2xl border border-cyan-500/15 bg-gradient-to-br from-gray-900/80 to-indigo-950/40 neon-border-cyan">
+                <h3 class="text-xl font-bold text-cyan-400 neon-text-cyan mb-2">Comprar MTR</h3>
+                <p class="text-gray-400 text-sm mb-6">Compra MTR en Aerodrome (Base) y acredita tu saldo con el hash de la transacción.</p>
+                <div class="flex flex-wrap gap-3 mb-6">
+                    <a href="https://aerodrome.finance/swap?from=ETH&to=0x99cd1eb32846c9027ed9cb88710066fa08791c33b" target="_blank" rel="noopener noreferrer"
+                       class="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg text-sm font-semibold bg-cyan-500/15 border border-cyan-500/30 text-cyan-400 hover:bg-cyan-500/25 transition-all">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/></svg>
+                        Swap en Aerodrome
+                    </a>
+                    <a href="https://basescan.org/token/0x99cd1eb32846c9027ed9cb88710066fa08791c33b" target="_blank" rel="noopener noreferrer"
+                       class="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg text-sm font-semibold bg-white/5 border border-white/10 text-gray-300 hover:text-white hover:border-white/20 transition-all">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/></svg>
+                        Ver en Basescan
+                    </a>
+                </div>
+                <div class="flex flex-col sm:flex-row gap-3">
+                    <input id="depositTxHash" type="text" placeholder="Pega hash de compra en Base (0x...)" autocomplete="off"
+                           class="flex-1 px-4 py-3 rounded-lg bg-black/40 border border-white/10 text-white placeholder-gray-500 text-sm focus:outline-none focus:border-cyan-500/50 focus:ring-1 focus:ring-cyan-500/20 transition">
+                    <button type="button" id="creditPurchaseBtn" onclick="verifyPurchasedMtrTx()"
+                            class="px-6 py-3 rounded-lg text-sm font-bold bg-gradient-to-r from-cyan-500 to-cyan-600 text-white hover:opacity-90 transition-all shadow-lg shadow-cyan-500/20 cursor-pointer whitespace-nowrap">
+                        🔎 Acreditar Compra
                     </button>
-                    <div class="login-wall-features">
-                        <div class="feature-item">
-                            <span class="feature-icon">⚔️</span>
-                            <span class="feature-text">Modo Rápido</span>
-                        </div>
-                        <div class="feature-item">
-                            <span class="feature-icon">🎪</span>
-                            <span class="feature-text">Salas Privadas</span>
-                        </div>
-                        <div class="feature-item">
-                            <span class="feature-icon">🏆</span>
-                            <span class="feature-text">Torneos</span>
-                        </div>
-                        <div class="feature-item">
-                            <span class="feature-icon">🎯</span>
-                            <span class="feature-text">Modo Práctica</span>
-                        </div>
+                </div>
+                <p id="tokenConfigError" class="hidden text-red-400 text-sm mt-3"></p>
+            </div>
+        </section>
+
+        <!-- GAME MODE SELECTOR (shown when logged in) -->
+        <section id="modeSelector" class="hidden mb-16">
+            <div class="text-center mb-10">
+                <h2 class="text-3xl font-extrabold text-white mb-2">Elige tu Modo de Juego</h2>
+                <p class="text-gray-400">Selecciona cómo quieres competir</p>
+            </div>
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+
+                <div class="group p-6 rounded-2xl border border-cyan-500/15 bg-gray-900/50 transition-all duration-300 card-glow cursor-pointer" onclick="selectMode('quick')">
+                    <div class="text-4xl mb-4">⚔️</div>
+                    <h3 class="text-lg font-bold text-white mb-2 group-hover:text-cyan-400 transition-colors">Modo Rápido</h3>
+                    <p class="text-gray-400 text-sm mb-4">Matchmaking automático. Encuentra rival en segundos.</p>
+                    <div class="flex flex-wrap gap-1.5 mb-5">
+                        <span class="text-xs px-2 py-1 rounded-full bg-cyan-500/10 text-cyan-400 border border-cyan-500/20">🎯 Auto-match</span>
+                        <span class="text-xs px-2 py-1 rounded-full bg-cyan-500/10 text-cyan-400 border border-cyan-500/20">⏱️ 1 min</span>
                     </div>
-                </div>
-            </section>
-
-            <section class="streaming-showcase">
-                <p class="streaming-label">Streaming partners</p>
-                <div class="streaming-logos">
-                    <img src="https://cdn.jsdelivr.net/npm/simple-icons@latest/icons/deezer.svg" alt="Deezer" class="streaming-logo" onerror="this.style.display='none'">
-                    <img src="https://cdn.jsdelivr.net/npm/simple-icons@latest/icons/spotify.svg" alt="Spotify" class="streaming-logo" onerror="this.style.display='none'">
-                    <img src="https://cdn.jsdelivr.net/npm/simple-icons@latest/icons/applemusic.svg" alt="Apple Music" class="streaming-logo" onerror="this.style.display='none'">
-                    <img src="https://cdn.jsdelivr.net/npm/simple-icons@latest/icons/youtubemusic.svg" alt="YouTube Music" class="streaming-logo" onerror="this.style.display='none'">
-                    <img src="https://cdn.jsdelivr.net/npm/simple-icons@latest/icons/amazonmusic.svg" alt="Amazon Music" class="streaming-logo" onerror="this.style.display='none'">
-                    <img src="https://cdn.jsdelivr.net/npm/simple-icons@latest/icons/tidal.svg" alt="Tidal" class="streaming-logo" onerror="this.style.display='none'">
-                    <img src="https://cdn.jsdelivr.net/npm/simple-icons@latest/icons/soundcloud.svg" alt="SoundCloud" class="streaming-logo" onerror="this.style.display='none'">
-                </div>
-            </section>
-
-            <section class="payments-showcase">
-                <p class="streaming-label">Pagos en Base con MTR</p>
-                <div class="payment-controls">
-                    <label for="preferredNetwork" class="payment-label">Red Base para pagos</label>
-                    <select id="preferredNetwork" class="payment-select" onchange="setPreferredNetwork(this.value)"></select>
-                </div>
-                <div class="currency-logos">
-                                        <img src="https://cdn.jsdelivr.net/npm/simple-icons@latest/icons/ethereum.svg" alt="Ethereum" class="currency-logo" onerror="this.style.display='none'">
-                    <img src="https://cdn.jsdelivr.net/npm/simple-icons@latest/icons/optimism.svg" alt="Optimism" class="currency-logo" onerror="this.style.display='none'">
-                    <img src="https://cdn.jsdelivr.net/npm/simple-icons@latest/icons/base.svg" alt="Base" class="currency-logo" onerror="this.style.display='none'">
-                    <img src="https://cdn.jsdelivr.net/npm/simple-icons@latest/icons/bnbchain.svg" alt="BNB Chain" class="currency-logo" onerror="this.onerror=null;this.src='https://cdn.jsdelivr.net/npm/simple-icons@latest/icons/binance.svg';">
-                    <img src="https://cdn.jsdelivr.net/npm/simple-icons@latest/icons/arbitrum.svg" alt="Arbitrum" class="currency-logo" onerror="this.style.display='none'">
-                    <img src="https://cdn.jsdelivr.net/npm/simple-icons@latest/icons/linea.svg" alt="Linea" class="currency-logo" onerror="this.style.display='none'">
-                    <img src="https://cdn.jsdelivr.net/npm/simple-icons@latest/icons/tron.svg" alt="Tron" class="currency-logo" onerror="this.style.display='none'">
-                    <img src="https://cdn.jsdelivr.net/npm/simple-icons@latest/icons/solana.svg" alt="Solana" class="currency-logo" onerror="this.style.display='none'">
-                    <img src="https://cdn.jsdelivr.net/npm/simple-icons@latest/icons/bitcoin.svg" alt="Bitcoin" class="currency-logo" onerror="this.style.display='none'">
-                </div>
-                <div class="wallet-directory" id="walletDirectory"></div>
-
-                <div class="settlement-panel">
-                    <div class="settlement-card">
-                        <h4>Comprar MTR directo</h4>
-                        <p class="settlement-help">
-                            Compra MTR en Aerodrome y vuelve aquí. El saldo jugable solo se habilita tras verificación on-chain/backend del hash en Base.
-                        </p>
-                        <div class="settlement-grid">
-                            <a class="btn-primary btn-link-primary bg-blue-600 hover:bg-blue-700 shadow" target="_blank" rel="noopener noreferrer" href="https://aerodrome.finance/swap?from=ETH&to=0x99cd1eb32846c9027ed9cb88710066fa08791c33b">
-                                <svg class="link-icon w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/></svg>
-                                Jugar Ahora
-                            </a>
-                            <a class="btn-primary btn-link-primary bg-blue-600 hover:bg-blue-700 shadow" target="_blank" rel="noopener noreferrer" href="https://basescan.org/address/0x99cd1eb32846c9027ed9cb88710066fa08791c33b">
-                                <svg class="link-icon w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/></svg>
-                                Ver Contrato en Basescan
-                            </a>
-                            <a class="btn-primary btn-link-primary bg-blue-600 hover:bg-blue-700 shadow" target="_blank" rel="noopener noreferrer" href="https://basescan.org/token/0x99cd1eb32846c9027ed9cb88710066fa08791c33b">
-                                <svg class="link-icon w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/></svg>
-                                Ver Supply 99.99M MTR
-                            </a>
-                            <p class="settlement-help">Contrato MTR: <a target="_blank" rel="noopener noreferrer" href="https://basescan.org/token/0x99cd1eb32846c9027ed9cb88710066fa08791c33b">0x99cd1eb32846c9027ed9cb88710066fa08791c33b</a></p>
-                            <p class="settlement-help" id="tokenConfigError" style="color:#ff6b6b;display:none;"></p>
-                            <input id="depositTxHash" class="payment-input" type="text" placeholder="Pega hash de compra en Base (0x...)" autocomplete="off">
-                            <button type="button" class="btn-secondary" id="creditPurchaseBtn" onclick="verifyPurchasedMtrTx()">🔎 Verificar depósito</button>
-                        </div>
-                        
-                    </div>
-
-                    <div class="settlement-card">
-                        <h4>Liquidación de ganancias (MTR → USD digital)</h4>
-                        <p class="settlement-help">
-                            Solicita retiro cuando tengas saldo. El backend cotiza con referencia USD y registra la comisión antes de liquidar.
-                        </p>
-                        <div class="settlement-grid">
-                            <input id="cashoutAmount" class="payment-input" type="number" min="1" placeholder="MTR a retirar">
-                            <button type="button" class="btn-secondary" onclick="quoteCashout()">📊 Cotizar en USD</button>
-                        </div>
-                        <p class="settlement-quote" id="cashoutQuote">Sin cotización aún.</p>
-                        <button type="button" class="btn-primary" onclick="requestCashout()">💸 Solicitar retiro</button>
-                    </div>
-                </div>
-            </section>
-
-            <section class="payments-showcase">
-                <p class="streaming-label">Sobre MTR</p>
-                <div class="settlement-card about-mtr-card">
-                    <img src="https://pink-blank-vicuna-260.mypinata.cloud/ipfs/bafybeiah2fffgw6y6aomfx5b5pgav7wedo3qdtqxqteg2glvmgzs6fpivu" alt="MTR Logo" class="mtr-logo-large" onerror="this.style.display='none'">
-                    <p>Token ERC-20 en Base. Liquidez lockeada en Aerodrome.</p>
-                    <p>Contrato verificado: <a target="_blank" rel="noopener noreferrer" href="https://basescan.org/address/0x99cd1eb32846c9027ed9cb88710066fa08791c33b">0x99cd1eb32846c9027ed9cb88710066fa08791c33b</a></p>
-                    <p>Supply total: 99,990,000 MTR (99.99M).</p>
-                </div>
-            </section>
-
-            <!-- SELECTOR DE MODO (mostrar si está logueado) -->
-            <section id="modeSelector" class="mode-selector hidden">
-                <div class="section-header">
-                    <h1 class="section-title">Elige tu Modo de Juego</h1>
-                    <p class="section-subtitle">Selecciona cómo quieres competir</p>
+                    <button type="button" class="w-full py-2.5 rounded-lg text-sm font-bold bg-cyan-500/15 border border-cyan-500/30 text-cyan-400 hover:bg-cyan-500/25 transition-all cursor-pointer" onclick="selectMode('quick')">Jugar Ahora</button>
                 </div>
 
-                <div class="modes-grid">
-                    <!-- Modo Rápido -->
-                    <div class="mode-card" onclick="selectMode('quick')">
-                        <div class="mode-icon">⚔️</div>
-                        <h3 class="mode-title">Modo Rápido</h3>
-                        <p class="mode-description">
-                            Matchmaking automático. Encuentra un rival en segundos y empieza a batallar.
-                        </p>
-                        <div class="mode-features">
-                            <span class="mode-feature">🎯 Emparejamiento automático</span>
-                            <span class="mode-feature">💰 Apuesta personalizada</span>
-                            <span class="mode-feature">⏱️ Partidas de 1 minuto</span>
-                        </div>
-                        <button type="button" class="btn-mode" onclick="selectMode('quick')">Jugar Ahora</button>
+                <div class="group p-6 rounded-2xl border border-fuchsia-500/15 bg-gray-900/50 transition-all duration-300 card-glow-magenta cursor-pointer" onclick="selectMode('private')">
+                    <div class="text-4xl mb-4">🎵</div>
+                    <h3 class="text-lg font-bold text-white mb-2 group-hover:text-fuchsia-400 transition-colors">Sala Privada</h3>
+                    <p class="text-gray-400 text-sm mb-4">Invita a tus amigos. Personaliza reglas y apuestas.</p>
+                    <div class="flex flex-wrap gap-1.5 mb-5">
+                        <span class="text-xs px-2 py-1 rounded-full bg-fuchsia-500/10 text-fuchsia-400 border border-fuchsia-500/20">👥 Amigos</span>
+                        <span class="text-xs px-2 py-1 rounded-full bg-fuchsia-500/10 text-fuchsia-400 border border-fuchsia-500/20">🔗 Código</span>
                     </div>
-
-                    <!-- Sala Privada -->
-                    <div class="mode-card" onclick="selectMode('private')">
-                        <div class="mode-icon">🎪</div>
-                        <h3 class="mode-title">Sala Privada</h3>
-                        <p class="mode-description">
-                            Crea una sala e invita a tus amigos. Personaliza las reglas y apuestas.
-                        </p>
-                        <div class="mode-features">
-                            <span class="mode-feature">👥 Juega con amigos</span>
-                            <span class="mode-feature">🔗 Código de sala único</span>
-                            <span class="mode-feature">⚙️ Reglas personalizadas</span>
-                        </div>
-                        <button type="button" class="btn-mode" onclick="selectMode('private')">Crear Sala</button>
-                    </div>
-
-                    <!-- Torneo -->
-                    <div class="mode-card" onclick="selectMode('tournament')">
-                        <div class="mode-icon">🏆</div>
-                        <h3 class="mode-title">Torneo</h3>
-                        <p class="mode-description">
-                            Compite en torneos de eliminación. Gana premios masivos del prize pool.
-                        </p>
-                        <div class="mode-features">
-                            <span class="mode-feature">🎪 Múltiples rondas</span>
-                            <span class="mode-feature">💎 Grandes premios</span>
-                            <span class="mode-feature">🏅 Rankings globales</span>
-                        </div>
-                        <button type="button" class="btn-mode" onclick="selectMode('tournament')">Unirse al Torneo</button>
-                    </div>
-
-                    <!-- Modo Práctica -->
-                    <div class="mode-card" onclick="selectMode('practice')">
-                        <div class="mode-icon">🎯</div>
-                        <h3 class="mode-title">Modo Práctica</h3>
-                        <p class="mode-description">
-                            Practica contra la CPU sin arriesgar tokens. Perfecto para nuevos jugadores.
-                        </p>
-                        <div class="mode-features">
-                            <span class="mode-feature">🎮 Sin riesgo</span>
-                            <span class="mode-feature">🎁 Pequeñas recompensas</span>
-                            <span class="mode-feature">📚 Aprende a jugar</span>
-                        </div>
-                        <button type="button" class="btn-mode" onclick="selectMode('practice')">Practicar</button>
-                    </div>
-                </div>
-            </section>
-
-            <!-- SELECCIÓN DE CANCIÓN Y APUESTA -->
-            <section id="songSelection" class="hidden">
-                <div class="section-header">
-                    <button type="button" onclick="backToModes()" class="btn-back">← Volver</button>
-                    <h2 class="section-title" id="modeTitle">Modo Rápido</h2>
-                    <p class="section-subtitle">Elige tu canción y realiza tu apuesta</p>
+                    <button type="button" class="w-full py-2.5 rounded-lg text-sm font-bold bg-fuchsia-500/15 border border-fuchsia-500/30 text-fuchsia-400 hover:bg-fuchsia-500/25 transition-all cursor-pointer" onclick="selectMode('private')">Crear Sala</button>
                 </div>
 
-                <div class="selection-container">
-                    <!-- Búsqueda -->
-                    <div class="search-panel">
-                        <h3>🎵 Busca tu Canción</h3>
-                        <div class="search-box">
-                            <input 
-                                type="text" 
-                                id="songSearch" 
-                                placeholder="Nombre de canción o artista..."
-                                class="search-input"
-                            >
-                            <button type="button" onclick="searchSong()" class="search-btn">🔍</button>
-                        </div>
-
-                        <!-- Resultados -->
-                        <div id="searchResults" class="results-grid"></div>
+                <div class="group p-6 rounded-2xl border border-purple-500/15 bg-gray-900/50 transition-all duration-300 card-glow-purple cursor-pointer" onclick="selectMode('tournament')">
+                    <div class="text-4xl mb-4">🏆</div>
+                    <h3 class="text-lg font-bold text-white mb-2 group-hover:text-purple-400 transition-colors">Torneo</h3>
+                    <p class="text-gray-400 text-sm mb-4">Eliminación directa. Gana premios masivos del prize pool.</p>
+                    <div class="flex flex-wrap gap-1.5 mb-5">
+                        <span class="text-xs px-2 py-1 rounded-full bg-purple-500/10 text-purple-400 border border-purple-500/20">💎 Premios</span>
+                        <span class="text-xs px-2 py-1 rounded-full bg-purple-500/10 text-purple-400 border border-purple-500/20">🏅 Ranking</span>
                     </div>
+                    <button type="button" class="w-full py-2.5 rounded-lg text-sm font-bold bg-purple-500/15 border border-purple-500/30 text-purple-400 hover:bg-purple-500/25 transition-all cursor-pointer" onclick="selectMode('tournament')">Unirse al Torneo</button>
+                </div>
 
-                    <!-- Selección Actual y Apuesta -->
-                    <div class="bet-panel">
-                        <div class="selected-song" id="selectedSongCard">
-                            <div class="no-selection">
-                                <div class="no-selection-icon">🎵</div>
-                                <p>Selecciona una canción</p>
-                            </div>
+                <div class="group p-6 rounded-2xl border border-cyan-500/15 bg-gray-900/50 transition-all duration-300 card-glow cursor-pointer" onclick="selectMode('practice')">
+                    <div class="text-4xl mb-4">🎯</div>
+                    <h3 class="text-lg font-bold text-white mb-2 group-hover:text-cyan-400 transition-colors">Modo Práctica</h3>
+                    <p class="text-gray-400 text-sm mb-4">Sin riesgo contra la CPU. Perfecto para empezar.</p>
+                    <div class="flex flex-wrap gap-1.5 mb-5">
+                        <span class="text-xs px-2 py-1 rounded-full bg-cyan-500/10 text-cyan-400 border border-cyan-500/20">🎮 Sin riesgo</span>
+                        <span class="text-xs px-2 py-1 rounded-full bg-cyan-500/10 text-cyan-400 border border-cyan-500/20">📚 Aprende</span>
+                    </div>
+                    <button type="button" class="w-full py-2.5 rounded-lg text-sm font-bold bg-cyan-500/15 border border-cyan-500/30 text-cyan-400 hover:bg-cyan-500/25 transition-all cursor-pointer" onclick="selectMode('practice')">Practicar</button>
+                </div>
+
+            </div>
+        </section>
+
+        <!-- SONG SELECTION & BET -->
+        <section id="songSelection" class="hidden mb-16">
+            <div class="flex items-center gap-4 mb-8">
+                <button type="button" onclick="backToModes()" class="px-4 py-2 rounded-lg text-sm font-medium bg-white/5 border border-white/10 text-gray-300 hover:text-white hover:border-white/20 transition cursor-pointer">← Volver</button>
+                <div>
+                    <h2 class="text-2xl font-bold text-white" id="modeTitle">Modo Rápido</h2>
+                    <p class="text-gray-400 text-sm">Elige tu canción y realiza tu apuesta</p>
+                </div>
+            </div>
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                <div class="p-6 rounded-2xl border border-white/5 bg-white/[0.02]">
+                    <h3 class="text-lg font-bold text-white mb-4">🎵 Busca tu Canción</h3>
+                    <div class="flex gap-2 mb-6">
+                        <input type="text" id="songSearch" placeholder="Nombre de canción o artista..."
+                               class="flex-1 px-4 py-3 rounded-lg bg-black/40 border border-white/10 text-white placeholder-gray-500 text-sm focus:outline-none focus:border-cyan-500/50 focus:ring-1 focus:ring-cyan-500/20 transition">
+                        <button type="button" onclick="searchSong()" class="px-4 py-3 rounded-lg bg-cyan-500/15 border border-cyan-500/30 text-cyan-400 hover:bg-cyan-500/25 transition cursor-pointer">🔍</button>
+                    </div>
+                    <div id="searchResults" class="grid grid-cols-2 gap-3 max-h-96 overflow-y-auto"></div>
+                </div>
+
+                <div class="space-y-6">
+                    <div id="selectedSongCard" class="p-6 rounded-2xl border border-white/5 bg-white/[0.02] min-h-[120px] flex items-center justify-center">
+                        <div class="text-center text-gray-500">
+                            <div class="text-3xl mb-2">🎵</div>
+                            <p>Selecciona una canción</p>
                         </div>
-
-                        <div class="bet-section">
-                            <h3>💰 Tu Apuesta</h3>
-                            <div class="bet-info">
-                                <span><span id="balanceLabel">Tu MTR (on-chain)</span>: <strong id="onchainMtrBalance">--</strong> MTR</span>
-                                <span>Saldo jugable: <strong id="userBalance">0</strong> MTR</span>
-                                <span>Mínimo: <strong id="minBet">100</strong> MTR</span>
-                            </div>
-                            <input 
-                                type="number" 
-                                id="betAmount" 
-                                placeholder="100" 
-                                min="100" 
-                                class="bet-input"
-                            >
-                            <div class="bet-quick">
-                                <button type="button" onclick="quickBet(100)" class="btn-quick">100</button>
-                                <button type="button" onclick="quickBet(500)" class="btn-quick">500</button>
-                                <button type="button" onclick="quickBet(1000)" class="btn-quick">1K</button>
-                                <button type="button" onclick="quickBet(5000)" class="btn-quick">5K</button>
-                            </div>
-
-                            <!-- Botones según modo -->
-                            <div id="actionButtons"></div>
+                    </div>
+                    <div class="p-6 rounded-2xl border border-white/5 bg-white/[0.02]">
+                        <h3 class="text-lg font-bold text-white mb-4">💰 Tu Apuesta</h3>
+                        <div class="grid grid-cols-2 gap-3 text-sm text-gray-400 mb-4">
+                            <span><span id="balanceLabel">Tu MTR (on-chain)</span>: <strong id="onchainMtrBalance" class="text-white">--</strong></span>
+                            <span>Jugable: <strong id="userBalance" class="text-white">0</strong> MTR</span>
+                            <span>Mínimo: <strong id="minBet" class="text-white">100</strong> MTR</span>
                         </div>
+                        <input type="number" id="betAmount" placeholder="100" min="100"
+                               class="w-full px-4 py-3 rounded-lg bg-black/40 border border-white/10 text-white placeholder-gray-500 text-sm focus:outline-none focus:border-cyan-500/50 focus:ring-1 focus:ring-cyan-500/20 transition mb-3">
+                        <div class="flex gap-2 mb-5">
+                            <button type="button" onclick="quickBet(100)" class="flex-1 py-2 rounded-lg text-xs font-bold bg-white/5 border border-white/10 text-gray-300 hover:text-white hover:border-cyan-500/30 transition cursor-pointer">100</button>
+                            <button type="button" onclick="quickBet(500)" class="flex-1 py-2 rounded-lg text-xs font-bold bg-white/5 border border-white/10 text-gray-300 hover:text-white hover:border-cyan-500/30 transition cursor-pointer">500</button>
+                            <button type="button" onclick="quickBet(1000)" class="flex-1 py-2 rounded-lg text-xs font-bold bg-white/5 border border-white/10 text-gray-300 hover:text-white hover:border-cyan-500/30 transition cursor-pointer">1K</button>
+                            <button type="button" onclick="quickBet(5000)" class="flex-1 py-2 rounded-lg text-xs font-bold bg-white/5 border border-white/10 text-gray-300 hover:text-white hover:border-cyan-500/30 transition cursor-pointer">5K</button>
+                        </div>
+                        <div id="actionButtons"></div>
                     </div>
                 </div>
-            </section>
+            </div>
+        </section>
 
-            <!-- PANTALLA DE ESPERA -->
-            <section id="waitingScreen" class="hidden">
-                <div class="waiting-content">
-                    <div class="waiting-spinner">⏳</div>
-                    <h2 class="waiting-title">Buscando Oponente...</h2>
-                    <p class="waiting-subtitle">Esto puede tomar unos segundos</p>
-                    <button type="button" onclick="cancelSearch()" class="btn-secondary">Cancelar Búsqueda</button>
+        <!-- WAITING SCREEN -->
+        <section id="waitingScreen" class="hidden mb-16">
+            <div class="max-w-md mx-auto text-center py-20 px-8 rounded-2xl border border-cyan-500/15 bg-gray-900/50">
+                <div class="text-5xl mb-4 animate-pulse">⏳</div>
+                <h2 class="text-2xl font-bold text-white mb-2">Buscando Oponente...</h2>
+                <p class="text-gray-400 mb-6">Esto puede tomar unos segundos</p>
+                <button type="button" onclick="cancelSearch()" class="px-6 py-2.5 rounded-lg text-sm font-medium bg-white/5 border border-white/10 text-gray-300 hover:text-white hover:border-white/20 transition cursor-pointer">Cancelar Búsqueda</button>
+            </div>
+        </section>
+
+        <!-- ROOM SCREEN -->
+        <section id="roomScreen" class="hidden mb-16">
+            <div class="max-w-lg mx-auto p-8 rounded-2xl border border-fuchsia-500/15 bg-gray-900/50">
+                <h2 class="text-2xl font-bold text-white mb-6 text-center">🎵 Sala Privada</h2>
+                <div class="flex items-center justify-center gap-3 mb-6">
+                    <span class="text-gray-400">Código:</span>
+                    <strong id="roomCode" class="text-2xl font-mono text-fuchsia-400">XXXXX</strong>
+                    <button type="button" onclick="copyRoomCode()" class="px-2 py-1 rounded bg-white/5 text-gray-400 hover:text-white transition cursor-pointer">📋</button>
                 </div>
-            </section>
-
-            <!-- PANTALLA DE SALA PRIVADA -->
-            <section id="roomScreen" class="hidden">
-                <div class="room-content">
-                    <div class="room-header">
-                        <h2>🎪 Sala Privada</h2>
-                        <div class="room-code-display">
-                            <span>Código:</span>
-                            <strong id="roomCode">XXXXX</strong>
-                            <button type="button" onclick="copyRoomCode()" class="btn-copy">📋</button>
-                        </div>
+                <div class="mb-6">
+                    <label for="roomInviteLink" class="text-sm text-gray-400 mb-1 block">Link privado</label>
+                    <div class="flex gap-2">
+                        <input id="roomInviteLink" type="text" readonly class="flex-1 px-3 py-2 rounded-lg bg-black/40 border border-white/10 text-white text-sm">
+                        <button type="button" onclick="copyRoomLink()" class="px-4 py-2 rounded-lg text-sm bg-white/5 border border-white/10 text-gray-300 hover:text-white transition cursor-pointer">Copiar</button>
                     </div>
-                    <div class="room-invite">
-                        <label for="roomInviteLink">Link privado para invitar</label>
-                        <div class="room-invite-actions">
-                            <input id="roomInviteLink" type="text" readonly class="room-invite-input">
-                            <button type="button" onclick="copyRoomLink()" class="btn-secondary">Copiar link</button>
-                        </div>
-                    </div>
-                    <div class="room-players">
-                        <div class="room-player" id="player1Card">
-                            <div class="player-avatar">👤</div>
-                            <span class="player-name">Esperando...</span>
-                        </div>
-                        <div class="room-vs">VS</div>
-                        <div class="room-player" id="player2Card">
-                            <div class="player-avatar">❓</div>
-                            <span class="player-name">Esperando rival...</span>
-                        </div>
-                    </div>
-                    <p class="room-info">Comparte el código con tu amigo</p>
-                    <button type="button" onclick="leaveRoom()" class="btn-secondary">Salir de la Sala</button>
                 </div>
-            </section>
+                <div class="flex items-center justify-center gap-6 mb-6">
+                    <div id="player1Card" class="text-center">
+                        <div class="text-3xl mb-1">👤</div>
+                        <span class="text-sm text-gray-400">Esperando...</span>
+                    </div>
+                    <div class="text-2xl font-bold text-fuchsia-400">VS</div>
+                    <div id="player2Card" class="text-center">
+                        <div class="text-3xl mb-1">❓</div>
+                        <span class="text-sm text-gray-400">Esperando rival...</span>
+                    </div>
+                </div>
+                <button type="button" onclick="leaveRoom()" class="w-full py-2.5 rounded-lg text-sm font-medium bg-white/5 border border-white/10 text-gray-300 hover:text-white transition cursor-pointer">Salir de la Sala</button>
+            </div>
+        </section>
 
-        </div>
+        <!-- CASHOUT CARD -->
+        <section class="mb-16">
+            <div class="max-w-2xl mx-auto p-6 sm:p-8 rounded-2xl border border-fuchsia-500/15 bg-gradient-to-br from-gray-900/80 to-purple-950/30 neon-border-magenta">
+                <h3 class="text-xl font-bold text-fuchsia-400 neon-text-magenta mb-2">Liquidación de ganancias</h3>
+                <p class="text-gray-400 text-sm mb-6">Solicita retiro cuando tengas saldo. Cotizamos con referencia USD y registramos comisión.</p>
+                <div class="flex flex-col sm:flex-row gap-3 mb-4">
+                    <input id="cashoutAmount" type="number" min="1" placeholder="MTR a retirar"
+                           class="flex-1 px-4 py-3 rounded-lg bg-black/40 border border-white/10 text-white placeholder-gray-500 text-sm focus:outline-none focus:border-fuchsia-500/50 focus:ring-1 focus:ring-fuchsia-500/20 transition">
+                    <button type="button" onclick="quoteCashout()" class="px-6 py-3 rounded-lg text-sm font-bold bg-fuchsia-500/15 border border-fuchsia-500/30 text-fuchsia-400 hover:bg-fuchsia-500/25 transition cursor-pointer whitespace-nowrap">📊 Cotizar en USD</button>
+                </div>
+                <p id="cashoutQuote" class="text-gray-400 text-sm mb-4">Sin cotización aún.</p>
+                <button type="button" onclick="requestCashout()" class="px-6 py-3 rounded-lg text-sm font-bold bg-gradient-to-r from-fuchsia-500 to-purple-600 text-white hover:opacity-90 transition-all shadow-lg shadow-fuchsia-500/20 cursor-pointer">💸 Solicitar retiro</button>
+            </div>
+        </section>
+
+        <!-- CONTACT -->
+        <section id="contactSection" class="mb-16">
+            <div class="max-w-xl mx-auto p-6 sm:p-8 rounded-2xl border border-white/5 bg-white/[0.02]">
+                <h3 class="text-xl font-bold text-white mb-2">Contacto</h3>
+                <p class="text-gray-400 text-sm mb-6">¿Dudas? Escríbenos a <a href="mailto:support@musictokenring.xyz" class="text-cyan-400 hover:text-cyan-300">support@musictokenring.xyz</a></p>
+                <form class="space-y-4" onsubmit="submitContactForm(event)">
+                    <div>
+                        <label for="contactName" class="text-sm text-gray-400 mb-1 block">Nombre</label>
+                        <input type="text" id="contactName" placeholder="Tu nombre" required class="w-full px-4 py-3 rounded-lg bg-black/40 border border-white/10 text-white placeholder-gray-500 text-sm focus:outline-none focus:border-cyan-500/50 transition">
+                    </div>
+                    <div>
+                        <label for="contactEmail" class="text-sm text-gray-400 mb-1 block">Email</label>
+                        <input type="email" id="contactEmail" placeholder="tu@email.com" required class="w-full px-4 py-3 rounded-lg bg-black/40 border border-white/10 text-white placeholder-gray-500 text-sm focus:outline-none focus:border-cyan-500/50 transition">
+                    </div>
+                    <div>
+                        <label for="contactMessage" class="text-sm text-gray-400 mb-1 block">Mensaje</label>
+                        <textarea id="contactMessage" rows="3" placeholder="Cuéntanos en qué podemos ayudarte" required class="w-full px-4 py-3 rounded-lg bg-black/40 border border-white/10 text-white placeholder-gray-500 text-sm focus:outline-none focus:border-cyan-500/50 transition resize-none"></textarea>
+                    </div>
+                    <button type="submit" class="px-6 py-3 rounded-lg text-sm font-bold bg-cyan-500/15 border border-cyan-500/30 text-cyan-400 hover:bg-cyan-500/25 transition cursor-pointer">Enviar mensaje</button>
+                </form>
+            </div>
+        </section>
+
     </main>
 
-    <!-- Toast Container -->
-    <div id="toastContainer" class="toast-container"></div>
-
-    <!-- Auth Modal -->
-    <div id="authModal" class="modal hidden">
-        <div class="modal-overlay" onclick="closeAuthModal()"></div>
-        <div class="modal-content auth-modal-content">
-            <button type="button" onclick="closeAuthModal()" class="modal-close">×</button>
-            
-            <!-- Login Form -->
-            <div id="loginForm" class="auth-form">
-                <h2 class="auth-title">Iniciar Sesión</h2>
-                <p class="auth-subtitle">Accede a tu cuenta para guardar tu progreso</p>
-                
-                <!-- Google Login -->
-                <button type="button" onclick="loginWithGoogle()" class="btn-google">
-                    <svg width="18" height="18" viewBox="0 0 18 18">
-                        <path fill="#4285F4" d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844c-.209 1.125-.843 2.078-1.796 2.717v2.258h2.908c1.702-1.567 2.684-3.875 2.684-6.615z"/>
-                        <path fill="#34A853" d="M9 18c2.43 0 4.467-.806 5.956-2.184l-2.908-2.258c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332C2.438 15.983 5.482 18 9 18z"/>
-                        <path fill="#FBBC05" d="M3.964 10.707c-.18-.54-.282-1.117-.282-1.707 0-.593.102-1.167.282-1.707V4.961H.957C.347 6.175 0 7.55 0 9s.348 2.825.957 4.039l3.007-2.332z"/>
-                        <path fill="#EA4335" d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0 5.482 0 2.438 2.017.957 4.961L3.964 7.29C4.672 5.163 6.656 3.58 9 3.58z"/>
-                    </svg>
-                    Continuar con Google
-                </button>
-                
-                <div class="auth-divider">
-                    <span>o</span>
+    <!-- ==================== FOOTER ==================== -->
+    <footer class="border-t border-white/5 mt-8">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
+            <div class="flex flex-col items-center gap-4 text-center">
+                <div class="flex items-center gap-2">
+                    <img src="https://pink-blank-vicuna-260.mypinata.cloud/ipfs/bafybeiah2fffgw6y6aomfx5b5pgav7wedo3qdtqxqteg2glvmgzs6fpivu" alt="MTR" class="w-6 h-6 rounded-full" onerror="this.style.display='none'">
+                    <span class="text-sm font-bold text-white">MusicToken Ring</span>
                 </div>
-                
-                <!-- Email Login -->
-                <form onsubmit="handleLoginSubmit(event)">
-                    <div class="form-group">
-                        <label for="loginEmail">Email</label>
-                        <input 
-                            type="email" 
-                            id="loginEmail" 
-                            class="form-input" 
-                            placeholder="tu@email.com"
-                            required
-                        >
-                    </div>
-                    
-                    <div class="form-group">
-                        <label for="loginPassword">Contraseña</label>
-                        <input 
-                            type="password" 
-                            id="loginPassword" 
-                            class="form-input" 
-                            placeholder="••••••••"
-                            required
-                        >
-                    </div>
-                    
-                    <button type="submit" class="btn-primary btn-block">
-                        Iniciar Sesión
-                    </button>
-                </form>
-                
-                <p class="auth-switch">
-                    ¿No tienes cuenta? 
-                    <a href="#" onclick="switchToSignup(); return false;">Regístrate</a>
-                </p>
-            </div>
-            
-            <!-- Signup Form -->
-            <div id="signupForm" class="auth-form hidden">
-                <h2 class="auth-title">Crear Cuenta</h2>
-                <p class="auth-subtitle">Únete a MusicToken Ring</p>
-                
-                <!-- Google Signup -->
-                <button type="button" onclick="loginWithGoogle()" class="btn-google">
-                    <svg width="18" height="18" viewBox="0 0 18 18">
-                        <path fill="#4285F4" d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844c-.209 1.125-.843 2.078-1.796 2.717v2.258h2.908c1.702-1.567 2.684-3.875 2.684-6.615z"/>
-                        <path fill="#34A853" d="M9 18c2.43 0 4.467-.806 5.956-2.184l-2.908-2.258c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332C2.438 15.983 5.482 18 9 18z"/>
-                        <path fill="#FBBC05" d="M3.964 10.707c-.18-.54-.282-1.117-.282-1.707 0-.593.102-1.167.282-1.707V4.961H.957C.347 6.175 0 7.55 0 9s.348 2.825.957 4.039l3.007-2.332z"/>
-                        <path fill="#EA4335" d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0 5.482 0 2.438 2.017.957 4.961L3.964 7.29C4.672 5.163 6.656 3.58 9 3.58z"/>
-                    </svg>
-                    Continuar con Google
-                </button>
-                
-                <div class="auth-divider">
-                    <span>o</span>
+                <div class="text-sm text-gray-400 space-y-1">
+                    <p>Token ERC-20 en <strong class="text-white">Base</strong> · Supply total: <strong class="text-white">99,990,000 MTR</strong> (99.99M)</p>
+                    <p>Contrato:
+                        <a href="https://basescan.org/token/0x99cd1eb32846c9027ed9cb88710066fa08791c33b" target="_blank" rel="noopener noreferrer" class="text-cyan-400 hover:text-cyan-300 font-mono text-xs break-all">
+                            0x99cd1eb32846c9027ed9cb88710066fa08791c33b
+                        </a>
+                    </p>
                 </div>
-                
-                <!-- Email Signup -->
-                <form onsubmit="handleSignupSubmit(event)">
-                    <div class="form-group">
-                        <label for="signupName">Nombre</label>
-                        <input 
-                            type="text" 
-                            id="signupName" 
-                            class="form-input" 
-                            placeholder="Tu nombre"
-                            required
-                        >
-                    </div>
-                    
-                    <div class="form-group">
-                        <label for="signupEmail">Email</label>
-                        <input 
-                            type="email" 
-                            id="signupEmail" 
-                            class="form-input" 
-                            placeholder="tu@email.com"
-                            required
-                        >
-                    </div>
-                    
-                    <div class="form-group">
-                        <label for="signupPassword">Contraseña</label>
-                        <input 
-                            type="password" 
-                            id="signupPassword" 
-                            class="form-input" 
-                            placeholder="Mínimo 6 caracteres"
-                            required
-                            minlength="6"
-                        >
-                    </div>
-                    
-                    <button type="submit" class="btn-primary btn-block">
-                        Crear Cuenta
-                    </button>
-                </form>
-                
-                <p class="auth-switch">
-                    ¿Ya tienes cuenta? 
-                    <a href="#" onclick="switchToLogin(); return false;">Inicia sesión</a>
-                </p>
-            </div>
-        </div>
-    </div>
-
-    <!-- Player Profile Modal -->
-    <div id="profileModal" class="modal hidden">
-        <div class="modal-overlay" onclick="closeProfileModal()"></div>
-        <div class="modal-content profile-modal-content">
-            <button type="button" onclick="closeProfileModal()" class="modal-close">×</button>
-            <h2 class="auth-title">Perfil del Jugador</h2>
-            <p class="auth-subtitle">Resumen de rendimiento y actividad reciente</p>
-
-            <div class="profile-header">
-                <p id="profileDisplayName" class="profile-name">Jugador</p>
-                <p id="profileEmail" class="profile-email">-</p>
-                <p class="profile-since">Miembro desde: <span id="profileSince">-</span></p>
-            </div>
-
-            <div class="profile-stats-grid">
-                <div class="profile-stat-card"><span>Balance</span><strong id="profileBalance">-</strong></div>
-                <div class="profile-stat-card"><span>Partidas</span><strong id="profileMatches">-</strong></div>
-                <div class="profile-stat-card"><span>Victorias</span><strong id="profileWins">-</strong></div>
-                <div class="profile-stat-card"><span>Derrotas</span><strong id="profileLosses">-</strong></div>
-                <div class="profile-stat-card"><span>Win Rate</span><strong id="profileWinRate">-</strong></div>
-                <div class="profile-stat-card"><span>Streams totales</span><strong id="profileStreams">-</strong></div>
-                <div class="profile-stat-card full"><span>MTR apostados</span><strong id="profileWagered">-</strong></div>
-            </div>
-
-            <div class="profile-recent-section">
-                <h3>Últimas partidas</h3>
-                <div id="profileRecentMatches" class="profile-recent-list">
-                    <p class="profile-empty">Sin partidas aún.</p>
+                <a href="mailto:support@musictokenring.xyz" class="text-sm text-fuchsia-400 hover:text-fuchsia-300">support@musictokenring.xyz</a>
+                <div class="flex items-center gap-4 text-sm text-gray-500">
+                    <a href="/privacy.html" class="hover:text-gray-300 transition">Privacy Policy</a>
+                    <span>·</span>
+                    <a href="/terms.html" class="hover:text-gray-300 transition">Terms of Service</a>
                 </div>
+                <p class="text-gray-600 text-xs">© 2026 MusicToken Ring. All rights reserved.</p>
             </div>
-        </div>
-    </div>
-
-    <!-- Quick Match Challenge Modal -->
-    <div id="challengeModal" class="modal hidden">
-        <div class="modal-overlay" onclick="closeChallengeModal()"></div>
-        <div class="modal-content">
-            <button type="button" onclick="closeChallengeModal()" class="modal-close">×</button>
-            <h2 class="auth-title">⚔️ Reto Rápido</h2>
-            <p class="auth-subtitle" id="challengeDetails">Tienes un reto pendiente</p>
-            <div class="challenge-actions">
-                <button type="button" onclick="acceptChallenge()" class="btn-primary btn-block">Aceptar</button>
-                <button type="button" onclick="rejectChallenge()" class="btn-secondary btn-block">Rechazar</button>
-            </div>
-        </div>
-    </div>
-
-    <!-- Contacto -->
-    <section id="contactSection" class="contact-section">
-        <div class="contact-card">
-            <h2>Contacto</h2>
-            <p>¿Tienes dudas o necesitas ayuda? Escríbenos a <a href="mailto:support@musictokenring.xyz">support@musictokenring.xyz</a>.</p>
-            <form class="contact-form" onsubmit="submitContactForm(event)">
-                <div class="form-group">
-                    <label for="contactName">Nombre</label>
-                    <input type="text" id="contactName" class="form-input" placeholder="Tu nombre" required>
-                </div>
-                <div class="form-group">
-                    <label for="contactEmail">Email</label>
-                    <input type="email" id="contactEmail" class="form-input" placeholder="tu@email.com" required>
-                </div>
-                <div class="form-group">
-                    <label for="contactMessage">Mensaje</label>
-                    <textarea id="contactMessage" class="form-input" rows="4" placeholder="Cuéntanos en qué podemos ayudarte" required></textarea>
-                </div>
-                <button type="submit" class="btn-primary">Enviar mensaje</button>
-            </form>
-        </div>
-    </section>
-
-    <!-- Footer -->
-    <footer class="footer">
-        <div class="footer-content">
-            <div class="footer-links">
-                <a href="/privacy.html" class="footer-link">Privacy Policy</a>
-                <a href="/terms.html" class="footer-link">Terms of Service</a>
-                <a href="#contactSection" class="footer-link">Contact</a>
-            </div>
-            <p class="footer-copyright">
-                © 2026 MusicToken Ring. All rights reserved.
-            </p>
         </div>
     </footer>
 
-    <!-- Scripts -->
-    <script src="./auth-system.js?v=20260228mtr2"></script>
-    <script src="./game-engine.js?v=20260228mtr2"></script>
+    <!-- ==================== MODALS ==================== -->
+
+    <!-- Auth Modal -->
+    <div id="authModal" class="hidden fixed inset-0 z-[100] flex items-center justify-center p-4">
+        <div class="modal-overlay" onclick="closeAuthModal()"></div>
+        <div class="modal-box">
+            <button type="button" onclick="closeAuthModal()" class="absolute top-4 right-4 text-gray-400 hover:text-white text-2xl leading-none cursor-pointer">×</button>
+
+            <div id="loginForm">
+                <h2 class="text-2xl font-bold text-white mb-1">Iniciar Sesión</h2>
+                <p class="text-gray-400 text-sm mb-6">Accede a tu cuenta para guardar tu progreso</p>
+                <button type="button" onclick="loginWithGoogle()" class="w-full flex items-center justify-center gap-3 px-4 py-3 rounded-lg bg-white text-gray-900 font-semibold text-sm hover:bg-gray-100 transition mb-4 cursor-pointer">
+                    <svg width="18" height="18" viewBox="0 0 18 18"><path fill="#4285F4" d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844c-.209 1.125-.843 2.078-1.796 2.717v2.258h2.908c1.702-1.567 2.684-3.875 2.684-6.615z"/><path fill="#34A853" d="M9 18c2.43 0 4.467-.806 5.956-2.184l-2.908-2.258c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332C2.438 15.983 5.482 18 9 18z"/><path fill="#FBBC05" d="M3.964 10.707c-.18-.54-.282-1.117-.282-1.707 0-.593.102-1.167.282-1.707V4.961H.957C.347 6.175 0 7.55 0 9s.348 2.825.957 4.039l3.007-2.332z"/><path fill="#EA4335" d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0 5.482 0 2.438 2.017.957 4.961L3.964 7.29C4.672 5.163 6.656 3.58 9 3.58z"/></svg>
+                    Continuar con Google
+                </button>
+                <div class="flex items-center gap-3 my-4"><div class="flex-1 h-px bg-white/10"></div><span class="text-xs text-gray-500">o</span><div class="flex-1 h-px bg-white/10"></div></div>
+                <form onsubmit="handleLoginSubmit(event)" class="space-y-4">
+                    <div>
+                        <label for="loginEmail" class="text-sm text-gray-400 mb-1 block">Email</label>
+                        <input type="email" id="loginEmail" placeholder="tu@email.com" required class="w-full px-4 py-3 rounded-lg bg-black/40 border border-white/10 text-white placeholder-gray-500 text-sm focus:outline-none focus:border-cyan-500/50 transition">
+                    </div>
+                    <div>
+                        <label for="loginPassword" class="text-sm text-gray-400 mb-1 block">Contraseña</label>
+                        <input type="password" id="loginPassword" placeholder="••••••••" required class="w-full px-4 py-3 rounded-lg bg-black/40 border border-white/10 text-white placeholder-gray-500 text-sm focus:outline-none focus:border-cyan-500/50 transition">
+                    </div>
+                    <button type="submit" class="w-full py-3 rounded-lg text-sm font-bold bg-gradient-to-r from-cyan-500 to-fuchsia-500 text-white hover:opacity-90 transition-all shadow-lg shadow-cyan-500/25 cursor-pointer">Iniciar Sesión</button>
+                </form>
+                <p class="text-center text-sm text-gray-400 mt-4">¿No tienes cuenta? <a href="#" onclick="switchToSignup(); return false;" class="text-cyan-400 hover:text-cyan-300">Regístrate</a></p>
+            </div>
+
+            <div id="signupForm" class="hidden">
+                <h2 class="text-2xl font-bold text-white mb-1">Crear Cuenta</h2>
+                <p class="text-gray-400 text-sm mb-6">Únete a MusicToken Ring</p>
+                <button type="button" onclick="loginWithGoogle()" class="w-full flex items-center justify-center gap-3 px-4 py-3 rounded-lg bg-white text-gray-900 font-semibold text-sm hover:bg-gray-100 transition mb-4 cursor-pointer">
+                    <svg width="18" height="18" viewBox="0 0 18 18"><path fill="#4285F4" d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844c-.209 1.125-.843 2.078-1.796 2.717v2.258h2.908c1.702-1.567 2.684-3.875 2.684-6.615z"/><path fill="#34A853" d="M9 18c2.43 0 4.467-.806 5.956-2.184l-2.908-2.258c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332C2.438 15.983 5.482 18 9 18z"/><path fill="#FBBC05" d="M3.964 10.707c-.18-.54-.282-1.117-.282-1.707 0-.593.102-1.167.282-1.707V4.961H.957C.347 6.175 0 7.55 0 9s.348 2.825.957 4.039l3.007-2.332z"/><path fill="#EA4335" d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0 5.482 0 2.438 2.017.957 4.961L3.964 7.29C4.672 5.163 6.656 3.58 9 3.58z"/></svg>
+                    Continuar con Google
+                </button>
+                <div class="flex items-center gap-3 my-4"><div class="flex-1 h-px bg-white/10"></div><span class="text-xs text-gray-500">o</span><div class="flex-1 h-px bg-white/10"></div></div>
+                <form onsubmit="handleSignupSubmit(event)" class="space-y-4">
+                    <div>
+                        <label for="signupName" class="text-sm text-gray-400 mb-1 block">Nombre</label>
+                        <input type="text" id="signupName" placeholder="Tu nombre" required class="w-full px-4 py-3 rounded-lg bg-black/40 border border-white/10 text-white placeholder-gray-500 text-sm focus:outline-none focus:border-cyan-500/50 transition">
+                    </div>
+                    <div>
+                        <label for="signupEmail" class="text-sm text-gray-400 mb-1 block">Email</label>
+                        <input type="email" id="signupEmail" placeholder="tu@email.com" required class="w-full px-4 py-3 rounded-lg bg-black/40 border border-white/10 text-white placeholder-gray-500 text-sm focus:outline-none focus:border-cyan-500/50 transition">
+                    </div>
+                    <div>
+                        <label for="signupPassword" class="text-sm text-gray-400 mb-1 block">Contraseña</label>
+                        <input type="password" id="signupPassword" placeholder="Mínimo 6 caracteres" required minlength="6" class="w-full px-4 py-3 rounded-lg bg-black/40 border border-white/10 text-white placeholder-gray-500 text-sm focus:outline-none focus:border-cyan-500/50 transition">
+                    </div>
+                    <button type="submit" class="w-full py-3 rounded-lg text-sm font-bold bg-gradient-to-r from-cyan-500 to-fuchsia-500 text-white hover:opacity-90 transition-all shadow-lg shadow-cyan-500/25 cursor-pointer">Crear Cuenta</button>
+                </form>
+                <p class="text-center text-sm text-gray-400 mt-4">¿Ya tienes cuenta? <a href="#" onclick="switchToLogin(); return false;" class="text-cyan-400 hover:text-cyan-300">Inicia sesión</a></p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Profile Modal -->
+    <div id="profileModal" class="hidden fixed inset-0 z-[100] flex items-center justify-center p-4">
+        <div class="modal-overlay" onclick="closeProfileModal()"></div>
+        <div class="modal-box max-w-lg">
+            <button type="button" onclick="closeProfileModal()" class="absolute top-4 right-4 text-gray-400 hover:text-white text-2xl leading-none cursor-pointer">×</button>
+            <h2 class="text-2xl font-bold text-white mb-1">Perfil del Jugador</h2>
+            <p class="text-gray-400 text-sm mb-6">Resumen de rendimiento</p>
+            <div class="mb-6">
+                <p id="profileDisplayName" class="text-lg font-bold text-white">Jugador</p>
+                <p id="profileEmail" class="text-gray-400 text-sm">-</p>
+                <p class="text-gray-500 text-xs mt-1">Miembro desde: <span id="profileSince">-</span></p>
+            </div>
+            <div class="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-6">
+                <div class="p-3 rounded-lg bg-white/[0.03] border border-white/5 text-center"><span class="text-xs text-gray-400 block">Balance</span><strong id="profileBalance" class="text-white">-</strong></div>
+                <div class="p-3 rounded-lg bg-white/[0.03] border border-white/5 text-center"><span class="text-xs text-gray-400 block">Partidas</span><strong id="profileMatches" class="text-white">-</strong></div>
+                <div class="p-3 rounded-lg bg-white/[0.03] border border-white/5 text-center"><span class="text-xs text-gray-400 block">Victorias</span><strong id="profileWins" class="text-white">-</strong></div>
+                <div class="p-3 rounded-lg bg-white/[0.03] border border-white/5 text-center"><span class="text-xs text-gray-400 block">Derrotas</span><strong id="profileLosses" class="text-white">-</strong></div>
+                <div class="p-3 rounded-lg bg-white/[0.03] border border-white/5 text-center"><span class="text-xs text-gray-400 block">Win Rate</span><strong id="profileWinRate" class="text-white">-</strong></div>
+                <div class="p-3 rounded-lg bg-white/[0.03] border border-white/5 text-center"><span class="text-xs text-gray-400 block">Streams</span><strong id="profileStreams" class="text-white">-</strong></div>
+            </div>
+            <div class="p-3 rounded-lg bg-white/[0.03] border border-white/5 text-center mb-6"><span class="text-xs text-gray-400 block">MTR apostados</span><strong id="profileWagered" class="text-white">-</strong></div>
+            <div>
+                <h3 class="text-sm font-bold text-white mb-3">Últimas partidas</h3>
+                <div id="profileRecentMatches"><p class="text-gray-500 text-sm">Sin partidas aún.</p></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Challenge Modal -->
+    <div id="challengeModal" class="hidden fixed inset-0 z-[100] flex items-center justify-center p-4">
+        <div class="modal-overlay" onclick="closeChallengeModal()"></div>
+        <div class="modal-box text-center">
+            <button type="button" onclick="closeChallengeModal()" class="absolute top-4 right-4 text-gray-400 hover:text-white text-2xl leading-none cursor-pointer">×</button>
+            <h2 class="text-2xl font-bold text-white mb-2">⚔️ Reto Rápido</h2>
+            <p id="challengeDetails" class="text-gray-400 text-sm mb-6">Tienes un reto pendiente</p>
+            <div class="flex gap-3">
+                <button type="button" onclick="acceptChallenge()" class="flex-1 py-3 rounded-lg text-sm font-bold bg-gradient-to-r from-cyan-500 to-fuchsia-500 text-white hover:opacity-90 transition cursor-pointer">Aceptar</button>
+                <button type="button" onclick="rejectChallenge()" class="flex-1 py-3 rounded-lg text-sm font-medium bg-white/5 border border-white/10 text-gray-300 hover:text-white transition cursor-pointer">Rechazar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast Container -->
+    <div id="toastContainer" class="fixed top-20 right-4 z-[200] flex flex-col gap-2"></div>
+
+    <!-- ==================== SCRIPTS ==================== -->
+    <script src="./auth-system.js?v=v2.0"></script>
+    <script src="./game-engine.js?v=v2.0"></script>
     <script>window.MTR_INLINE_TOP_STREAMS_ACTIVE = true;</script>
-    <script src="./app.js?v=20260228mtr2"></script>
-    <script src="./top-streams-fallback.js?v=20260228mtr2"></script>
-
-
-
-
-
+    <script src="./app.js?v=v2.0"></script>
+    <script src="./top-streams-fallback.js?v=v2.0"></script>
 
     <script>
+        /* ============ BATTLE ANIMATION (canvas pulse) ============ */
+        const enableAnimation = true;
 
+        (function initBattleAnimation() {
+            var container = document.getElementById('battle-animation');
+            var canvas = document.getElementById('pulse-canvas');
+            if (!container || !canvas) return;
 
-        // Dashboard inline fallback removed; using top-streams-fallback.js
+            if (!enableAnimation) {
+                container.classList.add('hidden');
+                return;
+            }
 
+            var ctx = canvas.getContext('2d');
 
+            function resize() {
+                canvas.width = container.offsetWidth;
+                canvas.height = container.offsetHeight;
+            }
+            resize();
+            window.addEventListener('resize', resize);
+
+            var t = 0;
+            function draw() {
+                t += 0.015;
+                var w = canvas.width;
+                var h = canvas.height;
+                var cx = w / 2;
+                var cy = h / 2;
+                ctx.clearRect(0, 0, w, h);
+
+                for (var wave = 0; wave < 7; wave++) {
+                    var baseY = cy + (wave - 3) * 28;
+                    var isCyan = wave % 2 === 0;
+                    var alpha = 0.25 + Math.sin(t + wave * 0.5) * 0.12;
+
+                    ctx.beginPath();
+                    ctx.strokeStyle = isCyan
+                        ? 'rgba(0, 243, 255, ' + alpha + ')'
+                        : 'rgba(192, 38, 211, ' + alpha + ')';
+                    ctx.lineWidth = 1.5;
+                    ctx.shadowColor = isCyan ? 'rgba(0, 243, 255, 0.3)' : 'rgba(192, 38, 211, 0.3)';
+                    ctx.shadowBlur = 12;
+
+                    for (var x = 0; x <= w; x += 3) {
+                        var freq = 0.008 + wave * 0.002;
+                        var amp = 18 + Math.sin(t * 0.5 + wave) * 10;
+                        var y = baseY + Math.sin(x * freq + t * 1.2 + wave * 1.1) * amp;
+                        if (x === 0) ctx.moveTo(x, y);
+                        else ctx.lineTo(x, y);
+                    }
+                    ctx.stroke();
+                    ctx.shadowBlur = 0;
+                }
+
+                var pulseR = 50 + Math.sin(t * 2) * 20;
+                var grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, pulseR);
+                grad.addColorStop(0, 'rgba(0, 243, 255, 0.12)');
+                grad.addColorStop(0.6, 'rgba(192, 38, 211, 0.06)');
+                grad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+                ctx.fillStyle = grad;
+                ctx.beginPath();
+                ctx.arc(cx, cy, pulseR, 0, Math.PI * 2);
+                ctx.fill();
+
+                requestAnimationFrame(draw);
+            }
+            draw();
+        })();
+    </script>
+
+    <script>
+        /* ============ INLINE DASHBOARD (guarded) ============ */
         (function () {
+            if (window.MTR_INLINE_TOP_STREAMS_ACTIVE) { return; }
+
             var dashboardRegion = 'latam';
             var dashboardOffset = 0;
 
-            function getDashboardList() {
-                return document.getElementById('streamDashboardTrackList');
-            }
+            function getDashboardList() { return document.getElementById('streamDashboardTrackList'); }
 
             function tracksByRegion(region) {
                 var data = {
                     latam: [
                         { title: 'Luna', artist: 'Feid', cover: 'https://e-cdns-images.dzcdn.net/images/cover/9f4c9025e2f4f4be85a8d0f95f3bc5fe/250x250-000000-80-0-0.jpg', stat: '• 18.4% del top' },
                         { title: 'Si Antes Te Hubiera Conocido', artist: 'KAROL G', cover: 'https://e-cdns-images.dzcdn.net/images/cover/4aa4b9f4674f7f9f7428962456f31cc7/250x250-000000-80-0-0.jpg', stat: '• 15.9% del top' },
-                        { title: 'Perro Negro', artist: 'Bad Bunny', cover: 'https://e-cdns-images.dzcdn.net/images/cover/236f9df9f6f95cc8c6f0707dbe6839df/250x250-000000-80-0-0.jpg', stat: '• 14.8% del top' },
-                        { title: 'La Falda', artist: 'Myke Towers', cover: 'https://e-cdns-images.dzcdn.net/images/cover/3aebce9e3ec736beee8da30258aab6fa/250x250-000000-80-0-0.jpg', stat: '• 12.9% del top' },
-                        { title: 'Gata Only', artist: 'FloyyMenor', cover: 'https://e-cdns-images.dzcdn.net/images/cover/83d2abea3f2826f384749fd84d836c8e/250x250-000000-80-0-0.jpg', stat: '• 11.3% del top' },
-                        { title: 'Puntería', artist: 'Shakira', cover: 'https://e-cdns-images.dzcdn.net/images/cover/3f1582203c1667b663219c2f47825550/250x250-000000-80-0-0.jpg', stat: '• 10.2% del top' },
-                        { title: 'QLO', artist: 'Young Miko', cover: 'https://e-cdns-images.dzcdn.net/images/cover/f15d8bc1ecf71ac95f640117f4d5e585/250x250-000000-80-0-0.jpg', stat: '• 8.7% del top' },
-                        { title: 'Adivino', artist: 'Bad Bunny', cover: 'https://e-cdns-images.dzcdn.net/images/cover/e1d6d6c45f7ec902f9b2e8db0f9d377f/250x250-000000-80-0-0.jpg', stat: '• 7.8% del top' }
+                        { title: 'Perro Negro', artist: 'Bad Bunny', cover: 'https://e-cdns-images.dzcdn.net/images/cover/236f9df9f6f95cc8c6f0707dbe6839df/250x250-000000-80-0-0.jpg', stat: '• 14.8% del top' }
                     ],
                     us: [
                         { title: 'Espresso', artist: 'Sabrina Carpenter', cover: 'https://e-cdns-images.dzcdn.net/images/cover/94bfaf6f3b278ba8e56ef8fca0ca65a4/250x250-000000-80-0-0.jpg', stat: '• 17.8% del top' },
                         { title: 'Lose Control', artist: 'Teddy Swims', cover: 'https://e-cdns-images.dzcdn.net/images/cover/c025cd9e3f0980d7f33173f66c66fdfd/250x250-000000-80-0-0.jpg', stat: '• 15.9% del top' },
-                        { title: 'Beautiful Things', artist: 'Benson Boone', cover: 'https://e-cdns-images.dzcdn.net/images/cover/4ff4d2e2e89ae5fd3df5e6eabf78f8f6/250x250-000000-80-0-0.jpg', stat: '• 14.4% del top' },
-                        { title: 'Too Sweet', artist: 'Hozier', cover: 'https://e-cdns-images.dzcdn.net/images/cover/7100802cbf6de021bf33f6f502838177/250x250-000000-80-0-0.jpg', stat: '• 13.2% del top' },
-                        { title: 'Fortnight', artist: 'Taylor Swift', cover: 'https://e-cdns-images.dzcdn.net/images/cover/46dc36370b32276115be5f66f8f70855/250x250-000000-80-0-0.jpg', stat: '• 11.6% del top' },
-                        { title: 'I Had Some Help', artist: 'Post Malone', cover: 'https://e-cdns-images.dzcdn.net/images/cover/2b9d74ac9e3b4fe26c7c0e59101cf15f/250x250-000000-80-0-0.jpg', stat: '• 10.1% del top' },
-                        { title: 'Birds of a Feather', artist: 'Billie Eilish', cover: 'https://e-cdns-images.dzcdn.net/images/cover/221551f4f4d74f6d20f4f2af2cfcbf60/250x250-000000-80-0-0.jpg', stat: '• 9.0% del top' },
-                        { title: 'Please Please Please', artist: 'Sabrina Carpenter', cover: 'https://e-cdns-images.dzcdn.net/images/cover/0e3f4d3ac048f6a8b6b91f44389f6515/250x250-000000-80-0-0.jpg', stat: '• 8.0% del top' }
+                        { title: 'Beautiful Things', artist: 'Benson Boone', cover: 'https://e-cdns-images.dzcdn.net/images/cover/4ff4d2e2e89ae5fd3df5e6eabf78f8f6/250x250-000000-80-0-0.jpg', stat: '• 14.4% del top' }
                     ],
                     eu: [
                         { title: "Stumblin' In", artist: 'Cyril', cover: 'https://e-cdns-images.dzcdn.net/images/cover/3f4b8cf4be2f16ebf3d6f8cfad8aa7c1/250x250-000000-80-0-0.jpg', stat: '• 18.2% del top' },
                         { title: 'Mwaki', artist: 'Zerb', cover: 'https://e-cdns-images.dzcdn.net/images/cover/cc8f20c021f39d8444ec4f7f6d1d6e57/250x250-000000-80-0-0.jpg', stat: '• 16.5% del top' },
-                        { title: 'Texas Hold Em', artist: 'Beyonce', cover: 'https://e-cdns-images.dzcdn.net/images/cover/c5dfcb2f5a13f5327dd58476fdd0f9ed/250x250-000000-80-0-0.jpg', stat: '• 14.6% del top' },
-                        { title: 'Pedro', artist: 'Jaxomy', cover: 'https://e-cdns-images.dzcdn.net/images/cover/7fe2fcc56bcf8b188ad1a2b8ad34ec08/250x250-000000-80-0-0.jpg', stat: '• 12.9% del top' },
-                        { title: 'We Pray', artist: 'Coldplay', cover: 'https://e-cdns-images.dzcdn.net/images/cover/88fbf030f40bb08f61aa11d77ec2a3f8/250x250-000000-80-0-0.jpg', stat: '• 11.0% del top' },
-                        { title: 'MILLION DOLLAR BABY', artist: 'Tommy Richman', cover: 'https://e-cdns-images.dzcdn.net/images/cover/53ef5b98c4f886d86fbf2deb4228bb0e/250x250-000000-80-0-0.jpg', stat: '• 9.8% del top' },
-                        { title: 'A Bar Song', artist: 'Shaboozey', cover: 'https://e-cdns-images.dzcdn.net/images/cover/18b0fef52ac2957e574c5f7a357f6ce2/250x250-000000-80-0-0.jpg', stat: '• 8.8% del top' },
-                        { title: 'Good Luck, Babe!', artist: 'Chappell Roan', cover: 'https://e-cdns-images.dzcdn.net/images/cover/d095db4ad8d9f6407781c38b3dd9df04/250x250-000000-80-0-0.jpg', stat: '• 8.2% del top' }
+                        { title: 'Texas Hold Em', artist: 'Beyonce', cover: 'https://e-cdns-images.dzcdn.net/images/cover/c5dfcb2f5a13f5327dd58476fdd0f9ed/250x250-000000-80-0-0.jpg', stat: '• 14.6% del top' }
                     ]
                 };
                 return data[region] || data.latam;
-            }
-
-            function clean(value) {
-                var text = String(value || '');
-                text = text.replace(/codex\/[^\s]+/gi, '').replace(/feature\/[^\s]+/gi, '').replace(/cargando\.{0,3}/gi, '').trim();
-                return text;
-            }
-
-            function purgeInjectedArtifacts() {
-                var list = getDashboardList();
-                if (!list) return;
-                var targets = list.querySelectorAll('.stream-card-info strong, .stream-card-info span');
-                for (var i = 0; i < targets.length; i++) {
-                    var node = targets[i];
-                    var cleaned = clean(node.textContent || '');
-                    if (!cleaned && node.matches('span.stream-delta')) cleaned = '• N/D';
-                    if (!cleaned && node.matches('span:not(.stream-delta)')) cleaned = 'Artista';
-                    if (!cleaned && node.matches('strong')) cleaned = 'Sin título';
-                    node.textContent = cleaned;
-                }
-            }
-
-            function protectDashboardFromInjectedText() {
-                var list = getDashboardList();
-                if (!list || list.dataset.protected === '1') return;
-                list.dataset.protected = '1';
-                var observer = new MutationObserver(function () {
-                    purgeInjectedArtifacts();
-                });
-                observer.observe(list, { childList: true, subtree: true, characterData: true });
-            }
-
-            function sanitizeDashboardCards() {
-                var list = getDashboardList();
-                if (!list) return;
-                var cards = list.querySelectorAll('.stream-card');
-                for (var i = 0; i < cards.length; i++) {
-                    var info = cards[i].querySelector('.stream-card-info');
-                    if (!info) continue;
-                    var strong = info.querySelector('strong');
-                    var spans = info.querySelectorAll('span');
-                    if (!strong || spans.length < 2) continue;
-
-                    var artist = spans[0];
-                    var stat = spans[1];
-
-                    strong.textContent = clean(strong.textContent || 'Sin título') || 'Sin título';
-                    artist.textContent = clean(artist.textContent || 'Artista') || 'Artista';
-                    stat.textContent = clean(stat.textContent || '• N/D') || '• N/D';
-
-                    while (info.childNodes.length > 3) {
-                        info.removeChild(info.lastChild);
-                    }
-
-                }
             }
 
             var fallbackCover = 'data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%2264%22 height=%2264%22 viewBox=%220 0 64 64%22%3E%3Crect width=%2264%22 height=%2264%22 rx=%2210%22 fill=%22%232f3542%22/%3E%3Ctext x=%2232%22 y=%2239%22 text-anchor=%22middle%22 font-size=%2226%22%3E%F0%9F%8E%B5%3C/text%3E%3C/svg%3E';
@@ -890,25 +673,9 @@
                 var html = '';
                 for (var i = 0; i < tracks.length; i++) {
                     var t = tracks[i];
-                    var cover = t.cover || fallbackCover;
-                    html += '<article class="stream-card">' +
-                        '<img src="' + cover + '" alt="' + clean(t.title) + '">' +
-                        '<div class="stream-card-info">' +
-                        '<strong>' + clean(t.title) + '</strong>' +
-                        '<span>' + clean(t.artist) + '</span>' +
-                        '<span class="stream-delta neutral">' + clean(t.stat) + '</span>' +
-                        '</div></article>';
+                    html += '<article class="stream-card"><img src="' + (t.cover || fallbackCover) + '" alt="' + t.title + '"><div class="stream-card-info"><strong>' + t.title + '</strong><span>' + t.artist + '</span><span class="stream-delta neutral">' + t.stat + '</span></div></article>';
                 }
                 list.innerHTML = html;
-                var covers = list.querySelectorAll('img');
-                for (var j = 0; j < covers.length; j++) {
-                    covers[j].onerror = function () {
-                        this.onerror = null;
-                        this.src = fallbackCover;
-                    };
-                }
-                sanitizeDashboardCards();
-
                 window.moveDashboardCarousel(0);
             }
 
@@ -916,8 +683,7 @@
                 dashboardRegion = region || 'latam';
                 var btns = document.querySelectorAll('.stream-region-tab');
                 for (var i = 0; i < btns.length; i++) {
-                    var b = btns[i];
-                    b.classList.toggle('active', b.dataset && b.dataset.region === dashboardRegion);
+                    btns[i].classList.toggle('active', btns[i].dataset && btns[i].dataset.region === dashboardRegion);
                 }
                 render(dashboardRegion);
             };
@@ -930,56 +696,42 @@
                 list.scrollTo({ left: dashboardOffset * step, behavior: 'smooth' });
             };
 
-            document.addEventListener('DOMContentLoaded', function () {
-                render('latam');
-                sanitizeDashboardCards();
-                protectDashboardFromInjectedText();
-                purgeInjectedArtifacts();
-                setInterval(function () { sanitizeDashboardCards(); purgeInjectedArtifacts(); }, 1200);
-
-                sanitizeDashboardCards();
-                setInterval(sanitizeDashboardCards, 2000);
-
-            });
+            document.addEventListener('DOMContentLoaded', function () { render('latam'); });
         })();
-        // Variables globales
-        let selectedSong = null;
+
+        /* ============ GAME LOGIC ============ */
+        var selectedSong = null;
         window.__mtrOnChainBalance = Number(window.__mtrOnChainBalance || 0);
-        let currentMode = null;
+        var currentMode = null;
 
-
-        // Verificar login al cargar
-        document.addEventListener('DOMContentLoaded', async () => {
-            initializePreferredNetwork();
-            renderWalletDirectory();
+        document.addEventListener('DOMContentLoaded', async function () {
+            if (typeof initializePreferredNetwork === 'function') initializePreferredNetwork();
+            if (typeof renderWalletDirectory === 'function') renderWalletDirectory();
 
             try {
-                const { data: { session } } = await supabaseClient.auth.getSession();
-                
+                var session = null;
+                if (typeof supabaseClient !== 'undefined') {
+                    var resp = await supabaseClient.auth.getSession();
+                    session = resp?.data?.session;
+                }
                 if (session) {
                     showModeSelector();
-                    // Inicializar GameEngine
-                    if (typeof GameEngine !== 'undefined') {
-                        await GameEngine.init();
-                    }
+                    if (typeof GameEngine !== 'undefined') await GameEngine.init();
                 } else {
                     showLoginWall();
                 }
 
-                const urlParams = new URLSearchParams(window.location.search);
-                const modeParam = urlParams.get('mode');
-                if (modeParam && ['quick', 'private', 'practice', 'tournament'].includes(modeParam)) {
+                var urlParams = new URLSearchParams(window.location.search);
+                var modeParam = urlParams.get('mode');
+                if (modeParam && ['quick', 'private', 'practice', 'tournament'].indexOf(modeParam) !== -1) {
                     selectMode(modeParam);
-                    if (modeParam === 'practice') {
-                        showToast('Elige otra canción para continuar en práctica.', 'info');
-                    }
                 }
-
-                const roomParam = urlParams.get('room');
-                    if (roomParam) {
+                var roomParam = urlParams.get('room');
+                if (roomParam) {
                     selectMode('private');
-                    document.getElementById('joinRoomCode').value = roomParam.toUpperCase();
-                    showToast('Sala privada detectada. Selecciona tu canción para unirte.', 'info');
+                    var joinInput = document.getElementById('joinRoomCode');
+                    if (joinInput) joinInput.value = roomParam.toUpperCase();
+                    if (typeof showToast === 'function') showToast('Sala privada detectada. Selecciona tu canción para unirte.', 'info');
                 }
             } catch (error) {
                 console.error('Error inicializando sesión:', error);
@@ -987,417 +739,238 @@
             }
         });
 
-        // Mostrar/ocultar secciones
         function showLoginWall() {
             document.getElementById('loginWall').classList.remove('hidden');
             document.getElementById('modeSelector').classList.add('hidden');
         }
-
         function showModeSelector() {
             document.getElementById('loginWall').classList.add('hidden');
             document.getElementById('modeSelector').classList.remove('hidden');
         }
 
         function initializePreferredNetwork() {
-            const selector = document.getElementById('preferredNetwork');
+            var selector = document.getElementById('preferredNetwork');
             if (!selector || typeof PLATFORM_WALLET_ADDRESSES === 'undefined') return;
-
-            const stored = localStorage.getItem('mtr_preferred_network') || 'base';
-            const options = Object.keys(PLATFORM_WALLET_ADDRESSES).map((network) => {
-                const label = network === 'base' ? 'Base (8453)' : network.charAt(0).toUpperCase() + network.slice(1);
-                const selected = network === stored ? 'selected' : '';
-                return `<option value="${network}" ${selected}>${label}</option>`;
+            var stored = localStorage.getItem('mtr_preferred_network') || 'base';
+            var options = Object.keys(PLATFORM_WALLET_ADDRESSES).map(function (network) {
+                var label = network === 'base' ? 'Base (8453)' : network.charAt(0).toUpperCase() + network.slice(1);
+                return '<option value="' + network + '"' + (network === stored ? ' selected' : '') + '>' + label + '</option>';
             }).join('');
-
             selector.innerHTML = options;
             localStorage.setItem('mtr_preferred_network', selector.value || stored);
         }
-
         function setPreferredNetwork(network) {
             localStorage.setItem('mtr_preferred_network', network);
-            renderWalletDirectory(network);
-            showToast(`Red activa: ${network.toUpperCase()} (chainId 8453)`, 'success');
+            if (typeof renderWalletDirectory === 'function') renderWalletDirectory(network);
+            if (typeof showToast === 'function') showToast('Red activa: ' + network.toUpperCase() + ' (chainId 8453)', 'success');
         }
 
         function submitContactForm(event) {
             event.preventDefault();
-            const name = document.getElementById('contactName').value.trim();
-            const email = document.getElementById('contactEmail').value.trim();
-            const message = document.getElementById('contactMessage').value.trim();
-            const subject = encodeURIComponent(`Soporte MusicToken Ring - ${name}`);
-            const body = encodeURIComponent(`Nombre: ${name}\nEmail: ${email}\n\nMensaje:\n${message}`);
-            window.location.href = `mailto:support@musictokenring.xyz?subject=${subject}&body=${body}`;
-            showToast('Abriendo tu cliente de correo para enviar el mensaje.', 'success');
+            var name = document.getElementById('contactName').value.trim();
+            var email = document.getElementById('contactEmail').value.trim();
+            var message = document.getElementById('contactMessage').value.trim();
+            var subject = encodeURIComponent('Soporte MusicToken Ring - ' + name);
+            var body = encodeURIComponent('Nombre: ' + name + '\nEmail: ' + email + '\n\nMensaje:\n' + message);
+            window.location.href = 'mailto:support@musictokenring.xyz?subject=' + subject + '&body=' + body;
+            if (typeof showToast === 'function') showToast('Abriendo tu cliente de correo para enviar el mensaje.', 'success');
         }
 
         function copyWalletAddress(address, network) {
             navigator.clipboard.writeText(address);
-            showToast(`Dirección de ${network.toUpperCase()} copiada`, 'success');
+            if (typeof showToast === 'function') showToast('Dirección de ' + network.toUpperCase() + ' copiada', 'success');
         }
 
-        function renderWalletDirectory(selectedNetwork = null) {
-            const walletDirectory = document.getElementById('walletDirectory');
+        function renderWalletDirectory(selectedNetwork) {
+            var walletDirectory = document.getElementById('walletDirectory');
             if (!walletDirectory || typeof PLATFORM_WALLET_ADDRESSES === 'undefined') return;
-
-            const selector = document.getElementById('preferredNetwork');
-            const activeNetwork = selectedNetwork || selector?.value || localStorage.getItem('mtr_preferred_network') || 'base';
-            const selectedAddress = PLATFORM_WALLET_ADDRESSES[activeNetwork];
-
-            if (!selectedAddress) {
-                walletDirectory.innerHTML = '<div class="wallet-item"><span class="wallet-network">Sin red seleccionada</span></div>';
-                return;
-            }
-
-            const label = activeNetwork.charAt(0).toUpperCase() + activeNetwork.slice(1);
-            walletDirectory.innerHTML = `
-                <div class="wallet-item">
-                    <span class="wallet-network">${label}</span>
-                    <span class="wallet-value">${selectedAddress}</span>
-                    <button type="button" class="wallet-copy" onclick="copyWalletAddress('${selectedAddress}', '${activeNetwork}')">Copiar</button>
-                </div>
-            `;
-        }
-        function sanitizeInjectedGitArtifactsPage() {
-            pruneForbiddenTextNodes(document.body);
+            var selector = document.getElementById('preferredNetwork');
+            var activeNetwork = selectedNetwork || (selector ? selector.value : null) || localStorage.getItem('mtr_preferred_network') || 'base';
+            var selectedAddress = PLATFORM_WALLET_ADDRESSES[activeNetwork];
+            if (!selectedAddress) { walletDirectory.innerHTML = ''; return; }
+            walletDirectory.innerHTML = '';
         }
 
-        // Seleccionar modo
         function selectMode(mode) {
             currentMode = mode;
             window.currentMode = mode;
             document.getElementById('modeSelector').classList.add('hidden');
             document.getElementById('songSelection').classList.remove('hidden');
-            
-            const titles = {
-                'quick': 'Modo Rápido',
-                'private': 'Sala Privada',
-                'practice': 'Modo Práctica',
-                'tournament': 'Modo Torneo'
-            };
-            document.getElementById('modeTitle').textContent = titles[mode];
-            
+            var titles = { quick: 'Modo Rápido', private: 'Sala Privada', practice: 'Modo Práctica', tournament: 'Modo Torneo' };
+            document.getElementById('modeTitle').textContent = titles[mode] || 'Modo de Juego';
             updateActionButtons(mode);
-            if (typeof GameEngine !== 'undefined' && typeof GameEngine.updatePracticeBetDisplay === 'function') {
-                GameEngine.updatePracticeBetDisplay();
-            }
+            if (typeof GameEngine !== 'undefined' && typeof GameEngine.updatePracticeBetDisplay === 'function') GameEngine.updatePracticeBetDisplay();
         }
 
         function backToModes() {
             document.getElementById('songSelection').classList.add('hidden');
             document.getElementById('modeSelector').classList.remove('hidden');
             window.currentMode = null;
-            if (typeof GameEngine !== 'undefined' && typeof GameEngine.updatePracticeBetDisplay === 'function') {
-                GameEngine.updatePracticeBetDisplay();
-            }
+            if (typeof GameEngine !== 'undefined' && typeof GameEngine.updatePracticeBetDisplay === 'function') GameEngine.updatePracticeBetDisplay();
             selectedSong = null;
         }
 
-        // Actualizar botones según modo
         function updateActionButtons(mode) {
-            const buttonsDiv = document.getElementById('actionButtons');
-            
+            var buttonsDiv = document.getElementById('actionButtons');
+            var btnBase = 'w-full py-3 rounded-lg text-sm font-bold transition-all cursor-pointer';
+            var btnPrimary = btnBase + ' bg-gradient-to-r from-cyan-500 to-fuchsia-500 text-white hover:opacity-90 shadow-lg shadow-cyan-500/20';
+            var btnSecondary = btnBase + ' bg-white/5 border border-white/10 text-gray-300 hover:text-white';
+
             if (mode === 'quick') {
-                buttonsDiv.innerHTML = `
-                    <button type="button" onclick="startQuickMatch()" class="btn-primary btn-large" id="startQuickBtn" disabled>
-                        ⚔️ Buscar Rival
-                    </button>
-                `;
-                const startQuickBtn = document.getElementById('startQuickBtn');
-                if (startQuickBtn) startQuickBtn.dataset.baseState = 'ready';
+                buttonsDiv.innerHTML = '<button type="button" onclick="startQuickMatch()" class="' + btnPrimary + '" id="startQuickBtn" disabled>⚔️ Buscar Rival</button>';
+                var sq = document.getElementById('startQuickBtn');
+                if (sq) sq.dataset.baseState = 'ready';
                 updateBetEligibility();
             } else if (mode === 'private') {
-                buttonsDiv.innerHTML = `
-                    <button type="button" onclick="createRoom()" class="btn-primary" id="createRoomBtn" disabled>
-                        🎪 Crear Sala
-                    </button>
-                    <div class="or-divider">o</div>
-                    <div class="join-room-group">
-                        <input type="text" id="joinRoomCode" placeholder="Código" class="room-code-input" maxlength="6">
-                        <button type="button" onclick="joinRoom()" class="btn-secondary" id="joinRoomBtn" disabled>
-                            Unirse
-                        </button>
-                    </div>
-                `;
+                buttonsDiv.innerHTML = '<button type="button" onclick="createRoom()" class="' + btnPrimary + '" id="createRoomBtn" disabled>🎵 Crear Sala</button>' +
+                    '<div class="flex items-center gap-3 my-3"><div class="flex-1 h-px bg-white/10"></div><span class="text-xs text-gray-500">o</span><div class="flex-1 h-px bg-white/10"></div></div>' +
+                    '<div class="flex gap-2"><input type="text" id="joinRoomCode" placeholder="Código" class="flex-1 px-3 py-2.5 rounded-lg bg-black/40 border border-white/10 text-white text-sm" maxlength="6">' +
+                    '<button type="button" onclick="joinRoom()" class="' + btnSecondary + ' w-auto px-4" id="joinRoomBtn" disabled>Unirse</button></div>';
             } else if (mode === 'practice') {
-                buttonsDiv.innerHTML = `
-                    <button type="button" onclick="startPractice()" class="btn-primary btn-large" id="startPracticeBtn" disabled>
-                        🎯 Iniciar Práctica
-                    </button>
-                `;
+                buttonsDiv.innerHTML = '<button type="button" onclick="startPractice()" class="' + btnPrimary + '" id="startPracticeBtn" disabled>🎯 Iniciar Práctica</button>';
             } else if (mode === 'tournament') {
-                buttonsDiv.innerHTML = `
-                    <div class="join-room-group">
-                        <input type="text" id="tournamentId" placeholder="ID de torneo" class="room-code-input">
-                        <button type="button" onclick="joinTournamentMode()" class="btn-primary" id="joinTournamentBtn" disabled>
-                            🏆 Unirme
-                        </button>
-                    </div>
-                    <p class="section-subtitle" style="margin-top: 12px;">
-                        El jackpot crece con un % de las comisiones cuando la plataforma supera el 90% del objetivo.
-                    </p>
-                `;
+                buttonsDiv.innerHTML = '<div class="flex gap-2"><input type="text" id="tournamentId" placeholder="ID de torneo" class="flex-1 px-3 py-2.5 rounded-lg bg-black/40 border border-white/10 text-white text-sm">' +
+                    '<button type="button" onclick="joinTournamentMode()" class="' + btnPrimary + ' w-auto px-4" id="joinTournamentBtn" disabled>🏆 Unirme</button></div>';
             }
         }
 
-        // Búsqueda de canciones
         function searchSong() {
-            const query = document.getElementById('songSearch').value;
-            if (query.trim()) {
-                searchDeezer(query, 'searchResults');
-            }
+            var query = document.getElementById('songSearch').value;
+            if (query.trim() && typeof searchDeezer === 'function') searchDeezer(query, 'searchResults');
         }
 
-        // Seleccionar canción
         async function selectSongForBattle(song) {
             if (typeof GameEngine !== 'undefined' && typeof GameEngine.ensureSongEligibleForMatchmaking === 'function') {
-                const eloGate = await GameEngine.ensureSongEligibleForMatchmaking(song.id);
-                if (!eloGate.allowed) {
-                    showToast(eloGate.reason || 'Canción fuera del rango ELO permitido', 'error');
-                    return;
-                }
+                var eloGate = await GameEngine.ensureSongEligibleForMatchmaking(song.id);
+                if (!eloGate.allowed) { showToast(eloGate.reason || 'Canción fuera del rango ELO permitido', 'error'); return; }
             }
             selectedSong = song;
-            
-            const cardDiv = document.getElementById('selectedSongCard');
-            cardDiv.innerHTML = `
-                <img src="${song.image}" alt="${song.name}" class="selected-song-image">
-                <div class="selected-song-info">
-                    <h4>${song.name}</h4>
-                    <p>${song.artist}</p>
-                </div>
-            `;
-            
-            // Habilitar botones
-            document.querySelectorAll('#actionButtons button').forEach(btn => {
-                if (!btn.classList.contains('btn-disabled')) {
-                    btn.disabled = false;
-                }
-            });
+            var cardDiv = document.getElementById('selectedSongCard');
+            cardDiv.innerHTML = '<img src="' + song.image + '" alt="' + song.name + '" class="w-16 h-16 rounded-lg object-cover">' +
+                '<div class="ml-4"><h4 class="text-white font-bold">' + song.name + '</h4><p class="text-gray-400 text-sm">' + song.artist + '</p></div>';
+            cardDiv.className = 'p-6 rounded-2xl border border-cyan-500/20 bg-cyan-500/5 flex items-center';
+            document.querySelectorAll('#actionButtons button').forEach(function (btn) { btn.disabled = false; });
             updateBetEligibility();
         }
 
-        // Apuesta rápida
         function quickBet(amount) {
             document.getElementById('betAmount').value = amount;
             updateBetEligibility();
         }
 
-
         function updateBetEligibility() {
-            const startQuickBtn = document.getElementById('startQuickBtn');
-            const betAmountEl = document.getElementById('betAmount');
-            const onchainBalance = Number(window.__mtrOnChainBalance || 0);
-            const bet = parseFloat(betAmountEl?.value || '0');
+            var startQuickBtn = document.getElementById('startQuickBtn');
+            var betAmountEl = document.getElementById('betAmount');
+            var onchainBalance = Number(window.__mtrOnChainBalance || 0);
+            var bet = parseFloat(betAmountEl?.value || '0');
             if (!startQuickBtn) return;
-
-            const canCoverBet = !!bet && onchainBalance >= bet;
-            if (startQuickBtn.dataset.baseState === 'ready') {
-                startQuickBtn.disabled = !canCoverBet;
-            }
-
-            if (!canCoverBet && bet > 0) {
-                startQuickBtn.title = 'Saldo on-chain insuficiente para la apuesta';
-            } else {
-                startQuickBtn.title = '';
-            }
+            var canCoverBet = !!bet && onchainBalance >= bet;
+            if (startQuickBtn.dataset.baseState === 'ready') startQuickBtn.disabled = !canCoverBet;
+            startQuickBtn.title = (!canCoverBet && bet > 0) ? 'Saldo on-chain insuficiente para la apuesta' : '';
         }
 
-        // Iniciar según modo
         async function startQuickMatch() {
             if (!selectedSong) return;
-            const bet = parseInt(document.getElementById('betAmount').value) || 100;
-            const onchainBalance = Number(window.__mtrOnChainBalance || 0);
-            if (onchainBalance < bet) {
-                showToast('Saldo on-chain insuficiente para esta apuesta', 'error');
-                updateBetEligibility();
-                return;
-            }
-            if (typeof GameEngine !== 'undefined') {
-                await GameEngine.joinQuickMatch(selectedSong, bet);
-            } else {
-                showToast('GameEngine no está cargado', 'error');
-            }
+            var bet = parseInt(document.getElementById('betAmount').value) || 100;
+            if (Number(window.__mtrOnChainBalance || 0) < bet) { showToast('Saldo on-chain insuficiente', 'error'); updateBetEligibility(); return; }
+            if (typeof GameEngine !== 'undefined') await GameEngine.joinQuickMatch(selectedSong, bet);
+            else showToast('GameEngine no está cargado', 'error');
         }
-
         async function createRoom() {
             if (!selectedSong) return;
-            const bet = parseInt(document.getElementById('betAmount').value) || 100;
-            if (typeof GameEngine !== 'undefined') {
-                await GameEngine.createPrivateRoom(selectedSong, bet);
-            } else {
-                showToast('GameEngine no está cargado', 'error');
-            }
+            var bet = parseInt(document.getElementById('betAmount').value) || 100;
+            if (typeof GameEngine !== 'undefined') await GameEngine.createPrivateRoom(selectedSong, bet);
+            else showToast('GameEngine no está cargado', 'error');
         }
-
         async function joinRoom() {
             if (!selectedSong) return;
-            const roomCode = document.getElementById('joinRoomCode').value.toUpperCase();
-            const bet = parseInt(document.getElementById('betAmount').value) || 100;
-            if (typeof GameEngine !== 'undefined') {
-                await GameEngine.joinPrivateRoom(roomCode, selectedSong, bet);
-            } else {
-                showToast('GameEngine no está cargado', 'error');
-            }
+            var roomCode = document.getElementById('joinRoomCode').value.toUpperCase();
+            var bet = parseInt(document.getElementById('betAmount').value) || 100;
+            if (typeof GameEngine !== 'undefined') await GameEngine.joinPrivateRoom(roomCode, selectedSong, bet);
+            else showToast('GameEngine no está cargado', 'error');
         }
-
         async function startPractice() {
-            if (!selectedSong) {
-                showToast('Selecciona una canción primero', 'error');
-                return;
-            }
-
-            const demoBet = parseInt(document.getElementById('betAmount').value) || 100;
-
-            if (typeof GameEngine !== 'undefined') {
-                await GameEngine.startPracticeMatch(selectedSong, demoBet);
-            } else {
-                showToast('Modo práctica en desarrollo', 'info');
-            }
+            if (!selectedSong) { showToast('Selecciona una canción primero', 'error'); return; }
+            var demoBet = parseInt(document.getElementById('betAmount').value) || 100;
+            if (typeof GameEngine !== 'undefined') await GameEngine.startPracticeMatch(selectedSong, demoBet);
+            else showToast('Modo práctica en desarrollo', 'info');
         }
-
         async function joinTournamentMode() {
             if (!selectedSong) return;
-            const tournamentId = document.getElementById('tournamentId').value;
-            if (!tournamentId) {
-                showToast('Ingresa el ID del torneo', 'error');
-                return;
-            }
-            const bet = parseInt(document.getElementById('betAmount').value) || 100;
-            if (typeof GameEngine !== 'undefined') {
-                await GameEngine.joinTournament(tournamentId, selectedSong, bet);
-            } else {
-                showToast('Modo torneo en desarrollo', 'info');
-            }
+            var tournamentId = document.getElementById('tournamentId').value;
+            if (!tournamentId) { showToast('Ingresa el ID del torneo', 'error'); return; }
+            var bet = parseInt(document.getElementById('betAmount').value) || 100;
+            if (typeof GameEngine !== 'undefined') await GameEngine.joinTournament(tournamentId, selectedSong, bet);
+            else showToast('Modo torneo en desarrollo', 'info');
         }
-
         function cancelSearch() {
-            if (typeof GameEngine !== 'undefined' && typeof GameEngine.cancelMatchmaking === 'function') {
-                GameEngine.cancelMatchmaking();
-            } else {
-                backToModes();
-            }
+            if (typeof GameEngine !== 'undefined' && typeof GameEngine.cancelMatchmaking === 'function') GameEngine.cancelMatchmaking();
+            else backToModes();
         }
-
         function leaveRoom() {
-            if (typeof GameEngine !== 'undefined' && typeof GameEngine.leavePrivateRoom === 'function') {
-                GameEngine.leavePrivateRoom();
-            } else {
-                backToModes();
-            }
+            if (typeof GameEngine !== 'undefined' && typeof GameEngine.leavePrivateRoom === 'function') GameEngine.leavePrivateRoom();
+            else backToModes();
         }
-
         function copyRoomCode() {
-            const code = document.getElementById('roomCode').textContent;
+            var code = document.getElementById('roomCode').textContent;
             navigator.clipboard.writeText(code);
-            if (typeof showToast !== 'undefined') {
-                showToast('Código copiado', 'success');
-            }
+            if (typeof showToast === 'function') showToast('Código copiado', 'success');
         }
-
         function copyRoomLink() {
-            const link = document.getElementById('roomInviteLink').value;
+            var link = document.getElementById('roomInviteLink').value;
             navigator.clipboard.writeText(link);
-            if (typeof showToast !== 'undefined') {
-                showToast('Link copiado', 'success');
-            }
+            if (typeof showToast === 'function') showToast('Link copiado', 'success');
         }
-
         function showIncomingChallenge(challenge) {
-            const modal = document.getElementById('challengeModal');
-            const details = document.getElementById('challengeDetails');
-            if (details) {
-                details.textContent = `${challenge.song.name} - ${challenge.song.artist} | Apuesta: ${challenge.betAmount} MTR`;
-            }
+            var modal = document.getElementById('challengeModal');
+            var details = document.getElementById('challengeDetails');
+            if (details) details.textContent = challenge.song.name + ' - ' + challenge.song.artist + ' | Apuesta: ' + challenge.betAmount + ' MTR';
             modal.classList.remove('hidden');
         }
-
-        function closeChallengeModal() {
-            document.getElementById('challengeModal').classList.add('hidden');
-        }
-
-        function acceptChallenge() {
-            closeChallengeModal();
-            selectMode('quick');
-            showToast('Reto aceptado. Selecciona tu canción para iniciar.', 'success');
-        }
-
+        function closeChallengeModal() { document.getElementById('challengeModal').classList.add('hidden'); }
+        function acceptChallenge() { closeChallengeModal(); selectMode('quick'); showToast('Reto aceptado. Selecciona tu canción.', 'success'); }
         function rejectChallenge() {
-            if (typeof GameEngine !== 'undefined') {
-                GameEngine.pendingChallenge = null;
-            }
-            closeChallengeModal();
-            showToast('Reto rechazado', 'info');
+            if (typeof GameEngine !== 'undefined') GameEngine.pendingChallenge = null;
+            closeChallengeModal(); showToast('Reto rechazado', 'info');
         }
+
         async function quoteCashout() {
-            const amount = parseFloat(document.getElementById('cashoutAmount')?.value || '0');
-            if (!amount || amount <= 0) {
-                showToast('Ingresa un monto válido', 'error');
-                return;
-            }
-            if (typeof GameEngine === 'undefined') {
-                showToast('GameEngine no está cargado', 'error');
-                return;
-            }
-
-            const quote = await GameEngine.getUsdSettlementQuote(amount);
-            const quoteEl = document.getElementById('cashoutQuote');
-            if (quoteEl && quote) {
-                quoteEl.textContent = `Referencia: 1 MTR = $${quote.usdRate}. Neto estimado: $${quote.netUsd} (fee ${quote.feePercent}%).`;
-            }
+            var amount = parseFloat(document.getElementById('cashoutAmount')?.value || '0');
+            if (!amount || amount <= 0) { showToast('Ingresa un monto válido', 'error'); return; }
+            if (typeof GameEngine === 'undefined') { showToast('GameEngine no está cargado', 'error'); return; }
+            var quote = await GameEngine.getUsdSettlementQuote(amount);
+            var quoteEl = document.getElementById('cashoutQuote');
+            if (quoteEl && quote) quoteEl.textContent = 'Referencia: 1 MTR = $' + quote.usdRate + '. Neto: $' + quote.netUsd + ' (fee ' + quote.feePercent + '%).';
         }
-
         async function requestCashout() {
-            const amount = parseFloat(document.getElementById('cashoutAmount')?.value || '0');
-            if (!amount || amount <= 0) {
-                showToast('Ingresa un monto válido', 'error');
-                return;
-            }
-            if (typeof GameEngine === 'undefined') {
-                showToast('GameEngine no está cargado', 'error');
-                return;
-            }
-
-            const payout = await GameEngine.requestCashout(amount, {
-                network: 'base'
-            });
-
-            if (payout?.ok) {
-                showToast(`Retiro solicitado: ${payout.requestId || 'ID pendiente'}`, 'success');
-            }
+            var amount = parseFloat(document.getElementById('cashoutAmount')?.value || '0');
+            if (!amount || amount <= 0) { showToast('Ingresa un monto válido', 'error'); return; }
+            if (typeof GameEngine === 'undefined') { showToast('GameEngine no está cargado', 'error'); return; }
+            var payout = await GameEngine.requestCashout(amount, { network: 'base' });
+            if (payout?.ok) showToast('Retiro solicitado: ' + (payout.requestId || 'ID pendiente'), 'success');
         }
 
-        function isBaseTxHash(value) {
-            return /^0x([A-Fa-f0-9]{64})$/.test(value || '');
-        }
+        function isBaseTxHash(value) { return /^0x([A-Fa-f0-9]{64})$/.test(value || ''); }
 
         async function verifyPurchasedMtrTx() {
-            const txInput = document.getElementById('depositTxHash');
-            const creditButton = document.getElementById('creditPurchaseBtn');
-            const txHash = txInput?.value?.trim();
-            if (!isBaseTxHash(txHash)) {
-                showToast('Pega un hash válido de Base (0x + 64 caracteres hex)', 'error');
-                return;
-            }
-            if (typeof GameEngine === 'undefined') {
-                showToast('GameEngine no está cargado', 'error');
-                return;
-            }
-
+            var txInput = document.getElementById('depositTxHash');
+            var creditButton = document.getElementById('creditPurchaseBtn');
+            var txHash = txInput?.value?.trim();
+            if (!isBaseTxHash(txHash)) { showToast('Pega un hash válido de Base (0x + 64 hex)', 'error'); return; }
+            if (typeof GameEngine === 'undefined') { showToast('GameEngine no está cargado', 'error'); return; }
             if (creditButton) creditButton.disabled = true;
             try {
-                const result = await GameEngine.verifyDepositAndCredit(txHash, { network: 'base' });
+                var result = await GameEngine.verifyDepositAndCredit(txHash, { network: 'base' });
                 if (result?.credited || typeof result?.newBalance === 'number') {
-                    showToast('Depósito verificado y acreditado. Ya puedes usar tu saldo en partidas pagadas.', 'success');
+                    showToast('Depósito verificado y acreditado.', 'success');
                     if (txInput) txInput.value = '';
                 } else if (result?.status) {
-                    showToast(`Estado de verificación on-chain: ${result.status}`, 'info');
+                    showToast('Estado: ' + result.status, 'info');
                 }
-            } finally {
-                if (creditButton) creditButton.disabled = false;
-            }
+            } finally { if (creditButton) creditButton.disabled = false; }
         }
 
-        const betAmountInput = document.getElementById('betAmount');
+        var betAmountInput = document.getElementById('betAmount');
         if (betAmountInput) betAmountInput.addEventListener('input', updateBetEligibility);
 
         window.showIncomingChallenge = showIncomingChallenge;
@@ -1405,108 +978,90 @@
         window.updateBetEligibility = updateBetEligibility;
     </script>
 
+    <!-- VIEM WALLET MODULE -->
     <script type="module">
         import { createPublicClient, createWalletClient, custom, http, formatUnits, isAddress, getAddress } from 'https://esm.sh/viem';
         import { base } from 'https://esm.sh/viem/chains';
 
-        const EXPECTED_MTR_TOKEN = '0x99cd1eb32846c9027ed9cb88710066fa08791c33b';
-        const MTR_TOKEN = window.CONFIG?.MTR_TOKEN_ADDRESS || EXPECTED_MTR_TOKEN;
-        const publicClient = createPublicClient({ chain: base, transport: http('https://mainnet.base.org') });
+        var EXPECTED_MTR_TOKEN = '0x99cd1eb32846c9027ed9cb88710066fa08791c33b';
+        var MTR_TOKEN = window.CONFIG?.MTR_TOKEN_ADDRESS || EXPECTED_MTR_TOKEN;
+        var publicClient = createPublicClient({ chain: base, transport: http('https://mainnet.base.org') });
+        var connectedAddress = null;
+        var connectedChainId = null;
 
-        let connectedAddress = null;
-        let connectedChainId = null;
-
-        function setOnchainBalanceError(label = 'Error RPC') {
-            const badge = document.getElementById('onchainBalanceDisplay');
-            const onchainBalance = document.getElementById('onchainMtrBalance');
-            if (badge) badge.textContent = `On-chain: ${label}`;
+        function setOnchainBalanceError(label) {
+            label = label || 'Error RPC';
+            var badge = document.getElementById('onchainBalanceDisplay');
+            var onchainBalance = document.getElementById('onchainMtrBalance');
+            if (badge) badge.textContent = 'On-chain: ' + label;
             if (onchainBalance) onchainBalance.textContent = label;
         }
 
         function validateMtrTokenAddress() {
-            const errorEl = document.getElementById('tokenConfigError');
+            var errorEl = document.getElementById('tokenConfigError');
             if (!isAddress(MTR_TOKEN)) {
-                if (errorEl) {
-                    errorEl.textContent = 'Error crítico: la address MTR configurada es inválida.';
-                    errorEl.style.display = 'block';
-                }
+                if (errorEl) { errorEl.textContent = 'Error: address MTR inválida.'; errorEl.classList.remove('hidden'); }
                 return false;
             }
-            const checksummed = getAddress(MTR_TOKEN);
+            var checksummed = getAddress(MTR_TOKEN);
             if (checksummed.toLowerCase() !== EXPECTED_MTR_TOKEN.toLowerCase()) {
-                if (errorEl) {
-                    errorEl.textContent = `Error crítico: address MTR no permitida (${checksummed}).`;
-                    errorEl.style.display = 'block';
-                }
+                if (errorEl) { errorEl.textContent = 'Error: address MTR no permitida (' + checksummed + ').'; errorEl.classList.remove('hidden'); }
                 return false;
             }
-            if (errorEl) errorEl.style.display = 'none';
+            if (errorEl) errorEl.classList.add('hidden');
             return true;
         }
 
         async function ensureBaseChain() {
             if (!window.ethereum) {
-                if (typeof showToast === 'function') showToast('Instala MetaMask para usar wallet en Base', 'error');
+                if (typeof showToast === 'function') showToast('Instala MetaMask para wallet en Base', 'error');
                 return false;
             }
-            const chainHex = await window.ethereum.request({ method: 'eth_chainId' });
-            const chainId = Number.parseInt(chainHex, 16);
-            connectedChainId = chainId;
-            if (chainId === 8453) return true;
-
+            var chainHex = await window.ethereum.request({ method: 'eth_chainId' });
+            connectedChainId = Number.parseInt(chainHex, 16);
+            if (connectedChainId === 8453) return true;
             if (typeof showToast === 'function') showToast('Cambia a Base para MTR', 'error');
             try {
                 await window.ethereum.request({ method: 'wallet_switchEthereumChain', params: [{ chainId: '0x2105' }] });
                 connectedChainId = 8453;
                 return true;
-            } catch (error) {
-                console.warn('[wallet] switch to base rejected', error);
-                return false;
-            }
+            } catch (e) { console.warn('[wallet] switch rejected', e); return false; }
         }
 
         async function refreshMtrBalance(address) {
             if (!address) return;
-            if (!validateMtrTokenAddress()) {
-                setOnchainBalanceError('Address inválida');
-                if (typeof showToast === 'function') showToast('Address MTR inválida. Contacta soporte.', 'error');
-                return;
-            }
+            if (!validateMtrTokenAddress()) { setOnchainBalanceError('Address inválida'); return; }
             try {
-                const balance = await publicClient.readContract({
+                var balance = await publicClient.readContract({
                     address: MTR_TOKEN,
                     abi: [{ type: 'function', name: 'balanceOf', stateMutability: 'view', inputs: [{ name: 'account', type: 'address' }], outputs: [{ name: '', type: 'uint256' }] }],
-                    functionName: 'balanceOf',
-                    args: [address]
+                    functionName: 'balanceOf', args: [address]
                 });
-                const numericBalance = Number(formatUnits(balance, 18));
+                var numericBalance = Number(formatUnits(balance, 18));
                 window.__mtrOnChainBalance = numericBalance;
-                const formatted = numericBalance.toLocaleString('es-ES', { maximumFractionDigits: 4 });
-                const badge = document.getElementById('onchainBalanceDisplay');
-                const onchainBalance = document.getElementById('onchainMtrBalance');
-                if (badge) badge.textContent = `Tu MTR: ${formatted}`;
-                if (onchainBalance) onchainBalance.textContent = formatted;
+                var formatted = numericBalance.toLocaleString('es-ES', { maximumFractionDigits: 4 });
+                var badge = document.getElementById('onchainBalanceDisplay');
+                var onchain = document.getElementById('onchainMtrBalance');
+                if (badge) badge.textContent = 'Tu MTR: ' + formatted;
+                if (onchain) onchain.textContent = formatted;
                 if (typeof window.updateBetEligibility === 'function') window.updateBetEligibility();
-            } catch (error) {
-                console.error('[wallet] balance read error', error);
+            } catch (e) {
+                console.error('[wallet] balance error', e);
                 setOnchainBalanceError();
-                if (typeof showToast === 'function') showToast('No se pudo leer balance on-chain (RPC/Base)', 'error');
             }
         }
 
         function renderWallet() {
-            const walletEl = document.getElementById('walletAddress');
-            const btnEl = document.getElementById('walletConnectBtn');
-            const warningEl = document.getElementById('walletNetworkWarning');
+            var walletEl = document.getElementById('walletAddress');
+            var btnEl = document.getElementById('walletConnectBtn');
+            var warningEl = document.getElementById('walletNetworkWarning');
             if (!walletEl || !btnEl) return;
-
             if (connectedAddress) {
-                walletEl.textContent = `${connectedAddress.slice(0, 6)}...${connectedAddress.slice(-4)}`;
+                walletEl.textContent = connectedAddress.slice(0, 6) + '...' + connectedAddress.slice(-4);
                 walletEl.classList.remove('hidden');
                 btnEl.textContent = connectedChainId === 8453 ? 'Wallet conectada' : 'Cambiar a Base';
                 if (warningEl) warningEl.classList.toggle('hidden', connectedChainId === 8453);
                 localStorage.setItem('mtr_wallet', connectedAddress);
-                localStorage.setItem('mtr_wallet_chain', String(connectedChainId || 'unknown'));
             } else {
                 walletEl.classList.add('hidden');
                 btnEl.textContent = 'Conectar Wallet';
@@ -1517,40 +1072,30 @@
         }
 
         async function connectWallet() {
-            if (!window.ethereum) {
-                if (typeof showToast === 'function') showToast('MetaMask no está disponible', 'error');
-                return;
-            }
+            if (!window.ethereum) { if (typeof showToast === 'function') showToast('MetaMask no disponible', 'error'); return; }
             try {
-                const walletClient = createWalletClient({ chain: base, transport: custom(window.ethereum) });
-                const [address] = await walletClient.requestAddresses();
-                connectedAddress = address || null;
-                const onBase = await ensureBaseChain();
+                var walletClient = createWalletClient({ chain: base, transport: custom(window.ethereum) });
+                var addresses = await walletClient.requestAddresses();
+                connectedAddress = addresses[0] || null;
+                var onBase = await ensureBaseChain();
                 renderWallet();
-                if (connectedAddress && onBase) {
-                    await refreshMtrBalance(connectedAddress);
-                }
-            } catch (error) {
-                console.error('[wallet] connect error', error);
-                if (typeof showToast === 'function') showToast('No se pudo conectar la wallet', 'error');
-            }
+                if (connectedAddress && onBase) await refreshMtrBalance(connectedAddress);
+            } catch (e) { console.error('[wallet] connect error', e); if (typeof showToast === 'function') showToast('No se pudo conectar', 'error'); }
         }
 
-        const btn = document.getElementById('walletConnectBtn');
+        var btn = document.getElementById('walletConnectBtn');
         if (btn) btn.addEventListener('click', connectWallet);
 
         if (window.ethereum?.on) {
-            window.ethereum.on('accountsChanged', async (accounts) => {
+            window.ethereum.on('accountsChanged', async function (accounts) {
                 connectedAddress = accounts?.[0] || null;
-                const onBase = connectedAddress ? await ensureBaseChain() : false;
+                var onBase = connectedAddress ? await ensureBaseChain() : false;
                 renderWallet();
                 if (connectedAddress && onBase) await refreshMtrBalance(connectedAddress);
             });
-            window.ethereum.on('chainChanged', async (chainHex) => {
+            window.ethereum.on('chainChanged', async function (chainHex) {
                 connectedChainId = Number.parseInt(chainHex, 16);
-                if (connectedChainId !== 8453 && typeof showToast === 'function') {
-                    showToast('Cambia a Base para MTR', 'error');
-                }
+                if (connectedChainId !== 8453 && typeof showToast === 'function') showToast('Cambia a Base para MTR', 'error');
                 renderWallet();
                 if (connectedAddress && connectedChainId === 8453) await refreshMtrBalance(connectedAddress);
             });
@@ -1558,18 +1103,12 @@
 
         validateMtrTokenAddress();
         if (window.ethereum) {
-            const accounts = await window.ethereum.request({ method: 'eth_accounts' });
+            var accounts = await window.ethereum.request({ method: 'eth_accounts' });
             connectedAddress = accounts?.[0] || null;
-            if (connectedAddress) {
-                await ensureBaseChain();
-                renderWallet();
-                if (connectedChainId === 8453) await refreshMtrBalance(connectedAddress);
-            } else {
-                renderWallet();
-            }
-        } else {
-            renderWallet();
-        }
+            if (connectedAddress) { await ensureBaseChain(); renderWallet(); if (connectedChainId === 8453) await refreshMtrBalance(connectedAddress); }
+            else renderWallet();
+        } else { renderWallet(); }
     </script>
+
 </body>
 </html>
