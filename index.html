@@ -101,6 +101,11 @@
         #streamDashboardTrackList::-webkit-scrollbar { display: none; }
         .stream-card { flex: 0 0 180px; background: rgba(15,15,40,0.7); border: 1px solid rgba(0,243,255,0.1); border-radius: 12px; overflow: hidden; transition: all 0.3s ease; cursor: pointer; }
         .stream-card:hover { border-color: rgba(0,243,255,0.3); box-shadow: 0 0 20px rgba(0,243,255,0.1); transform: translateY(-2px); }
+        .stream-card-cover { position: relative; overflow: hidden; }
+        .stream-card-cover img { width: 100%; aspect-ratio: 1; object-fit: cover; display: block; }
+        .stream-play-btn { position: absolute; bottom: 8px; right: 8px; width: 32px; height: 32px; border-radius: 50%; background: rgba(0,243,255,0.85); color: #030712; border: none; font-size: 14px; cursor: pointer; opacity: 0; transition: all 0.2s; display: flex; align-items: center; justify-content: center; box-shadow: 0 0 12px rgba(0,243,255,0.4); }
+        .stream-card:hover .stream-play-btn { opacity: 1; }
+        .stream-play-btn.playing { opacity: 1; background: rgba(236,72,153,0.9); box-shadow: 0 0 12px rgba(236,72,153,0.5); }
         .stream-card img { width: 100%; aspect-ratio: 1; object-fit: cover; }
         .stream-card-info { padding: 10px 12px; }
         .stream-card-info strong { display: block; font-size: 13px; color: #e2e8f0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -1094,15 +1099,36 @@
         }
 
         async function connectWallet() {
-            if (!window.ethereum) { if (typeof showToast === 'function') showToast('MetaMask no disponible', 'error'); return; }
+            if (!window.ethereum) {
+                console.warn('[wallet] window.ethereum not found — MetaMask not installed');
+                if (typeof showToast === 'function') showToast('Instala MetaMask para conectar tu wallet en Base', 'error');
+                return;
+            }
             try {
+                console.log('[wallet] Requesting wallet connection...');
                 var walletClient = createWalletClient({ chain: base, transport: custom(window.ethereum) });
                 var addresses = await walletClient.requestAddresses();
                 connectedAddress = addresses[0] || null;
+                if (!connectedAddress) {
+                    console.warn('[wallet] No address returned');
+                    if (typeof showToast === 'function') showToast('No se obtuvo dirección de wallet', 'error');
+                    return;
+                }
+                console.log('[wallet] Connected:', connectedAddress);
                 var onBase = await ensureBaseChain();
                 renderWallet();
-                if (connectedAddress && onBase) await refreshMtrBalance(connectedAddress);
-            } catch (e) { console.error('[wallet] connect error', e); if (typeof showToast === 'function') showToast('No se pudo conectar', 'error'); }
+                if (onBase) {
+                    await refreshMtrBalance(connectedAddress);
+                    if (typeof showToast === 'function') showToast('Wallet conectada en Base ✓', 'success');
+                } else {
+                    if (typeof showToast === 'function') showToast('Wallet conectada pero necesitas cambiar a Base (8453)', 'error');
+                }
+            } catch (e) {
+                console.error('[wallet] connect error:', e);
+                var msg = 'No se pudo conectar la wallet';
+                if (e.code === 4001 || (e.message && e.message.includes('rejected'))) msg = 'Conexión rechazada por el usuario';
+                if (typeof showToast === 'function') showToast(msg, 'error');
+            }
         }
 
         var btn = document.getElementById('walletConnectBtn');

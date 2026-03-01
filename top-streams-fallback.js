@@ -42,8 +42,14 @@
     var html = '';
     for (var i = 0; i < items.length; i++) {
       var t = items[i] || {};
+      var previewBtn = t.preview
+        ? '<button class="stream-play-btn" data-preview="' + t.preview + '" onclick="event.stopPropagation(); window.__mtrStreamPreview(this)" title="Escuchar preview">▶</button>'
+        : '';
       html += '<article class="stream-card">' +
+        '<div class="stream-card-cover">' +
         '<img src="' + (t.cover || '') + '" alt="' + (t.title || 'Track') + '">' +
+        previewBtn +
+        '</div>' +
         '<div class="stream-card-info">' +
         '<strong>' + (t.title || 'Sin título') + '</strong>' +
         '<span>' + (t.artist || 'Artista') + '</span>' +
@@ -53,6 +59,36 @@
     list.innerHTML = html;
     applyCarouselPosition();
   }
+
+  var __streamAudio = null;
+  window.__mtrStreamPreview = function(btn) {
+    var url = btn.getAttribute('data-preview');
+    if (!url) return;
+    var allBtns = document.querySelectorAll('.stream-play-btn');
+    if (__streamAudio && __streamAudio.src === url && !__streamAudio.paused) {
+      __streamAudio.pause();
+      btn.textContent = '▶';
+      btn.classList.remove('playing');
+      return;
+    }
+    if (__streamAudio) { __streamAudio.pause(); }
+    for (var i = 0; i < allBtns.length; i++) { allBtns[i].textContent = '▶'; allBtns[i].classList.remove('playing'); }
+    __streamAudio = new Audio(url);
+    __streamAudio.volume = 0.7;
+    __streamAudio.play().then(function() {
+      btn.textContent = '⏸';
+      btn.classList.add('playing');
+      console.log('[audio] Playing stream preview:', url);
+    }).catch(function(err) {
+      console.error('[audio] Preview playback failed:', err);
+      if (typeof showToast === 'function') showToast('No se pudo reproducir el preview', 'error');
+    });
+    __streamAudio.onended = function() { btn.textContent = '▶'; btn.classList.remove('playing'); };
+    __streamAudio.onerror = function() {
+      console.error('[audio] Audio load error for:', url);
+      btn.textContent = '▶'; btn.classList.remove('playing');
+    };
+  };
 
   function updateRegionButtons(r) {
     var btns = document.querySelectorAll('.stream-region-tab');
@@ -99,7 +135,8 @@
           title: row.title || 'Sin título',
           artist: row.artist && row.artist.name ? row.artist.name : 'Artista',
           cover: row.album && row.album.cover_medium ? row.album.cover_medium : '',
-          stat: stat
+          stat: stat,
+          preview: row.preview || ''
         });
       }
       if (!items.length) items = fallbackTracks(r);
