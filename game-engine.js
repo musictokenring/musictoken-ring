@@ -150,37 +150,11 @@ const GameEngine = {
     },
     
     updateBalanceDisplay() {
- codex/fix-issues-from-codex-review-on-pr-#117-h1vqdv
-
- codex/fix-issues-from-codex-review-on-pr-#117-vm0jtz
-
- codex/fix-issues-from-codex-review-on-pr-#117-1unygy
-
- codex/fix-issues-from-codex-review-on-pr-#117-a0dcjt
-
- codex/fix-issues-from-codex-review-on-pr-#117-txj6hp
-
- codex/fix-issues-from-codex-review-on-pr-#117-js14p8
-
- codex/fix-issues-from-codex-review-on-pr-#117-yqd0oa
-
- codex/fix-issues-from-codex-review-on-pr-#117-snau6z
-
- codex/fix-issues-from-codex-review-on-pr-#117-6lh27n
- codex/migrate-mtoken-to-mtr-on-base-chain-hbd77v
- codex/migrate-mtoken-to-mtr-on-base-chain-hbd77v
- codex/migrate-mtoken-to-mtr-on-base-chain-hbd77v
- codex/migrate-mtoken-to-mtr-on-base-chain-hbd77v
- codex/migrate-mtoken-to-mtr-on-base-chain-hbd77v
- codex/migrate-mtoken-to-mtr-on-base-chain-hbd77v
- codex/migrate-mtoken-to-mtr-on-base-chain-hbd77v
- codex/migrate-mtoken-to-mtr-on-base-chain-hbd77v
         const balanceEl = document.getElementById('appBalanceDisplay');
         if (balanceEl) {
-            balanceEl.textContent = `Saldo jugable: ${this.userBalance} MTR`;
+            balanceEl.textContent = `Jugable: ${this.userBalance} MTR`;
         }
 
- codex/migrate-mtoken-to-mtr-on-base-chain-hbd77v
         const userBalanceEl = document.getElementById('userBalance');
         if (userBalanceEl) {
             userBalanceEl.textContent = this.userBalance;
@@ -624,8 +598,6 @@ const GameEngine = {
     
     async startPracticeMatch(userSong, demoBet = 100) {
         try {
-            const { data: { session } } = await supabaseClient.auth.getSession();
-
             const normalizedBet = Math.max(this.minBet, Math.round(demoBet || this.minBet));
             if (normalizedBet > this.practiceDemoBalance) {
                 showToast(`Saldo demo insuficiente. Disponible: ${this.practiceDemoBalance} MTR`, 'error');
@@ -634,14 +606,54 @@ const GameEngine = {
 
             this.setPracticeDemoBalance(this.practiceDemoBalance - normalizedBet);
             this.updatePracticeBetDisplay();
-            
+
+            console.log('[practice] Fetching CPU opponent...');
             const cpuSong = await this.fetchCpuOpponentByElo(userSong);
-            
-            const { data: match, error } = await supabaseClient
-                .from('matches')
-                .insert([{
+            console.log('[practice] CPU song:', cpuSong.name, '-', cpuSong.artist);
+
+            let match = null;
+            let useLocalFallback = false;
+
+            try {
+                const { data: { session } } = await supabaseClient.auth.getSession();
+                if (session) {
+                    const { data, error } = await supabaseClient
+                        .from('matches')
+                        .insert([{
+                            match_type: 'practice',
+                            player1_id: session.user.id,
+                            player1_song_id: userSong.id,
+                            player1_song_name: userSong.name,
+                            player1_song_artist: userSong.artist,
+                            player1_song_image: userSong.image,
+                            player1_song_preview: userSong.preview,
+                            player1_bet: normalizedBet,
+                            player2_song_id: cpuSong.id,
+                            player2_song_name: cpuSong.name,
+                            player2_song_artist: cpuSong.artist,
+                            player2_song_image: cpuSong.image,
+                            player2_song_preview: cpuSong.preview,
+                            player2_bet: normalizedBet,
+                            total_pot: normalizedBet * 2,
+                            status: 'ready'
+                        }])
+                        .select()
+                        .single();
+                    if (error) throw error;
+                    match = data;
+                } else {
+                    useLocalFallback = true;
+                }
+            } catch (dbError) {
+                console.warn('[practice] Supabase insert failed, using local mode:', dbError.message);
+                useLocalFallback = true;
+            }
+
+            if (useLocalFallback) {
+                match = {
+                    id: 'local_practice_' + Date.now(),
                     match_type: 'practice',
-                    player1_id: session.user.id,
+                    player1_id: 'local_user',
                     player1_song_id: userSong.id,
                     player1_song_name: userSong.name,
                     player1_song_artist: userSong.artist,
@@ -656,19 +668,92 @@ const GameEngine = {
                     player2_bet: normalizedBet,
                     total_pot: normalizedBet * 2,
                     status: 'ready'
-                }])
-                .select()
-                .single();
-            
-            if (error) throw error;
-            
-            showToast(`¡Iniciando práctica con ${normalizedBet} MTR demo!`, 'success');
-            await this.startMatch(match.id);
-            
+                };
+                console.log('[practice] Using local fallback match');
+            }
+
+            showToast(`¡Práctica iniciada: ${normalizedBet} MTR demo!`, 'success');
+            await this.startLocalPractice(match);
+
         } catch (error) {
-            console.error('Error starting practice:', error);
+            console.error('[practice] Error starting practice:', error);
             showToast('Error al iniciar práctica', 'error');
         }
+    },
+
+    async startLocalPractice(match) {
+        document.getElementById('songSelection')?.classList.add('hidden');
+        document.getElementById('waitingScreen')?.classList.add('hidden');
+        document.getElementById('roomScreen')?.classList.add('hidden');
+
+        this.currentMatch = match;
+        this.createBattleUI(match);
+
+        const userSong = match.player1_song_preview;
+        if (userSong) {
+            this.playUserSong(userSong);
+            console.log('[practice] Playing user song:', userSong);
+        }
+
+        const oracleStats = await this.fetchOracleStats(match);
+        const basePlays1 = oracleStats.player1Projected;
+        const basePlays2 = oracleStats.player2Projected;
+        let plays1 = 0;
+        let plays2 = 0;
+        let timeLeft = this.battleDuration;
+
+        const battleInterval = setInterval(() => {
+            timeLeft--;
+            var timerEl = document.getElementById('battleTimer');
+            if (timerEl) timerEl.textContent = timeLeft;
+
+            plays1 += this.calculatePlaysIncrement(basePlays1);
+            plays2 += this.calculatePlaysIncrement(basePlays2);
+            this.updateBattleRhythmAnimation(timeLeft, plays1, plays2);
+
+            var totalPlays = plays1 + plays2;
+            var health1 = totalPlays > 0 ? Math.max(0, Math.min(100, (plays1 / totalPlays) * 100)) : 50;
+            var health2 = 100 - health1;
+
+            var h1f = document.getElementById('health1Fill');
+            var h2f = document.getElementById('health2Fill');
+            if (h1f) { h1f.style.width = health1 + '%'; }
+            if (h2f) { h2f.style.width = health2 + '%'; }
+            var h1t = document.getElementById('health1Text');
+            var h2t = document.getElementById('health2Text');
+            if (h1t) h1t.textContent = Math.round(health1) + '%';
+            if (h2t) h2t.textContent = Math.round(health2) + '%';
+            var p1 = document.getElementById('plays1');
+            var p2 = document.getElementById('plays2');
+            if (p1) p1.textContent = Math.round(plays1).toLocaleString('es-ES');
+            if (p2) p2.textContent = Math.round(plays2).toLocaleString('es-ES');
+
+            if (timeLeft <= 0) {
+                clearInterval(battleInterval);
+                this.endPracticeLocally(match, plays1, plays2);
+            }
+        }, 1000);
+    },
+
+    async endPracticeLocally(match, plays1, plays2) {
+        var winner = plays1 > plays2 ? 1 : 2;
+        var userWon = winner === 1;
+        this.stopUserSong();
+
+        var winnerSong = winner === 1 ? match.player1_song_preview : match.player2_song_preview;
+        this.playVictorySong(winnerSong);
+
+        if (userWon) {
+            this.setPracticeDemoBalance(this.practiceDemoBalance + 50);
+            console.log('[practice] User won! +50 MTR demo');
+        }
+        this.updatePracticeBetDisplay();
+        this.finalizeBattleRhythmAnimation(winner);
+
+        var payouts = { platformFee: 0, winnerPayout: userWon ? 50 : 0 };
+        setTimeout(() => {
+            this.showVictoryScreen(match, winner, userWon, payouts);
+        }, this.victoryAudioDuration * 1000);
     },
     
     // ==========================================
