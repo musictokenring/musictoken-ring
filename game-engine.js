@@ -74,7 +74,12 @@ const GameEngine = {
 
     loadPracticeDemoBalance() {
         const stored = parseInt(localStorage.getItem('mtr_practice_demo_balance') || `${this.practiceDemoInitialBalance}`, 10);
-        this.practiceDemoBalance = Number.isFinite(stored) ? stored : this.practiceDemoInitialBalance;
+        this.practiceDemoBalance = Number.isFinite(stored) && stored > 0 ? stored : this.practiceDemoInitialBalance;
+        if (this.practiceDemoBalance <= 0) {
+            this.practiceDemoBalance = this.practiceDemoInitialBalance;
+            localStorage.setItem('mtr_practice_demo_balance', String(this.practiceDemoBalance));
+            console.log('[practice] Demo balance reset to', this.practiceDemoBalance);
+        }
     },
 
     setPracticeDemoBalance(amount) {
@@ -85,12 +90,18 @@ const GameEngine = {
     updatePracticeBetDisplay() {
         const labelEl = document.getElementById('balanceLabel');
         const valueEl = document.getElementById('userBalance');
+        const onchainEl = document.getElementById('onchainMtrBalance');
         if (labelEl) labelEl.textContent = 'Saldo real';
         if (valueEl) valueEl.textContent = this.userBalance;
 
         if (typeof window !== 'undefined' && window.currentMode === 'practice') {
+            if (this.practiceDemoBalance <= 0) {
+                this.practiceDemoBalance = this.practiceDemoInitialBalance;
+                localStorage.setItem('mtr_practice_demo_balance', String(this.practiceDemoBalance));
+            }
             if (labelEl) labelEl.textContent = 'Saldo demo (práctica)';
             if (valueEl) valueEl.textContent = this.practiceDemoBalance;
+            if (onchainEl) onchainEl.textContent = this.practiceDemoBalance;
         }
     },
     
@@ -598,6 +609,12 @@ const GameEngine = {
     
     async startPracticeMatch(userSong, demoBet = 100) {
         try {
+            if (this.practiceDemoBalance <= 0) {
+                this.practiceDemoBalance = this.practiceDemoInitialBalance;
+                localStorage.setItem('mtr_practice_demo_balance', String(this.practiceDemoBalance));
+                console.log('[practice] Auto-reset demo balance to', this.practiceDemoBalance);
+            }
+
             const normalizedBet = Math.max(this.minBet, Math.round(demoBet || this.minBet));
             if (normalizedBet > this.practiceDemoBalance) {
                 showToast(`Saldo demo insuficiente. Disponible: ${this.practiceDemoBalance} MTR`, 'error');
@@ -923,7 +940,7 @@ const GameEngine = {
     },
     
     createBattleUI(match) {
-        const container = document.querySelector('.container');
+        const container = document.querySelector('main') || document.querySelector('.container');
         
         const battleHTML = `
             <section id="battleArena" class="battle-section">
@@ -1205,7 +1222,7 @@ const GameEngine = {
         const platformWallet = this.getPlatformWalletAddress();
         const payoutNetwork = 'base';
         
-        const container = document.querySelector('.container');
+        const container = document.querySelector('main') || document.querySelector('.container');
         container.innerHTML = `
             <div class="victory-screen">
                 <div class="victory-icon">${userWon ? '🏆' : '😔'}</div>
