@@ -150,37 +150,19 @@ const GameEngine = {
     },
     
     updateBalanceDisplay() {
- codex/fix-issues-from-codex-review-on-pr-#117-h1vqdv
 
- codex/fix-issues-from-codex-review-on-pr-#117-vm0jtz
 
- codex/fix-issues-from-codex-review-on-pr-#117-1unygy
 
- codex/fix-issues-from-codex-review-on-pr-#117-a0dcjt
 
- codex/fix-issues-from-codex-review-on-pr-#117-txj6hp
 
- codex/fix-issues-from-codex-review-on-pr-#117-js14p8
 
- codex/fix-issues-from-codex-review-on-pr-#117-yqd0oa
 
- codex/fix-issues-from-codex-review-on-pr-#117-snau6z
 
- codex/fix-issues-from-codex-review-on-pr-#117-6lh27n
- codex/migrate-mtoken-to-mtr-on-base-chain-hbd77v
- codex/migrate-mtoken-to-mtr-on-base-chain-hbd77v
- codex/migrate-mtoken-to-mtr-on-base-chain-hbd77v
- codex/migrate-mtoken-to-mtr-on-base-chain-hbd77v
- codex/migrate-mtoken-to-mtr-on-base-chain-hbd77v
- codex/migrate-mtoken-to-mtr-on-base-chain-hbd77v
- codex/migrate-mtoken-to-mtr-on-base-chain-hbd77v
- codex/migrate-mtoken-to-mtr-on-base-chain-hbd77v
         const balanceEl = document.getElementById('appBalanceDisplay');
         if (balanceEl) {
             balanceEl.textContent = `Saldo jugable: ${this.userBalance} MTR`;
         }
 
- codex/migrate-mtoken-to-mtr-on-base-chain-hbd77v
         const userBalanceEl = document.getElementById('userBalance');
         if (userBalanceEl) {
             userBalanceEl.textContent = this.userBalance;
