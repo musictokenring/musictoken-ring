@@ -1,1 +1,123 @@
 /* Original content of styles/main.css from commit d738dc310582de3d118516614e337f095e5405d4 */
+
+/* Estilos para perfil de usuario y botón de salir - Fix posicionamiento */
+#authButton {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: nowrap;
+}
+
+.user-profile {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    padding: 4px 8px;
+    border-radius: 8px;
+    transition: background-color 0.2s ease;
+    flex-shrink: 0;
+}
+
+.user-profile:hover {
+    background-color: rgba(255, 255, 255, 0.1);
+}
+
+.user-avatar {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 2px solid rgba(255, 255, 255, 0.2);
+    flex-shrink: 0;
+    display: block;
+}
+
+.user-info {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    min-width: 0;
+}
+
+.user-name {
+    font-size: 14px;
+    font-weight: 600;
+    color: #fff;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 150px;
+}
+
+.btn-logout {
+    background: rgba(239, 68, 68, 0.9);
+    color: white;
+    border: none;
+    padding: 10px 20px;
+    border-radius: 8px;
+    font-weight: 600;
+    font-size: 14px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    white-space: nowrap;
+    flex-shrink: 0;
+    margin-left: auto;
+}
+
+.btn-logout:hover {
+    background: rgba(239, 68, 68, 1);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(239, 68, 68, 0.4);
+}
+
+.btn-logout:active {
+    transform: translateY(0);
+}
+
+/* Responsive: En pantallas pequeñas, apilar verticalmente */
+@media (max-width: 768px) {
+    #authButton {
+        flex-direction: column;
+        gap: 8px;
+        width: 100%;
+    }
+    
+    .user-profile {
+        width: 100%;
+        justify-content: center;
+    }
+    
+    .btn-logout {
+        width: 100%;
+        margin-left: 0;
+    }
+    
+    .user-name {
+        max-width: 100%;
+    }
+}
+
+/* Asegurar que el header-content tenga espacio suficiente */
+.header-content {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 16px;
+}
+
+/* Asegurar que authButton no se comprima */
+#authButton {
+    margin-left: auto;
+    min-width: fit-content;
+}
+
+@media (max-width: 1024px) {
+    #authButton {
+        margin-left: 0;
+        width: 100%;
+        order: 10;
+    }
+}
