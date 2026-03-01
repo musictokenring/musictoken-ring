@@ -706,36 +706,42 @@ const GameEngine = {
         this.currentMatch = match;
         this.createBattleUI(match);
 
-        const userSong = match.player1_song_preview;
+        var userSong = match.player1_song_preview;
         if (userSong) {
             this.playUserSong(userSong);
             console.log('[practice] Playing user song:', userSong);
         }
 
-        const oracleStats = await this.fetchOracleStats(match);
-        const basePlays1 = oracleStats.player1Projected;
-        const basePlays2 = oracleStats.player2Projected;
-        let plays1 = 0;
-        let plays2 = 0;
-        let timeLeft = this.battleDuration;
+        var oracleStats = await this.fetchOracleStats(match);
+        var basePlays1 = oracleStats.player1Projected;
+        var basePlays2 = oracleStats.player2Projected;
+        var plays1 = 0, plays2 = 0;
+        var timeLeft = this.battleDuration;
+        var self = this;
 
-        const battleInterval = setInterval(() => {
+        var statusEl = document.getElementById('battleStatusText');
+        var battleInterval = setInterval(function () {
             timeLeft--;
             var timerEl = document.getElementById('battleTimer');
             if (timerEl) timerEl.textContent = timeLeft;
 
-            plays1 += this.calculatePlaysIncrement(basePlays1);
-            plays2 += this.calculatePlaysIncrement(basePlays2);
-            this.updateBattleRhythmAnimation(timeLeft, plays1, plays2);
+            plays1 += self.calculatePlaysIncrement(basePlays1);
+            plays2 += self.calculatePlaysIncrement(basePlays2);
 
             var totalPlays = plays1 + plays2;
             var health1 = totalPlays > 0 ? Math.max(0, Math.min(100, (plays1 / totalPlays) * 100)) : 50;
             var health2 = 100 - health1;
 
+            if (self.battleAnimState) {
+                self.battleAnimState.h1 = health1;
+                self.battleAnimState.h2 = health2;
+                self.battleAnimState.time = timeLeft;
+            }
+
             var h1f = document.getElementById('health1Fill');
             var h2f = document.getElementById('health2Fill');
-            if (h1f) { h1f.style.width = health1 + '%'; }
-            if (h2f) { h2f.style.width = health2 + '%'; }
+            if (h1f) h1f.style.width = health1 + '%';
+            if (h2f) h2f.style.width = health2 + '%';
             var h1t = document.getElementById('health1Text');
             var h2t = document.getElementById('health2Text');
             if (h1t) h1t.textContent = Math.round(health1) + '%';
@@ -745,9 +751,22 @@ const GameEngine = {
             if (p1) p1.textContent = Math.round(plays1).toLocaleString('es-ES');
             if (p2) p2.textContent = Math.round(plays2).toLocaleString('es-ES');
 
+            var diff = Math.abs(health1 - health2);
+            if (statusEl) {
+                if (timeLeft <= 5) statusEl.innerHTML = '<span class="text-red-400 font-bold animate-pulse">⚡ FINAL ÉPICO</span>';
+                else if (diff < 5) statusEl.innerHTML = '<span class="text-yellow-400">🔥 Empate técnico</span>';
+                else if (health1 > health2) statusEl.innerHTML = '<span class="text-cyan-400">🎵 Tu canción domina</span>';
+                else statusEl.innerHTML = '<span class="text-fuchsia-400">🎵 CPU toma la delantera</span>';
+            }
+
+            var img1 = document.getElementById('fighter1Img');
+            var img2 = document.getElementById('fighter2Img');
+            if (img1) img1.style.boxShadow = '0 0 ' + (15 + health1 * 0.3) + 'px rgba(0,243,255,' + (0.3 + health1 * 0.005) + ')';
+            if (img2) img2.style.boxShadow = '0 0 ' + (15 + health2 * 0.3) + 'px rgba(236,72,153,' + (0.3 + health2 * 0.005) + ')';
+
             if (timeLeft <= 0) {
                 clearInterval(battleInterval);
-                this.endPracticeLocally(match, plays1, plays2);
+                self.endPracticeLocally(match, plays1, plays2);
             }
         }, 1000);
     },
@@ -757,20 +776,35 @@ const GameEngine = {
         var userWon = winner === 1;
         this.stopUserSong();
 
+        if (this.battleAnimState) {
+            this.battleAnimState.finished = true;
+            this.battleAnimState.winner = winner;
+        }
+        this.spawnVictoryParticles(winner);
+
         var winnerSong = winner === 1 ? match.player1_song_preview : match.player2_song_preview;
         this.playVictorySong(winnerSong);
+
+        var statusEl = document.getElementById('battleStatusText');
+        if (statusEl) {
+            statusEl.innerHTML = userWon
+                ? '<span class="text-cyan-400 font-bold text-lg">🏆 ¡Tu canción gana! +50 MTR</span>'
+                : '<span class="text-red-400 font-bold text-lg">😔 CPU gana esta vez</span>';
+        }
 
         if (userWon) {
             this.setPracticeDemoBalance(this.practiceDemoBalance + 50);
             console.log('[practice] User won! +50 MTR demo');
+        } else {
+            console.log('[practice] CPU won');
         }
         this.updatePracticeBetDisplay();
-        this.finalizeBattleRhythmAnimation(winner);
 
         var payouts = { platformFee: 0, winnerPayout: userWon ? 50 : 0 };
-        setTimeout(() => {
-            this.showVictoryScreen(match, winner, userWon, payouts);
-        }, this.victoryAudioDuration * 1000);
+        var self = this;
+        setTimeout(function () {
+            self.showVictoryScreen(match, winner, userWon, payouts);
+        }, 5000);
     },
     
     // ==========================================
@@ -939,77 +973,178 @@ const GameEngine = {
         }
     },
     
+    battleAnimState: null,
+    battleAnimFrameId: null,
+    battleParticles: [],
+
     createBattleUI(match) {
         const container = document.querySelector('main') || document.querySelector('.container');
-        
-        const battleHTML = `
-            <section id="battleArena" class="battle-section">
-                <div class="battle-arena-grid">
-                    <!-- Fighter 1 -->
-                    <div class="battle-card blue">
-                        <div class="battle-avatar">
-                            <img src="${match.player1_song_image}" alt="${match.player1_song_name}">
+        if (!container) { console.error('[battle] No container found'); return; }
+
+        const pot = (match.player1_bet || 0) + (match.player2_bet || 0);
+        container.innerHTML = `
+        <section id="battleArena" class="max-w-5xl mx-auto py-6 px-4">
+            <div class="text-center mb-4">
+                <div class="inline-flex items-center gap-3 px-6 py-2 rounded-full bg-white/5 border border-white/10 mb-2">
+                    <span class="text-xs text-gray-400 uppercase tracking-widest">Batalla en curso</span>
+                    <span class="text-3xl font-black text-white tabular-nums" id="battleTimer">${this.battleDuration}</span>
+                    <span class="text-xs text-gray-400">seg</span>
+                </div>
+                <div class="text-sm text-gray-500">💰 Pot: ${pot} MTR</div>
+            </div>
+
+            <div class="relative rounded-2xl overflow-hidden border border-cyan-500/20 bg-black/60 mb-6" style="height:340px" id="battleCanvasWrap">
+                <canvas id="battleCanvas" class="absolute inset-0 w-full h-full"></canvas>
+                <div class="absolute inset-0 flex items-center justify-between px-6 sm:px-12 z-10 pointer-events-none">
+                    <div class="text-center" id="fighter1Card">
+                        <div class="relative inline-block">
+                            <img src="${match.player1_song_image}" alt="" class="w-20 h-20 sm:w-28 sm:h-28 rounded-full object-cover border-4 border-cyan-400" style="box-shadow:0 0 25px rgba(0,243,255,0.5)" id="fighter1Img">
+                            <div class="absolute -bottom-1 -right-1 w-7 h-7 rounded-full bg-cyan-500 text-black text-xs font-black flex items-center justify-center" id="fighter1Badge">♪</div>
                         </div>
-                        <h3 class="battle-name">${match.player1_song_name}</h3>
-                        <p class="battle-artist">${match.player1_song_artist}</p>
-                        <div class="health-bar">
-                            <div class="health-fill blue" id="health1Fill" style="width: 100%">
-                                <span class="health-text" id="health1Text">100%</span>
-                            </div>
-                        </div>
-                        <div class="battle-plays">🎧 Reproducciones: <span id="plays1">0</span></div>
-                        <div class="battle-bet">💰 ${match.player1_bet} MTR</div>
+                        <h3 class="text-white font-bold text-sm sm:text-base mt-2 max-w-[140px] truncate">${match.player1_song_name}</h3>
+                        <p class="text-cyan-400 text-xs">${match.player1_song_artist}</p>
+                        <p class="text-gray-400 text-xs mt-1">🎧 <span id="plays1">0</span></p>
                     </div>
-                    
-                    <!-- VS -->
-                    <div class="vs-divider">
-                        <div class="vs-circle">
-                            <span class="vs-text">VS</span>
-                            <span class="timer" id="battleTimer">60</span>
-                        </div>
-                        <div id="battleRhythm" class="battle-rhythm beat-a" aria-label="Animación de batalla musical">
-                            <div class="rhythm-fighter left" aria-hidden="true">
-                                <span class="fighter-head"><span class="fighter-face">😐</span></span>
-                                <span class="fighter-body"></span>
-                                <span class="fighter-arm front"></span>
-                                <span class="fighter-arm back"></span>
-                                <span class="fighter-leg front"></span>
-                                <span class="fighter-leg back"></span>
-                                <span class="fighter-hit" id="leftHitFx">♪</span>
-                            </div>
-                            <div class="rhythm-stage" aria-hidden="true"></div>
-                            <div class="rhythm-fighter right" aria-hidden="true">
-                                <span class="fighter-head"><span class="fighter-face">😐</span></span>
-                                <span class="fighter-body"></span>
-                                <span class="fighter-arm front"></span>
-                                <span class="fighter-arm back"></span>
-                                <span class="fighter-leg front"></span>
-                                <span class="fighter-leg back"></span>
-                                <span class="fighter-hit" id="rightHitFx">♫</span>
-                            </div>
-                        </div>
+                    <div class="flex flex-col items-center gap-1">
+                        <span class="text-5xl sm:text-7xl font-black text-white/10">VS</span>
                     </div>
-                    
-                    <!-- Fighter 2 -->
-                    <div class="battle-card red">
-                        <div class="battle-avatar">
-                            <img src="${match.player2_song_image}" alt="${match.player2_song_name}">
+                    <div class="text-center" id="fighter2Card">
+                        <div class="relative inline-block">
+                            <img src="${match.player2_song_image}" alt="" class="w-20 h-20 sm:w-28 sm:h-28 rounded-full object-cover border-4 border-fuchsia-400" style="box-shadow:0 0 25px rgba(236,72,153,0.5)" id="fighter2Img">
+                            <div class="absolute -bottom-1 -right-1 w-7 h-7 rounded-full bg-fuchsia-500 text-white text-xs font-black flex items-center justify-center" id="fighter2Badge">♫</div>
                         </div>
-                        <h3 class="battle-name">${match.player2_song_name}</h3>
-                        <p class="battle-artist">${match.player2_song_artist}</p>
-                        <div class="health-bar">
-                            <div class="health-fill red" id="health2Fill" style="width: 100%">
-                                <span class="health-text" id="health2Text">100%</span>
-                            </div>
-                        </div>
-                        <div class="battle-plays">🎧 Reproducciones: <span id="plays2">0</span></div>
-                        <div class="battle-bet">💰 ${match.player2_bet} MTR</div>
+                        <h3 class="text-white font-bold text-sm sm:text-base mt-2 max-w-[140px] truncate">${match.player2_song_name}</h3>
+                        <p class="text-fuchsia-400 text-xs">${match.player2_song_artist}</p>
+                        <p class="text-gray-400 text-xs mt-1">🎧 <span id="plays2">0</span></p>
                     </div>
                 </div>
-            </section>
-        `;
-        
-        container.innerHTML = battleHTML;
+            </div>
+
+            <div class="max-w-3xl mx-auto space-y-3 mb-4">
+                <div class="flex items-center gap-3">
+                    <span class="text-cyan-400 font-bold text-sm w-12 text-right tabular-nums" id="health1Text">50%</span>
+                    <div class="flex-1 h-5 bg-gray-800/80 rounded-full overflow-hidden relative">
+                        <div id="health1Fill" class="h-full rounded-full transition-all duration-700 ease-out" style="width:50%;background:linear-gradient(90deg,#06b6d4,#22d3ee);box-shadow:0 0 12px rgba(0,243,255,0.5)"></div>
+                    </div>
+                </div>
+                <div class="flex items-center gap-3">
+                    <span class="text-fuchsia-400 font-bold text-sm w-12 text-right tabular-nums" id="health2Text">50%</span>
+                    <div class="flex-1 h-5 bg-gray-800/80 rounded-full overflow-hidden relative">
+                        <div id="health2Fill" class="h-full rounded-full transition-all duration-700 ease-out" style="width:50%;background:linear-gradient(90deg,#d946ef,#ec4899);box-shadow:0 0 12px rgba(236,72,153,0.5)"></div>
+                    </div>
+                </div>
+            </div>
+            <div id="battleStatusText" class="text-center text-gray-500 text-sm"></div>
+        </section>`;
+
+        this.initBattleCanvas();
+        console.log('[battle] UI created with canvas');
+    },
+
+    initBattleCanvas() {
+        var canvas = document.getElementById('battleCanvas');
+        var wrap = document.getElementById('battleCanvasWrap');
+        if (!canvas || !wrap) return;
+        canvas.width = wrap.offsetWidth;
+        canvas.height = wrap.offsetHeight;
+        this.battleAnimState = { h1: 50, h2: 50, time: this.battleDuration, finished: false, winner: 0 };
+        this.battleParticles = [];
+        var self = this;
+        function loop() {
+            self.battleAnimFrameId = requestAnimationFrame(loop);
+            self.drawBattleFrame(canvas);
+        }
+        loop();
+    },
+
+    drawBattleFrame(canvas) {
+        var ctx = canvas.getContext('2d');
+        var w = canvas.width, h = canvas.height;
+        var st = this.battleAnimState;
+        if (!st) return;
+        var t = performance.now() * 0.001;
+        ctx.clearRect(0, 0, w, h);
+
+        for (var wave = 0; wave < 5; wave++) {
+            var baseY = h * 0.5 + (wave - 2) * 22;
+            var isCyan = wave % 2 === 0;
+            var lead = st.h1 - 50;
+            var alpha = 0.12 + Math.abs(lead) * 0.003 + Math.sin(t + wave) * 0.05;
+            ctx.beginPath();
+            ctx.strokeStyle = isCyan ? 'rgba(0,243,255,' + alpha + ')' : 'rgba(236,72,153,' + alpha + ')';
+            ctx.lineWidth = 1.2;
+            for (var x = 0; x <= w; x += 4) {
+                var amp = 12 + Math.abs(lead) * 0.3 + Math.sin(t * 0.3 + wave) * 6;
+                var y = baseY + Math.sin(x * 0.007 + t * 1.5 + wave * 0.9) * amp;
+                if (x === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+            }
+            ctx.stroke();
+        }
+
+        var cx = w * 0.5, cy = h * 0.5;
+        if (!st.finished) {
+            var lead1 = Math.max(0, st.h1 - 50) / 50;
+            var lead2 = Math.max(0, st.h2 - 50) / 50;
+            if (Math.random() < 0.15 + lead1 * 0.3) {
+                this.battleParticles.push({ x: w * 0.18, y: cy + (Math.random() - 0.5) * 80, vx: 1.5 + Math.random() * 2, vy: (Math.random() - 0.5) * 1.5, life: 1, decay: 0.015 + Math.random() * 0.01, size: 2 + Math.random() * 3, color: 'cyan' });
+            }
+            if (Math.random() < 0.15 + lead2 * 0.3) {
+                this.battleParticles.push({ x: w * 0.82, y: cy + (Math.random() - 0.5) * 80, vx: -(1.5 + Math.random() * 2), vy: (Math.random() - 0.5) * 1.5, life: 1, decay: 0.015 + Math.random() * 0.01, size: 2 + Math.random() * 3, color: 'magenta' });
+            }
+        }
+
+        for (var i = this.battleParticles.length - 1; i >= 0; i--) {
+            var p = this.battleParticles[i];
+            p.x += p.vx;
+            p.y += p.vy;
+            p.life -= p.decay;
+            if (p.life <= 0) { this.battleParticles.splice(i, 1); continue; }
+            ctx.beginPath();
+            ctx.arc(p.x, p.y, p.size * p.life, 0, Math.PI * 2);
+            var c = p.color === 'cyan' ? '0,243,255' : (p.color === 'gold' ? '255,215,0' : '236,72,153');
+            ctx.fillStyle = 'rgba(' + c + ',' + (p.life * 0.7) + ')';
+            ctx.shadowColor = 'rgba(' + c + ',0.5)';
+            ctx.shadowBlur = 8 * p.life;
+            ctx.fill();
+            ctx.shadowBlur = 0;
+        }
+
+        if (!st.finished && st.time <= 10) {
+            var pulse = Math.sin(t * 4) * 0.3 + 0.3;
+            ctx.fillStyle = 'rgba(255,50,50,' + (pulse * 0.08) + ')';
+            ctx.fillRect(0, 0, w, h);
+        }
+
+        if (st.finished) {
+            var winC = st.winner === 1 ? '0,243,255' : '236,72,153';
+            var pulse2 = Math.sin(t * 3) * 0.15 + 0.15;
+            var grad = ctx.createRadialGradient(st.winner === 1 ? w * 0.18 : w * 0.82, cy, 0, st.winner === 1 ? w * 0.18 : w * 0.82, cy, 200);
+            grad.addColorStop(0, 'rgba(' + winC + ',' + (pulse2 + 0.1) + ')');
+            grad.addColorStop(1, 'rgba(' + winC + ',0)');
+            ctx.fillStyle = grad;
+            ctx.fillRect(0, 0, w, h);
+        }
+    },
+
+    spawnVictoryParticles(winner) {
+        var canvas = document.getElementById('battleCanvas');
+        if (!canvas) return;
+        var w = canvas.width, h = canvas.height;
+        var ox = winner === 1 ? w * 0.18 : w * 0.82;
+        var oy = h * 0.5;
+        var color = winner === 1 ? 'cyan' : 'magenta';
+        for (var i = 0; i < 60; i++) {
+            var angle = Math.random() * Math.PI * 2;
+            var speed = 2 + Math.random() * 5;
+            this.battleParticles.push({ x: ox, y: oy, vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed, life: 1, decay: 0.008 + Math.random() * 0.008, size: 3 + Math.random() * 5, color: Math.random() > 0.3 ? color : 'gold' });
+        }
+    },
+
+    destroyBattleCanvas() {
+        if (this.battleAnimFrameId) cancelAnimationFrame(this.battleAnimFrameId);
+        this.battleAnimFrameId = null;
+        this.battleAnimState = null;
+        this.battleParticles = [];
     },
     
     async runBattle(match) {
@@ -1217,32 +1352,76 @@ const GameEngine = {
     },
     
     showVictoryScreen(match, winner, userWon, payouts) {
-        const winnerName = winner === 1 ? match.player1_song_name : match.player2_song_name;
-        const prize = userWon ? payouts.winnerPayout : 0;
-        const platformWallet = this.getPlatformWalletAddress();
-        const payoutNetwork = 'base';
-        
-        const container = document.querySelector('main') || document.querySelector('.container');
-        container.innerHTML = `
-            <div class="victory-screen">
-                <div class="victory-icon">${userWon ? '🏆' : '😔'}</div>
-                <h1 class="victory-title">${userWon ? '¡VICTORIA!' : 'Derrota'}</h1>
-                <h2 class="victory-winner">${winnerName}</h2>
-                ${prize > 0 ? `<p class="victory-prize">+${prize} MTR</p>` : ''}
-                ${match.match_type !== 'practice' ? `
-                    <div class="victory-breakdown">
-                        <p>Comisión plataforma: ${payouts.platformFee} MTR</p>
-                        <p>Pago al ganador: ${payouts.winnerPayout} MTR</p>
-                        <p>Red de cobro: ${payoutNetwork.toUpperCase()}</p>
-                        <p>Billetera plataforma: ${platformWallet}</p>
-                    </div>
-                ` : ''}
-                ${this.lastPrizeTxHash ? `<p class="victory-prize">Premio enviado! Tx: <a href="https://basescan.org/tx/${this.lastPrizeTxHash}" target="_blank" rel="noopener noreferrer">${this.lastPrizeTxHash}</a></p>` : ''}
-                <button onclick="${match.match_type === 'practice' ? 'GameEngine.goToPracticeSelection()' : 'location.reload()'}" class="btn-primary btn-large">
-                    ${match.match_type === 'practice' ? 'Continuar en práctica' : 'Jugar de Nuevo'}
-                </button>
-            </div>
-        `;
+        this.destroyBattleCanvas();
+        var winnerName = winner === 1 ? match.player1_song_name : match.player2_song_name;
+        var winnerImg = winner === 1 ? match.player1_song_image : match.player2_song_image;
+        var prize = userWon ? payouts.winnerPayout : 0;
+        var isPractice = match.match_type === 'practice';
+        var accentColor = userWon ? 'cyan' : 'fuchsia';
+        var glowClass = userWon ? 'shadow-[0_0_40px_rgba(0,243,255,0.4)]' : 'shadow-[0_0_40px_rgba(239,68,68,0.3)]';
+
+        var container = document.querySelector('main') || document.querySelector('.container');
+        container.innerHTML = '<section id="victorySection" class="max-w-3xl mx-auto py-12 px-4 text-center relative min-h-[500px]">' +
+            '<canvas id="victoryCanvas" class="absolute inset-0 w-full h-full pointer-events-none rounded-2xl"></canvas>' +
+            '<div class="relative z-10">' +
+            '<div class="text-7xl sm:text-8xl mb-4" style="animation:bounce 0.6s ease-out">' + (userWon ? '🏆' : '😔') + '</div>' +
+            '<h1 class="text-4xl sm:text-6xl font-black mb-3 ' + (userWon ? 'text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 via-white to-fuchsia-400' : 'text-red-400') + '" style="animation:fadeInUp 0.5s ease-out">' + (userWon ? '¡VICTORIA!' : 'Derrota') + '</h1>' +
+            '<div class="flex items-center justify-center gap-4 mb-4">' +
+            '<img src="' + winnerImg + '" class="w-16 h-16 rounded-full border-2 border-' + accentColor + '-400 ' + glowClass + '">' +
+            '<h2 class="text-xl sm:text-2xl font-bold text-white">' + winnerName + '</h2>' +
+            '</div>' +
+            (prize > 0 ? '<p class="text-3xl sm:text-4xl font-black text-cyan-400 mb-6" style="text-shadow:0 0 20px rgba(0,243,255,0.5);animation:pulse 1s ease-in-out infinite">+' + prize + ' MTR</p>' : '<p class="text-lg text-gray-400 mb-6">Mejor suerte la próxima vez</p>') +
+            (!isPractice && payouts.platformFee ? '<div class="text-sm text-gray-500 mb-6 space-y-1"><p>Comisión: ' + payouts.platformFee + ' MTR</p><p>Pago ganador: ' + payouts.winnerPayout + ' MTR</p></div>' : '') +
+            (this.lastPrizeTxHash ? '<p class="text-sm text-cyan-400 mb-4">Tx: <a href="https://basescan.org/tx/' + this.lastPrizeTxHash + '" target="_blank" class="underline">' + this.lastPrizeTxHash.slice(0, 14) + '...</a></p>' : '') +
+            '<button onclick="' + (isPractice ? 'GameEngine.goToPracticeSelection()' : 'location.reload()') + '" class="px-8 py-3 rounded-xl text-lg font-bold bg-gradient-to-r from-cyan-500 to-fuchsia-500 text-white hover:opacity-90 transition-all shadow-lg shadow-cyan-500/25 cursor-pointer">' +
+            (isPractice ? '🎯 Continuar en práctica' : '🔄 Jugar de Nuevo') +
+            '</button>' +
+            '</div></section>';
+
+        this.initVictoryCanvas(userWon);
+    },
+
+    initVictoryCanvas(userWon) {
+        var canvas = document.getElementById('victoryCanvas');
+        var section = document.getElementById('victorySection');
+        if (!canvas || !section) return;
+        canvas.width = section.offsetWidth;
+        canvas.height = section.offsetHeight;
+        var particles = [];
+        var w = canvas.width, h = canvas.height;
+        var colors = userWon ? ['0,243,255', '255,215,0', '192,132,252', '34,211,238'] : ['239,68,68', '156,163,175', '107,114,128'];
+
+        for (var i = 0; i < (userWon ? 80 : 20); i++) {
+            particles.push({ x: Math.random() * w, y: -20 - Math.random() * 100, vx: (Math.random() - 0.5) * 2, vy: 1 + Math.random() * 3, size: 2 + Math.random() * 4, color: colors[Math.floor(Math.random() * colors.length)], life: 1, decay: 0.002 + Math.random() * 0.003, rotation: Math.random() * Math.PI * 2, spin: (Math.random() - 0.5) * 0.1 });
+        }
+
+        var ctx = canvas.getContext('2d');
+        var frameId = null;
+        function draw() {
+            frameId = requestAnimationFrame(draw);
+            ctx.clearRect(0, 0, w, h);
+            for (var i = particles.length - 1; i >= 0; i--) {
+                var p = particles[i];
+                p.x += p.vx;
+                p.y += p.vy;
+                p.rotation += p.spin;
+                p.life -= p.decay;
+                if (p.life <= 0 || p.y > h + 20) {
+                    if (userWon) { p.x = Math.random() * w; p.y = -10; p.life = 1; }
+                    else { particles.splice(i, 1); continue; }
+                }
+                ctx.save();
+                ctx.translate(p.x, p.y);
+                ctx.rotate(p.rotation);
+                ctx.fillStyle = 'rgba(' + p.color + ',' + (p.life * 0.8) + ')';
+                ctx.shadowColor = 'rgba(' + p.color + ',0.4)';
+                ctx.shadowBlur = 6;
+                ctx.fillRect(-p.size / 2, -p.size / 2, p.size, p.size * 0.6);
+                ctx.restore();
+            }
+            if (!particles.length && frameId) cancelAnimationFrame(frameId);
+        }
+        draw();
     },
     
     // ==========================================

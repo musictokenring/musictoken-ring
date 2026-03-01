@@ -129,6 +129,10 @@
         .btn-login { padding: 8px 16px; border-radius: 8px; font-size: 14px; font-weight: 600; color: #c084fc; background: rgba(192,132,252,0.1); border: 1px solid rgba(192,132,252,0.25); cursor: pointer; transition: all 0.2s; }
         .btn-login:hover { background: rgba(192,132,252,0.2); }
 
+        @keyframes fadeInUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+        @keyframes bounce { 0% { transform: scale(0.3); opacity: 0; } 50% { transform: scale(1.1); } 100% { transform: scale(1); opacity: 1; } }
+        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.7; } }
+
     </style>
 </head>
 
