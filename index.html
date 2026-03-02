@@ -1162,13 +1162,184 @@
             }
         }
 
-        async function connectWallet() {
-            if (!window.ethereum) {
-                console.warn('[wallet] window.ethereum not found — MetaMask not installed');
+        // Detectar si estamos en dispositivo móvil
+        function isMobileDevice() {
+            return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || 
+                   (window.innerWidth <= 768);
+        }
+
+        // Detectar wallets móviles disponibles
+        function detectMobileWallets() {
+            var wallets = [];
+            var userAgent = navigator.userAgent.toLowerCase();
+            
+            // MetaMask móvil
+            if (userAgent.includes('metamask') || userAgent.includes('mmsb')) {
+                wallets.push({ name: 'MetaMask', id: 'metamask', icon: '🦊', deepLink: 'metamask://wc?uri=' });
+            } else {
+                wallets.push({ name: 'MetaMask', id: 'metamask', icon: '🦊', deepLink: 'metamask://wc?uri=' });
+            }
+            
+            // Trust Wallet
+            wallets.push({ name: 'Trust Wallet', id: 'trust', icon: '🔷', deepLink: 'trust://wc?uri=' });
+            
+            // Coinbase Wallet
+            wallets.push({ name: 'Coinbase Wallet', id: 'coinbase', icon: '🔵', deepLink: 'cbwallet://wc?uri=' });
+            
+            // Rainbow Wallet
+            wallets.push({ name: 'Rainbow', id: 'rainbow', icon: '🌈', deepLink: 'rainbow://wc?uri=' });
+            
+            // WalletConnect (universal)
+            wallets.push({ name: 'WalletConnect', id: 'walletconnect', icon: '🔗', deepLink: null });
+            
+            return wallets;
+        }
+
+        // Mostrar modal de selección de wallet en móvil
+        function showMobileWalletModal() {
+            var wallets = detectMobileWallets();
+            var modal = document.getElementById('mobileWalletModal');
+            
+            if (!modal) {
+                // Crear el modal si no existe
+                modal = document.createElement('div');
+                modal.id = 'mobileWalletModal';
+                modal.className = 'fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm';
+                modal.innerHTML = `
+                    <div class="bg-gray-900 border border-cyan-500/30 rounded-xl p-6 max-w-sm w-full mx-4 shadow-2xl">
+                        <div class="flex justify-between items-center mb-4">
+                            <h3 class="text-xl font-bold text-white">Conectar Wallet</h3>
+                            <button onclick="closeMobileWalletModal()" class="text-gray-400 hover:text-white text-2xl leading-none">&times;</button>
+                        </div>
+                        <p class="text-gray-400 text-sm mb-6">Selecciona tu wallet para conectar</p>
+                        <div id="walletList" class="space-y-2"></div>
+                        <p class="text-gray-500 text-xs mt-4 text-center">Si ya tienes una wallet conectada, recarga la página</p>
+                    </div>
+                `;
+                document.body.appendChild(modal);
+                
+                // Cerrar al hacer clic fuera del modal
+                modal.addEventListener('click', function(e) {
+                    if (e.target === modal) {
+                        closeMobileWalletModal();
+                    }
+                });
+            }
+            
+            var walletList = document.getElementById('walletList');
+            walletList.innerHTML = '';
+            
+            wallets.forEach(function(wallet) {
+                var walletBtn = document.createElement('button');
+                walletBtn.className = 'w-full flex items-center gap-3 p-4 rounded-lg bg-gray-800/50 border border-gray-700 hover:border-cyan-500/50 hover:bg-gray-800 transition-all text-left';
+                walletBtn.innerHTML = `
+                    <span class="text-2xl">${wallet.icon}</span>
+                    <div class="flex-1">
+                        <span class="text-white font-semibold block">${wallet.name}</span>
+                        <span class="text-gray-400 text-xs">Toca para conectar</span>
+                    </div>
+                `;
+                walletBtn.onclick = function() { connectMobileWallet(wallet); };
+                walletList.appendChild(walletBtn);
+            });
+            
+            modal.classList.remove('hidden');
+        }
+
+        // Cerrar modal de wallets móviles (accesible globalmente)
+        window.closeMobileWalletModal = function closeMobileWalletModal() {
+            var modal = document.getElementById('mobileWalletModal');
+            if (modal) {
+                modal.classList.add('hidden');
+            }
+        };
+
+        // Conectar wallet móvil usando deep linking
+        function connectMobileWallet(wallet) {
+            closeMobileWalletModal();
+            
+            if (wallet.id === 'walletconnect') {
+                // WalletConnect requiere configuración adicional
                 if (typeof showToast === 'function') {
-                    showToast('Instala MetaMask para conectar tu wallet en Base', 'error');
+                    showToast('WalletConnect requiere configuración adicional. Usa una wallet específica.', 'info');
+                }
+                return;
+            }
+            
+            // Intentar conectar usando window.ethereum primero (si está disponible)
+            if (window.ethereum) {
+                connectWallet();
+                return;
+            }
+            
+            // Mostrar mensaje informativo
+            if (typeof showToast === 'function') {
+                showToast('Abriendo ' + wallet.name + '...', 'info');
+            }
+            
+            // Deep linking para wallets móviles
+            // Para MetaMask, usar el formato correcto
+            var deepLink;
+            if (wallet.id === 'metamask') {
+                // MetaMask móvil usa un formato especial
+                deepLink = 'https://metamask.app.link/dapp/' + encodeURIComponent(window.location.href);
+            } else if (wallet.id === 'trust') {
+                deepLink = 'https://link.trustwallet.com/open_url?coin_id=60&url=' + encodeURIComponent(window.location.href);
+            } else if (wallet.id === 'coinbase') {
+                deepLink = 'https://go.cb-w.com/dapp?cb_url=' + encodeURIComponent(window.location.href);
+            } else {
+                deepLink = wallet.deepLink + encodeURIComponent(window.location.href);
+            }
+            
+            // Intentar abrir la wallet app
+            var opened = false;
+            var timeout = setTimeout(function() {
+                if (!opened && typeof showToast === 'function') {
+                    showToast('Abre ' + wallet.name + ' manualmente y vuelve a esta página', 'info');
+                }
+            }, 3000);
+            
+            // Intentar abrir la app
+            window.location.href = deepLink;
+            opened = true;
+            
+            // Detectar cuando regresamos a la página
+            var checkInterval = setInterval(function() {
+                if (window.ethereum) {
+                    clearInterval(checkInterval);
+                    clearTimeout(timeout);
+                    setTimeout(function() {
+                        connectWallet();
+                    }, 500);
+                }
+            }, 500);
+            
+            // Limpiar después de 30 segundos
+            setTimeout(function() {
+                clearInterval(checkInterval);
+                clearTimeout(timeout);
+            }, 30000);
+        }
+
+        async function connectWallet() {
+            // Si estamos en móvil y no hay window.ethereum, mostrar modal de selección
+            if (isMobileDevice() && !window.ethereum) {
+                showMobileWalletModal();
+                return;
+            }
+            
+            if (!window.ethereum) {
+                console.warn('[wallet] window.ethereum not found');
+                // En desktop, mostrar mensaje de instalación
+                if (!isMobileDevice()) {
+                    if (typeof showToast === 'function') {
+                        showToast('Instala MetaMask para conectar tu wallet en Base', 'error');
+                    } else {
+                        alert('Instala MetaMask para conectar tu wallet en Base');
+                    }
                 } else {
-                    alert('Instala MetaMask para conectar tu wallet en Base');
+                    // En móvil, mostrar modal de wallets
+                    showMobileWalletModal();
                 }
                 return;
             }
@@ -1247,7 +1418,28 @@
             initWalletButton();
         }
 
+        // Detectar cuando window.ethereum se vuelve disponible (útil en móviles)
+        var ethereumCheckInterval = setInterval(function() {
+            if (window.ethereum && !window.__mtrEthereumDetected) {
+                window.__mtrEthereumDetected = true;
+                console.log('[wallet] window.ethereum detectado');
+                
+                // Si estamos en móvil y el usuario acaba de regresar, intentar conectar automáticamente
+                if (isMobileDevice() && !connectedAddress) {
+                    setTimeout(function() {
+                        connectWallet();
+                    }, 1000);
+                }
+            }
+        }, 500);
+        
+        // Limpiar el intervalo después de 30 segundos
+        setTimeout(function() {
+            clearInterval(ethereumCheckInterval);
+        }, 30000);
+
         if (window.ethereum?.on) {
+            window.__mtrEthereumDetected = true;
             window.ethereum.on('accountsChanged', async function (accounts) {
                 connectedAddress = accounts?.[0] || null;
                 var onBase = connectedAddress ? await ensureBaseChain() : false;
