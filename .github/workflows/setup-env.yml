@@ -1,0 +1,119 @@
+name: Setup Environment Variables
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - '.env.example'
+      - 'scripts/setup-env-vars.*'
+  workflow_dispatch:
+
+jobs:
+  setup-env:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Validate .env.example
+        run: |
+          if [ ! -f .env.example ]; then
+            echo "❌ .env.example no encontrado"
+            exit 1
+          fi
+          echo "✅ .env.example encontrado"
+          
+          # Verificar que todas las variables requeridas estén documentadas
+          required_vars=(
+            "SUPABASE_URL"
+            "SUPABASE_SERVICE_ROLE_KEY"
+            "ADMIN_WALLET_PRIVATE_KEY"
+            "ADMIN_WALLET_ADDRESS"
+          )
+          
+          for var in "${required_vars[@]}"; do
+            if ! grep -q "^$var=" .env.example; then
+              echo "⚠️  Variable requerida no encontrada: $var"
+            fi
+          done
+
+      - name: Setup Vercel Environment Variables
+        if: github.event_name == 'workflow_dispatch'
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+        run: |
+          echo "📦 Configurando variables en Vercel..."
+          
+          # Nota: Las variables sensibles deben configurarse manualmente en Vercel Dashboard
+          # Este workflow solo valida la configuración
+          
+          if [ -z "$VERCEL_TOKEN" ]; then
+            echo "⚠️  VERCEL_TOKEN no configurado en secrets"
+            exit 0
+          fi
+          
+          echo "✅ Vercel token configurado"
+          echo "💡 Configura las variables manualmente en: https://vercel.com/dashboard"
+
+      - name: Setup Render Environment Variables
+        if: github.event_name == 'workflow_dispatch'
+        env:
+          RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
+          RENDER_SERVICE_ID: ${{ secrets.RENDER_SERVICE_ID }}
+        run: |
+          echo "📦 Configurando variables en Render..."
+          
+          if [ -z "$RENDER_API_KEY" ]; then
+            echo "⚠️  RENDER_API_KEY no configurado en secrets"
+            exit 0
+          fi
+          
+          echo "✅ Render API key configurado"
+          echo "💡 Usa el script scripts/setup-env-vars.sh para configurar variables"
+
+      - name: Create PR Comment
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const fs = require('fs');
+            const envExample = fs.readFileSync('.env.example', 'utf8');
+            
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: `## 🔧 Configuración de Variables de Entorno
+              
+              Este PR incluye la configuración de variables de entorno para el sistema de automatización.
+              
+              ### 📋 Variables Requeridas
+              
+              Las siguientes variables deben configurarse en tu plataforma de despliegue:
+              
+              \`\`\`
+              ${envExample}
+              \`\`\`
+              
+              ### 🚀 Pasos para Configurar
+              
+              1. **Vercel**: Ve a Project Settings → Environment Variables
+              2. **Render**: Ve a Environment → Environment Variables
+              3. **Local**: Copia \`.env.example\` a \`.env\` y completa los valores
+              
+              ### ⚠️ Variables Sensibles
+              
+              Las siguientes variables contienen información sensible y deben configurarse manualmente:
+              - \`SUPABASE_SERVICE_ROLE_KEY\`
+              - \`ADMIN_WALLET_PRIVATE_KEY\`
+              
+              ### 📝 Scripts Disponibles
+              
+              - \`scripts/setup-env-vars.sh\` (Linux/Mac)
+              - \`scripts/setup-env-vars.ps1\` (Windows)
+              
+              Ejecuta estos scripts después de configurar las variables de entorno locales.`
+            });
