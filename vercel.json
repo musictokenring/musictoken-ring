@@ -4,20 +4,29 @@
     {
       "src": "backend/server-auto.js",
       "use": "@vercel/node"
+    },
+    {
+      "src": "package.json",
+      "use": "@vercel/static-build",
+      "config": {
+        "distDir": "."
+      }
     }
   ],
   "routes": [
     {
       "src": "/api/(.*)",
       "dest": "backend/server-auto.js"
+    },
+    {
+      "src": "/(.*)",
+      "dest": "/$1"
     }
   ],
-  "env": {
-    "NODE_ENV": "production"
-  },
-  "build": {
-    "env": {
-      "NODE_ENV": "production"
+  "rewrites": [
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
     }
-  }
+  ]
 }
