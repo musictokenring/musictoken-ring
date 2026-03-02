@@ -169,6 +169,10 @@
 
                 <div class="flex items-center gap-2 sm:gap-4 text-sm">
                     <span id="onchainBalanceDisplay" class="hidden sm:inline px-2 py-1 rounded-md bg-cyan-500/10 text-cyan-400 text-xs font-semibold">On-chain: --</span>
+                    <span id="creditsCombinedDisplay" class="hidden sm:inline px-2 py-1 rounded-md bg-fuchsia-500/10 text-fuchsia-400 text-xs font-semibold flex items-center gap-2">
+                        <span id="creditsDisplay">0 créditos</span>
+                        <span id="usdcValueDisplay" class="text-gray-400">≈ $0 USDC</span>
+                    </span>
                     <span id="appBalanceDisplay" class="hidden sm:inline px-2 py-1 rounded-md bg-fuchsia-500/10 text-fuchsia-400 text-xs font-semibold">Jugable: --</span>
                     <span id="walletAddress" class="hidden text-cyan-300 font-mono text-xs bg-cyan-500/10 px-2 py-1 rounded-md"></span>
                     <button type="button" id="walletConnectBtn" class="px-4 py-2 rounded-lg text-sm font-semibold bg-cyan-500/10 border border-cyan-500/30 text-cyan-400 hover:bg-cyan-500/20 transition-all duration-200 cursor-pointer">
@@ -607,6 +611,10 @@
     <!-- ==================== SCRIPTS ==================== -->
     <script src="./auth-system.js?v=v2.1"></script>
     <script src="./src/streams-realtime.js?v=v2.1"></script>
+    <script src="./src/credits-system.js"></script>
+    <script src="./src/wallet-credits-integration.js"></script>
+    <script src="./src/deposit-ui.js"></script>
+    <script src="./src/claim-ui.js"></script>
     <script src="./game-engine.js?v=v2.1"></script>
     <script>window.MTR_INLINE_TOP_STREAMS_ACTIVE = true;</script>
     <script src="./app.js?v=v2.1"></script>
@@ -1118,6 +1126,7 @@
             var walletEl = document.getElementById('walletAddress');
             var btnEl = document.getElementById('walletConnectBtn');
             var warningEl = document.getElementById('walletNetworkWarning');
+            var creditsDisplay = document.getElementById('creditsCombinedDisplay');
             if (!walletEl || !btnEl) return;
             if (connectedAddress) {
                 walletEl.textContent = connectedAddress.slice(0, 6) + '...' + connectedAddress.slice(-4);
@@ -1125,12 +1134,24 @@
                 btnEl.textContent = connectedChainId === 8453 ? 'Wallet conectada' : 'Cambiar a Base';
                 if (warningEl) warningEl.classList.toggle('hidden', connectedChainId === 8453);
                 localStorage.setItem('mtr_wallet', connectedAddress);
+                
+                // Initialize credits system when wallet is connected
+                if (window.CreditsSystem && typeof window.CreditsSystem.init === 'function') {
+                    window.CreditsSystem.init(connectedAddress);
+                    if (creditsDisplay) creditsDisplay.classList.remove('hidden');
+                }
             } else {
                 walletEl.classList.add('hidden');
                 btnEl.textContent = 'Conectar Wallet';
                 if (warningEl) warningEl.classList.add('hidden');
+                if (creditsDisplay) creditsDisplay.classList.add('hidden');
                 window.__mtrOnChainBalance = 0;
                 setOnchainBalanceError('Wallet no conectada');
+                
+                // Stop credits updates
+                if (window.CreditsSystem && typeof window.CreditsSystem.stopPeriodicUpdates === 'function') {
+                    window.CreditsSystem.stopPeriodicUpdates();
+                }
             }
         }
 
