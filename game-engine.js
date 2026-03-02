@@ -195,20 +195,38 @@ const GameEngine = {
         }
         return true;
     },
+
+    /**
+     * Check if user has sufficient credits for betting
+     */
+    async hasSufficientCredits(betAmount) {
+        if (!window.CreditsSystem) {
+            console.warn('[game-engine] CreditsSystem not available, falling back to balance check');
+            return this.hasSufficientBalance(betAmount);
+        }
+
+        const credits = window.CreditsSystem.currentCredits || 0;
+        if (Number(betAmount) > credits) {
+            showToast(`Créditos insuficientes. Disponible: ${credits.toFixed(2)} créditos`, 'error');
+            return false;
+        }
+        return true;
+    },
     
     // ==========================================
     // MODO RÁPIDO (Quick Match)
     // ==========================================
     
     async joinQuickMatch(song, betAmount) {
-        // Validate minimum bet (100 MTR)
+        // Validate minimum bet (100 credits)
         const normalizedBet = Math.max(this.minBet, Math.round(betAmount || this.minBet));
         if (normalizedBet < this.minBet) {
-            showToast(`Apuesta mínima: ${this.minBet} MTR`, 'error');
+            showToast(`Apuesta mínima: ${this.minBet} créditos`, 'error');
             return;
         }
         
-        if (!this.hasSufficientBalance(normalizedBet)) {
+        // Check credits balance instead of on-chain balance
+        if (!(await this.hasSufficientCredits(normalizedBet))) {
             return;
         }
         
@@ -1370,11 +1388,12 @@ const GameEngine = {
         // Procesar premios
         if (match.match_type !== 'practice') {
             if (userWon) {
+                // Award credits instead of MTR directly
+                const creditsWon = payouts.winnerPayout; // Credits amount
+                await this.awardCredits(creditsWon, match.id);
+                
+                // Also update legacy balance for compatibility
                 await this.updateBalance(payouts.winnerPayout, 'win', match.id);
-                const winnerWallet = this.connectedWallet || localStorage.getItem('mtr_wallet') || null;
-                if (winnerWallet) {
-                    await this.sendPrizeToWinner(winnerWallet, payouts.winnerPayout, match.id);
-                }
             }
             this.addToPlatformRevenue(payouts.platformFee);
             await this.logPlatformFeeTransaction(match.id, payouts.platformFee);
@@ -2206,9 +2225,75 @@ const GameEngine = {
     // BALANCE
     // ==========================================
     
+    /**
+     * Award credits to user (for wins)
+     */
+    async awardCredits(credits, matchId = null) {
+        try {
+            const walletAddress = this.connectedWallet || localStorage.getItem('mtr_wallet');
+            if (!walletAddress || !window.CreditsSystem) {
+                console.warn('[game-engine] Cannot award credits: wallet or CreditsSystem not available');
+                return;
+            }
+
+            // Deduct bet credits first (if not already deducted)
+            // Then add winnings
+            
+            // Update credits via backend
+            const backendUrl = window.CONFIG?.BACKEND_API || 'https://musictoken-backend.onrender.com';
+            const userId = await window.CreditsSystem.getUserId(walletAddress);
+            
+            if (userId) {
+                // Record win in database
+                const { data: { session } } = await supabaseClient.auth.getSession();
+                if (session?.user?.id) {
+                    await supabaseClient
+                        .from('match_wins')
+                        .insert([{
+                            user_id: session.user.id,
+                            match_id: matchId,
+                            credits_won: credits,
+                            created_at: new Date().toISOString()
+                        }]);
+                }
+
+                // Reload credits balance
+                await window.CreditsSystem.loadBalance(walletAddress);
+            }
+        } catch (error) {
+            console.error('[game-engine] Error awarding credits:', error);
+        }
+    },
+
     async updateBalance(amount, type, matchId = null) {
         try {
             const { data: { session } } = await supabaseClient.auth.getSession();
+            
+            // If betting, deduct credits instead
+            if (type === 'bet' && window.CreditsSystem) {
+                const walletAddress = this.connectedWallet || localStorage.getItem('mtr_wallet');
+                if (walletAddress) {
+                    // Deduct credits via backend
+                    const backendUrl = window.CONFIG?.BACKEND_API || 'https://musictoken-backend.onrender.com';
+                    const userId = await window.CreditsSystem.getUserId(walletAddress);
+                    
+                    if (userId) {
+                        // Deduct credits
+                        const response = await fetch(`${backendUrl}/api/user/deduct-credits`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                userId,
+                                credits: amount
+                            })
+                        });
+
+                        if (response.ok) {
+                            await window.CreditsSystem.loadBalance(walletAddress);
+                        }
+                    }
+                }
+            }
             
             const { data } = await supabaseClient
                 .rpc('update_user_balance', {
