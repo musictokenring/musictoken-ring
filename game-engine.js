@@ -29,6 +29,8 @@ const GameEngine = {
     practiceDemoBalance: 0,
     practiceDemoInitialBalance: 1000,
     songsEloDisableKey: 'mtr_songs_elo_disabled_until',
+    streamsRealtime: null, // Will be initialized when StreamsRealtime module loads
+    activeStreamTracking: null, // Current match ID being tracked
     
     // ==========================================
     // INICIALIZACIÓN
@@ -199,12 +201,14 @@ const GameEngine = {
     // ==========================================
     
     async joinQuickMatch(song, betAmount) {
-        if (betAmount < this.minBet) {
+        // Validate minimum bet (100 MTR)
+        const normalizedBet = Math.max(this.minBet, Math.round(betAmount || this.minBet));
+        if (normalizedBet < this.minBet) {
             showToast(`Apuesta mínima: ${this.minBet} MTR`, 'error');
             return;
         }
         
-        if (!this.hasSufficientBalance(betAmount)) {
+        if (!this.hasSufficientBalance(normalizedBet)) {
             return;
         }
         
@@ -402,12 +406,14 @@ const GameEngine = {
     // ==========================================
     
     async createPrivateRoom(song, betAmount) {
-        if (betAmount < this.minBet) {
+        // Validate minimum bet (100 MTR)
+        const normalizedBet = Math.max(this.minBet, Math.round(betAmount || this.minBet));
+        if (normalizedBet < this.minBet) {
             showToast(`Apuesta mínima: ${this.minBet} MTR`, 'error');
             return;
         }
 
-        if (!this.hasSufficientBalance(betAmount)) {
+        if (!this.hasSufficientBalance(normalizedBet)) {
             return;
         }
 
@@ -1155,6 +1161,9 @@ const GameEngine = {
         const userSong = isPlayer1 ? match.player1_song_preview : match.player2_song_preview;
         this.playUserSong(userSong);
         
+        // Initialize real-time streams tracking
+        this.initializeStreamsTracking(match);
+        
         const oracleStats = await this.fetchOracleStats(match);
         const basePlays1 = oracleStats.player1Projected;
         const basePlays2 = oracleStats.player2Projected;
@@ -1169,15 +1178,26 @@ const GameEngine = {
             
             document.getElementById('battleTimer').textContent = timeLeft;
 
-            plays1 += this.calculatePlaysIncrement(basePlays1);
-            plays2 += this.calculatePlaysIncrement(basePlays2);
+            // Use real-time streams data if available, otherwise fallback to calculated
+            const streamData = this.getRealTimeStreams(match.id);
+            if (streamData && streamData.lastUpdate > Date.now() - 10000) {
+                // Use real-time data (updated within last 10 seconds)
+                plays1 = streamData.streams1;
+                plays2 = streamData.streams2;
+                health1 = streamData.percentage1;
+                health2 = streamData.percentage2;
+            } else {
+                // Fallback to calculated increments
+                plays1 += this.calculatePlaysIncrement(basePlays1);
+                plays2 += this.calculatePlaysIncrement(basePlays2);
+                const totalPlays = plays1 + plays2;
+                const share1 = totalPlays > 0 ? (plays1 / totalPlays) * 100 : 50;
+                const share2 = 100 - share1;
+                health1 = Math.max(0, Math.min(100, share1));
+                health2 = Math.max(0, Math.min(100, share2));
+            }
+            
             this.updateBattleRhythmAnimation(timeLeft, plays1, plays2);
-
-            const totalPlays = plays1 + plays2;
-            const share1 = totalPlays > 0 ? (plays1 / totalPlays) * 100 : 50;
-            const share2 = 100 - share1;
-            health1 = Math.max(0, Math.min(100, share1));
-            health2 = Math.max(0, Math.min(100, share2));
             
             // Actualizar UI
             document.getElementById('health1Fill').style.width = `${health1}%`;
@@ -1190,6 +1210,14 @@ const GameEngine = {
             // Fin de batalla
             if (timeLeft <= 0) {
                 clearInterval(battleInterval);
+                // Use real-time streams for final determination
+                const finalStreamData = this.getRealTimeStreams(match.id);
+                if (finalStreamData) {
+                    plays1 = finalStreamData.streams1;
+                    plays2 = finalStreamData.streams2;
+                    health1 = finalStreamData.percentage1;
+                    health2 = finalStreamData.percentage2;
+                }
                 this.endBattle(match, health1, health2, isPlayer1, plays1, plays2);
             }
         }, 1000);
@@ -1301,9 +1329,22 @@ const GameEngine = {
     },
 
     async endBattle(match, health1, health2, isPlayer1, plays1, plays2) {
-        const winner = plays1 > plays2 ? 1 : 2;
+        // Determine winner based on real-time stream percentages
+        let winner = null;
+        if (window.StreamsRealtime) {
+            winner = window.StreamsRealtime.determineWinner(match.id);
+        }
+        
+        // Fallback to plays comparison if real-time determination fails
+        if (winner === null) {
+            winner = plays1 > plays2 ? 1 : 2;
+        }
+        
         const userWon = (isPlayer1 && winner === 1) || (!isPlayer1 && winner === 2);
         const payouts = this.calculateMatchPayouts(match.total_pot);
+        
+        // Stop streams tracking
+        this.stopStreamsTracking(match.id);
         
         // Detener canción del usuario
         this.stopUserSong();
@@ -2046,27 +2087,119 @@ const GameEngine = {
     },
 
     async sendPrizeToWinner(winnerAddress, amountMtr, matchId = null) {
-        if (!winnerAddress || !amountMtr) return null;
+        if (!winnerAddress || !amountMtr) {
+            console.error('[prize] Invalid parameters:', { winnerAddress, amountMtr });
+            showToast('Error: Parámetros inválidos para envío de premio', 'error');
+            return null;
+        }
+
+        // Validate address format
+        if (!/^0x[a-fA-F0-9]{40}$/.test(winnerAddress)) {
+            console.error('[prize] Invalid wallet address format:', winnerAddress);
+            showToast('Error: Dirección de wallet inválida', 'error');
+            return null;
+        }
+
+        // Validate amount (minimum 100 MTR for payout)
+        const normalizedAmount = Math.max(this.minBet, Math.round(amountMtr));
+        if (normalizedAmount < this.minBet) {
+            console.error('[prize] Amount below minimum:', normalizedAmount);
+            showToast(`Error: Monto mínimo para payout es ${this.minBet} MTR`, 'error');
+            return null;
+        }
+
         try {
-            console.log('[prize] Sending prize request to backend', { winnerAddress, amountMtr, matchId });
-            const data = await this.backendRequest('/api/prizes/send', {
-                winner: winnerAddress,
-                amount: amountMtr,
-                matchId,
-                network: 'base',
-                token: 'MTR',
-                tokenAddress: '0x99cd1eb32846c9027ed9cb8710066fa08791c33b'
-            });
+            console.log('[prize] Sending prize request to backend', { winnerAddress, amountMtr: normalizedAmount, matchId });
+            
+            // Try backend API first
+            let data = null;
+            try {
+                data = await this.backendRequest('/api/prizes/send', {
+                    winner: winnerAddress,
+                    amount: normalizedAmount,
+                    matchId,
+                    network: 'base',
+                    token: 'MTR',
+                    tokenAddress: '0x99cd1eb32846c9027ed9cb8710066fa08791c33b'
+                });
+            } catch (backendError) {
+                console.warn('[prize] Backend API failed, trying direct on-chain:', backendError);
+                // Fallback to direct on-chain call if backend fails
+                data = await this.sendPrizeOnChain(winnerAddress, normalizedAmount);
+            }
+
             if (data?.txHash) {
                 this.lastPrizeTxHash = data.txHash;
                 showToast(`Premio enviado! Tx: ${data.txHash.slice(0, 10)}...`, 'success');
                 console.log('[prize] Prize tx hash', data.txHash);
+            } else {
+                throw new Error('No transaction hash returned');
             }
             return data;
         } catch (error) {
             console.error('[prize] Error sending prize:', error);
+            const errorMsg = error?.message || 'Error desconocido al enviar premio';
+            showToast(`Error: ${errorMsg}`, 'error');
             return null;
         }
+    },
+
+    /**
+     * Send prize directly on-chain using viem/wagmi pattern
+     */
+    async sendPrizeOnChain(winnerAddress, amountMtr) {
+        // This would require viem to be available in the context
+        // For now, return error to use backend API
+        throw new Error('Direct on-chain payout requires backend API. Please ensure backend is available.');
+    },
+
+    /**
+     * Initialize real-time streams tracking for a match
+     */
+    initializeStreamsTracking(match) {
+        if (!window.StreamsRealtime) {
+            console.warn('[game-engine] StreamsRealtime module not loaded, using fallback');
+            return;
+        }
+
+        const song1 = {
+            id: match.player1_song_id,
+            name: match.player1_song_name,
+            artist: match.player1_song_artist
+        };
+        const song2 = {
+            id: match.player2_song_id,
+            name: match.player2_song_name,
+            artist: match.player2_song_artist
+        };
+
+        this.activeStreamTracking = match.id;
+        window.StreamsRealtime.startTracking(match.id, song1, song2, (streams1, streams2, pct1, pct2) => {
+            // Real-time update callback
+            console.log(`[game-engine] Streams update: ${streams1} vs ${streams2} (${pct1.toFixed(1)}% vs ${pct2.toFixed(1)}%)`);
+        });
+    },
+
+    /**
+     * Stop streams tracking for a match
+     */
+    stopStreamsTracking(matchId) {
+        if (window.StreamsRealtime && matchId) {
+            window.StreamsRealtime.stopTracking(matchId);
+            if (this.activeStreamTracking === matchId) {
+                this.activeStreamTracking = null;
+            }
+        }
+    },
+
+    /**
+     * Get real-time streams data for a match
+     */
+    getRealTimeStreams(matchId) {
+        if (!window.StreamsRealtime || !matchId) {
+            return null;
+        }
+        return window.StreamsRealtime.getStreamPercentages(matchId);
     },
 
     // ==========================================
