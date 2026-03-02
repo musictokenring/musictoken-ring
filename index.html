@@ -196,11 +196,18 @@
 
         <!-- BATTLE ANIMATION -->
         <div id="battle-animation" class="h-96 w-full max-w-5xl mx-auto my-12 relative overflow-hidden rounded-xl border border-cyan-500/30 bg-black/40 neon-border-cyan">
-            <canvas id="pulse-canvas" class="absolute inset-0 w-full h-full"></canvas>
-            <div class="absolute inset-0 flex flex-col items-center justify-center z-10 pointer-events-none">
-                <div class="text-5xl mb-4">🥊</div>
-                <h2 class="text-2xl sm:text-3xl font-bold text-white/90 neon-text-cyan mb-2">Batallas en vivo</h2>
-                <p class="text-cyan-300/60 text-sm font-medium tracking-wider uppercase">En desarrollo</p>
+            <!-- Video en loop para Batallas en vivo -->
+            <video id="batallasVideo" autoplay muted loop playsinline class="absolute inset-0 w-full h-full object-cover z-0" style="display: none;">
+                <source src="./assets/videos/batallas-en-vivo.mp4" type="video/mp4">
+                <source src="./assets/videos/batallas-en-vivo.webm" type="video/webm">
+            </video>
+            <!-- Canvas de animación (fallback si no hay video) -->
+            <canvas id="pulse-canvas" class="absolute inset-0 w-full h-full z-0"></canvas>
+            <!-- Overlay con texto (sobre el video) -->
+            <div class="absolute inset-0 flex flex-col items-center justify-center z-10 pointer-events-none bg-gradient-to-b from-black/40 via-transparent to-black/40">
+                <div class="text-5xl mb-4 drop-shadow-2xl">🥊</div>
+                <h2 class="text-2xl sm:text-3xl font-bold text-white neon-text-cyan mb-2 drop-shadow-2xl">Batallas en vivo</h2>
+                <p class="text-cyan-300 text-sm font-medium tracking-wider uppercase drop-shadow-lg">En desarrollo</p>
             </div>
         </div>
 
@@ -1262,6 +1269,30 @@
             if (connectedAddress) { await ensureBaseChain(); renderWallet(); if (connectedChainId === 8453) await refreshMtrBalance(connectedAddress); }
             else renderWallet();
         } else { renderWallet(); }
+
+        // Manejar video de batallas en vivo
+        (function() {
+            var video = document.getElementById('batallasVideo');
+            var canvas = document.getElementById('pulse-canvas');
+            
+            if (video && canvas) {
+                // Ocultar canvas cuando el video se carga correctamente
+                video.addEventListener('loadeddata', function() {
+                    canvas.style.display = 'none';
+                    video.style.display = 'block';
+                });
+                
+                // Si el video falla, mostrar canvas como fallback
+                video.addEventListener('error', function() {
+                    canvas.style.display = 'block';
+                    video.style.display = 'none';
+                    console.log('[video] Video no disponible, usando canvas como fallback');
+                });
+                
+                // Verificar si el video puede cargarse
+                video.load();
+            }
+        })();
     </script>
 
 </body>
