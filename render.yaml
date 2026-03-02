@@ -1,0 +1,21 @@
+services:
+  - type: web
+    name: musictoken-backend
+    env: node
+    buildCommand: npm install
+    startCommand: node backend/server-auto.js
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 3001
+      # Las siguientes variables deben configurarse en Render Dashboard:
+      # - SUPABASE_URL
+      # - SUPABASE_SERVICE_ROLE_KEY
+      # - BASE_RPC_URL
+      # - MTR_TOKEN_ADDRESS
+      # - USDC_ADDRESS
+      # - PLATFORM_WALLET_ADDRESS
+      # - ADMIN_WALLET_PRIVATE_KEY
+      # - ADMIN_WALLET_ADDRESS
+      # - MTR_TO_CREDIT_RATE
