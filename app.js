@@ -4,6 +4,21 @@
         return;
     }
     global.__MTR_APP_JS_LOADED__ = true;
+    
+    // DEFINIR selectSongForBattle INMEDIATAMENTE si no existe
+    if (typeof global.selectSongForBattle === 'undefined' && typeof global.window !== 'undefined') {
+        global.window.selectSongForBattle = global.window.selectSongForBattle || function(song) {
+            console.warn('[app.js] selectSongForBattle placeholder llamado, esperando función real...');
+            setTimeout(function() {
+                if (typeof global.window.selectSongForBattle === 'function' && 
+                    global.window.selectSongForBattle.toString().indexOf('placeholder') === -1) {
+                    global.window.selectSongForBattle(song);
+                } else {
+                    console.error('[app.js] selectSongForBattle no disponible después de delay');
+                }
+            }, 200);
+        };
+    }
 
 // =========================================
 // APP.JS - MusicToken Ring
@@ -249,8 +264,10 @@ async function displaySearchResults(tracks, resultsDiv) {
         };
         const indicator = getTrackIndicator(streamData.current, streamData.avg24h);
 
+        // FORMATO ROBUSTO - llamar directamente a window.selectSongForBattle si está disponible
+        var trackJson = JSON.stringify(trackData).replace(/'/g, "&#39;");
         html += `
-            <div class="track-item" onclick='handleTrackSelect(${JSON.stringify(trackData).replace(/'/g, "&#39;")})'>
+            <div class="track-item" onclick='(function(t){if(window.selectSongForBattle){window.selectSongForBattle(t);}else if(typeof handleTrackSelect==="function"){handleTrackSelect(t);}else{console.error("No handler");}})(${trackJson})'>
                 <img src="${track.album.cover_medium}" alt="${track.title}">
                 <div class="track-info">
                     <div class="track-name">${track.title}</div>
@@ -469,13 +486,74 @@ function handleTrackSelect(track) {
     // Stop any playing preview
     stopAllPreviews();
     
-    // Call the selection function if it exists
-    if (typeof selectSongForBattle === 'function') {
-        selectSongForBattle(track);
-    } else if (typeof selectTrack === 'function') {
-        selectTrack(track);
-    } else {
-        console.warn('No track selection handler found');
+    console.log('[handleTrackSelect] Llamado con:', track);
+    
+    // FUNCIÓN MEJORADA - Buscar de múltiples formas con reintentos
+    var selectFn = null;
+    var attempts = 0;
+    var maxAttempts = 3;
+    
+    function trySelect() {
+        attempts++;
+        
+        // Intentar 1: window.selectSongForBattle
+        if (typeof window !== 'undefined' && typeof window.selectSongForBattle === 'function') {
+            var fn = window.selectSongForBattle;
+            // Verificar que no sea el placeholder
+            if (fn.toString().indexOf('placeholder') === -1) {
+                try {
+                    console.log('[handleTrackSelect] ✅ Usando window.selectSongForBattle');
+                    fn(track);
+                    return true;
+                } catch (e) {
+                    console.error('[handleTrackSelect] Error llamando selectSongForBattle:', e);
+                }
+            }
+        }
+        
+        // Intentar 2: selectSongForBattle global
+        if (typeof selectSongForBattle === 'function') {
+            try {
+                console.log('[handleTrackSelect] ✅ Usando selectSongForBattle global');
+                selectSongForBattle(track);
+                return true;
+            } catch (e) {
+                console.error('[handleTrackSelect] Error:', e);
+            }
+        }
+        
+        // Intentar 3: selectTrack (fallback original)
+        if (typeof selectTrack === 'function') {
+            try {
+                console.log('[handleTrackSelect] ✅ Usando selectTrack (fallback)');
+                selectTrack(track);
+                return true;
+            } catch (e) {
+                console.error('[handleTrackSelect] Error:', e);
+            }
+        }
+        
+        // Si no funcionó y aún hay intentos, esperar y reintentar
+        if (attempts < maxAttempts) {
+            console.warn('[handleTrackSelect] Intento', attempts, 'fallido, reintentando en 150ms...');
+            setTimeout(trySelect, 150);
+            return false;
+        }
+        
+        // Si todos los intentos fallaron
+        console.error('[handleTrackSelect] ❌ NO se encontró handler después de', maxAttempts, 'intentos');
+        console.error('[handleTrackSelect] window.selectSongForBattle:', typeof window !== 'undefined' ? typeof window.selectSongForBattle : 'window undefined');
+        console.error('[handleTrackSelect] selectSongForBattle:', typeof selectSongForBattle);
+        console.error('[handleTrackSelect] selectTrack:', typeof selectTrack);
+        return false;
+    }
+    
+    // Iniciar intentos
+    if (!trySelect()) {
+        // Si falló inmediatamente, mostrar mensaje al usuario
+        if (typeof showToast === 'function') {
+            showToast('Error: Sistema no completamente cargado. Recarga la página (Ctrl+Shift+R)', 'error');
+        }
     }
 }
 
@@ -534,7 +612,15 @@ window.togglePreview = togglePreview;
 window.stopAllPreviews = stopAllPreviews;
 window.searchDeezer = searchDeezer;
 window.displaySearchResults = displaySearchResults;
+// EXPONER handleTrackSelect GLOBALMENTE
 window.handleTrackSelect = handleTrackSelect;
+
+// Asegurar que esté disponible inmediatamente
+if (typeof handleTrackSelect === 'function') {
+    console.log('[app.js] ✅ handleTrackSelect expuesto globalmente');
+} else {
+    console.error('[app.js] ❌ ERROR: handleTrackSelect no se pudo exponer');
+}
 
 // Fallbacks: keep mode buttons functional even if inline scripts fail to parse/load.
 if (typeof window.selectMode !== 'function') {

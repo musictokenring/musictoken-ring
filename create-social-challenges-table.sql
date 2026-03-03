@@ -13,13 +13,14 @@ CREATE TABLE IF NOT EXISTS social_challenges (
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     expires_at TIMESTAMPTZ NOT NULL,
     accepted_at TIMESTAMPTZ,
-    challenger_id UUID REFERENCES auth.users(id) ON DELETE SET NULL,
+    accepter_id UUID REFERENCES auth.users(id) ON DELETE SET NULL,
     match_id UUID REFERENCES matches(id) ON DELETE SET NULL
 );
 
 -- Índices para búsquedas rápidas
 CREATE INDEX IF NOT EXISTS idx_social_challenges_challenge_id ON social_challenges(challenge_id);
 CREATE INDEX IF NOT EXISTS idx_social_challenges_challenger_id ON social_challenges(challenger_id);
+CREATE INDEX IF NOT EXISTS idx_social_challenges_accepter_id ON social_challenges(accepter_id);
 CREATE INDEX IF NOT EXISTS idx_social_challenges_status ON social_challenges(status);
 CREATE INDEX IF NOT EXISTS idx_social_challenges_expires_at ON social_challenges(expires_at);
 

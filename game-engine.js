@@ -42,13 +42,21 @@ const GameEngine = {
 
         this.initPromise = (async () => {
             console.log('🎮 Game Engine initializing...');
-            this.loadSongsEloAvailability();
-            this.loadPracticeDemoBalance();
-            await this.loadUserBalance();
-            await this.loadGameConfig();
-            this.loadStoredWallet();
-            this.setupRealtimeSubscriptions();
-            this.scheduleEloRefresh();
+            try {
+                this.loadSongsEloAvailability();
+                this.loadPracticeDemoBalance();
+                await this.loadUserBalance();
+                await this.loadGameConfig();
+                this.loadStoredWallet();
+                this.setupRealtimeSubscriptions();
+                this.scheduleEloRefresh();
+                
+                // Actualizar display después de cargar balances
+                this.updatePracticeBetDisplay();
+            } catch (initError) {
+                console.error('Error during GameEngine initialization:', initError);
+            }
+            
             this.initialized = true;
             console.log('✅ Game Engine ready!');
         })().finally(() => {
@@ -93,17 +101,76 @@ const GameEngine = {
         const labelEl = document.getElementById('balanceLabel');
         const valueEl = document.getElementById('userBalance');
         const onchainEl = document.getElementById('onchainMtrBalance');
-        if (labelEl) labelEl.textContent = 'Saldo real';
-        if (valueEl) valueEl.textContent = this.userBalance;
-
-        if (typeof window !== 'undefined' && window.currentMode === 'practice') {
+        
+        // Verificar si estamos en modo práctica
+        const isPracticeMode = typeof window !== 'undefined' && window.currentMode === 'practice';
+        
+        console.log('[updatePracticeBetDisplay] Modo práctica:', isPracticeMode, 'Balance demo:', this.practiceDemoBalance);
+        console.log('[updatePracticeBetDisplay] Elementos encontrados:', {
+            labelEl: !!labelEl,
+            valueEl: !!valueEl,
+            onchainEl: !!onchainEl,
+            windowCurrentMode: window.currentMode
+        });
+        
+        if (isPracticeMode) {
+            // Asegurar que el balance demo esté inicializado
             if (this.practiceDemoBalance <= 0) {
                 this.practiceDemoBalance = this.practiceDemoInitialBalance;
                 localStorage.setItem('mtr_practice_demo_balance', String(this.practiceDemoBalance));
+                console.log('[practice] Demo balance reset to', this.practiceDemoBalance);
             }
-            if (labelEl) labelEl.textContent = 'Saldo demo (práctica)';
-            if (valueEl) valueEl.textContent = this.practiceDemoBalance;
-            if (onchainEl) onchainEl.textContent = this.practiceDemoBalance;
+            
+            // Actualizar UI para modo práctica - FORZAR actualización
+            if (labelEl) {
+                labelEl.textContent = 'Saldo demo (práctica)';
+                labelEl.style.color = '#8b5cf6'; // Color púrpura para práctica
+                console.log('[updatePracticeBetDisplay] Label actualizado a "Saldo demo (práctica)"');
+            } else {
+                console.error('[updatePracticeBetDisplay] balanceLabel no encontrado en el DOM');
+            }
+            
+            const formattedBalance = this.practiceDemoBalance.toLocaleString('es-ES');
+            
+            if (valueEl) {
+                valueEl.textContent = formattedBalance;
+                valueEl.style.color = '#8b5cf6';
+                console.log('[updatePracticeBetDisplay] userBalance actualizado a', formattedBalance);
+            } else {
+                console.error('[updatePracticeBetDisplay] userBalance no encontrado en el DOM');
+            }
+            
+            if (onchainEl) {
+                onchainEl.textContent = formattedBalance;
+                onchainEl.style.color = '#8b5cf6';
+                console.log('[updatePracticeBetDisplay] onchainMtrBalance actualizado a', formattedBalance);
+            } else {
+                console.error('[updatePracticeBetDisplay] onchainMtrBalance no encontrado en el DOM');
+            }
+            
+            // También actualizar el display de "Jugable" en el header
+            const appBalanceDisplay = document.getElementById('appBalanceDisplay');
+            if (appBalanceDisplay) {
+                appBalanceDisplay.textContent = `Jugable: ${formattedBalance} MTR`;
+                appBalanceDisplay.style.color = '#8b5cf6';
+            }
+            
+        } else {
+            // Modo normal: mostrar balance real
+            if (labelEl) {
+                labelEl.textContent = 'Tu MTR (on-chain)';
+                labelEl.style.color = '';
+            }
+            const onChainBalance = Number(window.__mtrOnChainBalance || 0);
+            const playableBalance = onChainBalance > 0 ? onChainBalance : this.userBalance;
+            if (valueEl) {
+                valueEl.textContent = playableBalance.toLocaleString('es-ES');
+                valueEl.style.color = '';
+            }
+            if (onchainEl) {
+                onchainEl.textContent = onChainBalance > 0 ? playableBalance.toLocaleString('es-ES') : '--';
+                onchainEl.style.color = '';
+            }
         }
     },
     
@@ -163,15 +230,27 @@ const GameEngine = {
     },
     
     updateBalanceDisplay() {
-        const balanceEl = document.getElementById('appBalanceDisplay');
-        if (balanceEl) {
-            balanceEl.textContent = `Jugable: ${this.userBalance} MTR`;
-        }
+        // Verificar si estamos en modo práctica
+        const isPracticeMode = typeof window !== 'undefined' && window.currentMode === 'practice';
+        
+        // NO actualizar estos elementos si estamos en modo práctica (dejar que updatePracticeBetDisplay lo maneje)
+        if (!isPracticeMode) {
+            // Para modo normal, usar saldo on-chain si está disponible, sino usar userBalance
+            const onChainBalance = Number(window.__mtrOnChainBalance || 0);
+            const playableBalance = onChainBalance > 0 ? onChainBalance : this.userBalance;
+            
+            const balanceEl = document.getElementById('appBalanceDisplay');
+            if (balanceEl) {
+                balanceEl.textContent = `Jugable: ${playableBalance.toLocaleString('es-ES')} MTR`;
+            }
 
-        const userBalanceEl = document.getElementById('userBalance');
-        if (userBalanceEl) {
-            userBalanceEl.textContent = this.userBalance;
+            const userBalanceEl = document.getElementById('userBalance');
+            if (userBalanceEl) {
+                userBalanceEl.textContent = playableBalance.toLocaleString('es-ES');
+            }
         }
+        
+        // Siempre actualizar el display de práctica para que maneje el modo correcto
         this.updatePracticeBetDisplay();
     },
 
@@ -648,7 +727,7 @@ const GameEngine = {
                 .from('social_challenges')
                 .update({
                     status: 'accepted',
-                    challenger_id: session.user.id,
+                    accepter_id: session.user.id,
                     accepted_at: new Date().toISOString()
                 })
                 .eq('id', challenge.id);
@@ -917,13 +996,18 @@ const GameEngine = {
     
     async startPracticeMatch(userSong, demoBet = 100) {
         try {
+            if (!userSong || !userSong.id) {
+                showToast('Error: Canción no válida', 'error');
+                return;
+            }
+
             if (this.practiceDemoBalance <= 0) {
                 this.practiceDemoBalance = this.practiceDemoInitialBalance;
                 localStorage.setItem('mtr_practice_demo_balance', String(this.practiceDemoBalance));
-                console.log('[practice] Auto-reset demo balance to', this.practiceDemoBalance);
             }
 
             const normalizedBet = Math.max(this.minBet, Math.round(demoBet || this.minBet));
+            
             if (normalizedBet > this.practiceDemoBalance) {
                 showToast(`Saldo demo insuficiente. Disponible: ${this.practiceDemoBalance} MTR`, 'error');
                 return;
@@ -931,10 +1015,26 @@ const GameEngine = {
 
             this.setPracticeDemoBalance(this.practiceDemoBalance - normalizedBet);
             this.updatePracticeBetDisplay();
-
-            console.log('[practice] Fetching CPU opponent...');
-            const cpuSong = await this.fetchCpuOpponentByElo(userSong);
-            console.log('[practice] CPU song:', cpuSong.name, '-', cpuSong.artist);
+            let cpuSong;
+            try {
+                cpuSong = await Promise.race([
+                    this.fetchCpuOpponentByElo(userSong),
+                    new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout')), 10000))
+                ]);
+                
+                if (!cpuSong || !cpuSong.id) {
+                    throw new Error('CPU song fetch returned invalid result');
+                }
+            } catch (cpuError) {
+                // Fallback: usar una canción genérica
+                cpuSong = {
+                    id: `cpu_fallback_${Date.now()}`,
+                    name: 'Rival Generado',
+                    artist: 'CPU Challenger',
+                    image: userSong.image || 'https://via.placeholder.com/500x500.png?text=CPU+Rival',
+                    preview: userSong.preview || ''
+                };
+            }
 
             let match = null;
             let useLocalFallback = false;
@@ -998,29 +1098,67 @@ const GameEngine = {
             }
 
             showToast(`¡Práctica iniciada: ${normalizedBet} MTR demo!`, 'success');
+            
             await this.startLocalPractice(match);
 
         } catch (error) {
             console.error('[practice] Error starting practice:', error);
-            showToast('Error al iniciar práctica', 'error');
+            showToast('Error al iniciar práctica: ' + (error.message || 'Error desconocido'), 'error');
+            
+            // Restaurar balance si falla
+            this.setPracticeDemoBalance(this.practiceDemoBalance + normalizedBet);
+            this.updatePracticeBetDisplay();
         }
     },
 
     async startLocalPractice(match) {
+        if (!match) {
+            showToast('Error: Datos de batalla inválidos', 'error');
+            return;
+        }
+
+        // Ocultar secciones
         document.getElementById('songSelection')?.classList.add('hidden');
         document.getElementById('waitingScreen')?.classList.add('hidden');
         document.getElementById('roomScreen')?.classList.add('hidden');
+        document.getElementById('modeSelector')?.classList.add('hidden');
 
         this.currentMatch = match;
-        this.createBattleUI(match);
+        
+        try {
+            this.createBattleUI(match);
+        } catch (uiError) {
+            console.error('[practice] Error creating battle UI:', uiError);
+            showToast('Error al crear la interfaz de batalla', 'error');
+            return;
+        }
+
+        // Esperar un momento para que el DOM se actualice
+        await new Promise(resolve => setTimeout(resolve, 200));
 
         var userSong = match.player1_song_preview;
         if (userSong) {
-            this.playUserSong(userSong);
-            console.log('[practice] Playing user song:', userSong);
+            try {
+                this.playUserSong(userSong);
+            } catch (audioError) {
+                // Silenciar error de audio
+            }
         }
 
-        var oracleStats = await this.fetchOracleStats(match);
+        var oracleStats;
+        try {
+            oracleStats = await Promise.race([
+                this.fetchOracleStats(match),
+                new Promise((_, reject) => setTimeout(() => reject(new Error('Oracle timeout')), 8000))
+            ]);
+        } catch (oracleError) {
+            // Usar valores por defecto
+            oracleStats = {
+                player1Projected: Math.floor(Math.random() * 800000) + 200000,
+                player2Projected: Math.floor(Math.random() * 800000) + 200000
+            };
+        }
+        
         var basePlays1 = oracleStats.player1Projected;
         var basePlays2 = oracleStats.player2Projected;
         var plays1 = 0, plays2 = 0;
@@ -1305,12 +1443,38 @@ const GameEngine = {
     battleParticles: [],
 
     createBattleUI(match) {
-        const container = document.querySelector('main') || document.querySelector('.container');
-        if (!container) { console.error('[battle] No container found'); return; }
+        // Ocultar todas las secciones principales primero
+        const songSelection = document.getElementById('songSelection');
+        const waitingScreen = document.getElementById('waitingScreen');
+        const roomScreen = document.getElementById('roomScreen');
+        const modeSelector = document.getElementById('modeSelector');
+        const battleArena = document.getElementById('battleArena');
+        
+        if (songSelection) songSelection.classList.add('hidden');
+        if (waitingScreen) waitingScreen.classList.add('hidden');
+        if (roomScreen) roomScreen.classList.add('hidden');
+        if (modeSelector) modeSelector.classList.add('hidden');
+        
+        // Si ya existe battleArena, limpiarlo primero
+        if (battleArena) {
+            battleArena.remove();
+        }
+        
+        // Buscar el contenedor principal
+        const container = document.querySelector('main');
+        if (!container) { 
+            console.error('[battle] No main container found');
+            showToast('Error: No se encontró el contenedor principal', 'error');
+            return; 
+        }
 
         const pot = (match.player1_bet || 0) + (match.player2_bet || 0);
-        container.innerHTML = `
-        <section id="battleArena" class="max-w-5xl mx-auto py-6 px-4">
+        
+        // Crear la sección de batalla y agregarla al contenedor
+        const battleSection = document.createElement('section');
+        battleSection.id = 'battleArena';
+        battleSection.className = 'max-w-5xl mx-auto py-6 px-4';
+        battleSection.innerHTML = `
             <div class="text-center mb-4">
                 <div class="inline-flex items-center gap-3 px-6 py-2 rounded-full bg-white/5 border border-white/10 mb-2">
                     <span class="text-xs text-gray-400 uppercase tracking-widest">Batalla en curso</span>
@@ -1362,10 +1526,19 @@ const GameEngine = {
                 </div>
             </div>
             <div id="battleStatusText" class="text-center text-gray-500 text-sm"></div>
-        </section>`;
-
-        this.initBattleCanvas();
-        console.log('[battle] UI created with canvas');
+        `;
+        
+        // Agregar la sección al contenedor
+        container.appendChild(battleSection);
+        
+        // Inicializar el canvas después de agregar al DOM
+        setTimeout(() => {
+            try {
+                this.initBattleCanvas();
+            } catch (canvasError) {
+                console.error('[battle] Error initializing canvas:', canvasError);
+            }
+        }, 100);
     },
 
     initBattleCanvas() {

@@ -6,7 +6,7 @@
     <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
     <meta http-equiv="Pragma" content="no-cache">
     <meta http-equiv="Expires" content="0">
-    <meta name="mtr-build" content="v2.1-walletconnect-fix">
+    <meta name="mtr-build" content="v3.4-URGENT-FIX">
     <title>MusicToken Ring - Music Battle Arena</title>
 
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -79,7 +79,7 @@
         });
 
         var PLATFORM_WALLET_ADDRESSES = { base: window.PLATFORM_WALLET_BASE_ADDRESS || '0x75376BC58830f27415402875D26B73A6BE8E2253' };
-        window.MTR_BUILD_ID = 'v2.0';
+        window.MTR_BUILD_ID = 'v3.4-URGENT-FIX';
 
         if (typeof window.selectMode !== 'function') {
             window.selectMode = function selectModeCriticalFallback(mode) {
@@ -662,15 +662,163 @@
     <div id="toastContainer" class="fixed top-20 right-4 z-[200] flex flex-col gap-2"></div>
 
     <!-- ==================== SCRIPTS ==================== -->
-    <script src="./auth-system.js?v=v2.1"></script>
-    <script src="./src/streams-realtime.js?v=v2.1"></script>
-    <script src="./src/credits-system.js"></script>
-    <script src="./src/wallet-credits-integration.js"></script>
-    <script src="./src/deposit-ui.js"></script>
-    <script src="./src/claim-ui.js"></script>
-    <script src="./game-engine.js?v=v2.1"></script>
+    <script src="./auth-system.js?v=v2.7"></script>
+    <script src="./src/streams-realtime.js?v=v2.7"></script>
+    <script src="./src/credits-system.js?v=v2.7"></script>
+    <script src="./src/wallet-credits-integration.js?v=v2.7"></script>
+    <script src="./src/deposit-ui.js?v=v2.7"></script>
+    <script src="./src/claim-ui.js?v=v2.7"></script>
+    <script src="./game-engine.js?v=v2.7"></script>
     <script>window.MTR_INLINE_TOP_STREAMS_ACTIVE = true;</script>
-    <script src="./app.js?v=v2.1"></script>
+    <!-- DEFINIR selectSongForBattle INMEDIATAMENTE - ANTES DE CUALQUIER OTRO SCRIPT -->
+    <script>
+        // ESTA FUNCIÓN DEBE ESTAR DISPONIBLE ANTES DE QUE app.js SE CARGUE
+        console.log('[PRE-INIT] Definiendo selectSongForBattle...');
+        // Definir selectSongForBattle INMEDIATAMENTE antes de que app.js se cargue
+        (function() {
+            var selectedSong = null;
+            var currentMode = null;
+            
+            // DEFINIR FUNCIÓN DE FORMA GLOBAL Y ROBUSTA
+            window.selectSongForBattle = async function selectSongForBattle(song) {
+                try {
+                    console.log('[selectSongForBattle] ✅ FUNCIÓN LLAMADA con:', song);
+                    
+                    // Obtener currentMode del window si está disponible
+                    var currentMode = typeof window.currentMode !== 'undefined' ? window.currentMode : null;
+                    
+                    // Validación de ELO solo para modos competitivos (no práctica)
+                    if (currentMode !== 'practice' && typeof GameEngine !== 'undefined' && typeof GameEngine.ensureSongEligibleForMatchmaking === 'function') {
+                        try {
+                            var eloGate = await GameEngine.ensureSongEligibleForMatchmaking(song.id);
+                            if (!eloGate.allowed) { 
+                                if (typeof showToast === 'function') {
+                                    showToast(eloGate.reason || 'Canción fuera del rango ELO permitido', 'error');
+                                }
+                                return; 
+                            }
+                        } catch (eloError) {
+                            console.warn('[selectSong] Error en verificación ELO:', eloError);
+                        }
+                    }
+                    
+                    // Si hay un desafío pendiente, intentar aceptarlo
+                    if (window.pendingChallengeId && window.currentMode === 'social') {
+                        if (typeof handleSocialChallengeAccept === 'function') {
+                            await handleSocialChallengeAccept();
+                        }
+                        return;
+                    }
+                    
+                    if (!song || !song.id) {
+                        console.error('[selectSong] Canción inválida:', song);
+                        if (typeof showToast === 'function') {
+                            showToast('Error: Canción no válida', 'error');
+                        }
+                        return;
+                    }
+                    
+                    // Actualizar variables globales
+                    if (typeof window !== 'undefined') {
+                        window.selectedSong = song;
+                    }
+                    if (typeof selectedSong !== 'undefined') {
+                        selectedSong = song;
+                    }
+                    
+                    console.log('[selectSong] ✅ Canción seleccionada:', song.name, 'ID:', song.id);
+                    
+                    var cardDiv = document.getElementById('selectedSongCard');
+                    if (cardDiv) {
+                        cardDiv.innerHTML = '<img src="' + (song.image || '') + '" alt="' + (song.name || '') + '" class="w-16 h-16 rounded-lg object-cover">' +
+                            '<div class="ml-4"><h4 class="text-white font-bold">' + (song.name || 'Sin nombre') + '</h4><p class="text-gray-400 text-sm">' + (song.artist || 'Artista desconocido') + '</p></div>';
+                        cardDiv.className = 'p-6 rounded-2xl border border-cyan-500/20 bg-cyan-500/5 flex items-center';
+                        console.log('[selectSong] ✅ Tarjeta de canción actualizada');
+                    } else {
+                        console.warn('[selectSong] ⚠️ selectedSongCard no encontrado');
+                    }
+                    
+                    // Actualizar estado de botones según el modo
+                    if (typeof updateBetEligibility === 'function') {
+                        updateBetEligibility();
+                    } else if (typeof window.updateBetEligibility === 'function') {
+                        window.updateBetEligibility();
+                    }
+                    
+                    // Si es modo práctica, mostrar mensaje de confirmación
+                    if (currentMode === 'practice' || window.currentMode === 'practice') {
+                        console.log('[selectSong] ✅ Modo práctica - canción seleccionada correctamente');
+                        if (typeof showToast === 'function') {
+                            showToast('Canción seleccionada: ' + song.name, 'success');
+                        }
+                    }
+                } catch (error) {
+                    console.error('[selectSongForBattle] ❌ ERROR:', error);
+                    if (typeof showToast === 'function') {
+                        showToast('Error al seleccionar canción: ' + error.message, 'error');
+                    }
+                }
+            };
+            
+            // ASEGURAR QUE ESTÉ DISPONIBLE INMEDIATAMENTE
+            console.log('[INIT] ✅ selectSongForBattle DEFINIDA:', typeof window.selectSongForBattle === 'function');
+            
+            console.log('[selectSongForBattle] Función DEFINIDA ANTES de app.js');
+            
+            // VERIFICACIÓN FINAL Y LOGS
+            console.log('[INIT] ✅ selectSongForBattle DEFINIDA:', typeof window.selectSongForBattle === 'function');
+            console.log('[INIT] Función disponible en window:', typeof window.selectSongForBattle);
+            
+            // FORZAR DISPONIBILIDAD GLOBAL
+            if (typeof window.selectSongForBattle === 'function') {
+                // También asignar sin window para compatibilidad
+                if (typeof selectSongForBattle === 'undefined') {
+                    try {
+                        eval('selectSongForBattle = window.selectSongForBattle;');
+                    } catch(e) {
+                        // Ignorar si falla en strict mode
+                    }
+                }
+            }
+        })();
+        
+        // VERIFICACIÓN INMEDIATA DESPUÉS DE DEFINIR
+        console.log('[POST-DEFINE] ✅ selectSongForBattle disponible:', typeof window.selectSongForBattle === 'function');
+    </script>
+    <!-- CARGAR app.js CON VERSIÓN NUEVA Y SIN CACHÉ - USAR JAVASCRIPT PARA TIMESTAMP -->
+    <script>
+        (function() {
+            var timestamp = Date.now();
+            var random = Math.random();
+            var script = document.createElement('script');
+            script.src = './app.js?v=v3.3&nocache=' + timestamp + '&r=' + random;
+            script.async = false; // Cargar síncronamente para asegurar orden
+            script.onload = function() {
+                console.log('[SUCCESS] ✅ app.js v3.3 cargado');
+                console.log('[CHECK] window.selectSongForBattle:', typeof window.selectSongForBattle);
+                console.log('[CHECK] handleTrackSelect:', typeof handleTrackSelect);
+                
+                // Asegurar que handleTrackSelect esté disponible globalmente
+                if (typeof handleTrackSelect === 'function') {
+                    window.handleTrackSelect = handleTrackSelect;
+                    console.log('[SUCCESS] ✅ handleTrackSelect disponible globalmente');
+                } else {
+                    console.error('[ERROR] ❌ handleTrackSelect NO disponible después de cargar');
+                }
+                
+                // Verificar que selectSongForBattle esté disponible
+                if (typeof window.selectSongForBattle === 'function') {
+                    console.log('[SUCCESS] ✅ selectSongForBattle disponible');
+                } else {
+                    console.error('[ERROR] ❌ selectSongForBattle NO disponible');
+                }
+            };
+            script.onerror = function() {
+                console.error('[CRITICAL] ❌ Error cargando app.js');
+            };
+            document.head.appendChild(script);
+        })();
+    </script>
     <script src="./top-streams-fallback.js?v=v2.1"></script>
 
     <script>
@@ -814,6 +962,71 @@
         var selectedSong = null;
         window.__mtrOnChainBalance = Number(window.__mtrOnChainBalance || 0);
         var currentMode = null;
+        
+        // DEFINIR selectSongForBattle INMEDIATAMENTE para que esté disponible cuando app.js lo necesite
+        window.selectSongForBattle = async function selectSongForBattle(song) {
+            console.log('[selectSong] Seleccionando canción:', song, 'Modo actual:', currentMode);
+            
+            // Validación de ELO solo para modos competitivos (no práctica)
+            if (currentMode !== 'practice' && typeof GameEngine !== 'undefined' && typeof GameEngine.ensureSongEligibleForMatchmaking === 'function') {
+                try {
+                    var eloGate = await GameEngine.ensureSongEligibleForMatchmaking(song.id);
+                    if (!eloGate.allowed) { 
+                        if (typeof showToast === 'function') {
+                            showToast(eloGate.reason || 'Canción fuera del rango ELO permitido', 'error');
+                        }
+                        return; 
+                    }
+                } catch (eloError) {
+                    // Continuar si falla la verificación ELO
+                    console.warn('[selectSong] Error en verificación ELO:', eloError);
+                }
+            }
+            
+            // Si hay un desafío pendiente, intentar aceptarlo
+            if (window.pendingChallengeId && window.currentMode === 'social') {
+                if (typeof handleSocialChallengeAccept === 'function') {
+                    await handleSocialChallengeAccept();
+                }
+                return;
+            }
+            
+            if (!song || !song.id) {
+                console.error('[selectSong] Canción inválida:', song);
+                if (typeof showToast === 'function') {
+                    showToast('Error: Canción no válida', 'error');
+                }
+                return;
+            }
+            
+            selectedSong = song;
+            window.selectedSong = song;
+            console.log('[selectSong] Canción seleccionada:', song.name, 'ID:', song.id);
+            
+            var cardDiv = document.getElementById('selectedSongCard');
+            if (cardDiv) {
+                cardDiv.innerHTML = '<img src="' + (song.image || '') + '" alt="' + (song.name || '') + '" class="w-16 h-16 rounded-lg object-cover">' +
+                    '<div class="ml-4"><h4 class="text-white font-bold">' + (song.name || 'Sin nombre') + '</h4><p class="text-gray-400 text-sm">' + (song.artist || 'Artista desconocido') + '</p></div>';
+                cardDiv.className = 'p-6 rounded-2xl border border-cyan-500/20 bg-cyan-500/5 flex items-center';
+            } else {
+                console.warn('[selectSong] selectedSongCard no encontrado');
+            }
+            
+            // Actualizar estado de botones según el modo
+            if (typeof updateBetEligibility === 'function') {
+                updateBetEligibility();
+            }
+            
+            // Si es modo práctica, mostrar mensaje de confirmación
+            if (currentMode === 'practice') {
+                console.log('[selectSong] Modo práctica - canción seleccionada correctamente');
+                if (typeof showToast === 'function') {
+                    showToast('Canción seleccionada: ' + song.name, 'success');
+                }
+            }
+        };
+        
+        console.log('[selectSongForBattle] Función DEFINIDA INMEDIATAMENTE en window');
 
         // Inicializar cliente de Supabase si no existe
         if (typeof supabaseClient === 'undefined' && typeof supabase !== 'undefined') {
@@ -947,18 +1160,31 @@
         };
 
         document.addEventListener('DOMContentLoaded', async function () {
-            if (typeof initializePreferredNetwork === 'function') initializePreferredNetwork();
-            if (typeof renderWalletDirectory === 'function') renderWalletDirectory();
-
             try {
+                if (typeof initializePreferredNetwork === 'function') initializePreferredNetwork();
+                if (typeof renderWalletDirectory === 'function') renderWalletDirectory();
+
                 var session = null;
                 if (typeof supabaseClient !== 'undefined') {
-                    var resp = await supabaseClient.auth.getSession();
-                    session = resp?.data?.session;
+                    try {
+                        var resp = await Promise.race([
+                            supabaseClient.auth.getSession(),
+                            new Promise((_, reject) => setTimeout(() => reject(new Error('Session timeout')), 5000))
+                        ]);
+                        session = resp?.data?.session;
+                    } catch (sessionError) {
+                        // Continuar sin sesión si hay error
+                    }
                 }
+                
                 if (session) {
                     showModeSelector();
-                    if (typeof GameEngine !== 'undefined') await GameEngine.init();
+                    if (typeof GameEngine !== 'undefined') {
+                        // Inicializar GameEngine sin bloquear
+                        GameEngine.init().catch(function(initError) {
+                            console.error('Error initializing GameEngine:', initError);
+                        });
+                    }
                 } else {
                     showLoginWall();
                 }
@@ -1054,7 +1280,48 @@
             var titles = { quick: 'Modo Rápido', private: 'Sala Privada', practice: 'Modo Práctica', tournament: 'Modo Torneo', social: 'Desafío Social' };
             document.getElementById('modeTitle').textContent = titles[mode] || 'Modo de Juego';
             updateActionButtons(mode);
-            if (typeof GameEngine !== 'undefined' && typeof GameEngine.updatePracticeBetDisplay === 'function') GameEngine.updatePracticeBetDisplay();
+            
+            // Actualizar display de balance según el modo
+            if (typeof GameEngine !== 'undefined') {
+                // Si es modo práctica, asegurar que el balance demo esté cargado primero
+                if (mode === 'practice') {
+                    console.log('[selectMode] Modo práctica seleccionado, cargando balance demo...');
+                    if (typeof GameEngine.loadPracticeDemoBalance === 'function') {
+                        GameEngine.loadPracticeDemoBalance();
+                        console.log('[selectMode] Balance demo cargado:', GameEngine.practiceDemoBalance);
+                    }
+                    // Actualizar display múltiples veces para asegurar que se muestre
+                    setTimeout(function() {
+                        console.log('[selectMode] Actualizando display (50ms)...');
+                        if (typeof GameEngine.updatePracticeBetDisplay === 'function') {
+                            GameEngine.updatePracticeBetDisplay();
+                        }
+                    }, 50);
+                    setTimeout(function() {
+                        console.log('[selectMode] Actualizando display (200ms)...');
+                        if (typeof GameEngine.updatePracticeBetDisplay === 'function') {
+                            GameEngine.updatePracticeBetDisplay();
+                        }
+                    }, 200);
+                    setTimeout(function() {
+                        console.log('[selectMode] Actualizando display (500ms)...');
+                        if (typeof GameEngine.updatePracticeBetDisplay === 'function') {
+                            GameEngine.updatePracticeBetDisplay();
+                        }
+                    }, 500);
+                    setTimeout(function() {
+                        console.log('[selectMode] Actualizando display (1000ms)...');
+                        if (typeof GameEngine.updatePracticeBetDisplay === 'function') {
+                            GameEngine.updatePracticeBetDisplay();
+                        }
+                    }, 1000);
+                } else {
+                    // Para otros modos, actualizar display normalmente
+                    if (typeof GameEngine.updatePracticeBetDisplay === 'function') {
+                        GameEngine.updatePracticeBetDisplay();
+                    }
+                }
+            }
             
             // En móvil, hacer scroll automático al INICIO EXACTO del selector de canciones
             // ESTRATEGIA NUEVA: Usar scrollIntoView y luego ajustar manualmente para compensar header sticky
@@ -1185,6 +1452,17 @@
                     '<button type="button" onclick="joinRoom()" class="' + btnSecondary + ' w-auto px-4" id="joinRoomBtn" disabled>Unirse</button></div>';
             } else if (mode === 'practice') {
                 buttonsDiv.innerHTML = '<button type="button" onclick="startPractice()" class="' + btnPrimary + '" id="startPracticeBtn" disabled>🎯 Iniciar Práctica</button>';
+                
+                // Asegurar que el campo de apuesta tenga un valor por defecto
+                var betAmountInput = document.getElementById('betAmount');
+                if (betAmountInput && !betAmountInput.value) {
+                    betAmountInput.value = '100';
+                }
+                
+                // Actualizar estado del botón inmediatamente
+                setTimeout(function() {
+                    updateBetEligibility();
+                }, 100);
             } else if (mode === 'tournament') {
                 buttonsDiv.innerHTML = '<div class="flex gap-2"><input type="text" id="tournamentId" placeholder="ID de torneo" class="flex-1 px-3 py-2.5 rounded-lg bg-black/40 border border-white/10 text-white text-sm">' +
                     '<button type="button" onclick="joinTournamentMode()" class="' + btnPrimary + ' w-auto px-4" id="joinTournamentBtn" disabled>🏆 Unirme</button></div>';
@@ -1199,24 +1477,20 @@
             if (query.trim() && typeof searchDeezer === 'function') searchDeezer(query, 'searchResults');
         }
 
-        async function selectSongForBattle(song) {
-            if (typeof GameEngine !== 'undefined' && typeof GameEngine.ensureSongEligibleForMatchmaking === 'function') {
-                var eloGate = await GameEngine.ensureSongEligibleForMatchmaking(song.id);
-                if (!eloGate.allowed) { showToast(eloGate.reason || 'Canción fuera del rango ELO permitido', 'error'); return; }
-            }
-            
-            // Si hay un desafío pendiente, intentar aceptarlo
-            if (window.pendingChallengeId && window.currentMode === 'social') {
-                await handleSocialChallengeAccept();
-                return;
-            }
-            selectedSong = song;
-            var cardDiv = document.getElementById('selectedSongCard');
-            cardDiv.innerHTML = '<img src="' + song.image + '" alt="' + song.name + '" class="w-16 h-16 rounded-lg object-cover">' +
-                '<div class="ml-4"><h4 class="text-white font-bold">' + song.name + '</h4><p class="text-gray-400 text-sm">' + song.artist + '</p></div>';
-            cardDiv.className = 'p-6 rounded-2xl border border-cyan-500/20 bg-cyan-500/5 flex items-center';
-            document.querySelectorAll('#actionButtons button').forEach(function (btn) { btn.disabled = false; });
-            updateBetEligibility();
+        // La función selectSongForBattle ya está definida arriba antes de app.js
+        // Aquí solo actualizamos las variables locales cuando se llama
+        if (typeof window.selectSongForBattle === 'function') {
+            var originalSelectSong = window.selectSongForBattle;
+            window.selectSongForBattle = async function(song) {
+                // Actualizar variables locales del scope
+                selectedSong = song;
+                window.selectedSong = song;
+                if (typeof currentMode !== 'undefined') {
+                    window.currentMode = currentMode;
+                }
+                // Llamar función original
+                return await originalSelectSong(song);
+            };
         }
 
         function quickBet(amount) {
@@ -1227,6 +1501,7 @@
         function updateBetEligibility() {
             var startQuickBtn = document.getElementById('startQuickBtn');
             var createSocialBtn = document.getElementById('createSocialBtn');
+            var startPracticeBtn = document.getElementById('startPracticeBtn');
             var betAmountEl = document.getElementById('betAmount');
             var onchainBalance = Number(window.__mtrOnChainBalance || 0);
             var credits = window.CreditsSystem ? (window.CreditsSystem.currentCredits || 0) : 0;
@@ -1244,6 +1519,37 @@
                 createSocialBtn.disabled = !canCoverSocialBet || !selectedSong;
                 createSocialBtn.title = (!canCoverSocialBet && bet > 0) ? 
                     (bet < 100 ? 'Apuesta mínima: 100 créditos' : 'Créditos insuficientes') : '';
+            }
+            
+            // Para modo práctica, habilitar cuando hay canción seleccionada
+            if (startPracticeBtn) {
+                // Asegurar que el balance demo esté cargado
+                if (typeof GameEngine !== 'undefined' && typeof GameEngine.loadPracticeDemoBalance === 'function') {
+                    GameEngine.loadPracticeDemoBalance();
+                }
+                
+                var practiceBalance = (typeof GameEngine !== 'undefined' && GameEngine.practiceDemoBalance) ? GameEngine.practiceDemoBalance : 1000;
+                var effectiveBet = bet || 100;
+                var canCoverPracticeBet = practiceBalance >= effectiveBet;
+                var shouldBeEnabled = !!selectedSong && canCoverPracticeBet;
+                
+                console.log('[updateBetEligibility] Modo práctica:', {
+                    selectedSong: !!selectedSong,
+                    practiceBalance: practiceBalance,
+                    effectiveBet: effectiveBet,
+                    canCoverPracticeBet: canCoverPracticeBet,
+                    shouldBeEnabled: shouldBeEnabled
+                });
+                
+                startPracticeBtn.disabled = !shouldBeEnabled;
+                
+                if (!selectedSong) {
+                    startPracticeBtn.title = 'Selecciona una canción primero';
+                } else if (!canCoverPracticeBet) {
+                    startPracticeBtn.title = 'Saldo demo insuficiente. Disponible: ' + practiceBalance + ' MTR';
+                } else {
+                    startPracticeBtn.title = '';
+                }
             }
         }
 
@@ -1268,9 +1574,39 @@
             else showToast('GameEngine no está cargado', 'error');
         }
         async function startPractice() {
-            if (!selectedSong) { showToast('Selecciona una canción primero', 'error'); return; }
+            if (!selectedSong) { 
+                showToast('Selecciona una canción primero', 'error'); 
+                return; 
+            }
+            
+            if (typeof GameEngine === 'undefined') {
+                showToast('GameEngine no está cargado. Recarga la página.', 'error');
+                console.error('[practice] GameEngine is not defined');
+                return;
+            }
+            
             var demoBet = parseInt(document.getElementById('betAmount').value) || 100;
-            if (typeof GameEngine !== 'undefined') await GameEngine.startPracticeMatch(selectedSong, demoBet);
+            
+            try {
+                // Deshabilitar el botón mientras se procesa
+                var btn = document.getElementById('startPracticeBtn');
+                if (btn) {
+                    btn.disabled = true;
+                    btn.textContent = '🎯 Iniciando...';
+                }
+                
+                await GameEngine.startPracticeMatch(selectedSong, demoBet);
+            } catch (error) {
+                console.error('[practice] Error in startPractice:', error);
+                showToast('Error al iniciar práctica: ' + (error.message || 'Error desconocido'), 'error');
+                
+                // Rehabilitar el botón en caso de error
+                var btn = document.getElementById('startPracticeBtn');
+                if (btn) {
+                    btn.disabled = false;
+                    btn.textContent = '🎯 Iniciar Práctica';
+                }
+            }
         }
 
         async function createSocialChallenge() {
@@ -1325,8 +1661,6 @@
                     window.pendingChallengeId = null; // Limpiar después de aceptar
                 }
             }
-        }
-            else showToast('Modo práctica en desarrollo', 'info');
         }
         async function joinTournamentMode() {
             if (!selectedSong) return;
@@ -1409,6 +1743,7 @@
         window.showIncomingChallenge = showIncomingChallenge;
         window.verifyPurchasedMtrTx = verifyPurchasedMtrTx;
         window.updateBetEligibility = updateBetEligibility;
+        // selectSongForBattle ya está asignado arriba directamente a window
     </script>
 
     <!-- VIEM WALLET MODULE -->
@@ -1426,8 +1761,12 @@
             label = label || 'Error RPC';
             var badge = document.getElementById('onchainBalanceDisplay');
             var onchainBalance = document.getElementById('onchainMtrBalance');
+            // NO actualizar si estamos en modo práctica
+            const isPracticeMode = typeof window !== 'undefined' && window.currentMode === 'practice';
             if (badge) badge.textContent = 'On-chain: ' + label;
-            if (onchainBalance) onchainBalance.textContent = label;
+            if (onchainBalance && !isPracticeMode) {
+                onchainBalance.textContent = label;
+            }
         }
 
         function validateMtrTokenAddress() {
@@ -1478,21 +1817,38 @@
             if (!address) return;
             if (!validateMtrTokenAddress()) { setOnchainBalanceError('Address inválida'); return; }
             try {
-                var balance = await publicClient.readContract({
+                // Agregar timeout para evitar bloqueos
+                var balancePromise = publicClient.readContract({
                     address: MTR_TOKEN,
                     abi: [{ type: 'function', name: 'balanceOf', stateMutability: 'view', inputs: [{ name: 'account', type: 'address' }], outputs: [{ name: '', type: 'uint256' }] }],
                     functionName: 'balanceOf', args: [address]
                 });
+                
+                var balance = await Promise.race([
+                    balancePromise,
+                    new Promise((_, reject) => setTimeout(() => reject(new Error('Balance timeout')), 5000))
+                ]);
+                
                 var numericBalance = Number(formatUnits(balance, 18));
                 window.__mtrOnChainBalance = numericBalance;
                 var formatted = numericBalance.toLocaleString('es-ES', { maximumFractionDigits: 4 });
                 var badge = document.getElementById('onchainBalanceDisplay');
                 var onchain = document.getElementById('onchainMtrBalance');
+                
+                // NO actualizar onchainMtrBalance si estamos en modo práctica (dejar que updatePracticeBetDisplay lo maneje)
+                const isPracticeMode = typeof window !== 'undefined' && window.currentMode === 'practice';
+                
                 if (badge) badge.textContent = 'Tu MTR: ' + formatted;
-                if (onchain) onchain.textContent = formatted;
+                if (onchain && !isPracticeMode) {
+                    onchain.textContent = formatted;
+                }
+                // Si estamos en modo práctica, actualizar el display del balance demo
+                if (isPracticeMode && typeof GameEngine !== 'undefined' && typeof GameEngine.updatePracticeBetDisplay === 'function') {
+                    GameEngine.updatePracticeBetDisplay();
+                }
                 if (typeof window.updateBetEligibility === 'function') window.updateBetEligibility();
             } catch (e) {
-                console.error('[wallet] balance error', e);
+                // Silenciar errores para no bloquear la página
                 setOnchainBalanceError();
             }
         }
@@ -1534,36 +1890,23 @@
             }
         }
 
-        // Detectar si estamos en dispositivo móvil - MEJORADO
+        // Detectar si estamos en dispositivo móvil
         function isMobileDevice() {
-            var isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || 
-                          (window.innerWidth <= 768) ||
-                          ('ontouchstart' in window) ||
-                          (navigator.maxTouchPoints > 0);
-            console.log('[wallet] 🔍 Detección móvil:', {
-                userAgent: navigator.userAgent,
-                width: window.innerWidth,
-                touchSupport: 'ontouchstart' in window,
-                maxTouchPoints: navigator.maxTouchPoints,
-                isMobile: isMobile
-            });
-            return isMobile;
+            return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || 
+                   (window.innerWidth <= 768) ||
+                   ('ontouchstart' in window) ||
+                   (navigator.maxTouchPoints > 0);
         }
         
         // Detectar si estamos en un navegador de wallet (MetaMask, Trust Wallet, etc.)
         function isWalletBrowser() {
             var userAgent = navigator.userAgent.toLowerCase();
-            var isWallet = userAgent.includes('metamask') || 
-                          userAgent.includes('mmsb') ||
-                          userAgent.includes('trust') ||
-                          userAgent.includes('trustwallet') ||
-                          userAgent.includes('binance') ||
-                          userAgent.includes('coinbase');
-            console.log('[auth] 🔍 Detección navegador wallet:', {
-                userAgent: navigator.userAgent,
-                isWallet: isWallet
-            });
-            return isWallet;
+            return userAgent.includes('metamask') || 
+                   userAgent.includes('mmsb') ||
+                   userAgent.includes('trust') ||
+                   userAgent.includes('trustwallet') ||
+                   userAgent.includes('binance') ||
+                   userAgent.includes('coinbase');
         }
 
         // Detectar wallets móviles disponibles
@@ -2769,61 +3112,64 @@
         }
 
         // Detectar cuando window.ethereum o BinanceChain se vuelve disponible (útil en móviles)
+        // Usar un timeout más largo para no sobrecargar
+        var ethereumCheckCount = 0;
         var ethereumCheckInterval = setInterval(function() {
+            ethereumCheckCount++;
             if ((window.ethereum || window.BinanceChain) && !window.__mtrEthereumDetected) {
                 window.__mtrEthereumDetected = true;
-                console.log('[wallet] Wallet provider detectado:', window.ethereum ? 'ethereum' : 'binance');
+                clearInterval(ethereumCheckInterval);
                 
                 // Si estamos en móvil y el usuario acaba de regresar, intentar conectar automáticamente
                 if (isMobileDevice() && !connectedAddress) {
                     setTimeout(function() {
-                        if (window.BinanceChain) {
-                            connectBinanceWallet();
-                        } else {
-                            connectWallet();
+                        try {
+                            if (window.BinanceChain) {
+                                connectBinanceWallet();
+                            } else {
+                                connectWallet();
+                            }
+                        } catch (e) {
+                            // Silenciar errores
                         }
                     }, 1000);
                 }
             }
+            
+            // Limpiar después de 20 intentos (10 segundos)
+            if (ethereumCheckCount >= 20) {
+                clearInterval(ethereumCheckInterval);
+            }
         }, 500);
-        
-        // Limpiar el intervalo después de 30 segundos
-        setTimeout(function() {
-            clearInterval(ethereumCheckInterval);
-        }, 30000);
 
         // Función mejorada para verificar y actualizar el estado de la wallet
         async function checkAndUpdateWalletState() {
-            var isMobile = isMobileDevice();
-            console.log('[wallet] 🔍 Verificando estado de wallet...', isMobile ? '📱 MÓVIL' : '🖥️ DESKTOP');
-            
             // Verificar si window.ethereum está disponible
             if (!window.ethereum) {
-                console.log('[wallet] window.ethereum no disponible');
                 renderWallet();
                 return;
             }
             
             try {
-                // Obtener cuentas conectadas
-                var accounts = await window.ethereum.request({ method: 'eth_accounts' });
-                console.log('[wallet] Cuentas obtenidas:', accounts);
+                // Obtener cuentas conectadas con timeout
+                var accountsPromise = window.ethereum.request({ method: 'eth_accounts' });
+                var accounts = await Promise.race([
+                    accountsPromise,
+                    new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout')), 3000))
+                ]).catch(function() { return []; });
                 
-                // Obtener chain ID actual
-                var chainIdHex = await window.ethereum.request({ method: 'eth_chainId' });
+                // Obtener chain ID actual con timeout
+                var chainIdPromise = window.ethereum.request({ method: 'eth_chainId' });
+                var chainIdHex = await Promise.race([
+                    chainIdPromise,
+                    new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout')), 3000))
+                ]).catch(function() { return '0x2105'; }); // Default a Base
+                
                 connectedChainId = Number.parseInt(chainIdHex, 16);
-                console.log('[wallet] Chain ID:', connectedChainId);
                 
                 // Actualizar dirección conectada
                 var previousAddress = connectedAddress;
                 connectedAddress = accounts?.[0] || null;
-                
-                console.log('[wallet] Estado:', {
-                    previousAddress: previousAddress,
-                    currentAddress: connectedAddress,
-                    chainId: connectedChainId,
-                    isMobile: isMobile
-                });
                 
                 // Si hay cambio de dirección o es la primera vez
                 if (connectedAddress !== previousAddress || (connectedAddress && !previousAddress)) {
@@ -2831,41 +3177,23 @@
                     await ensureBaseChain();
                     renderWallet();
                     
-                    // En móvil, forzar múltiples actualizaciones
-                    if (isMobile && connectedAddress) {
-                        // Actualizar UI inmediatamente
-                        renderWallet();
-                        
-                        // Esperar un momento y actualizar balance
+                    // Actualizar balance si está en Base
+                    if (connectedChainId === 8453 && connectedAddress) {
+                        // Usar un timeout para no bloquear la carga inicial
                         setTimeout(async function() {
-                            if (connectedChainId === 8453 && connectedAddress) {
+                            try {
                                 await refreshMtrBalance(connectedAddress);
+                                renderWallet();
+                            } catch (balanceError) {
+                                // Silenciar errores de balance para no bloquear
                             }
-                            // Actualizar UI nuevamente después del balance
-                            renderWallet();
-                        }, 500);
-                        
-                        // Una verificación más después de 2 segundos
-                        setTimeout(function() {
-                            renderWallet();
-                        }, 2000);
-                    } else {
-                        // Desktop: comportamiento normal
-                        if (connectedChainId === 8453 && connectedAddress) {
-                            await refreshMtrBalance(connectedAddress);
-                        }
-                    }
-                } else if (connectedAddress) {
-                    // Si ya estaba conectada, solo actualizar si es necesario
-                    renderWallet();
-                    if (connectedChainId === 8453) {
-                        await refreshMtrBalance(connectedAddress);
+                        }, isMobile ? 1000 : 500);
                     }
                 } else {
                     renderWallet();
                 }
             } catch (error) {
-                console.error('[wallet] Error al verificar estado:', error);
+                // Silenciar errores para no bloquear la página
                 renderWallet();
             }
         }
@@ -2947,29 +3275,38 @@
             }, 60000);
         }
 
-        // Manejar video de batallas en vivo
-        (function() {
-            var video = document.getElementById('batallasVideo');
-            var canvas = document.getElementById('pulse-canvas');
-            
-            if (video && canvas) {
-                // Ocultar canvas cuando el video se carga correctamente
-                video.addEventListener('loadeddata', function() {
-                    canvas.style.display = 'none';
-                    video.style.display = 'block';
-                });
+        // Manejar video de batallas en vivo (carga diferida para no bloquear)
+        setTimeout(function() {
+            try {
+                var video = document.getElementById('batallasVideo');
+                var canvas = document.getElementById('pulse-canvas');
                 
-                // Si el video falla, mostrar canvas como fallback
-                video.addEventListener('error', function() {
-                    canvas.style.display = 'block';
-                    video.style.display = 'none';
-                    console.log('[video] Video no disponible, usando canvas como fallback');
-                });
-                
-                // Verificar si el video puede cargarse
-                video.load();
+                if (video && canvas) {
+                    // Ocultar canvas cuando el video se carga correctamente
+                    video.addEventListener('loadeddata', function() {
+                        if (canvas) canvas.style.display = 'none';
+                        if (video) video.style.display = 'block';
+                    }, { once: true });
+                    
+                    // Si el video falla, mostrar canvas como fallback
+                    video.addEventListener('error', function() {
+                        if (canvas) canvas.style.display = 'block';
+                        if (video) video.style.display = 'none';
+                    }, { once: true });
+                    
+                    // Intentar cargar el video (con timeout para no bloquear)
+                    try {
+                        video.load();
+                    } catch (e) {
+                        // Si falla, mostrar canvas
+                        if (canvas) canvas.style.display = 'block';
+                        if (video) video.style.display = 'none';
+                    }
+                }
+            } catch (videoError) {
+                // Silenciar errores del video para no bloquear la página
             }
-        })();
+        }, 500);
     </script>
 
 </body>
