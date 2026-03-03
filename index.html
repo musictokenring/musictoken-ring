@@ -1139,12 +1139,31 @@
             window.supabaseClient = supabase.createClient(CONFIG.SUPABASE_URL, CONFIG.SUPABASE_ANON_KEY);
         }
 
+        // DEFINIR isWalletBrowser ANTES de loginWithGoogle para evitar ReferenceError
+        // Esta función ya está definida arriba, solo mantener referencia si no existe
+        if (typeof window.isWalletBrowser === 'undefined') {
+            function isWalletBrowser() {
+                var userAgent = navigator.userAgent.toLowerCase();
+                return userAgent.includes('metamask') ||
+                       userAgent.includes('mmsb') ||
+                       userAgent.includes('trust') ||
+                       userAgent.includes('trustwallet') ||
+                       userAgent.includes('binance') ||
+                       userAgent.includes('coinbase');
+            }
+            window.isWalletBrowser = isWalletBrowser;
+        }
+        
+        // Asegurar que esté disponible globalmente
+        window.isWalletBrowser = isWalletBrowser;
+        console.log('[INIT] ✅ isWalletBrowser definida globalmente');
+
         // Función para login con Google - con detección de navegadores de wallet
         window.loginWithGoogle = async function() {
             console.log('[auth] 🔐 Iniciando login con Google...');
             
             // Verificar si estamos en un navegador de wallet
-            if (isWalletBrowser()) {
+            if (typeof isWalletBrowser === 'function' && isWalletBrowser()) {
                 console.log('[auth] ⚠️ Navegador de wallet detectado - Google bloquea estos navegadores');
                 console.log('[auth] User Agent:', navigator.userAgent);
                 
