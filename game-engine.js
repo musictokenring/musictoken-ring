@@ -1548,7 +1548,7 @@ const GameEngine = {
                 <div class="text-sm text-gray-500">💰 Pot: ${pot} MTR</div>
             </div>
 
-            <div class="relative rounded-2xl overflow-hidden border border-cyan-500/20 bg-black/60 mb-6" style="height:340px" id="battleCanvasWrap">
+            <div class="relative rounded-2xl overflow-hidden border border-cyan-500/20 bg-black/60 mb-6" style="height:340px; min-height:280px;" id="battleCanvasWrap">
                 <canvas id="battleCanvas" class="absolute inset-0 w-full h-full"></canvas>
                 <div class="absolute inset-0 flex items-center justify-between px-6 sm:px-12 z-10 pointer-events-none">
                     <div class="text-center" id="fighter1Card">
@@ -1560,8 +1560,25 @@ const GameEngine = {
                         <p class="text-cyan-400 text-xs">${match.player1_song_artist}</p>
                         <p class="text-gray-400 text-xs mt-1">🎧 <span id="plays1">0</span></p>
                     </div>
-                    <div class="flex flex-col items-center gap-1">
-                        <span class="text-5xl sm:text-7xl font-black text-white/10">VS</span>
+                    <div class="flex flex-col items-center justify-center gap-1 relative" style="z-index: 20;">
+                        <!-- Video de animación central -->
+                        <div class="relative w-32 h-32 sm:w-48 sm:h-48 md:w-56 md:h-56 rounded-full overflow-hidden border-4 border-white/20 shadow-2xl" style="box-shadow: 0 0 40px rgba(255,255,255,0.3);">
+                            <video 
+                                id="battleCenterVideo" 
+                                autoplay 
+                                loop 
+                                muted 
+                                playsinline
+                                class="w-full h-full object-cover"
+                                style="filter: brightness(1.1) contrast(1.1);">
+                                <source src="./assets/videos/batallas-en-vivo.mp4" type="video/mp4">
+                                Tu navegador no soporta videos HTML5.
+                            </video>
+                            <!-- Overlay con "VS" semi-transparente sobre el video -->
+                            <div class="absolute inset-0 flex items-center justify-center bg-black/20">
+                                <span class="text-3xl sm:text-5xl md:text-6xl font-black text-white/80 drop-shadow-2xl" style="text-shadow: 0 0 20px rgba(255,255,255,0.8);">VS</span>
+                            </div>
+                        </div>
                     </div>
                     <div class="text-center" id="fighter2Card">
                         <div class="relative inline-block">
@@ -1718,6 +1735,24 @@ const GameEngine = {
                 console.log('[createBattleUI] Inicializando canvas...');
                 this.initBattleCanvas();
                 console.log('[createBattleUI] ✅ Canvas inicializado');
+                
+                // Inicializar video central
+                const battleVideo = document.getElementById('battleCenterVideo');
+                if (battleVideo) {
+                    console.log('[createBattleUI] Inicializando video central...');
+                    battleVideo.load(); // Precargar el video
+                    battleVideo.play().catch(error => {
+                        console.warn('[createBattleUI] Error al reproducir video automáticamente:', error);
+                        // Intentar reproducir después de interacción del usuario
+                        document.addEventListener('click', function playVideoOnce() {
+                            battleVideo.play().catch(() => {});
+                            document.removeEventListener('click', playVideoOnce);
+                        }, { once: true });
+                    });
+                    console.log('[createBattleUI] ✅ Video central inicializado');
+                } else {
+                    console.warn('[createBattleUI] ⚠️ battleCenterVideo no encontrado');
+                }
             } catch (canvasError) {
                 console.error('[createBattleUI] ❌ Error initializing canvas:', canvasError);
                 console.error('[createBattleUI] Stack:', canvasError.stack);
