@@ -1548,46 +1548,54 @@ const GameEngine = {
                 <div class="text-sm text-gray-500">💰 Pot: ${pot} MTR</div>
             </div>
 
-            <div class="relative rounded-2xl overflow-hidden border border-cyan-500/20 bg-black/60 mb-6 h-[280px] sm:h-[320px] md:h-[360px]" id="battleCanvasWrap">
+            <div class="relative rounded-2xl overflow-hidden border border-cyan-500/20 bg-black/60 mb-6 h-[300px] sm:h-[340px] md:h-[380px]" id="battleCanvasWrap">
                 <canvas id="battleCanvas" class="absolute inset-0 w-full h-full"></canvas>
-                <div class="absolute inset-0 flex items-center justify-between px-6 sm:px-12 z-10 pointer-events-none">
-                    <div class="text-center" id="fighter1Card">
-                        <div class="relative inline-block">
-                            <img src="${match.player1_song_image}" alt="" class="w-20 h-20 sm:w-28 sm:h-28 rounded-full object-cover border-4 border-cyan-400" style="box-shadow:0 0 25px rgba(0,243,255,0.5)" id="fighter1Img">
-                            <div class="absolute -bottom-1 -right-1 w-7 h-7 rounded-full bg-cyan-500 text-black text-xs font-black flex items-center justify-center" id="fighter1Badge">♪</div>
+                <div class="absolute inset-0 flex items-center justify-center px-2 sm:px-6 md:px-12 z-10 pointer-events-none">
+                    <!-- Contenedor responsivo con distribución equilibrada -->
+                    <div class="flex items-center justify-center w-full max-w-full gap-1 sm:gap-2 md:gap-4">
+                        <!-- Fighter 1 - Izquierda -->
+                        <div class="text-center flex-shrink-0" id="fighter1Card" style="flex: 0 0 auto; min-width: 0;">
+                            <div class="relative inline-block">
+                                <img src="${match.player1_song_image}" alt="" class="w-16 h-16 sm:w-24 sm:h-24 md:w-28 md:h-28 rounded-full object-cover border-4 border-cyan-400" style="box-shadow:0 0 25px rgba(0,243,255,0.5)" id="fighter1Img">
+                                <div class="absolute -bottom-1 -right-1 w-5 h-5 sm:w-6 sm:h-6 md:w-7 md:h-7 rounded-full bg-cyan-500 text-black text-xs font-black flex items-center justify-center" id="fighter1Badge">♪</div>
+                            </div>
+                            <h3 class="text-white font-bold text-xs sm:text-sm md:text-base mt-1 sm:mt-2 max-w-[90px] sm:max-w-[120px] md:max-w-[140px] truncate">${match.player1_song_name}</h3>
+                            <p class="text-cyan-400 text-[10px] sm:text-xs">${match.player1_song_artist}</p>
+                            <p class="text-gray-400 text-[10px] sm:text-xs mt-0.5 sm:mt-1">🎧 <span id="plays1">0</span></p>
                         </div>
-                        <h3 class="text-white font-bold text-sm sm:text-base mt-2 max-w-[140px] truncate">${match.player1_song_name}</h3>
-                        <p class="text-cyan-400 text-xs">${match.player1_song_artist}</p>
-                        <p class="text-gray-400 text-xs mt-1">🎧 <span id="plays1">0</span></p>
-                    </div>
-                    <div class="flex flex-col items-center justify-center gap-1 relative" style="z-index: 20;">
-                        <!-- Video de animación central -->
-                        <div class="relative w-32 h-32 sm:w-48 sm:h-48 md:w-56 md:h-56 rounded-full overflow-hidden border-4 border-white/20 shadow-2xl" style="box-shadow: 0 0 40px rgba(255,255,255,0.3);">
-                            <video 
-                                id="battleCenterVideo" 
-                                autoplay 
-                                loop 
-                                muted 
-                                playsinline
-                                class="w-full h-full object-cover"
-                                style="filter: brightness(1.1) contrast(1.1);">
-                                <source src="./assets/videos/batallas-en-vivo.mp4" type="video/mp4">
-                                Tu navegador no soporta videos HTML5.
-                            </video>
-                            <!-- Overlay con "VS" semi-transparente sobre el video -->
-                            <div class="absolute inset-0 flex items-center justify-center bg-black/20">
-                                <span class="text-3xl sm:text-5xl md:text-6xl font-black text-white/80 drop-shadow-2xl" style="text-shadow: 0 0 20px rgba(255,255,255,0.8);">VS</span>
+                        
+                        <!-- Video central con VS -->
+                        <div class="flex flex-col items-center justify-center gap-1 relative flex-shrink-0" style="z-index: 20; flex: 0 0 auto;">
+                            <!-- Video de animación central - Tamaño responsivo -->
+                            <div class="relative w-24 h-24 sm:w-40 sm:h-40 md:w-56 md:h-56 rounded-full overflow-hidden border-2 sm:border-4 border-white/20 shadow-2xl" style="box-shadow: 0 0 30px rgba(255,255,255,0.3);">
+                                <video 
+                                    id="battleCenterVideo" 
+                                    autoplay 
+                                    loop 
+                                    muted 
+                                    playsinline
+                                    class="w-full h-full object-cover"
+                                    style="filter: brightness(1.1) contrast(1.1);">
+                                    <source src="./assets/videos/batallas-en-vivo.mp4" type="video/mp4">
+                                    Tu navegador no soporta videos HTML5.
+                                </video>
+                                <!-- Overlay con "VS" semi-transparente sobre el video -->
+                                <div class="absolute inset-0 flex items-center justify-center bg-black/20">
+                                    <span class="text-2xl sm:text-4xl md:text-6xl font-black text-white/80 drop-shadow-2xl" style="text-shadow: 0 0 20px rgba(255,255,255,0.8);">VS</span>
+                                </div>
                             </div>
                         </div>
-                    </div>
-                    <div class="text-center" id="fighter2Card">
-                        <div class="relative inline-block">
-                            <img src="${match.player2_song_image}" alt="" class="w-20 h-20 sm:w-28 sm:h-28 rounded-full object-cover border-4 border-fuchsia-400" style="box-shadow:0 0 25px rgba(236,72,153,0.5)" id="fighter2Img">
-                            <div class="absolute -bottom-1 -right-1 w-7 h-7 rounded-full bg-fuchsia-500 text-white text-xs font-black flex items-center justify-center" id="fighter2Badge">♫</div>
+                        
+                        <!-- Fighter 2 - Derecha -->
+                        <div class="text-center flex-shrink-0" id="fighter2Card" style="flex: 0 0 auto; min-width: 0;">
+                            <div class="relative inline-block">
+                                <img src="${match.player2_song_image}" alt="" class="w-16 h-16 sm:w-24 sm:h-24 md:w-28 md:h-28 rounded-full object-cover border-4 border-fuchsia-400" style="box-shadow:0 0 25px rgba(236,72,153,0.5)" id="fighter2Img">
+                                <div class="absolute -bottom-1 -right-1 w-5 h-5 sm:w-6 sm:h-6 md:w-7 md:h-7 rounded-full bg-fuchsia-500 text-white text-xs font-black flex items-center justify-center" id="fighter2Badge">♫</div>
+                            </div>
+                            <h3 class="text-white font-bold text-xs sm:text-sm md:text-base mt-1 sm:mt-2 max-w-[90px] sm:max-w-[120px] md:max-w-[140px] truncate">${match.player2_song_name}</h3>
+                            <p class="text-fuchsia-400 text-[10px] sm:text-xs">${match.player2_song_artist}</p>
+                            <p class="text-gray-400 text-[10px] sm:text-xs mt-0.5 sm:mt-1">🎧 <span id="plays2">0</span></p>
                         </div>
-                        <h3 class="text-white font-bold text-sm sm:text-base mt-2 max-w-[140px] truncate">${match.player2_song_name}</h3>
-                        <p class="text-fuchsia-400 text-xs">${match.player2_song_artist}</p>
-                        <p class="text-gray-400 text-xs mt-1">🎧 <span id="plays2">0</span></p>
                     </div>
                 </div>
             </div>
@@ -1662,39 +1670,69 @@ const GameEngine = {
                         windowHeight: window.innerHeight
                     });
                     
-                    // En móvil, usar scrollIntoView para mejor compatibilidad
+                    // En móvil, usar scrollIntoView con mejor configuración
                     if (isMobile) {
                         console.log('[createBattleUI] Usando scrollIntoView para móvil...');
-                        addedArena.scrollIntoView({
-                            behavior: 'smooth',
-                            block: 'start',
-                            inline: 'nearest'
-                        });
                         
-                        // Ajuste adicional después del scrollIntoView
-                        setTimeout(() => {
-                            const finalRect = addedArena.getBoundingClientRect();
-                            const finalScrollTop = window.pageYOffset || document.documentElement.scrollTop || window.scrollY;
-                            const finalTop = finalRect.top;
-                            const expectedTop = headerHeight + paddingOffset;
+                        // Primero asegurar que el elemento esté completamente renderizado
+                        requestAnimationFrame(() => {
+                            // Obtener posición precisa después del render
+                            const rect = addedArena.getBoundingClientRect();
+                            const scrollTop = window.pageYOffset || document.documentElement.scrollTop || window.scrollY;
+                            const elementTop = rect.top + scrollTop;
+                            const targetPos = Math.max(0, elementTop - headerHeight - 5);
                             
-                            console.log('[createBattleUI] Verificación móvil:', {
-                                finalTop: finalTop,
-                                expectedTop: expectedTop,
-                                diferencia: finalTop - expectedTop
+                            console.log('[createBattleUI] Scroll móvil preciso:', {
+                                elementTop: elementTop,
+                                targetPos: targetPos,
+                                currentScroll: scrollTop
                             });
                             
-                            // Si hay diferencia significativa, hacer ajuste fino
-                            if (Math.abs(finalTop - expectedTop) > 15) {
-                                const adjustment = finalTop - expectedTop;
-                                const currentScroll = window.pageYOffset || document.documentElement.scrollTop || window.scrollY;
-                                window.scrollTo({
-                                    top: currentScroll - adjustment,
-                                    behavior: 'smooth'
+                            // Usar scrollTo con posición calculada para mayor precisión
+                            window.scrollTo({
+                                top: targetPos,
+                                behavior: 'smooth'
+                            });
+                            
+                            // Verificación y ajuste fino después del scroll
+                            setTimeout(() => {
+                                const finalRect = addedArena.getBoundingClientRect();
+                                const finalTop = finalRect.top;
+                                const expectedTop = headerHeight + 5;
+                                
+                                console.log('[createBattleUI] Verificación móvil:', {
+                                    finalTop: finalTop,
+                                    expectedTop: expectedTop,
+                                    diferencia: finalTop - expectedTop
                                 });
-                                console.log('[createBattleUI] Ajuste fino móvil aplicado:', -adjustment);
-                            }
-                        }, 400);
+                                
+                                // Ajuste fino si es necesario
+                                if (Math.abs(finalTop - expectedTop) > 10) {
+                                    const currentScroll = window.pageYOffset || document.documentElement.scrollTop || window.scrollY;
+                                    const adjustment = finalTop - expectedTop;
+                                    window.scrollTo({
+                                        top: currentScroll - adjustment,
+                                        behavior: 'smooth'
+                                    });
+                                    console.log('[createBattleUI] Ajuste fino móvil aplicado:', -adjustment);
+                                }
+                                
+                                // Verificación final - asegurar que battleArena esté visible
+                                const finalCheck = addedArena.getBoundingClientRect();
+                                const viewportHeight = window.innerHeight;
+                                const isVisible = finalCheck.top >= headerHeight && finalCheck.top < viewportHeight - 100;
+                                
+                                if (!isVisible) {
+                                    console.warn('[createBattleUI] ⚠️ battleArena no está completamente visible, ajustando...');
+                                    const finalScroll = window.pageYOffset || document.documentElement.scrollTop || window.scrollY;
+                                    const finalElementTop = finalCheck.top + finalScroll;
+                                    window.scrollTo({
+                                        top: finalElementTop - headerHeight - 10,
+                                        behavior: 'smooth'
+                                    });
+                                }
+                            }, 500);
+                        });
                     } else {
                         // Desktop: usar scrollTo normal
                         console.log('[createBattleUI] Usando scrollTo para desktop...');
