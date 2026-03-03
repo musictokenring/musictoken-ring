@@ -91,6 +91,21 @@
                 if (modeSelector) modeSelector.classList.add('hidden');
                 if (songSelection) songSelection.classList.remove('hidden');
                 if (modeTitle) modeTitle.textContent = titles[mode] || 'Modo de Juego';
+                
+                // En móvil, hacer scroll automático al selector de canciones
+                if (isMobileDevice && isMobileDevice()) {
+                    setTimeout(function() {
+                        if (songSelection) {
+                            var elementTop = songSelection.getBoundingClientRect().top + window.pageYOffset;
+                            var offset = 100;
+                            var targetPosition = elementTop - offset;
+                            window.scrollTo({
+                                top: targetPosition,
+                                behavior: 'smooth'
+                            });
+                        }
+                    }, 100);
+                }
             };
         }
         if (typeof window.backToModes !== 'function') {
@@ -215,11 +230,6 @@
 
     <!-- ==================== MAIN ==================== -->
     <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-20">
-
-        <!-- Indicador de versión (solo visible en desarrollo/debug) -->
-        <div id="version-indicator" class="fixed bottom-2 right-2 z-40 px-2 py-1 bg-black/60 border border-cyan-500/30 rounded text-xs text-cyan-400 font-mono opacity-50 hover:opacity-100 transition">
-            v2.1-walletconnect-fix
-        </div>
 
         <!-- BATTLE ANIMATION -->
         <div id="battle-animation" class="h-96 w-full max-w-5xl mx-auto my-12 relative overflow-hidden rounded-xl border border-cyan-500/30 bg-black/40 neon-border-cyan">
@@ -1017,6 +1027,27 @@
             document.getElementById('modeTitle').textContent = titles[mode] || 'Modo de Juego';
             updateActionButtons(mode);
             if (typeof GameEngine !== 'undefined' && typeof GameEngine.updatePracticeBetDisplay === 'function') GameEngine.updatePracticeBetDisplay();
+            
+            // En móvil, hacer scroll automático al selector de canciones para mejor UX
+            if (isMobileDevice()) {
+                setTimeout(function() {
+                    var songSelectionEl = document.getElementById('songSelection');
+                    if (songSelectionEl) {
+                        // Calcular posición para centrar el selector de canciones en la pantalla
+                        var elementTop = songSelectionEl.getBoundingClientRect().top + window.pageYOffset;
+                        var offset = 100; // Offset para dejar espacio arriba
+                        var targetPosition = elementTop - offset;
+                        
+                        // Scroll suave al selector de canciones
+                        window.scrollTo({
+                            top: targetPosition,
+                            behavior: 'smooth'
+                        });
+                        
+                        console.log('[mobile] 📱 Scroll automático al selector de canciones');
+                    }
+                }, 100); // Pequeño delay para asegurar que el DOM se actualizó
+            }
         }
 
         function backToModes() {
@@ -1025,6 +1056,22 @@
             window.currentMode = null;
             if (typeof GameEngine !== 'undefined' && typeof GameEngine.updatePracticeBetDisplay === 'function') GameEngine.updatePracticeBetDisplay();
             selectedSong = null;
+            
+            // En móvil, hacer scroll al selector de modos cuando se vuelve atrás
+            if (isMobileDevice()) {
+                setTimeout(function() {
+                    var modeSelectorEl = document.getElementById('modeSelector');
+                    if (modeSelectorEl) {
+                        var elementTop = modeSelectorEl.getBoundingClientRect().top + window.pageYOffset;
+                        var offset = 100;
+                        var targetPosition = elementTop - offset;
+                        window.scrollTo({
+                            top: targetPosition,
+                            behavior: 'smooth'
+                        });
+                    }
+                }, 100);
+            }
         }
 
         function updateActionButtons(mode) {
