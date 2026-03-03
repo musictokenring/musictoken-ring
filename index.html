@@ -1033,10 +1033,8 @@
             if (typeof GameEngine !== 'undefined' && typeof GameEngine.updatePracticeBetDisplay === 'function') GameEngine.updatePracticeBetDisplay();
             
             // En móvil, hacer scroll automático al INICIO EXACTO del selector de canciones
-            // PROBLEMA: El scroll estaba yendo a "Reclamar USDC" que está más abajo
-            // SOLUCIÓN: Asegurar que el elemento esté completamente visible y usar método más robusto
+            // ESTRATEGIA NUEVA: Usar scrollIntoView y luego ajustar manualmente para compensar header sticky
             if (typeof isMobileDevice === 'function' && isMobileDevice()) {
-                // Primero hacer visible el elemento y esperar a que se renderice completamente
                 setTimeout(function() {
                     var songSelectionEl = document.getElementById('songSelection');
                     if (!songSelectionEl) {
@@ -1044,83 +1042,75 @@
                         return;
                     }
                     
-                    // CRÍTICO: Remover 'hidden' y asegurar visibilidad ANTES de calcular posición
+                    // Asegurar que el elemento esté visible
                     songSelectionEl.classList.remove('hidden');
                     songSelectionEl.style.display = 'block';
-                    songSelectionEl.style.visibility = 'visible';
                     
-                    // Forzar múltiples reflows para asegurar que el DOM esté completamente actualizado
+                    // Forzar reflow
                     songSelectionEl.offsetHeight;
-                    void songSelectionEl.offsetHeight; // Forzar reflow adicional
                     
-                    // Esperar un frame más para que el navegador procese el cambio
-                    requestAnimationFrame(function() {
-                        // Obtener altura del header sticky
-                        var headerEl = document.querySelector('header');
-                        var headerHeight = headerEl ? headerEl.offsetHeight : 64;
-                        
-                        // Calcular posición usando getBoundingClientRect DESPUÉS de que el elemento esté visible
+                    // Obtener altura del header sticky ANTES del scroll
+                    var headerEl = document.querySelector('header');
+                    var headerHeight = headerEl ? headerEl.offsetHeight : 64;
+                    
+                    // PRIMERO: Usar scrollIntoView para llevar el elemento a la vista (sin comportamiento smooth para ser más preciso)
+                    songSelectionEl.scrollIntoView({ 
+                        block: 'start', 
+                        behavior: 'auto' // Usar 'auto' para ser instantáneo y más preciso
+                    });
+                    
+                    // INMEDIATAMENTE después, ajustar manualmente restando la altura del header
+                    setTimeout(function() {
                         var rect = songSelectionEl.getBoundingClientRect();
                         var currentScroll = window.pageYOffset || document.documentElement.scrollTop || window.scrollY;
+                        var elementTop = rect.top + currentScroll;
                         
-                        // Calcular posición absoluta del elemento en el documento
-                        var elementAbsoluteTop = rect.top + currentScroll;
+                        // Calcular la posición correcta: elemento menos header menos pequeño padding
+                        var targetPosition = elementTop - headerHeight - 10;
                         
-                        // Calcular posición objetivo: inicio del elemento menos header y pequeño padding
-                        var targetScrollPosition = elementAbsoluteTop - headerHeight - 10;
-                        
-                        console.log('[mobile] 📱 Scroll calculado (después de hacer visible):', {
+                        console.log('[mobile] 📱 Ajuste después de scrollIntoView:', {
                             rectTop: rect.top,
                             currentScroll: currentScroll,
-                            elementAbsoluteTop: elementAbsoluteTop,
+                            elementTop: elementTop,
                             headerHeight: headerHeight,
-                            targetScrollPosition: targetScrollPosition,
-                            offsetTop: songSelectionEl.offsetTop,
-                            modo: mode
+                            targetPosition: targetPosition
                         });
                         
-                        // Hacer scroll directamente a la posición calculada
+                        // Hacer el ajuste final con smooth scroll
                         window.scrollTo({
-                            top: Math.max(0, targetScrollPosition),
+                            top: Math.max(0, targetPosition),
                             behavior: 'smooth'
                         });
                         
-                        // Verificación y ajuste después del scroll
+                        // Verificación final después del ajuste
                         setTimeout(function() {
                             var finalRect = songSelectionEl.getBoundingClientRect();
-                            var finalScroll = window.pageYOffset || document.documentElement.scrollTop || window.scrollY;
                             var expectedTop = headerHeight + 10;
                             var actualTop = finalRect.top;
                             var difference = actualTop - expectedTop;
                             
-                            console.log('[mobile] 📱 Verificación después del scroll:', {
+                            console.log('[mobile] 📱 Verificación final:', {
                                 expectedTop: expectedTop,
                                 actualTop: actualTop,
-                                diferencia: difference,
-                                finalScroll: finalScroll
+                                diferencia: difference
                             });
                             
-                            // Si la diferencia es significativa (más de 20px), hacer ajuste final
-                            if (Math.abs(difference) > 20) {
-                                // Recalcular usando la posición actual
-                                var newElementTop = finalRect.top + finalScroll;
-                                var finalPosition = newElementTop - headerHeight - 10;
+                            // Si aún hay diferencia significativa, hacer un último ajuste
+                            if (Math.abs(difference) > 15) {
+                                var finalScroll = window.pageYOffset || document.documentElement.scrollTop || window.scrollY;
+                                var finalElementTop = finalRect.top + finalScroll;
+                                var finalPosition = finalElementTop - headerHeight - 10;
                                 
                                 window.scrollTo({
                                     top: Math.max(0, finalPosition),
                                     behavior: 'smooth'
                                 });
                                 
-                                console.log('[mobile] 📱 Ajuste final aplicado:', {
-                                    newElementTop: newElementTop,
-                                    finalPosition: finalPosition
-                                });
-                            } else {
-                                console.log('[mobile] 📱 ✅ Posición correcta');
+                                console.log('[mobile] 📱 Último ajuste aplicado:', finalPosition);
                             }
-                        }, 900); // Esperar más tiempo para que el scroll termine completamente
-                    });
-                }, 300); // Delay inicial para asegurar que el DOM esté listo
+                        }, 600);
+                    }, 50); // Delay muy corto después de scrollIntoView
+                }, 400); // Delay inicial para asegurar que el DOM esté listo
             }
         }
 
