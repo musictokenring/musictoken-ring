@@ -501,6 +501,32 @@
             </div>
         </section>
 
+        <!-- VAULT INFO SECTION -->
+        <section id="vaultInfoSection" class="mb-16">
+            <div class="max-w-2xl mx-auto p-6 sm:p-8 rounded-2xl border border-cyan-500/15 bg-gray-900/50">
+                <h3 class="text-xl font-bold text-white mb-4">💰 Vault de Liquidez</h3>
+                <p class="text-gray-400 text-sm mb-4">Transparencia total: Balance disponible para retiros</p>
+                
+                <div class="p-4 rounded-lg bg-cyan-500/10 border border-cyan-500/20 mb-4">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <div class="text-sm text-gray-400 mb-1">Balance del Vault:</div>
+                            <div id="publicVaultBalance" class="text-2xl font-bold text-cyan-400">Cargando...</div>
+                            <div class="text-xs text-gray-500 mt-1">USDC disponible para retiros</div>
+                        </div>
+                        <div class="text-4xl">🏦</div>
+                    </div>
+                </div>
+
+                <div class="text-xs text-gray-500 space-y-1">
+                    <div>✓ El vault se alimenta con fees: 5% depósito, 2% apuesta, 5% retiro</div>
+                    <div>✓ Todos los retiros se pagan desde el vault</div>
+                    <div>✓ Balance verificado en tiempo real</div>
+                    <a id="publicVaultLink" href="#" target="_blank" class="text-cyan-400 hover:text-cyan-300 underline inline-block mt-2">Ver vault en BaseScan</a>
+                </div>
+            </div>
+        </section>
+
         <!-- CONTACT -->
         <section id="contactSection" class="mb-16">
             <div class="max-w-xl mx-auto p-6 sm:p-8 rounded-2xl border border-white/5 bg-white/[0.02]">
@@ -1315,6 +1341,9 @@
                     showLoginWall();
                 }
 
+                // Cargar balance del vault públicamente (siempre visible)
+                loadPublicVaultBalance();
+
                 var urlParams = new URLSearchParams(window.location.search);
                 var modeParam = urlParams.get('mode');
                 if (modeParam && ['quick', 'private', 'practice', 'tournament', 'social'].indexOf(modeParam) !== -1) {
@@ -1387,6 +1416,54 @@
             navigator.clipboard.writeText(address);
             if (typeof showToast === 'function') showToast('Dirección de ' + network.toUpperCase() + ' copiada', 'success');
         }
+
+        // Cargar balance del vault públicamente
+        async function loadPublicVaultBalance() {
+            try {
+                const backendUrl = window.CONFIG?.BACKEND_API || 'https://musictoken-backend.onrender.com';
+                const response = await fetch(`${backendUrl}/api/vault/balance`);
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    const balance = data.balance || 0;
+                    const vaultAddress = data.vaultAddress;
+                    const baseScanUrl = data.baseScanUrl;
+
+                    const vaultBalanceEl = document.getElementById('publicVaultBalance');
+                    const vaultLinkEl = document.getElementById('publicVaultLink');
+
+                    if (vaultBalanceEl) {
+                        vaultBalanceEl.textContent = balance.toFixed(2) + ' USDC';
+                        vaultBalanceEl.classList.remove('text-gray-400');
+                        vaultBalanceEl.classList.add('text-cyan-400');
+                    }
+
+                    if (vaultLinkEl) {
+                        if (baseScanUrl) {
+                            vaultLinkEl.href = baseScanUrl;
+                        } else if (vaultAddress) {
+                            vaultLinkEl.href = `https://basescan.org/address/${vaultAddress}`;
+                        }
+                    }
+                } else {
+                    const vaultBalanceEl = document.getElementById('publicVaultBalance');
+                    if (vaultBalanceEl) {
+                        vaultBalanceEl.textContent = 'No disponible';
+                        vaultBalanceEl.classList.add('text-gray-500');
+                    }
+                }
+            } catch (error) {
+                console.error('[vault] Error loading public vault balance:', error);
+                const vaultBalanceEl = document.getElementById('publicVaultBalance');
+                if (vaultBalanceEl) {
+                    vaultBalanceEl.textContent = 'Error al cargar';
+                    vaultBalanceEl.classList.add('text-red-400');
+                }
+            }
+        }
+
+        // Actualizar balance del vault cada 60 segundos
+        setInterval(loadPublicVaultBalance, 60000);
 
         function renderWalletDirectory(selectedNetwork) {
             var walletDirectory = document.getElementById('walletDirectory');

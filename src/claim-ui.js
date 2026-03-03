@@ -12,6 +12,9 @@
          */
         init() {
             this.createClaimSection();
+            this.loadVaultBalance();
+            // Update vault balance every 30 seconds
+            setInterval(() => this.loadVaultBalance(), 30000);
         },
 
         /**
@@ -46,11 +49,19 @@
                             <div class="text-sm text-green-400" id="claimStatusText"></div>
                         </div>
 
-                        <div class="p-3 rounded-lg bg-green-500/10 border border-green-500/20">
+                        <div class="p-3 rounded-lg bg-green-500/10 border border-green-500/20 mb-4">
                             <div class="text-xs text-green-400 space-y-1">
                                 <div><strong>✓ Créditos Estables:</strong> 1 crédito = 1 USDC fijo</div>
                                 <div><strong>✓ Sin Volatilidad:</strong> Siempre cobrás en USDC lo que ganaste</div>
                                 <div><strong>✓ Fee de Retiro:</strong> 5% (va al vault de liquidez)</div>
+                            </div>
+                        </div>
+
+                        <div id="vaultBalanceDisplay" class="hidden p-3 rounded-lg bg-cyan-500/10 border border-cyan-500/20 mb-4">
+                            <div class="text-xs text-cyan-400">
+                                <div class="font-bold mb-1">💰 Vault de Liquidez:</div>
+                                <div>Balance disponible: <span id="vaultBalanceAmount" class="font-bold">-</span> USDC</div>
+                                <a id="vaultBaseScanLink" href="#" target="_blank" class="text-xs underline mt-1 inline-block">Ver en BaseScan</a>
                             </div>
                         </div>
                     </div>
@@ -75,7 +86,8 @@
             }
 
             if (usdcEl) {
-                usdcEl.textContent = `≈ $${usdcValue.toFixed(2)} USDC`;
+                // NUEVO: Mostrar como igual (1:1 fijo)
+                usdcEl.textContent = `= $${usdcValue.toFixed(2)} USDC`;
             }
         },
 
@@ -141,6 +153,40 @@
                 setTimeout(() => {
                     statusEl.classList.add('hidden');
                 }, 10000);
+            }
+        },
+
+        /**
+         * Load vault balance
+         */
+        async loadVaultBalance() {
+            try {
+                const backendUrl = window.CONFIG?.BACKEND_API || 'https://musictoken-backend.onrender.com';
+                const response = await fetch(`${backendUrl}/api/vault/balance`);
+
+                if (response.ok) {
+                    const data = await response.json();
+                    const balance = data.balance || 0;
+                    const vaultAddress = data.vaultAddress;
+                    const baseScanUrl = data.baseScanUrl;
+
+                    const vaultDisplay = document.getElementById('vaultBalanceDisplay');
+                    const vaultAmount = document.getElementById('vaultBalanceAmount');
+                    const vaultLink = document.getElementById('vaultBaseScanLink');
+
+                    if (vaultDisplay && vaultAmount) {
+                        vaultAmount.textContent = balance.toFixed(2);
+                        vaultDisplay.classList.remove('hidden');
+
+                        if (vaultLink && baseScanUrl) {
+                            vaultLink.href = baseScanUrl;
+                        } else if (vaultLink && vaultAddress) {
+                            vaultLink.href = `https://basescan.org/address/${vaultAddress}`;
+                        }
+                    }
+                }
+            } catch (error) {
+                console.error('[claim-ui] Error loading vault balance:', error);
             }
         }
     };

@@ -8,6 +8,7 @@ const { createPublicClient, createWalletClient, http, parseUnits, formatUnits } 
 const { privateKeyToAccount } = require('viem/accounts');
 const { base } = require('viem/chains');
 const { createClient } = require('@supabase/supabase-js');
+const { VaultService } = require('./vault-service');
 
 // Fix: Ensure ADMIN_WALLET is set from env
 const ADMIN_WALLET = process.env.ADMIN_WALLET_ADDRESS;
@@ -57,6 +58,7 @@ class ClaimService {
             chain: base,
             transport: http(process.env.BASE_RPC_URL || 'https://mainnet.base.org')
         });
+        this.vaultService = new VaultService();
     }
 
     /**
@@ -104,7 +106,14 @@ class ClaimService {
                 throw new Error('USDC amount too small');
             }
 
-            // Check admin wallet balance
+            // NUEVO: Verificar balance del vault antes de pagar
+            const canWithdraw = await this.vaultService.canWithdraw(usdcAmountRounded);
+            if (!canWithdraw) {
+                const vaultBalance = await this.vaultService.getVaultBalance();
+                throw new Error(`Insufficient vault balance. Available: ${vaultBalance} USDC, Required: ${usdcAmountRounded} USDC. Vault en recarga, espera unos minutos.`);
+            }
+
+            // También verificar admin wallet como fallback
             const adminWalletAddress = ADMIN_WALLET || this.account.address;
             const adminBalance = await this.publicClient.readContract({
                 address: USDC_ADDRESS,
@@ -116,7 +125,41 @@ class ClaimService {
             const adminBalanceFormatted = parseFloat(formatUnits(adminBalance, 6));
 
             if (adminBalanceFormatted < usdcAmountRounded) {
-                throw new Error(`Insufficient USDC in admin wallet. Available: ${adminBalanceFormatted}, Required: ${usdcAmountRounded}`);
+                // Intentar usar vault si admin wallet no tiene suficiente
+                try {
+                    const vaultTxHash = await this.vaultService.withdrawFromVault(usdcAmountRounded, recipientWallet, 'claim_payout');
+                    console.log(`[claim-service] Withdrew ${usdcAmountRounded} USDC from vault. Tx: ${vaultTxHash}`);
+                    
+                    // Deduct credits and update claim record
+                    await supabase.rpc('decrement_user_credits', {
+                        user_id_param: userId,
+                        credits_to_subtract: credits
+                    });
+
+                    await supabase
+                        .from('claims')
+                        .update({
+                            status: 'completed',
+                            tx_hash: vaultTxHash,
+                            completed_at: new Date().toISOString()
+                        })
+                        .eq('id', claimRecord.id);
+
+                    // Enviar fee al vault
+                    await this.sendFeeToVault(withdrawalFee, 'withdrawal', vaultTxHash);
+
+                    return {
+                        success: true,
+                        txHash: vaultTxHash,
+                        usdcAmount: usdcAmountRounded,
+                        creditsUsed: credits,
+                        withdrawalFee: withdrawalFee,
+                        source: 'vault',
+                        note: '1 crédito = 1 USDC fijo'
+                    };
+                } catch (vaultError) {
+                    throw new Error(`Insufficient funds. Admin: ${adminBalanceFormatted} USDC, Vault error: ${vaultError.message}`);
+                }
             }
 
             // Record claim request (nuevo formato sin conversión MTR)
@@ -241,29 +284,16 @@ class ClaimService {
     }
 
     /**
-     * Send fee to vault (for future implementation)
+     * Send fee to vault
      */
     async sendFeeToVault(feeAmount, feeType, txHash) {
         try {
-            // Registrar fee en base de datos para tracking
-            // TODO: Implementar transferencia real al vault cuando esté listo
-            const { error } = await supabase
-                .from('vault_fees')
-                .insert([{
-                    fee_type: feeType, // 'deposit', 'bet', 'withdrawal'
-                    amount: feeAmount,
-                    source_tx_hash: txHash,
-                    status: 'pending', // 'pending', 'sent_to_vault'
-                    created_at: new Date().toISOString()
-                }]);
-
-            if (error) {
-                console.error('[claim-service] Error recording fee:', error);
-            } else {
-                console.log(`[claim-service] Fee ${feeAmount} USDC recorded for vault (type: ${feeType})`);
-            }
+            // Usar vaultService directamente
+            await this.vaultService.addFee(feeAmount, feeType, txHash);
+            console.log(`[claim-service] Fee ${feeAmount} USDC sent to vault (type: ${feeType})`);
         } catch (error) {
             console.error('[claim-service] Error sending fee to vault:', error);
+            // No bloquear el flujo si falla el fee
         }
     }
 }

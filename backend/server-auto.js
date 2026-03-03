@@ -9,6 +9,7 @@ const cors = require('cors');
 const { DepositListener } = require('./deposit-listener');
 const { PriceUpdater } = require('./price-updater');
 const { ClaimService } = require('./claim-service');
+const { VaultService } = require('./vault-service');
 const { createClient } = require('@supabase/supabase-js');
 
 const app = express();
@@ -27,6 +28,7 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
 let depositListener;
 let priceUpdater;
 let claimService;
+let vaultService;
 
 // Initialize all services
 async function initializeServices() {
@@ -43,6 +45,9 @@ async function initializeServices() {
 
         // Initialize claim service
         claimService = new ClaimService();
+
+        // Initialize vault service
+        vaultService = new VaultService();
 
         console.log('[server] ✅ All services initialized');
     } catch (error) {
@@ -87,18 +92,16 @@ app.get('/api/user/credits/:walletAddress', async (req, res) => {
 
         const credits = creditsData?.credits || 0;
 
-        // Calculate USDC value
-        const mtrPrice = priceUpdater.getCurrentPrice() || 0;
-        const rate = priceUpdater.getCurrentRate() || 778;
-        const mtrEquivalent = credits * rate;
-        const usdcValue = mtrEquivalent * mtrPrice;
+        // NUEVO: 1 crédito = 1 USDC fijo siempre
+        const usdcValue = credits; // 1:1 fijo
 
         res.json({
             credits: Math.round(credits * 10000) / 10000, // 4 decimals
-            usdcValue: Math.round(usdcValue * 100) / 100, // 2 decimals
-            mtrPrice,
-            rate,
-            userId: user.id
+            usdcValue: Math.round(usdcValue * 100) / 100, // 2 decimals (igual a créditos)
+            mtrPrice: null, // Ya no relevante
+            rate: null, // Ya no se usa
+            userId: user.id,
+            note: '1 crédito = 1 USDC fijo'
         });
     } catch (error) {
         console.error('[server] Error getting credits:', error);
@@ -253,6 +256,125 @@ app.get('/api/claims/:walletAddress', async (req, res) => {
 });
 
 /**
+ * Add credits (for wins)
+ */
+app.post('/api/user/add-credits', async (req, res) => {
+    try {
+        const { userId, credits, reason, matchId } = req.body;
+
+        if (!userId || !credits || credits <= 0) {
+            return res.status(400).json({ error: 'Invalid parameters' });
+        }
+
+        // Add credits using RPC function
+        const { error: addError } = await supabase.rpc('increment_user_credits', {
+            user_id_param: userId,
+            credits_to_add: credits
+        });
+
+        if (addError) {
+            // Fallback: direct update
+            const { data: currentBalance } = await supabase
+                .from('user_credits')
+                .select('credits')
+                .eq('user_id', userId)
+                .single();
+
+            const newBalance = (currentBalance?.credits || 0) + credits;
+
+            await supabase
+                .from('user_credits')
+                .update({ credits: newBalance, updated_at: new Date().toISOString() })
+                .eq('user_id', userId);
+        }
+
+        res.json({ success: true, creditsAdded: credits });
+    } catch (error) {
+        console.error('[server] Error adding credits:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+/**
+ * Vault endpoints
+ */
+
+/**
+ * Get vault balance
+ */
+app.get('/api/vault/balance', async (req, res) => {
+    try {
+        if (!vaultService) {
+            return res.status(503).json({ error: 'Vault service not initialized' });
+        }
+
+        const balance = await vaultService.getVaultBalance();
+        const stats = await vaultService.getVaultStats();
+
+        res.json({
+            balance: balance,
+            stats: stats,
+            vaultAddress: process.env.VAULT_WALLET_ADDRESS || process.env.ADMIN_WALLET_ADDRESS,
+            baseScanUrl: process.env.VAULT_WALLET_ADDRESS 
+                ? `https://basescan.org/address/${process.env.VAULT_WALLET_ADDRESS}`
+                : null
+        });
+    } catch (error) {
+        console.error('[server] Error getting vault balance:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+/**
+ * Add fee to vault
+ */
+app.post('/api/vault/add-fee', async (req, res) => {
+    try {
+        const { feeType, amount, matchId, source } = req.body;
+
+        if (!feeType || !amount || amount <= 0) {
+            return res.status(400).json({ error: 'Invalid parameters' });
+        }
+
+        if (!['deposit', 'bet', 'withdrawal'].includes(feeType)) {
+            return res.status(400).json({ error: 'Invalid fee type' });
+        }
+
+        if (!vaultService) {
+            return res.status(503).json({ error: 'Vault service not initialized' });
+        }
+
+        const result = await vaultService.addFee(amount, feeType, null, matchId);
+
+        res.json({
+            success: true,
+            ...result
+        });
+    } catch (error) {
+        console.error('[server] Error adding fee to vault:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+/**
+ * Get vault statistics
+ */
+app.get('/api/vault/stats', async (req, res) => {
+    try {
+        if (!vaultService) {
+            return res.status(503).json({ error: 'Vault service not initialized' });
+        }
+
+        const stats = await vaultService.getVaultStats();
+
+        res.json(stats);
+    } catch (error) {
+        console.error('[server] Error getting vault stats:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+/**
  * Health check
  */
 app.get('/api/health', (req, res) => {
@@ -261,7 +383,8 @@ app.get('/api/health', (req, res) => {
         services: {
             depositListener: depositListener?.isListening || false,
             priceUpdater: priceUpdater ? true : false,
-            claimService: claimService ? true : false
+            claimService: claimService ? true : false,
+            vaultService: vaultService ? true : false
         },
         timestamp: new Date().toISOString()
     });

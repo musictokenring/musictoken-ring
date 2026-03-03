@@ -373,27 +373,47 @@ class DepositListener {
     }
 
     /**
-     * Send fee to vault (for future implementation)
-     * Por ahora registra el fee, luego se implementará transferencia real al vault
+     * Send fee to vault
      */
     async sendFeeToVault(feeAmount, feeType, txHash) {
         try {
-            // Registrar fee en base de datos para tracking
-            // TODO: Implementar transferencia real al vault cuando esté listo
-            const { error } = await supabase
-                .from('vault_fees')
-                .insert([{
-                    fee_type: feeType, // 'deposit', 'bet', 'withdrawal'
-                    amount: feeAmount,
-                    source_tx_hash: txHash,
-                    status: 'pending', // 'pending', 'sent_to_vault'
-                    created_at: new Date().toISOString()
-                }]);
+            // Llamar al backend API para agregar fee al vault
+            const backendUrl = process.env.BACKEND_API_URL || 'http://localhost:3001';
+            
+            try {
+                const response = await fetch(`${backendUrl}/api/vault/add-fee`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        feeType: feeType,
+                        amount: feeAmount,
+                        sourceTxHash: txHash
+                    })
+                });
 
-            if (error) {
-                console.error('[deposit-listener] Error recording fee:', error);
-            } else {
-                console.log(`[deposit-listener] Fee ${feeAmount} USDC recorded for vault (type: ${feeType})`);
+                if (response.ok) {
+                    const result = await response.json();
+                    console.log(`[deposit-listener] Fee ${feeAmount} USDC sent to vault (type: ${feeType})`);
+                    return result;
+                } else {
+                    throw new Error(`HTTP ${response.status}`);
+                }
+            } catch (apiError) {
+                // Fallback: registrar directamente en base de datos si API no está disponible
+                console.warn('[deposit-listener] API not available, recording fee directly:', apiError.message);
+                const { error } = await supabase
+                    .from('vault_fees')
+                    .insert([{
+                        fee_type: feeType,
+                        amount: feeAmount,
+                        source_tx_hash: txHash,
+                        status: 'pending',
+                        created_at: new Date().toISOString()
+                    }]);
+
+                if (error) {
+                    console.error('[deposit-listener] Error recording fee:', error);
+                }
             }
         } catch (error) {
             console.error('[deposit-listener] Error sending fee to vault:', error);
