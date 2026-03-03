@@ -96,15 +96,19 @@
                 if (typeof isMobileDevice === 'function' && isMobileDevice()) {
                     setTimeout(function() {
                         if (songSelection) {
-                            var elementTop = songSelection.getBoundingClientRect().top + window.pageYOffset;
-                            var offset = 120;
+                            var headerEl = document.querySelector('header');
+                            var headerHeight = headerEl ? headerEl.offsetHeight : 64;
+                            var rect = songSelection.getBoundingClientRect();
+                            var scrollTop = window.pageYOffset || document.documentElement.scrollTop;
+                            var elementTop = rect.top + scrollTop;
+                            var offset = headerHeight + 20;
                             var targetPosition = Math.max(0, elementTop - offset);
                             window.scrollTo({
                                 top: targetPosition,
                                 behavior: 'smooth'
                             });
                         }
-                    }, 150);
+                    }, 200);
                 }
             };
         }
@@ -1028,27 +1032,42 @@
             updateActionButtons(mode);
             if (typeof GameEngine !== 'undefined' && typeof GameEngine.updatePracticeBetDisplay === 'function') GameEngine.updatePracticeBetDisplay();
             
-                // En móvil, hacer scroll automático al selector de canciones para mejor UX
-                // Esto asegura que el usuario vea inmediatamente el selector de canciones y la apuesta
-                if (typeof isMobileDevice === 'function' && isMobileDevice()) {
-                    setTimeout(function() {
-                        var songSelectionEl = document.getElementById('songSelection');
-                        if (songSelectionEl) {
-                            // Calcular posición para centrar el selector de canciones en la pantalla
-                            var elementTop = songSelectionEl.getBoundingClientRect().top + window.pageYOffset;
-                            var offset = 120; // Offset para dejar espacio arriba (header + padding)
-                            var targetPosition = Math.max(0, elementTop - offset);
-                            
-                            // Scroll suave al selector de canciones
-                            window.scrollTo({
-                                top: targetPosition,
-                                behavior: 'smooth'
-                            });
-                            
-                            console.log('[mobile] 📱 Scroll automático al selector de canciones - Modo:', mode);
-                        }
-                    }, 150); // Delay para asegurar que el DOM se actualizó completamente
-                }
+            // En móvil, hacer scroll automático al selector de canciones para mejor UX
+            // Esto asegura que el usuario vea inmediatamente el selector de canciones y la apuesta
+            if (typeof isMobileDevice === 'function' && isMobileDevice()) {
+                setTimeout(function() {
+                    var songSelectionEl = document.getElementById('songSelection');
+                    if (songSelectionEl) {
+                        // Obtener altura del header sticky
+                        var headerEl = document.querySelector('header');
+                        var headerHeight = headerEl ? headerEl.offsetHeight : 64; // Default 64px (h-16)
+                        
+                        // Calcular posición exacta considerando el header sticky
+                        var rect = songSelectionEl.getBoundingClientRect();
+                        var scrollTop = window.pageYOffset || document.documentElement.scrollTop;
+                        var elementTop = rect.top + scrollTop;
+                        
+                        // Offset: header + padding adicional para mejor visualización
+                        var offset = headerHeight + 20; // Header + 20px de padding
+                        var targetPosition = Math.max(0, elementTop - offset);
+                        
+                        // Scroll suave y preciso al selector de canciones
+                        window.scrollTo({
+                            top: targetPosition,
+                            behavior: 'smooth'
+                        });
+                        
+                        console.log('[mobile] 📱 Scroll automático calculado:', {
+                            elementTop: elementTop,
+                            headerHeight: headerHeight,
+                            offset: offset,
+                            targetPosition: targetPosition,
+                            currentScroll: scrollTop,
+                            modo: mode
+                        });
+                    }
+                }, 200); // Delay aumentado para asegurar que el DOM se actualizó completamente
+            }
         }
 
         function backToModes() {
@@ -1063,8 +1082,12 @@
                 setTimeout(function() {
                     var modeSelectorEl = document.getElementById('modeSelector');
                     if (modeSelectorEl) {
-                        var elementTop = modeSelectorEl.getBoundingClientRect().top + window.pageYOffset;
-                        var offset = 120;
+                        var headerEl = document.querySelector('header');
+                        var headerHeight = headerEl ? headerEl.offsetHeight : 64;
+                        var rect = modeSelectorEl.getBoundingClientRect();
+                        var scrollTop = window.pageYOffset || document.documentElement.scrollTop;
+                        var elementTop = rect.top + scrollTop;
+                        var offset = headerHeight + 20;
                         var targetPosition = Math.max(0, elementTop - offset);
                         window.scrollTo({
                             top: targetPosition,
@@ -1072,7 +1095,7 @@
                         });
                         console.log('[mobile] 📱 Scroll automático al selector de modos');
                     }
-                }, 150);
+                }, 200);
             }
         }
 
