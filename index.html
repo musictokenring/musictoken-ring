@@ -93,18 +93,18 @@
                 if (modeTitle) modeTitle.textContent = titles[mode] || 'Modo de Juego';
                 
                 // En móvil, hacer scroll automático al selector de canciones
-                if (isMobileDevice && isMobileDevice()) {
+                if (typeof isMobileDevice === 'function' && isMobileDevice()) {
                     setTimeout(function() {
                         if (songSelection) {
                             var elementTop = songSelection.getBoundingClientRect().top + window.pageYOffset;
-                            var offset = 100;
-                            var targetPosition = elementTop - offset;
+                            var offset = 120;
+                            var targetPosition = Math.max(0, elementTop - offset);
                             window.scrollTo({
                                 top: targetPosition,
                                 behavior: 'smooth'
                             });
                         }
-                    }, 100);
+                    }, 150);
                 }
             };
         }
@@ -1028,26 +1028,27 @@
             updateActionButtons(mode);
             if (typeof GameEngine !== 'undefined' && typeof GameEngine.updatePracticeBetDisplay === 'function') GameEngine.updatePracticeBetDisplay();
             
-            // En móvil, hacer scroll automático al selector de canciones para mejor UX
-            if (isMobileDevice()) {
-                setTimeout(function() {
-                    var songSelectionEl = document.getElementById('songSelection');
-                    if (songSelectionEl) {
-                        // Calcular posición para centrar el selector de canciones en la pantalla
-                        var elementTop = songSelectionEl.getBoundingClientRect().top + window.pageYOffset;
-                        var offset = 100; // Offset para dejar espacio arriba
-                        var targetPosition = elementTop - offset;
-                        
-                        // Scroll suave al selector de canciones
-                        window.scrollTo({
-                            top: targetPosition,
-                            behavior: 'smooth'
-                        });
-                        
-                        console.log('[mobile] 📱 Scroll automático al selector de canciones');
-                    }
-                }, 100); // Pequeño delay para asegurar que el DOM se actualizó
-            }
+                // En móvil, hacer scroll automático al selector de canciones para mejor UX
+                // Esto asegura que el usuario vea inmediatamente el selector de canciones y la apuesta
+                if (typeof isMobileDevice === 'function' && isMobileDevice()) {
+                    setTimeout(function() {
+                        var songSelectionEl = document.getElementById('songSelection');
+                        if (songSelectionEl) {
+                            // Calcular posición para centrar el selector de canciones en la pantalla
+                            var elementTop = songSelectionEl.getBoundingClientRect().top + window.pageYOffset;
+                            var offset = 120; // Offset para dejar espacio arriba (header + padding)
+                            var targetPosition = Math.max(0, elementTop - offset);
+                            
+                            // Scroll suave al selector de canciones
+                            window.scrollTo({
+                                top: targetPosition,
+                                behavior: 'smooth'
+                            });
+                            
+                            console.log('[mobile] 📱 Scroll automático al selector de canciones - Modo:', mode);
+                        }
+                    }, 150); // Delay para asegurar que el DOM se actualizó completamente
+                }
         }
 
         function backToModes() {
@@ -1058,19 +1059,20 @@
             selectedSong = null;
             
             // En móvil, hacer scroll al selector de modos cuando se vuelve atrás
-            if (isMobileDevice()) {
+            if (typeof isMobileDevice === 'function' && isMobileDevice()) {
                 setTimeout(function() {
                     var modeSelectorEl = document.getElementById('modeSelector');
                     if (modeSelectorEl) {
                         var elementTop = modeSelectorEl.getBoundingClientRect().top + window.pageYOffset;
-                        var offset = 100;
-                        var targetPosition = elementTop - offset;
+                        var offset = 120;
+                        var targetPosition = Math.max(0, elementTop - offset);
                         window.scrollTo({
                             top: targetPosition,
                             behavior: 'smooth'
                         });
+                        console.log('[mobile] 📱 Scroll automático al selector de modos');
                     }
-                }, 100);
+                }, 150);
             }
         }
 
