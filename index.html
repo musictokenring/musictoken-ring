@@ -2143,29 +2143,122 @@
             clearInterval(ethereumCheckInterval);
         }, 30000);
 
-        if (window.ethereum?.on) {
-            window.__mtrEthereumDetected = true;
-            window.ethereum.on('accountsChanged', async function (accounts) {
+        // Función mejorada para verificar y actualizar el estado de la wallet
+        async function checkAndUpdateWalletState() {
+            console.log('[wallet] 🔍 Verificando estado de wallet...');
+            
+            // Verificar si window.ethereum está disponible
+            if (!window.ethereum) {
+                console.log('[wallet] window.ethereum no disponible');
+                renderWallet();
+                return;
+            }
+            
+            try {
+                // Obtener cuentas conectadas
+                var accounts = await window.ethereum.request({ method: 'eth_accounts' });
+                console.log('[wallet] Cuentas obtenidas:', accounts);
+                
+                // Obtener chain ID actual
+                var chainIdHex = await window.ethereum.request({ method: 'eth_chainId' });
+                connectedChainId = Number.parseInt(chainIdHex, 16);
+                console.log('[wallet] Chain ID:', connectedChainId);
+                
+                // Actualizar dirección conectada
+                var previousAddress = connectedAddress;
                 connectedAddress = accounts?.[0] || null;
-                var onBase = connectedAddress ? await ensureBaseChain() : false;
+                
+                console.log('[wallet] Estado:', {
+                    previousAddress: previousAddress,
+                    currentAddress: connectedAddress,
+                    chainId: connectedChainId,
+                    isMobile: isMobileDevice()
+                });
+                
+                // Si hay cambio de dirección o es la primera vez
+                if (connectedAddress !== previousAddress || (connectedAddress && !previousAddress)) {
+                    console.log('[wallet] ✅ Wallet conectada, actualizando UI...');
+                    await ensureBaseChain();
+                    renderWallet();
+                    if (connectedChainId === 8453 && connectedAddress) {
+                        await refreshMtrBalance(connectedAddress);
+                    }
+                } else if (connectedAddress) {
+                    // Si ya estaba conectada, solo actualizar si es necesario
+                    renderWallet();
+                    if (connectedChainId === 8453) {
+                        await refreshMtrBalance(connectedAddress);
+                    }
+                } else {
+                    renderWallet();
+                }
+            } catch (error) {
+                console.error('[wallet] Error al verificar estado:', error);
                 renderWallet();
-                if (connectedAddress && onBase) await refreshMtrBalance(connectedAddress);
-            });
-            window.ethereum.on('chainChanged', async function (chainHex) {
-                connectedChainId = Number.parseInt(chainHex, 16);
-                if (connectedChainId !== 8453 && typeof showToast === 'function') showToast('Cambia a Base para MTR', 'error');
-                renderWallet();
-                if (connectedAddress && connectedChainId === 8453) await refreshMtrBalance(connectedAddress);
-            });
+            }
         }
-
+        
+        // Configurar event listeners para cambios en la wallet
+        function setupWalletEventListeners() {
+            if (window.ethereum?.on) {
+                window.__mtrEthereumDetected = true;
+                console.log('[wallet] Configurando event listeners...');
+                
+                window.ethereum.on('accountsChanged', async function (accounts) {
+                    console.log('[wallet] 📡 Evento accountsChanged:', accounts);
+                    connectedAddress = accounts?.[0] || null;
+                    var onBase = connectedAddress ? await ensureBaseChain() : false;
+                    renderWallet();
+                    if (connectedAddress && onBase) {
+                        await refreshMtrBalance(connectedAddress);
+                    }
+                });
+                
+                window.ethereum.on('chainChanged', async function (chainHex) {
+                    console.log('[wallet] 📡 Evento chainChanged:', chainHex);
+                    connectedChainId = Number.parseInt(chainHex, 16);
+                    if (connectedChainId !== 8453 && typeof showToast === 'function') {
+                        showToast('Cambia a Base para MTR', 'error');
+                    }
+                    renderWallet();
+                    if (connectedAddress && connectedChainId === 8453) {
+                        await refreshMtrBalance(connectedAddress);
+                    }
+                });
+                
+                // También escuchar cuando MetaMask se conecta (especialmente útil en móvil)
+                window.ethereum.on('connect', async function(connectInfo) {
+                    console.log('[wallet] 📡 Evento connect:', connectInfo);
+                    await checkAndUpdateWalletState();
+                });
+            }
+        }
+        
+        // Configurar listeners inmediatamente si ethereum está disponible
+        setupWalletEventListeners();
+        
+        // Verificar estado inicial
         validateMtrTokenAddress();
-        if (window.ethereum) {
-            var accounts = await window.ethereum.request({ method: 'eth_accounts' });
-            connectedAddress = accounts?.[0] || null;
-            if (connectedAddress) { await ensureBaseChain(); renderWallet(); if (connectedChainId === 8453) await refreshMtrBalance(connectedAddress); }
-            else renderWallet();
-        } else { renderWallet(); }
+        await checkAndUpdateWalletState();
+        
+        // En móvil, verificar periódicamente si MetaMask se conectó después de la carga inicial
+        if (isMobileDevice()) {
+            console.log('[wallet] 📱 Dispositivo móvil detectado, configurando verificación periódica...');
+            var mobileCheckInterval = setInterval(async function() {
+                if (window.ethereum && !connectedAddress) {
+                    console.log('[wallet] 📱 Verificando conexión en móvil...');
+                    await checkAndUpdateWalletState();
+                } else if (connectedAddress) {
+                    // Si ya hay conexión, dejar de verificar
+                    clearInterval(mobileCheckInterval);
+                }
+            }, 2000); // Verificar cada 2 segundos
+            
+            // Limpiar después de 30 segundos
+            setTimeout(function() {
+                clearInterval(mobileCheckInterval);
+            }, 30000);
+        }
 
         // Manejar video de batallas en vivo
         (function() {
