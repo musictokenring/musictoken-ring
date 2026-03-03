@@ -2118,21 +2118,126 @@
                 }
                 return;
             }
+            
+            // CÓDIGO ESPECÍFICO PARA MÓVIL - Más robusto y con múltiples verificaciones
+            if (isMobileDevice()) {
+                console.log('[wallet] 📱 MÓVIL: Iniciando conexión con método mejorado...');
+                try {
+                    // Paso 1: Solicitar conexión
+                    var accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
+                    console.log('[wallet] 📱 MÓVIL: Cuentas recibidas:', accounts);
+                    
+                    if (accounts && accounts.length > 0) {
+                        connectedAddress = accounts[0];
+                        console.log('[wallet] 📱 MÓVIL: Dirección conectada:', connectedAddress);
+                        
+                        // Paso 2: Obtener chain ID
+                        try {
+                            var chainIdHex = await window.ethereum.request({ method: 'eth_chainId' });
+                            connectedChainId = Number.parseInt(chainIdHex, 16);
+                            console.log('[wallet] 📱 MÓVIL: Chain ID:', connectedChainId);
+                        } catch (e) {
+                            console.error('[wallet] 📱 MÓVIL: Error al obtener chain ID:', e);
+                        }
+                        
+                        // Paso 3: Actualizar UI INMEDIATAMENTE
+                        renderWallet();
+                        console.log('[wallet] 📱 MÓVIL: UI actualizada');
+                        
+                        // Paso 4: Cambiar a Base si es necesario
+                        var onBase = await ensureBaseChain();
+                        console.log('[wallet] 📱 MÓVIL: En Base:', onBase);
+                        
+                        // Paso 5: Actualizar UI nuevamente después de cambiar de red
+                        renderWallet();
+                        
+                        // Paso 6: Obtener balance
+                        if (connectedChainId === 8453 && connectedAddress) {
+                            console.log('[wallet] 📱 MÓVIL: Obteniendo balance...');
+                            await refreshMtrBalance(connectedAddress);
+                        }
+                        
+                        // Paso 7: Verificaciones adicionales en móvil (múltiples intentos)
+                        var mobileVerificationCount = 0;
+                        var mobileVerificationInterval = setInterval(async function() {
+                            mobileVerificationCount++;
+                            console.log('[wallet] 📱 MÓVIL: Verificación #' + mobileVerificationCount);
+                            
+                            // Verificar que la dirección sigue siendo la misma
+                            try {
+                                var currentAccounts = await window.ethereum.request({ method: 'eth_accounts' });
+                                if (currentAccounts && currentAccounts.length > 0) {
+                                    if (currentAccounts[0] !== connectedAddress) {
+                                        console.log('[wallet] 📱 MÓVIL: Dirección cambió, actualizando...');
+                                        connectedAddress = currentAccounts[0];
+                                        renderWallet();
+                                        if (connectedChainId === 8453) {
+                                            await refreshMtrBalance(connectedAddress);
+                                        }
+                                    }
+                                }
+                                
+                                // Verificar que la UI está actualizada
+                                var walletEl = document.getElementById('walletAddress');
+                                if (walletEl && walletEl.classList.contains('hidden')) {
+                                    console.log('[wallet] 📱 MÓVIL: UI no visible, forzando actualización...');
+                                    renderWallet();
+                                }
+                                
+                                // Si todo está bien después de 3 verificaciones, detener
+                                if (mobileVerificationCount >= 3 && connectedAddress) {
+                                    clearInterval(mobileVerificationInterval);
+                                    console.log('[wallet] 📱 MÓVIL: Verificaciones completadas');
+                                }
+                            } catch (e) {
+                                console.error('[wallet] 📱 MÓVIL: Error en verificación:', e);
+                            }
+                        }, 1000); // Verificar cada segundo
+                        
+                        // Limpiar después de 10 segundos
+                        setTimeout(function() {
+                            clearInterval(mobileVerificationInterval);
+                        }, 10000);
+                        
+                        if (typeof showToast === 'function') {
+                            showToast('Wallet conectada ✓', 'success');
+                        }
+                    } else {
+                        throw new Error('No se recibieron cuentas');
+                    }
+                } catch (e) {
+                    console.error('[wallet] 📱 MÓVIL: Error en conexión:', e);
+                    var msg = 'No se pudo conectar la wallet';
+                    if (e.code === 4001 || (e.message && e.message.includes('rejected'))) {
+                        msg = 'Conexión rechazada por el usuario';
+                    } else if (e.message) {
+                        msg = 'Error: ' + e.message;
+                    }
+                    if (typeof showToast === 'function') {
+                        showToast(msg, 'error');
+                    } else {
+                        alert(msg);
+                    }
+                }
+                return; // IMPORTANTE: Salir aquí para móvil
+            }
+            
+            // CÓDIGO PARA DESKTOP - Sin cambios, funciona bien
             try {
-                console.log('[wallet] Requesting wallet connection...');
+                console.log('[wallet] DESKTOP: Requesting wallet connection...');
                 
                 // Primero intentar con el método estándar de MetaMask
                 var accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
                 if (accounts && accounts.length > 0) {
                     connectedAddress = accounts[0];
-                    console.log('[wallet] Connected via eth_requestAccounts:', connectedAddress);
+                    console.log('[wallet] DESKTOP: Connected via eth_requestAccounts:', connectedAddress);
                 } else {
                     // Fallback a viem si eth_requestAccounts no funciona
                     var walletClient = createWalletClient({ chain: base, transport: custom(window.ethereum) });
                     var addresses = await walletClient.requestAddresses();
                     connectedAddress = addresses[0] || null;
                     if (!connectedAddress) {
-                        console.warn('[wallet] No address returned');
+                        console.warn('[wallet] DESKTOP: No address returned');
                         if (typeof showToast === 'function') {
                             showToast('No se obtuvo dirección de wallet', 'error');
                         } else {
@@ -2140,16 +2245,16 @@
                         }
                         return;
                     }
-                    console.log('[wallet] Connected via viem:', connectedAddress);
+                    console.log('[wallet] DESKTOP: Connected via viem:', connectedAddress);
                 }
                 
                 // Obtener chain ID después de conectar
                 try {
                     var chainIdHex = await window.ethereum.request({ method: 'eth_chainId' });
                     connectedChainId = Number.parseInt(chainIdHex, 16);
-                    console.log('[wallet] Chain ID después de conectar:', connectedChainId);
+                    console.log('[wallet] DESKTOP: Chain ID después de conectar:', connectedChainId);
                 } catch (e) {
-                    console.error('[wallet] Error al obtener chain ID:', e);
+                    console.error('[wallet] DESKTOP: Error al obtener chain ID:', e);
                 }
                 
                 var onBase = await ensureBaseChain();
@@ -2165,16 +2270,8 @@
                         showToast('Wallet conectada pero necesitas cambiar a Base (8453)', 'error');
                     }
                 }
-                
-                // En móvil, forzar una verificación adicional después de un breve delay
-                if (isMobileDevice()) {
-                    setTimeout(async function() {
-                        console.log('[wallet] 📱 Verificación adicional en móvil después de conectar...');
-                        await checkAndUpdateWalletState();
-                    }, 1000);
-                }
             } catch (e) {
-                console.error('[wallet] connect error:', e);
+                console.error('[wallet] DESKTOP: connect error:', e);
                 var msg = 'No se pudo conectar la wallet';
                 if (e.code === 4001 || (e.message && e.message.includes('rejected'))) {
                     msg = 'Conexión rechazada por el usuario';
@@ -2237,7 +2334,8 @@
 
         // Función mejorada para verificar y actualizar el estado de la wallet
         async function checkAndUpdateWalletState() {
-            console.log('[wallet] 🔍 Verificando estado de wallet...');
+            var isMobile = isMobileDevice();
+            console.log('[wallet] 🔍 Verificando estado de wallet...', isMobile ? '📱 MÓVIL' : '🖥️ DESKTOP');
             
             // Verificar si window.ethereum está disponible
             if (!window.ethereum) {
@@ -2264,7 +2362,7 @@
                     previousAddress: previousAddress,
                     currentAddress: connectedAddress,
                     chainId: connectedChainId,
-                    isMobile: isMobileDevice()
+                    isMobile: isMobile
                 });
                 
                 // Si hay cambio de dirección o es la primera vez
@@ -2272,8 +2370,30 @@
                     console.log('[wallet] ✅ Wallet conectada, actualizando UI...');
                     await ensureBaseChain();
                     renderWallet();
-                    if (connectedChainId === 8453 && connectedAddress) {
-                        await refreshMtrBalance(connectedAddress);
+                    
+                    // En móvil, forzar múltiples actualizaciones
+                    if (isMobile && connectedAddress) {
+                        // Actualizar UI inmediatamente
+                        renderWallet();
+                        
+                        // Esperar un momento y actualizar balance
+                        setTimeout(async function() {
+                            if (connectedChainId === 8453 && connectedAddress) {
+                                await refreshMtrBalance(connectedAddress);
+                            }
+                            // Actualizar UI nuevamente después del balance
+                            renderWallet();
+                        }, 500);
+                        
+                        // Una verificación más después de 2 segundos
+                        setTimeout(function() {
+                            renderWallet();
+                        }, 2000);
+                    } else {
+                        // Desktop: comportamiento normal
+                        if (connectedChainId === 8453 && connectedAddress) {
+                            await refreshMtrBalance(connectedAddress);
+                        }
                     }
                 } else if (connectedAddress) {
                     // Si ya estaba conectada, solo actualizar si es necesario
