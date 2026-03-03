@@ -2259,6 +2259,81 @@ const GameEngine = {
             '</div></section>';
 
         this.initVictoryCanvas(userWon);
+        
+        // SCROLL AUTOMÁTICO A LA PANTALLA DE VICTORIA
+        setTimeout(() => {
+            try {
+                const victorySection = document.getElementById('victorySection');
+                if (victorySection) {
+                    // Detectar si es móvil
+                    const isMobile = typeof window !== 'undefined' && (
+                        /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) ||
+                        (window.innerWidth <= 768) ||
+                        (typeof isMobileDevice === 'function' && isMobileDevice())
+                    );
+                    
+                    console.log('[showVictoryScreen] Iniciando scroll automático a pantalla de victoria...');
+                    console.log('[showVictoryScreen] Plataforma:', isMobile ? 'MÓVIL' : 'DESKTOP');
+                    
+                    const header = document.querySelector('header');
+                    const headerHeight = header ? header.offsetHeight : (isMobile ? 64 : 80);
+                    
+                    // Obtener posición del elemento
+                    const rect = victorySection.getBoundingClientRect();
+                    const scrollTop = window.pageYOffset || document.documentElement.scrollTop || window.scrollY;
+                    const elementTop = rect.top + scrollTop;
+                    
+                    // Calcular posición objetivo
+                    const paddingOffset = isMobile ? 15 : 25;
+                    const offset = headerHeight + paddingOffset;
+                    const targetPosition = Math.max(0, elementTop - offset);
+                    
+                    console.log('[showVictoryScreen] Scroll calculado:', {
+                        plataforma: isMobile ? 'MÓVIL' : 'DESKTOP',
+                        elementTop: elementTop,
+                        headerHeight: headerHeight,
+                        targetPosition: targetPosition
+                    });
+                    
+                    // Hacer scroll suave a la pantalla de victoria
+                    window.scrollTo({
+                        top: targetPosition,
+                        behavior: 'smooth'
+                    });
+                    
+                    // Verificación después del scroll
+                    setTimeout(() => {
+                        const finalRect = victorySection.getBoundingClientRect();
+                        const finalTop = finalRect.top;
+                        const viewportHeight = window.innerHeight;
+                        const isVisible = finalTop >= headerHeight && finalTop < viewportHeight - 50;
+                        
+                        console.log('[showVictoryScreen] Verificación scroll:', {
+                            finalTop: finalTop,
+                            headerHeight: headerHeight,
+                            isVisible: isVisible
+                        });
+                        
+                        // Si no está completamente visible, hacer ajuste fino
+                        if (!isVisible || finalTop < headerHeight + 10) {
+                            const currentScroll = window.pageYOffset || document.documentElement.scrollTop || window.scrollY;
+                            const finalElementTop = finalRect.top + currentScroll;
+                            const fineTarget = finalElementTop - headerHeight - paddingOffset;
+                            
+                            window.scrollTo({
+                                top: fineTarget,
+                                behavior: 'smooth'
+                            });
+                            console.log('[showVictoryScreen] Ajuste fino aplicado');
+                        }
+                    }, 400);
+                } else {
+                    console.warn('[showVictoryScreen] ⚠️ victorySection no encontrado');
+                }
+            } catch (scrollError) {
+                console.error('[showVictoryScreen] ❌ Error en scroll automático:', scrollError);
+            }
+        }, 200); // Pequeño delay para que el elemento se renderice
     },
 
     initVictoryCanvas(userWon) {
