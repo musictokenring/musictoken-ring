@@ -1604,15 +1604,16 @@ const GameEngine = {
             addedArena.classList.remove('hidden');
             console.log('[createBattleUI] ✅ battleArena visible');
             
+            // Detectar si es dispositivo móvil (ANTES del setTimeout)
+            const isMobile = typeof window !== 'undefined' && (
+                /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) ||
+                (window.innerWidth <= 768) ||
+                (typeof isMobileDevice === 'function' && isMobileDevice())
+            );
+            
             // SCROLL AUTOMÁTICO AL ÁREA DE BATALLA (CON DETECCIÓN DE PLATAFORMA)
             setTimeout(() => {
                 try {
-                    // Detectar si es dispositivo móvil
-                    const isMobile = typeof window !== 'undefined' && (
-                        /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) ||
-                        (window.innerWidth <= 768) ||
-                        (typeof isMobileDevice === 'function' && isMobileDevice())
-                    );
                     
                     console.log('[createBattleUI] Iniciando scroll automático a battleArena...');
                     console.log('[createBattleUI] Plataforma detectada:', isMobile ? 'MÓVIL' : 'DESKTOP');
