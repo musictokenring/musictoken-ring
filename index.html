@@ -29,10 +29,25 @@
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <!-- QR Code Generator para WalletConnect -->
     <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
-    <!-- WalletConnect v2 SDK - usar jsDelivr como alternativa más confiable -->
-    <script src="https://cdn.jsdelivr.net/npm/@walletconnect/ethereum-provider@2.23.6/dist/index.umd.js" 
-            onerror="console.error('Failed to load WalletConnect SDK from jsDelivr'); window.__walletConnectLoadError = true;"
-            onload="console.log('WalletConnect SDK loaded successfully from jsDelivr'); window.__walletConnectLoaded = true;"></script>
+    <!-- WalletConnect v2 SDK - cargar de forma asíncrona para no bloquear -->
+    <script>
+        // Cargar WalletConnect SDK de forma asíncrona
+        (function() {
+            var script = document.createElement('script');
+            script.src = 'https://cdn.jsdelivr.net/npm/@walletconnect/ethereum-provider@2.23.6/dist/index.umd.js';
+            script.async = true;
+            script.defer = true;
+            script.onload = function() {
+                console.log('[wallet] ✅ WalletConnect SDK cargado correctamente');
+                window.__walletConnectLoaded = true;
+            };
+            script.onerror = function() {
+                console.error('[wallet] ❌ Error al cargar WalletConnect SDK');
+                window.__walletConnectLoadError = true;
+            };
+            document.head.appendChild(script);
+        })();
+    </script>
 
     <script>
         const CONFIG = {
@@ -1284,43 +1299,33 @@
                         showToast('Cargando WalletConnect...', 'info');
                     }
                     
-                    // Esperar hasta 8 segundos para que se cargue (más tiempo para conexiones lentas)
+                    // Esperar máximo 5 segundos para que se cargue
                     var waitTime = 0;
                     var checkInterval = setInterval(function() {
-                        waitTime += 300;
+                        waitTime += 200;
                         if (typeof EthereumProvider !== 'undefined') {
                             clearInterval(checkInterval);
-                            console.log('[wallet] WalletConnect SDK loaded, proceeding...');
+                            console.log('[wallet] ✅ WalletConnect SDK loaded, proceeding...');
                             if (typeof showToast === 'function') {
-                                showToast('WalletConnect cargado, generando QR...', 'info');
+                                showToast('Generando QR code...', 'info');
                             }
                             setTimeout(function() {
                                 showBinanceWalletConnectQR(); // Reintentar
-                            }, 500);
+                            }, 300);
                             return;
                         }
-                        if (waitTime >= 8000) {
+                        if (waitTime >= 5000) {
                             clearInterval(checkInterval);
-                            console.error('[wallet] WalletConnect SDK failed to load after 8 seconds');
+                            console.error('[wallet] ❌ WalletConnect SDK failed to load after 5 seconds');
                             
-                            // Intentar cargar el SDK manualmente antes de mostrar el modal alternativo
-                            var script = document.createElement('script');
-                            script.src = 'https://cdn.jsdelivr.net/npm/@walletconnect/ethereum-provider@2.23.6/dist/index.umd.js';
-                            script.onload = function() {
-                                console.log('[wallet] WalletConnect SDK loaded manually, retrying...');
-                                setTimeout(function() {
-                                    showBinanceWalletConnectQR();
-                                }, 1000);
-                            };
-                            script.onerror = function() {
-                                console.error('[wallet] Failed to load WalletConnect SDK even manually');
-                                // Solo mostrar modal alternativo si realmente falla todo
-                                showBinanceManualConnection();
-                            };
-                            document.head.appendChild(script);
+                            // Mostrar modal alternativo inmediatamente
+                            if (typeof showToast === 'function') {
+                                showToast('WalletConnect no disponible. Mostrando opciones...', 'info');
+                            }
+                            showBinanceManualConnection();
                             return;
                         }
-                    }, 300);
+                    }, 200);
                     return;
                 }
 
@@ -1407,25 +1412,29 @@
                     }
                 }, 1000);
                 
-                // Timeout: si después de 8 segundos no hay QR, mostrar modal alternativo
+                // Timeout: si después de 5 segundos no hay QR, mostrar modal alternativo inmediatamente
                 setTimeout(function() {
                     if (!qrShown) {
-                        console.error('[wallet] QR no apareció después de 8 segundos');
+                        console.error('[wallet] QR no apareció después de 5 segundos - WalletConnect no funciona');
                         if (qrCheckInterval) clearInterval(qrCheckInterval);
                         
                         // Cancelar la conexión pendiente
                         try {
                             if (walletConnectProvider) {
                                 walletConnectProvider.disconnect();
+                                walletConnectProvider = null;
                             }
                         } catch(e) {
                             console.log('[wallet] Error al desconectar:', e);
                         }
                         
-                        // Mostrar modal alternativo
+                        // Mostrar modal alternativo inmediatamente
+                        if (typeof showToast === 'function') {
+                            showToast('WalletConnect no disponible. Mostrando opciones alternativas...', 'info');
+                        }
                         showBinanceManualConnection();
                     }
-                }, 8000);
+                }, 5000); // Reducido a 5 segundos
                 
                 // Esperar a que se complete la conexión o timeout
                 try {
