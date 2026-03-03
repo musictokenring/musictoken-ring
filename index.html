@@ -1465,43 +1465,40 @@
                 // Verificar URI inmediatamente antes de conectar
                 checkProviderURI();
                 
-                // Método mejorado: Intentar obtener URI directamente del core antes de conectar
+                // ENFOQUE COMPLETAMENTE NUEVO: Usar enable() y acceder al URI directamente del core
                 try {
-                    // Método alternativo: Crear pairing manualmente para obtener URI
+                    console.log('[wallet] 🔄 Método nuevo: Usando enable() y acceso directo al core...');
+                    
+                    // Escuchar eventos del core directamente ANTES de llamar a enable()
                     if (walletConnectProvider.core && walletConnectProvider.core.pairing) {
-                        console.log('[wallet] Intentando crear pairing manual para obtener URI...');
-                        try {
-                            var pairing = walletConnectProvider.core.pairing.create();
-                            console.log('[wallet] Pairing creado:', pairing);
-                            
-                            // El pairing puede tener el URI
-                            if (pairing && pairing.topic) {
-                                console.log('[wallet] Pairing topic:', pairing.topic);
-                            }
-                            
-                            // Intentar obtener URI del pairing
-                            walletConnectProvider.core.pairing.events.on('pairing.proposal', function(pairingProposal) {
-                                console.log('[wallet] Pairing proposal recibido:', pairingProposal);
-                                if (pairingProposal && pairingProposal.params && pairingProposal.params.uri) {
-                                    var uri = pairingProposal.params.uri;
-                                    console.log('[wallet] ✅ URI obtenido del pairing proposal:', uri ? uri.substring(0, 50) + '...' : 'null');
-                                    if (uri) {
-                                        displayQRCodeModal(uri);
-                                    }
+                        console.log('[wallet] Configurando listeners del core...');
+                        
+                        // Escuchar eventos del core pairing
+                        walletConnectProvider.core.pairing.events.on('pairing.proposal', function(pairingProposal) {
+                            console.log('[wallet] 📡 Core pairing.proposal recibido:', pairingProposal);
+                            if (pairingProposal && pairingProposal.params && pairingProposal.params.uri) {
+                                var uri = pairingProposal.params.uri;
+                                console.log('[wallet] ✅✅✅ URI del core pairing:', uri ? uri.substring(0, 50) + '...' : 'null');
+                                if (uri) {
+                                    displayQRCodeModal(uri);
                                 }
-                            });
-                        } catch (pairError) {
-                            console.log('[wallet] Error al crear pairing manual:', pairError);
-                        }
+                            }
+                        });
+                        
+                        // También escuchar el evento de creación de pairing
+                        walletConnectProvider.core.pairing.events.on('pairing.created', function(pairing) {
+                            console.log('[wallet] 📡 Core pairing.created:', pairing);
+                        });
                     }
                     
-                    // Método principal: llamar connect() que debería disparar display_uri
-                    connectPromise = walletConnectProvider.connect({
+                    // Método 1: Intentar usar enable() en lugar de connect()
+                    console.log('[wallet] Llamando enable()...');
+                    connectPromise = walletConnectProvider.enable({
                         optionalChains: [8453, 1, 137, 56]
-                    }).then(function() {
-                        console.log('[wallet] ✅ WalletConnect connect() completado');
+                    }).then(function(accounts) {
+                        console.log('[wallet] ✅ WalletConnect enable() completado, cuentas:', accounts);
                         
-                        // Verificar URI después de conectar también
+                        // Verificar URI después de enable también
                         setTimeout(function() {
                             checkProviderURI();
                         }, 500);
@@ -1509,22 +1506,62 @@
                         if (qrCheckInterval) clearInterval(qrCheckInterval);
                         if (qrTimeout) clearTimeout(qrTimeout);
                     }).catch(function(error) {
-                        console.error('[wallet] ❌ Error en connect():', error);
-                        if (qrCheckInterval) clearInterval(qrCheckInterval);
-                        if (qrTimeout) clearTimeout(qrTimeout);
-                        throw error;
+                        console.error('[wallet] ❌ Error en enable():', error);
+                        
+                        // Si enable() falla, intentar con connect() como fallback
+                        console.log('[wallet] Intentando fallback con connect()...');
+                        return walletConnectProvider.connect({
+                            optionalChains: [8453, 1, 137, 56]
+                        }).then(function() {
+                            console.log('[wallet] ✅ WalletConnect connect() completado (fallback)');
+                            setTimeout(function() {
+                                checkProviderURI();
+                            }, 500);
+                        });
                     });
                     
-                    // Verificar URI periódicamente mientras se conecta (cada 500ms)
+                    // Verificar URI periódicamente mientras se conecta (cada 300ms - más frecuente)
                     var uriCheckInterval = setInterval(function() {
                         uriCheckAttempts++;
-                        if (checkProviderURI() || uriCheckAttempts >= maxUriChecks) {
-                            clearInterval(uriCheckInterval);
+                        
+                        // Verificar múltiples propiedades del provider
+                        try {
+                            // Verificar provider.uri directamente
+                            if (walletConnectProvider.uri) {
+                                console.log('[wallet] ✅ URI encontrado en provider.uri');
+                                displayQRCodeModal(walletConnectProvider.uri);
+                                clearInterval(uriCheckInterval);
+                                return;
+                            }
+                            
+                            // Verificar core.pairing para obtener URI
+                            if (walletConnectProvider.core && walletConnectProvider.core.pairing) {
+                                var pairings = walletConnectProvider.core.pairing.getAll();
+                                if (pairings && pairings.length > 0) {
+                                    for (var i = 0; i < pairings.length; i++) {
+                                        var pairing = pairings[i];
+                                        // El URI puede estar en pairing.uri o en el topic
+                                        if (pairing.uri) {
+                                            console.log('[wallet] ✅ URI encontrado en pairing:', pairing.uri.substring(0, 50) + '...');
+                                            displayQRCodeModal(pairing.uri);
+                                            clearInterval(uriCheckInterval);
+                                            return;
+                                        }
+                                    }
+                                }
+                            }
+                        } catch (e) {
+                            console.log('[wallet] Error al verificar URI:', e);
                         }
-                    }, 500);
+                        
+                        if (uriCheckAttempts >= maxUriChecks) {
+                            clearInterval(uriCheckInterval);
+                            console.log('[wallet] ⏱️ Máximo de intentos alcanzado para verificar URI');
+                        }
+                    }, 300); // Verificar cada 300ms
                     
                 } catch (connectError) {
-                    console.error('[wallet] ❌ Error al llamar connect():', connectError);
+                    console.error('[wallet] ❌ Error al iniciar conexión:', connectError);
                     throw connectError;
                 }
                 
