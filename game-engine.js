@@ -1548,7 +1548,7 @@ const GameEngine = {
                 <div class="text-sm text-gray-500">💰 Pot: ${pot} MTR</div>
             </div>
 
-            <div class="relative rounded-2xl overflow-hidden border border-cyan-500/20 bg-black/60 mb-6" style="height:340px; min-height:280px;" id="battleCanvasWrap">
+            <div class="relative rounded-2xl overflow-hidden border border-cyan-500/20 bg-black/60 mb-6 h-[280px] sm:h-[320px] md:h-[360px]" id="battleCanvasWrap">
                 <canvas id="battleCanvas" class="absolute inset-0 w-full h-full"></canvas>
                 <div class="absolute inset-0 flex items-center justify-between px-6 sm:px-12 z-10 pointer-events-none">
                     <div class="text-center" id="fighter1Card">
