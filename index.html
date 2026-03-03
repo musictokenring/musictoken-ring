@@ -1465,10 +1465,37 @@
                 // Verificar URI inmediatamente antes de conectar
                 checkProviderURI();
                 
-                // Método similar a Aerodrome: llamar connect() que dispara display_uri
-                // El evento display_uri se dispara ANTES de que se complete la conexión
+                // Método mejorado: Intentar obtener URI directamente del core antes de conectar
                 try {
-                    // Llamar a connect() que debería disparar display_uri
+                    // Método alternativo: Crear pairing manualmente para obtener URI
+                    if (walletConnectProvider.core && walletConnectProvider.core.pairing) {
+                        console.log('[wallet] Intentando crear pairing manual para obtener URI...');
+                        try {
+                            var pairing = walletConnectProvider.core.pairing.create();
+                            console.log('[wallet] Pairing creado:', pairing);
+                            
+                            // El pairing puede tener el URI
+                            if (pairing && pairing.topic) {
+                                console.log('[wallet] Pairing topic:', pairing.topic);
+                            }
+                            
+                            // Intentar obtener URI del pairing
+                            walletConnectProvider.core.pairing.events.on('pairing.proposal', function(pairingProposal) {
+                                console.log('[wallet] Pairing proposal recibido:', pairingProposal);
+                                if (pairingProposal && pairingProposal.params && pairingProposal.params.uri) {
+                                    var uri = pairingProposal.params.uri;
+                                    console.log('[wallet] ✅ URI obtenido del pairing proposal:', uri ? uri.substring(0, 50) + '...' : 'null');
+                                    if (uri) {
+                                        displayQRCodeModal(uri);
+                                    }
+                                }
+                            });
+                        } catch (pairError) {
+                            console.log('[wallet] Error al crear pairing manual:', pairError);
+                        }
+                    }
+                    
+                    // Método principal: llamar connect() que debería disparar display_uri
                     connectPromise = walletConnectProvider.connect({
                         optionalChains: [8453, 1, 137, 56]
                     }).then(function() {
@@ -1490,6 +1517,7 @@
                     
                     // Verificar URI periódicamente mientras se conecta (cada 500ms)
                     var uriCheckInterval = setInterval(function() {
+                        uriCheckAttempts++;
                         if (checkProviderURI() || uriCheckAttempts >= maxUriChecks) {
                             clearInterval(uriCheckInterval);
                         }
