@@ -271,6 +271,7 @@ async function loadPlayerProfile(user) {
             .select('id, winner, match_type, total_pot, player1_id, player2_id, player1_bet, player2_bet, finished_at, status')
             .or(`player1_id.eq.${user.id},player2_id.eq.${user.id}`)
             .eq('status', 'finished')
+            .neq('match_type', 'practice') // EXCLUIR batallas de práctica de las estadísticas reales
             .order('finished_at', { ascending: false })
             .limit(50);
 
@@ -283,6 +284,7 @@ async function loadPlayerProfile(user) {
                 .select('id, winner, match_type, player1_id, player2_id, player1_bet, player2_bet, finished_at, status')
                 .or(`player1_id.eq.${user.id},player2_id.eq.${user.id}`)
                 .eq('status', 'finished')
+                .neq('match_type', 'practice') // EXCLUIR batallas de práctica de las estadísticas reales
                 .order('finished_at', { ascending: false })
                 .limit(50));
         }
