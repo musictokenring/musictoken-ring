@@ -1280,9 +1280,96 @@ const GameEngine = {
 
         var statusEl = document.getElementById('battleStatusText');
         if (statusEl) {
+            // Detectar si es móvil para ajustar el tamaño del mensaje
+            const isMobile = typeof window !== 'undefined' && (
+                /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) ||
+                (window.innerWidth <= 768) ||
+                (typeof isMobileDevice === 'function' && isMobileDevice())
+            );
+            
+            const textSize = isMobile ? 'text-base sm:text-lg' : 'text-xl sm:text-2xl';
+            const paddingSize = isMobile ? 'py-3 px-3' : 'py-4 px-6';
+            
             statusEl.innerHTML = userWon
-                ? '<span class="text-cyan-400 font-bold text-lg">🏆 ¡Tu canción gana! +50 MTR</span>'
-                : '<span class="text-red-400 font-bold text-lg">😔 CPU gana esta vez</span>';
+                ? `<div class="inline-block ${paddingSize} rounded-2xl bg-gradient-to-r from-cyan-500/20 to-cyan-600/20 border-2 border-cyan-400/50 shadow-2xl animate-pulse">
+                    <span class="${textSize} text-cyan-300 font-black drop-shadow-lg" style="text-shadow: 0 0 20px rgba(0,243,255,0.8);">
+                        🏆 ¡VICTORIA! 🏆
+                    </span>
+                    <div class="mt-2 ${isMobile ? 'text-sm' : 'text-base'} text-cyan-200 font-bold">
+                        Tu canción gana +50 MTR
+                    </div>
+                   </div>`
+                : `<div class="inline-block ${paddingSize} rounded-2xl bg-gradient-to-r from-red-500/20 to-red-600/20 border-2 border-red-400/50 shadow-2xl">
+                    <span class="${textSize} text-red-300 font-black drop-shadow-lg" style="text-shadow: 0 0 20px rgba(239,68,68,0.8);">
+                        😔 Derrota
+                    </span>
+                    <div class="mt-2 ${isMobile ? 'text-sm' : 'text-base'} text-red-200 font-bold">
+                        CPU gana esta vez
+                    </div>
+                   </div>`;
+            
+            // SCROLL AUTOMÁTICO AL MENSAJE DE RESULTADO
+            setTimeout(() => {
+                try {
+                    console.log('[endBattle] Iniciando scroll automático al mensaje de resultado...');
+                    const header = document.querySelector('header');
+                    const headerHeight = header ? header.offsetHeight : (isMobile ? 64 : 80);
+                    
+                    // Obtener posición del elemento de estado
+                    const rect = statusEl.getBoundingClientRect();
+                    const scrollTop = window.pageYOffset || document.documentElement.scrollTop || window.scrollY;
+                    const elementTop = rect.top + scrollTop;
+                    
+                    // Calcular posición objetivo
+                    const paddingOffset = isMobile ? 15 : 25;
+                    const offset = headerHeight + paddingOffset;
+                    const targetPosition = Math.max(0, elementTop - offset);
+                    
+                    console.log('[endBattle] Scroll al resultado calculado:', {
+                        plataforma: isMobile ? 'MÓVIL' : 'DESKTOP',
+                        elementTop: elementTop,
+                        headerHeight: headerHeight,
+                        targetPosition: targetPosition,
+                        currentScroll: scrollTop
+                    });
+                    
+                    // Hacer scroll suave al mensaje de resultado
+                    window.scrollTo({
+                        top: targetPosition,
+                        behavior: 'smooth'
+                    });
+                    
+                    // Verificación después del scroll
+                    setTimeout(() => {
+                        const finalRect = statusEl.getBoundingClientRect();
+                        const finalTop = finalRect.top;
+                        const viewportHeight = window.innerHeight;
+                        const isVisible = finalTop >= headerHeight && finalTop < viewportHeight - 50;
+                        
+                        console.log('[endBattle] Verificación scroll resultado:', {
+                            finalTop: finalTop,
+                            headerHeight: headerHeight,
+                            viewportHeight: viewportHeight,
+                            isVisible: isVisible
+                        });
+                        
+                        // Si no está completamente visible, hacer ajuste fino
+                        if (!isVisible || finalTop < headerHeight + 10) {
+                            const currentScroll = window.pageYOffset || document.documentElement.scrollTop || window.scrollY;
+                            const finalElementTop = finalRect.top + currentScroll;
+                            const fineTarget = finalElementTop - headerHeight - paddingOffset;
+                            
+                            window.scrollTo({
+                                top: fineTarget,
+                                behavior: 'smooth'
+                            });
+                            console.log('[endBattle] Ajuste fino aplicado al resultado');
+                        }
+                    }, 400);
+                } catch (scrollError) {
+                    console.error('[endBattle] ❌ Error en scroll automático al resultado:', scrollError);
+                }
+            }, 300); // Pequeño delay para que el mensaje se renderice
         }
 
         if (userWon) {
@@ -1614,7 +1701,7 @@ const GameEngine = {
                     </div>
                 </div>
             </div>
-            <div id="battleStatusText" class="text-center text-gray-500 text-sm"></div>
+            <div id="battleStatusText" class="text-center py-4 px-4 mb-4"></div>
         `;
         
         console.log('[createBattleUI] HTML generado, agregando al DOM...');
