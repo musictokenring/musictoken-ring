@@ -6,7 +6,7 @@
     <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
     <meta http-equiv="Pragma" content="no-cache">
     <meta http-equiv="Expires" content="0">
-    <meta name="mtr-build" content="v3.5-balance-fix">
+    <meta name="mtr-build" content="v3.6-bet-buttons-fix">
     <title>MusicToken Ring - Music Battle Arena</title>
 
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -79,7 +79,7 @@
         });
 
         var PLATFORM_WALLET_ADDRESSES = { base: window.PLATFORM_WALLET_BASE_ADDRESS || '0x75376BC58830f27415402875D26B73A6BE8E2253' };
-        window.MTR_BUILD_ID = 'v3.5-balance-fix';
+        window.MTR_BUILD_ID = 'v3.6-bet-buttons-fix';
 
         if (typeof window.selectMode !== 'function') {
             window.selectMode = function selectModeCriticalFallback(mode) {
@@ -433,11 +433,11 @@
                         </div>
                         <input type="number" id="betAmount" placeholder="100" min="100"
                                class="w-full px-4 py-3 rounded-lg bg-black/40 border border-white/10 text-white placeholder-gray-500 text-sm focus:outline-none focus:border-cyan-500/50 focus:ring-1 focus:ring-cyan-500/20 transition mb-3">
-                        <div class="flex gap-2 mb-5">
-                            <button type="button" onclick="quickBet(100)" class="flex-1 py-2 rounded-lg text-xs font-bold bg-white/5 border border-white/10 text-gray-300 hover:text-white hover:border-cyan-500/30 transition cursor-pointer">100</button>
-                            <button type="button" onclick="quickBet(500)" class="flex-1 py-2 rounded-lg text-xs font-bold bg-white/5 border border-white/10 text-gray-300 hover:text-white hover:border-cyan-500/30 transition cursor-pointer">500</button>
-                            <button type="button" onclick="quickBet(1000)" class="flex-1 py-2 rounded-lg text-xs font-bold bg-white/5 border border-white/10 text-gray-300 hover:text-white hover:border-cyan-500/30 transition cursor-pointer">1K</button>
-                            <button type="button" onclick="quickBet(5000)" class="flex-1 py-2 rounded-lg text-xs font-bold bg-white/5 border border-white/10 text-gray-300 hover:text-white hover:border-cyan-500/30 transition cursor-pointer">5K</button>
+                        <div class="flex gap-2 mb-5" id="betAmountButtons">
+                            <button type="button" onclick="if(typeof window.quickBet==='function'){window.quickBet(100);}else{console.error('quickBet no disponible');}" class="bet-amount-btn flex-1 py-2 rounded-lg text-xs font-bold bg-white/5 border border-white/10 text-gray-300 hover:text-white hover:border-cyan-500/30 transition cursor-pointer" data-amount="100">100</button>
+                            <button type="button" onclick="if(typeof window.quickBet==='function'){window.quickBet(500);}else{console.error('quickBet no disponible');}" class="bet-amount-btn flex-1 py-2 rounded-lg text-xs font-bold bg-white/5 border border-white/10 text-gray-300 hover:text-white hover:border-cyan-500/30 transition cursor-pointer" data-amount="500">500</button>
+                            <button type="button" onclick="if(typeof window.quickBet==='function'){window.quickBet(1000);}else{console.error('quickBet no disponible');}" class="bet-amount-btn flex-1 py-2 rounded-lg text-xs font-bold bg-white/5 border border-white/10 text-gray-300 hover:text-white hover:border-cyan-500/30 transition cursor-pointer" data-amount="1000">1K</button>
+                            <button type="button" onclick="if(typeof window.quickBet==='function'){window.quickBet(5000);}else{console.error('quickBet no disponible');}" class="bet-amount-btn flex-1 py-2 rounded-lg text-xs font-bold bg-white/5 border border-white/10 text-gray-300 hover:text-white hover:border-cyan-500/30 transition cursor-pointer" data-amount="5000">5K</button>
                         </div>
                         <div id="actionButtons"></div>
                     </div>
@@ -963,6 +963,17 @@
         window.__mtrOnChainBalance = Number(window.__mtrOnChainBalance || 0);
         var currentMode = null;
         
+        // DEFINIR quickBet TEMPRANO para que esté disponible cuando se carguen los botones
+        window.quickBet = function quickBetEarly(amount) {
+            console.log('[quickBetEarly] Llamado con amount:', amount);
+            // Esta función será reemplazada por la versión completa más adelante
+            var betInput = document.getElementById('betAmount');
+            if (betInput) {
+                betInput.value = amount;
+                console.log('[quickBetEarly] Valor establecido:', amount);
+            }
+        };
+        
         // DEFINIR selectSongForBattle INMEDIATAMENTE para que esté disponible cuando app.js lo necesite
         window.selectSongForBattle = async function selectSongForBattle(song) {
             console.log('[selectSong] Seleccionando canción:', song, 'Modo actual:', currentMode);
@@ -1286,22 +1297,24 @@
                 // Si es modo práctica, asegurar que el balance demo esté cargado primero
                 if (mode === 'practice') {
                     console.log('[selectMode] Modo práctica seleccionado, cargando balance demo...');
-                    if (typeof GameEngine !== 'undefined') {
-                        // FORZAR carga del balance demo
-                        if (typeof GameEngine.loadPracticeDemoBalance === 'function') {
-                            GameEngine.loadPracticeDemoBalance();
-                        }
-                        // Si el balance está en 0 o no existe, forzar reset a 1000
-                        if (!GameEngine.practiceDemoBalance || GameEngine.practiceDemoBalance <= 0) {
-                            GameEngine.practiceDemoBalance = GameEngine.practiceDemoInitialBalance || 1000;
-                            if (typeof GameEngine.setPracticeDemoBalance === 'function') {
-                                GameEngine.setPracticeDemoBalance(GameEngine.practiceDemoBalance);
-                            }
-                            console.log('[selectMode] Balance demo forzado a', GameEngine.practiceDemoBalance);
-                        }
-                        console.log('[selectMode] Balance demo final:', GameEngine.practiceDemoBalance);
+                    // FORZAR carga del balance demo
+                    if (typeof GameEngine.loadPracticeDemoBalance === 'function') {
+                        GameEngine.loadPracticeDemoBalance();
                     }
-                    // Actualizar display múltiples veces para asegurar que se muestre
+                    // Si el balance está en 0 o no existe, forzar reset a 1000
+                    if (!GameEngine.practiceDemoBalance || GameEngine.practiceDemoBalance <= 0) {
+                        GameEngine.practiceDemoBalance = GameEngine.practiceDemoInitialBalance || 1000;
+                        if (typeof GameEngine.setPracticeDemoBalance === 'function') {
+                            GameEngine.setPracticeDemoBalance(GameEngine.practiceDemoBalance);
+                        }
+                        console.log('[selectMode] Balance demo forzado a', GameEngine.practiceDemoBalance);
+                    }
+                    console.log('[selectMode] Balance demo final:', GameEngine.practiceDemoBalance);
+                    
+                    // Actualizar display INMEDIATAMENTE y con delays para asegurar visibilidad
+                    if (typeof GameEngine.updatePracticeBetDisplay === 'function') {
+                        GameEngine.updatePracticeBetDisplay();
+                    }
                     setTimeout(function() {
                         console.log('[selectMode] Actualizando display (50ms)...');
                         if (typeof GameEngine.updatePracticeBetDisplay === 'function') {
@@ -1325,11 +1338,15 @@
                         if (typeof GameEngine.updatePracticeBetDisplay === 'function') {
                             GameEngine.updatePracticeBetDisplay();
                         }
+                        // Verificar que el balance se muestre
+                        var balanceLabel = document.getElementById('balanceLabel');
+                        var userBalance = document.getElementById('userBalance');
+                        console.log('[selectMode] Verificación final - Label:', balanceLabel?.textContent, 'Balance:', userBalance?.textContent);
                     }, 1000);
                 } else {
                     // Para otros modos, actualizar display normalmente
-                    if (typeof GameEngine.updatePracticeBetDisplay === 'function') {
-                        GameEngine.updatePracticeBetDisplay();
+                    if (typeof GameEngine.updateBalanceDisplay === 'function') {
+                        GameEngine.updateBalanceDisplay();
                     }
                 }
             }
@@ -1528,9 +1545,64 @@
         }
 
         function quickBet(amount) {
-            document.getElementById('betAmount').value = amount;
-            updateBetEligibility();
+            try {
+                console.log('[quickBet] Seleccionando apuesta:', amount);
+                var betInput = document.getElementById('betAmount');
+                if (!betInput) {
+                    console.error('[quickBet] Campo betAmount no encontrado');
+                    if (typeof showToast === 'function') {
+                        showToast('Error: Campo de apuesta no encontrado', 'error');
+                    }
+                    return;
+                }
+                
+                // Establecer el valor
+                betInput.value = amount;
+                console.log('[quickBet] Valor establecido en input:', betInput.value);
+                
+                // Feedback visual: remover clase activa de todos los botones de apuesta
+                var betButtons = document.querySelectorAll('.bet-amount-btn');
+                betButtons.forEach(function(btn) {
+                    btn.classList.remove('bg-cyan-500/30', 'border-cyan-500/50', 'text-white');
+                    btn.classList.add('bg-white/5', 'border-white/10', 'text-gray-300');
+                });
+                
+                // Agregar clase activa al botón presionado usando data-amount
+                var clickedBtn = document.querySelector('.bet-amount-btn[data-amount="' + amount + '"]');
+                if (clickedBtn) {
+                    clickedBtn.classList.remove('bg-white/5', 'border-white/10', 'text-gray-300');
+                    clickedBtn.classList.add('bg-cyan-500/30', 'border-cyan-500/50', 'text-white');
+                    console.log('[quickBet] Botón visualmente actualizado');
+                } else {
+                    console.warn('[quickBet] Botón con amount', amount, 'no encontrado');
+                }
+                
+                // Disparar eventos para asegurar que el valor se registre
+                betInput.dispatchEvent(new Event('input', { bubbles: true }));
+                betInput.dispatchEvent(new Event('change', { bubbles: true }));
+                
+                // Pequeño delay para asegurar que el DOM se actualice
+                setTimeout(function() {
+                    // Actualizar elegibilidad
+                    if (typeof updateBetEligibility === 'function') {
+                        updateBetEligibility();
+                    } else if (typeof window.updateBetEligibility === 'function') {
+                        window.updateBetEligibility();
+                    }
+                    console.log('[quickBet] Elegibilidad actualizada');
+                }, 50);
+                
+                console.log('[quickBet] ✅ Apuesta establecida correctamente:', amount);
+            } catch (e) {
+                console.error('[quickBet] ❌ Error:', e);
+                if (typeof showToast === 'function') {
+                    showToast('Error al seleccionar apuesta: ' + e.message, 'error');
+                }
+            }
         }
+        
+        // Asegurar que quickBet esté disponible globalmente ANTES de que se carguen los botones
+        window.quickBet = quickBet;
 
         function updateBetEligibility() {
             var startQuickBtn = document.getElementById('startQuickBtn');
