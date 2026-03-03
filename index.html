@@ -1279,37 +1279,48 @@
                 if (typeof EthereumProvider === 'undefined') {
                     console.log('[wallet] Waiting for WalletConnect SDK to load...');
                     
-                    // Esperar máximo 3 segundos (más rápido para no dejar al usuario esperando)
+                    // Mostrar mensaje de carga
+                    if (typeof showToast === 'function') {
+                        showToast('Cargando WalletConnect...', 'info');
+                    }
+                    
+                    // Esperar hasta 8 segundos para que se cargue (más tiempo para conexiones lentas)
                     var waitTime = 0;
                     var checkInterval = setInterval(function() {
-                        waitTime += 200;
+                        waitTime += 300;
                         if (typeof EthereumProvider !== 'undefined') {
                             clearInterval(checkInterval);
                             console.log('[wallet] WalletConnect SDK loaded, proceeding...');
-                            showBinanceWalletConnectQR(); // Reintentar
+                            if (typeof showToast === 'function') {
+                                showToast('WalletConnect cargado, generando QR...', 'info');
+                            }
+                            setTimeout(function() {
+                                showBinanceWalletConnectQR(); // Reintentar
+                            }, 500);
                             return;
                         }
-                        if (waitTime >= 3000) {
+                        if (waitTime >= 8000) {
                             clearInterval(checkInterval);
-                            console.error('[wallet] WalletConnect SDK failed to load after 3 seconds');
+                            console.error('[wallet] WalletConnect SDK failed to load after 8 seconds');
                             
-                            // Mostrar modal alternativo inmediatamente sin esperar más
-                            showBinanceManualConnection();
-                            
-                            // Intentar cargar el SDK en segundo plano (sin bloquear)
+                            // Intentar cargar el SDK manualmente antes de mostrar el modal alternativo
                             var script = document.createElement('script');
                             script.src = 'https://cdn.jsdelivr.net/npm/@walletconnect/ethereum-provider@2.23.6/dist/index.umd.js';
                             script.onload = function() {
-                                console.log('[wallet] WalletConnect SDK loaded manually in background');
-                                // No hacer nada, el usuario ya tiene el modal alternativo
+                                console.log('[wallet] WalletConnect SDK loaded manually, retrying...');
+                                setTimeout(function() {
+                                    showBinanceWalletConnectQR();
+                                }, 1000);
                             };
                             script.onerror = function() {
-                                console.error('[wallet] Failed to load WalletConnect SDK');
+                                console.error('[wallet] Failed to load WalletConnect SDK even manually');
+                                // Solo mostrar modal alternativo si realmente falla todo
+                                showBinanceManualConnection();
                             };
                             document.head.appendChild(script);
                             return;
                         }
-                    }, 200);
+                    }, 300);
                     return;
                 }
 
@@ -1360,34 +1371,36 @@
                 // El evento 'display_uri' debería dispararse antes de que se complete la conexión
                 console.log('[wallet] Iniciando conexión WalletConnect...');
                 
+                // Mostrar mensaje mientras se genera el QR
+                if (typeof showToast === 'function') {
+                    showToast('Generando código QR...', 'info');
+                }
+                
+                // Iniciar la conexión (esto debería disparar el evento display_uri)
                 var connectPromise = walletConnectProvider.connect().then(function() {
                     console.log('[wallet] WalletConnect connect() completado');
+                }).catch(function(error) {
+                    console.error('[wallet] Error en connect():', error);
+                    throw error;
                 });
                 
-                var timeoutPromise = new Promise(function(_, reject) {
-                    setTimeout(function() {
-                        reject(new Error('Timeout: WalletConnect no respondió en 15 segundos'));
-                    }, 15000); // 15 segundos máximo (más tiempo para que aparezca el QR)
+                // Esperar un poco antes de verificar si el QR apareció
+                await new Promise(function(resolve) {
+                    setTimeout(resolve, 3000); // Esperar 3 segundos para que aparezca el QR
                 });
                 
-                // Esperar a que aparezca el URI (el QR debería mostrarse antes de que se complete la conexión)
-                var uriReceived = false;
-                walletConnectProvider.once('display_uri', function(uri) {
-                    uriReceived = true;
-                    console.log('[wallet] URI recibido durante connect()');
-                });
+                // Verificar si el QR ya se mostró
+                var qrModal = document.getElementById('binanceQRModal');
+                if (!qrModal || qrModal.classList.contains('hidden')) {
+                    console.log('[wallet] QR aún no visible, esperando más tiempo...');
+                    // Esperar otros 5 segundos más
+                    await new Promise(function(resolve) {
+                        setTimeout(resolve, 5000);
+                    });
+                }
                 
-                // Si después de 2 segundos no hay URI, mostrar mensaje
-                setTimeout(function() {
-                    if (!uriReceived && !document.getElementById('binanceQRModal') || document.getElementById('binanceQRModal').classList.contains('hidden')) {
-                        console.log('[wallet] Esperando URI...');
-                        if (typeof showToast === 'function') {
-                            showToast('Generando código QR...', 'info');
-                        }
-                    }
-                }, 2000);
-                
-                await Promise.race([connectPromise, timeoutPromise]);
+                // Continuar con la conexión (no hacer timeout aquí, dejar que el QR aparezca)
+                // El usuario puede escanear el QR mientras la conexión está pendiente
                 
             } catch (error) {
                 console.error('[wallet] WalletConnect error:', error);
