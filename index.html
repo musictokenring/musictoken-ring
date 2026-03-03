@@ -29,10 +29,10 @@
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <!-- QR Code Generator para WalletConnect -->
     <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
-    <!-- WalletConnect v2 SDK - usar versión más reciente y verificada -->
-    <script src="https://unpkg.com/@walletconnect/ethereum-provider@2.23.6/dist/index.umd.js" 
-            onerror="console.error('Failed to load WalletConnect SDK'); window.__walletConnectLoadError = true;"
-            onload="console.log('WalletConnect SDK loaded successfully'); window.__walletConnectLoaded = true;"></script>
+    <!-- WalletConnect v2 SDK - usar jsDelivr como alternativa más confiable -->
+    <script src="https://cdn.jsdelivr.net/npm/@walletconnect/ethereum-provider@2.23.6/dist/index.umd.js" 
+            onerror="console.error('Failed to load WalletConnect SDK from jsDelivr'); window.__walletConnectLoadError = true;"
+            onload="console.log('WalletConnect SDK loaded successfully from jsDelivr'); window.__walletConnectLoaded = true;"></script>
 
     <script>
         const CONFIG = {
@@ -1274,27 +1274,41 @@
                 if (typeof EthereumProvider === 'undefined') {
                     console.log('[wallet] Waiting for WalletConnect SDK to load...');
                     
-                    // Esperar hasta 5 segundos para que se cargue
+                    // Esperar hasta 10 segundos para que se cargue (más tiempo para conexiones lentas)
                     var waitTime = 0;
                     var checkInterval = setInterval(function() {
-                        waitTime += 100;
+                        waitTime += 200;
                         if (typeof EthereumProvider !== 'undefined') {
                             clearInterval(checkInterval);
                             console.log('[wallet] WalletConnect SDK loaded, proceeding...');
                             showBinanceWalletConnectQR(); // Reintentar
                             return;
                         }
-                        if (waitTime >= 5000) {
+                        if (waitTime >= 10000) {
                             clearInterval(checkInterval);
-                            console.error('[wallet] WalletConnect SDK failed to load');
-                            if (typeof showToast === 'function') {
-                                showToast('WalletConnect no disponible. Usa otra wallet o recarga la página.', 'error');
-                            }
-                            // Fallback: mostrar modal con instrucciones manuales
-                            showBinanceManualConnection();
+                            console.error('[wallet] WalletConnect SDK failed to load after 10 seconds');
+                            
+                            // Intentar cargar el SDK manualmente como último recurso
+                            var script = document.createElement('script');
+                            script.src = 'https://cdn.jsdelivr.net/npm/@walletconnect/ethereum-provider@2.23.6/dist/index.umd.js';
+                            script.onload = function() {
+                                console.log('[wallet] WalletConnect SDK loaded manually, retrying...');
+                                setTimeout(function() {
+                                    showBinanceWalletConnectQR();
+                                }, 500);
+                            };
+                            script.onerror = function() {
+                                console.error('[wallet] Failed to load WalletConnect SDK even manually');
+                                if (typeof showToast === 'function') {
+                                    showToast('WalletConnect no disponible. Usa otra wallet o recarga la página.', 'error');
+                                }
+                                // Fallback: mostrar modal con instrucciones manuales
+                                showBinanceManualConnection();
+                            };
+                            document.head.appendChild(script);
                             return;
                         }
-                    }, 100);
+                    }, 200);
                     return;
                 }
 
