@@ -27,8 +27,10 @@
     <link rel="icon" type="image/png" href="https://pink-blank-vicuna-260.mypinata.cloud/ipfs/bafybeie24pisqmw6teijdng4flzjwumgwpesilowjxq3kww3p7kxlmuywm">
 
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <!-- QR Code Generator para WalletConnect - usar versión compatible -->
+    <!-- QR Code Generator para WalletConnect -->
     <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
+    <!-- WalletConnect v2 SDK -->
+    <script src="https://unpkg.com/@walletconnect/ethereum-provider@2.10.0/dist/index.umd.js"></script>
 
     <script>
         const CONFIG = {
@@ -41,7 +43,7 @@
         };
         
         // Variable global para WalletConnect
-        var walletConnectInstance = null;
+        var walletConnectProvider = null;
 
         function extractMetaMaskErrorMessage(reason) {
             if (!reason) return '';
@@ -1411,6 +1413,15 @@
             var modal = document.getElementById('binanceQRModal');
             if (modal) {
                 modal.classList.add('hidden');
+            }
+            // Cancelar conexión WalletConnect si está pendiente
+            if (walletConnectProvider) {
+                try {
+                    walletConnectProvider.disconnect();
+                } catch(e) {
+                    console.log('[wallet] Error disconnecting WalletConnect:', e);
+                }
+                walletConnectProvider = null;
             }
         };
 
