@@ -1879,51 +1879,64 @@
                 return;
             }
             
-            // Para MetaMask, usar el método estándar si está disponible
+            // Para MetaMask, usar el mismo método que Trust Wallet (que funciona)
             if (wallet.id === 'metamask') {
-                console.log('[wallet] 📱 MetaMask detectada...');
+                console.log('[wallet] 📱 MetaMask detectada - usando método Trust Wallet...');
                 
-                // Verificar si window.ethereum está disponible
+                // Verificar si window.ethereum está disponible (como Trust Wallet)
                 if (window.ethereum) {
-                    console.log('[wallet] window.ethereum disponible, conectando...');
+                    console.log('[wallet] 📱 MetaMask: window.ethereum disponible, conectando directamente...');
                     connectWallet();
                     return;
                 }
                 
-                // Si no está disponible, usar deep link
+                // Si no está disponible, usar deep link (igual que Trust Wallet)
                 if (typeof showToast === 'function') {
                     showToast('Abriendo MetaMask...', 'info');
                 }
                 
-                // Usar formato de deep link que MetaMask reconozca
+                // Usar el mismo formato que Trust Wallet funciona
                 var deepLink = 'https://metamask.app.link/dapp/' + encodeURIComponent(window.location.href);
+                
+                console.log('[wallet] 📱 MetaMask: Abriendo deep link:', deepLink);
                 
                 // Intentar abrir MetaMask
                 try {
                     window.location.href = deepLink;
                 } catch (e) {
-                    console.error('[wallet] Error al abrir MetaMask:', e);
+                    console.error('[wallet] 📱 MetaMask: Error al abrir:', e);
                     if (typeof showToast === 'function') {
                         showToast('Error al abrir MetaMask. Ábrela manualmente.', 'error');
                     }
                 }
                 
-                // Configurar detección cuando regresamos
+                // Usar el mismo sistema de detección que Trust Wallet
                 setupReturnDetection('metamask');
                 return;
             }
             
-            // Para Binance Wallet
+            // Para Binance Wallet - mejorar detección
             if (wallet.id === 'binance') {
                 console.log('[wallet] 📱 Binance Wallet detectada...');
+                console.log('[wallet] 📱 window.BinanceChain disponible:', !!window.BinanceChain);
+                console.log('[wallet] 📱 window.ethereum disponible:', !!window.ethereum);
                 
                 // Si BinanceChain está disponible, usar método directo
                 if (window.BinanceChain) {
+                    console.log('[wallet] 📱 Binance: Conectando directamente...');
                     connectBinanceWallet();
                     return;
                 }
                 
+                // Si window.ethereum está disponible (Binance puede usar ethereum también)
+                if (window.ethereum) {
+                    console.log('[wallet] 📱 Binance: Usando window.ethereum...');
+                    connectWallet();
+                    return;
+                }
+                
                 // Si no, usar WalletConnect con QR
+                console.log('[wallet] 📱 Binance: Usando WalletConnect QR...');
                 showBinanceWalletConnectQR();
                 return;
             }
@@ -1970,48 +1983,97 @@
         }
         
         // Función auxiliar para detectar cuando el usuario regresa después de abrir una wallet
+        // MEJORADA para funcionar igual que Trust Wallet (que funciona perfectamente)
         function setupReturnDetection(walletId) {
-            console.log('[wallet] Configurando detección de retorno para:', walletId);
+            console.log('[wallet] 📱 Configurando detección de retorno para:', walletId);
+            console.log('[wallet] 📱 window.ethereum disponible:', !!window.ethereum);
+            console.log('[wallet] 📱 window.BinanceChain disponible:', !!window.BinanceChain);
+            
+            var detectionCount = 0;
+            var maxDetections = 60; // 30 segundos (60 * 500ms)
             
             var checkInterval = setInterval(async function() {
-                if (window.ethereum || (walletId === 'binance' && window.BinanceChain)) {
+                detectionCount++;
+                console.log('[wallet] 📱 Detección #' + detectionCount + ' para', walletId);
+                
+                // Verificar window.ethereum (como Trust Wallet)
+                if (window.ethereum) {
+                    console.log('[wallet] 📱 ✅ window.ethereum detectado!');
                     clearInterval(checkInterval);
-                    console.log('[wallet] 📱 Wallet detectada después de deep link, verificando estado...');
                     
-                    // Esperar un momento para que la wallet termine de procesar
+                    // Esperar un momento para que la wallet termine de procesar (igual que Trust Wallet)
                     setTimeout(async function() {
+                        console.log('[wallet] 📱 Verificando estado después de detectar wallet...');
+                        
                         if (walletId === 'binance' && window.BinanceChain) {
+                            // Binance tiene su propio método
+                            console.log('[wallet] 📱 Conectando Binance Wallet...');
                             connectBinanceWallet();
                         } else {
-                            // Verificar estado primero antes de conectar
+                            // Para MetaMask y otras wallets que usan window.ethereum
+                            console.log('[wallet] 📱 Verificando estado de wallet...');
                             await checkAndUpdateWalletState();
-                            // Si aún no está conectada, intentar conectar
-                            if (!connectedAddress && window.ethereum) {
+                            
+                            // Si aún no está conectada después de verificar, conectar
+                            if (!connectedAddress) {
+                                console.log('[wallet] 📱 No conectada aún, intentando conectar...');
                                 connectWallet();
+                            } else {
+                                console.log('[wallet] 📱 ✅ Ya conectada:', connectedAddress);
                             }
                         }
-                    }, 1000);
+                    }, 1500); // Esperar 1.5 segundos (más tiempo que Trust Wallet)
+                    return;
                 }
-            }, 500);
+                
+                // Verificar window.BinanceChain específicamente para Binance
+                if (walletId === 'binance' && window.BinanceChain) {
+                    console.log('[wallet] 📱 ✅ window.BinanceChain detectado!');
+                    clearInterval(checkInterval);
+                    setTimeout(function() {
+                        connectBinanceWallet();
+                    }, 1500);
+                    return;
+                }
+                
+                // Limpiar después de máximo intentos
+                if (detectionCount >= maxDetections) {
+                    console.log('[wallet] 📱 ⏱️ Máximo de detecciones alcanzado');
+                    clearInterval(checkInterval);
+                }
+            }, 500); // Verificar cada 500ms (igual que Trust Wallet)
             
-            // También escuchar cuando la página vuelve a tener foco
+            // También escuchar cuando la página vuelve a tener foco (CRÍTICO para móvil)
             var focusHandler = async function() {
-                console.log('[wallet] 📱 Página recuperó foco después de deep link...');
+                console.log('[wallet] 📱 Página recuperó foco - verificando wallet...');
+                console.log('[wallet] 📱 window.ethereum:', !!window.ethereum);
+                console.log('[wallet] 📱 window.BinanceChain:', !!window.BinanceChain);
+                
+                // Verificar estado inmediatamente
                 await checkAndUpdateWalletState();
-                if (!connectedAddress && (window.ethereum || (walletId === 'binance' && window.BinanceChain))) {
-                    setTimeout(async function() {
-                        if (walletId === 'binance' && window.BinanceChain) {
+                
+                // Si hay wallet disponible pero no conectada, conectar
+                if (!connectedAddress) {
+                    if (walletId === 'binance' && window.BinanceChain) {
+                        console.log('[wallet] 📱 Conectando Binance después de focus...');
+                        setTimeout(function() {
                             connectBinanceWallet();
-                        } else if (window.ethereum) {
+                        }, 500);
+                    } else if (window.ethereum) {
+                        console.log('[wallet] 📱 Conectando MetaMask después de focus...');
+                        setTimeout(function() {
                             connectWallet();
-                        }
-                    }, 500);
+                        }, 500);
+                    }
+                } else {
+                    console.log('[wallet] 📱 ✅ Ya conectada después de focus:', connectedAddress);
                 }
             };
             
             window.addEventListener('focus', focusHandler);
             document.addEventListener('visibilitychange', function() {
                 if (!document.hidden) {
+                    console.log('[wallet] 📱 Página visible nuevamente...');
                     focusHandler();
                 }
             });
@@ -2020,6 +2082,7 @@
             setTimeout(function() {
                 clearInterval(checkInterval);
                 window.removeEventListener('focus', focusHandler);
+                console.log('[wallet] 📱 Limpiando detección de retorno');
             }, 60000);
         }
 
