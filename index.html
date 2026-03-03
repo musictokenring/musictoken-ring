@@ -1134,13 +1134,9 @@
         
         console.log('[selectSongForBattle] Función DEFINIDA INMEDIATAMENTE en window');
 
-        // Inicializar cliente de Supabase si no existe
-        if (typeof supabaseClient === 'undefined' && typeof window.supabaseClient === 'undefined' && typeof supabase !== 'undefined') {
+        // Inicializar cliente de Supabase si no existe (usar solo window para evitar conflictos)
+        if (typeof window.supabaseClient === 'undefined' && typeof supabase !== 'undefined') {
             window.supabaseClient = supabase.createClient(CONFIG.SUPABASE_URL, CONFIG.SUPABASE_ANON_KEY);
-            // También asignar a variable local si no existe
-            if (typeof supabaseClient === 'undefined') {
-                var supabaseClient = window.supabaseClient;
-            }
         }
 
         // Función para login con Google - con detección de navegadores de wallet
@@ -1231,15 +1227,16 @@
             
             // Si no es navegador de wallet, proceder normalmente
             try {
-                // Asegurar que supabaseClient existe
+                // Asegurar que supabaseClient existe (usar solo window para evitar conflictos)
                 if (typeof window.supabaseClient === 'undefined' && typeof supabase !== 'undefined') {
                     window.supabaseClient = supabase.createClient(CONFIG.SUPABASE_URL, CONFIG.SUPABASE_ANON_KEY);
                 }
-                // Usar window.supabaseClient como referencia
-                var supabaseClient = window.supabaseClient || (typeof supabase !== 'undefined' ? supabase.createClient(CONFIG.SUPABASE_URL, CONFIG.SUPABASE_ANON_KEY) : null);
-                if (!supabaseClient) {
+                // Usar window.supabaseClient directamente
+                if (!window.supabaseClient) {
                     throw new Error('Supabase no está disponible');
                 }
+                // Crear referencia local sin redeclarar
+                var supabaseClient = window.supabaseClient;
                 
                 console.log('[auth] Iniciando OAuth con Google...');
                 var { data, error } = await supabaseClient.auth.signInWithOAuth({
