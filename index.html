@@ -1368,8 +1368,19 @@
                 }
 
                 // Conectar usando WalletConnect con timeout
-                // El evento 'display_uri' debería dispararse antes de que se complete la conexión
                 console.log('[wallet] Iniciando conexión WalletConnect...');
+                
+                // Variable para rastrear si el QR apareció
+                var qrShown = false;
+                var qrCheckInterval = null;
+                
+                // Escuchar el evento display_uri antes de conectar
+                walletConnectProvider.once('display_uri', function(uri) {
+                    console.log('[wallet] URI recibido ANTES de connect():', uri);
+                    qrShown = true;
+                    if (qrCheckInterval) clearInterval(qrCheckInterval);
+                    displayQRCodeModal(uri);
+                });
                 
                 // Mostrar mensaje mientras se genera el QR
                 if (typeof showToast === 'function') {
@@ -1379,28 +1390,52 @@
                 // Iniciar la conexión (esto debería disparar el evento display_uri)
                 var connectPromise = walletConnectProvider.connect().then(function() {
                     console.log('[wallet] WalletConnect connect() completado');
+                    if (qrCheckInterval) clearInterval(qrCheckInterval);
                 }).catch(function(error) {
                     console.error('[wallet] Error en connect():', error);
+                    if (qrCheckInterval) clearInterval(qrCheckInterval);
                     throw error;
                 });
                 
-                // Esperar un poco antes de verificar si el QR apareció
-                await new Promise(function(resolve) {
-                    setTimeout(resolve, 3000); // Esperar 3 segundos para que aparezca el QR
-                });
+                // Verificar cada segundo si el QR apareció
+                qrCheckInterval = setInterval(function() {
+                    var qrModal = document.getElementById('binanceQRModal');
+                    if (qrModal && !qrModal.classList.contains('hidden')) {
+                        qrShown = true;
+                        clearInterval(qrCheckInterval);
+                        console.log('[wallet] QR code visible');
+                    }
+                }, 1000);
                 
-                // Verificar si el QR ya se mostró
-                var qrModal = document.getElementById('binanceQRModal');
-                if (!qrModal || qrModal.classList.contains('hidden')) {
-                    console.log('[wallet] QR aún no visible, esperando más tiempo...');
-                    // Esperar otros 5 segundos más
-                    await new Promise(function(resolve) {
-                        setTimeout(resolve, 5000);
-                    });
+                // Timeout: si después de 8 segundos no hay QR, mostrar modal alternativo
+                setTimeout(function() {
+                    if (!qrShown) {
+                        console.error('[wallet] QR no apareció después de 8 segundos');
+                        if (qrCheckInterval) clearInterval(qrCheckInterval);
+                        
+                        // Cancelar la conexión pendiente
+                        try {
+                            if (walletConnectProvider) {
+                                walletConnectProvider.disconnect();
+                            }
+                        } catch(e) {
+                            console.log('[wallet] Error al desconectar:', e);
+                        }
+                        
+                        // Mostrar modal alternativo
+                        showBinanceManualConnection();
+                    }
+                }, 8000);
+                
+                // Esperar a que se complete la conexión o timeout
+                try {
+                    await connectPromise;
+                } catch(error) {
+                    console.error('[wallet] Error en conexión:', error);
+                    if (!qrShown) {
+                        showBinanceManualConnection();
+                    }
                 }
-                
-                // Continuar con la conexión (no hacer timeout aquí, dejar que el QR aparezca)
-                // El usuario puede escanear el QR mientras la conexión está pendiente
                 
             } catch (error) {
                 console.error('[wallet] WalletConnect error:', error);
