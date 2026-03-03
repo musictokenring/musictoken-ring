@@ -1032,10 +1032,9 @@
             updateActionButtons(mode);
             if (typeof GameEngine !== 'undefined' && typeof GameEngine.updatePracticeBetDisplay === 'function') GameEngine.updatePracticeBetDisplay();
             
-            // En móvil, hacer scroll automático al selector de canciones para mejor UX
-            // Esto asegura que el usuario vea inmediatamente el selector de canciones y la apuesta
+            // En móvil, hacer scroll automático para mostrar selector de canciones Y apuesta
+            // Basado en la captura: header visible, "Busca tu Canción" visible arriba, "Tu Apuesta" visible abajo
             if (typeof isMobileDevice === 'function' && isMobileDevice()) {
-                // Esperar a que el DOM se actualice completamente
                 setTimeout(function() {
                     var songSelectionEl = document.getElementById('songSelection');
                     if (!songSelectionEl) {
@@ -1043,66 +1042,81 @@
                         return;
                     }
                     
-                    // Forzar reflow para asegurar que las dimensiones estén actualizadas
+                    // Forzar reflow
                     songSelectionEl.offsetHeight;
                     
                     // Obtener altura del header sticky
                     var headerEl = document.querySelector('header');
                     var headerHeight = headerEl ? headerEl.offsetHeight : 64;
                     
-                    // Calcular posición usando getBoundingClientRect y scrollY
+                    // Obtener altura del viewport móvil
+                    var viewportHeight = window.innerHeight || document.documentElement.clientHeight;
+                    
+                    // Calcular posición del elemento
                     var rect = songSelectionEl.getBoundingClientRect();
                     var scrollY = window.scrollY || window.pageYOffset || document.documentElement.scrollTop;
                     var elementTop = rect.top + scrollY;
                     
-                    // Offset: header + padding adicional para mejor visualización
-                    var offset = headerHeight + 20;
+                    // OBJETIVO: Posicionar el elemento para que:
+                    // - El header quede visible arriba
+                    // - "Busca tu Canción" quede visible justo después del header
+                    // - "Tu Apuesta" quede visible en la parte inferior de la pantalla
+                    // 
+                    // Estrategia: Scroll para que el inicio del songSelection quede justo después del header
+                    var offset = headerHeight + 10; // Header + pequeño padding (10px en lugar de 20px)
                     var targetPosition = Math.max(0, elementTop - offset);
                     
-                    console.log('[mobile] 📱 Calculando scroll:', {
-                        rectTop: rect.top,
-                        scrollY: scrollY,
-                        elementTop: elementTop,
+                    console.log('[mobile] 📱 Scroll para modo:', mode, {
+                        viewportHeight: viewportHeight,
                         headerHeight: headerHeight,
+                        elementTop: elementTop,
                         offset: offset,
                         targetPosition: targetPosition,
-                        modo: mode
+                        currentScroll: scrollY
                     });
                     
-                    // Hacer scroll directamente a la posición calculada
+                    // Hacer scroll
                     window.scrollTo({
                         top: targetPosition,
                         behavior: 'smooth'
                     });
                     
-                    // Verificación y ajuste fino después del scroll
+                    // Ajuste fino después del scroll
                     setTimeout(function() {
                         var newRect = songSelectionEl.getBoundingClientRect();
                         var newScrollY = window.scrollY || window.pageYOffset || document.documentElement.scrollTop;
-                        var expectedTop = headerHeight + 20;
-                        var difference = Math.abs(newRect.top - expectedTop);
                         
-                        // Si la diferencia es mayor a 30px, ajustar
-                        if (difference > 30) {
-                            var finalPosition = (newRect.top + newScrollY) - expectedTop;
+                        // Verificar que el elemento esté bien posicionado (justo después del header)
+                        var expectedTop = headerHeight + 10;
+                        var actualTop = newRect.top;
+                        var difference = actualTop - expectedTop;
+                        
+                        // Si está fuera del rango esperado (más de 20px de diferencia), ajustar
+                        if (Math.abs(difference) > 20) {
+                            var adjustment = difference;
+                            var finalPosition = newScrollY - adjustment;
+                            
                             window.scrollTo({
                                 top: Math.max(0, finalPosition),
                                 behavior: 'smooth'
                             });
-                            console.log('[mobile] 📱 Ajuste fino aplicado:', {
+                            
+                            console.log('[mobile] 📱 Ajuste fino:', {
+                                esperado: expectedTop,
+                                actual: actualTop,
                                 diferencia: difference,
+                                ajuste: adjustment,
                                 nuevaPosicion: finalPosition
                             });
+                        } else {
+                            console.log('[mobile] 📱 ✅ Posición correcta:', {
+                                esperado: expectedTop,
+                                actual: actualTop,
+                                diferencia: difference
+                            });
                         }
-                        
-                        console.log('[mobile] 📱 Scroll final:', {
-                            rectTop: newRect.top,
-                            esperado: expectedTop,
-                            diferencia: difference,
-                            scrollY: newScrollY
-                        });
-                    }, 500); // Esperar más tiempo para que el scroll termine completamente
-                }, 300); // Delay inicial aumentado para asegurar que el DOM esté completamente actualizado
+                    }, 600); // Esperar más tiempo para que el scroll termine
+                }, 350); // Delay para asegurar que el DOM esté completamente actualizado
             }
         }
 
