@@ -1284,6 +1284,40 @@
 
         // Mostrar QR code para conectar Binance Wallet usando WalletConnect v2
         async function showBinanceWalletConnectQR() {
+            console.log('[wallet] 🔄 Iniciando showBinanceWalletConnectQR()...');
+            
+            // LIMPIEZA CRÍTICA: Resetear provider antes de cada intento
+            if (walletConnectProvider) {
+                console.log('[wallet] 🧹 Limpiando provider anterior...');
+                try {
+                    // Desconectar cualquier sesión activa
+                    if (walletConnectProvider.disconnect) {
+                        await walletConnectProvider.disconnect();
+                    }
+                    // Limpiar pairings del core si existe
+                    if (walletConnectProvider.core && walletConnectProvider.core.pairing) {
+                        var pairings = walletConnectProvider.core.pairing.getAll();
+                        for (var i = 0; i < pairings.length; i++) {
+                            try {
+                                await walletConnectProvider.core.pairing.delete({ topic: pairings[i].topic });
+                            } catch(e) {
+                                console.log('[wallet] Error al eliminar pairing:', e);
+                            }
+                        }
+                    }
+                } catch (cleanupError) {
+                    console.log('[wallet] Error al limpiar provider:', cleanupError);
+                }
+                walletConnectProvider = null;
+                console.log('[wallet] ✅ Provider limpiado');
+            }
+            
+            // Cerrar cualquier modal de QR existente
+            var existingModal = document.getElementById('binanceQRModal');
+            if (existingModal) {
+                existingModal.remove();
+            }
+            
             // Mostrar indicador de carga inmediatamente
             if (typeof showToast === 'function') {
                 showToast('Iniciando conexión WalletConnect...', 'info');
@@ -1329,60 +1363,69 @@
                     return;
                 }
 
-                // Crear o reutilizar el provider de WalletConnect - Método similar a Aerodrome
-                if (!walletConnectProvider) {
-                    console.log('[wallet] Inicializando WalletConnect provider (método Aerodrome)...');
-                    
-                    try {
-                        walletConnectProvider = await EthereumProvider.init({
-                            projectId: CONFIG.WALLETCONNECT_PROJECT_ID,
-                            chains: [8453], // Base chain
-                            optionalChains: [1, 137, 56], // Ethereum, Polygon, BSC
-                            metadata: {
-                                name: 'MusicToken Ring',
-                                description: 'Music Battle Arena',
-                                url: window.location.origin,
-                                icons: ['https://pink-blank-vicuna-260.mypinata.cloud/ipfs/bafybeie24pisqmw6teijdng4flzjwumgwpesilowjxq3kww3p7kxlmuywm']
-                            },
-                            showQrModal: false // Manejar QR manualmente como Aerodrome
-                        });
-                        console.log('[wallet] ✅ Provider inicializado correctamente');
+                // SIEMPRE crear un nuevo provider (nunca reutilizar)
+                console.log('[wallet] 🆕 Creando NUEVO provider de WalletConnect...');
+                
+                try {
+                    // Forzar creación de nuevo provider con configuración limpia
+                    walletConnectProvider = await EthereumProvider.init({
+                        projectId: CONFIG.WALLETCONNECT_PROJECT_ID,
+                        chains: [8453], // Base chain
+                        optionalChains: [1, 137, 56], // Ethereum, Polygon, BSC
+                        metadata: {
+                            name: 'MusicToken Ring',
+                            description: 'Music Battle Arena',
+                            url: window.location.origin,
+                            icons: ['https://pink-blank-vicuna-260.mypinata.cloud/ipfs/bafybeie24pisqmw6teijdng4flzjwumgwpesilowjxq3kww3p7kxlmuywm']
+                        },
+                        showQrModal: false // Manejar QR manualmente como Aerodrome
+                    });
+                    console.log('[wallet] ✅ Provider NUEVO inicializado correctamente');
+                    console.log('[wallet] Provider object:', walletConnectProvider);
                         
                         // Verificar que el provider tenga los métodos necesarios
                         if (!walletConnectProvider.on || !walletConnectProvider.connect) {
                             throw new Error('Provider no tiene métodos necesarios');
                         }
 
-                        // Escuchar eventos de conexión ANTES de llamar a connect() - CRÍTICO
+                        // Escuchar eventos de conexión ANTES de llamar a enable() - CRÍTICO
                         // Múltiples listeners para asegurar que capturamos el URI
                         var uriReceived = false;
                         
                         function handleURI(uri) {
-                            if (uriReceived) return; // Evitar múltiples llamadas
+                            if (uriReceived) {
+                                console.log('[wallet] ⚠️ URI ya recibido anteriormente, ignorando...');
+                                return; // Evitar múltiples llamadas
+                            }
                             uriReceived = true;
-                            console.log('[wallet] ✅✅✅ URI recibido:', uri ? uri.substring(0, 50) + '...' : 'null');
-                            if (uri) {
+                            console.log('[wallet] ✅✅✅✅✅ URI RECIBIDO Y PROCESANDO:', uri ? uri.substring(0, 50) + '...' : 'null');
+                            if (uri && typeof uri === 'string' && uri.startsWith('wc:')) {
+                                console.log('[wallet] ✅ URI válido, mostrando QR...');
                                 displayQRCodeModal(uri);
+                            } else {
+                                console.error('[wallet] ❌ URI inválido:', uri);
                             }
                         }
                         
-                        // Listener 1: display_uri event (método estándar)
+                        // Listener 1: display_uri event (método estándar) - PRIORITARIO
                         walletConnectProvider.on('display_uri', function(uri) {
-                            console.log('[wallet] 📡 Evento display_uri capturado');
+                            console.log('[wallet] 📡📡📡 Evento display_uri capturado - URI:', uri ? uri.substring(0, 50) + '...' : 'null');
                             handleURI(uri);
                         });
                         
                         // Listener 2: También escuchar 'uri' event (algunas versiones usan este)
                         walletConnectProvider.on('uri', function(uri) {
-                            console.log('[wallet] 📡 Evento uri capturado');
+                            console.log('[wallet] 📡📡📡 Evento uri capturado - URI:', uri ? uri.substring(0, 50) + '...' : 'null');
                             handleURI(uri);
                         });
                         
                         // Listener 3: Escuchar todos los eventos para debugging
                         walletConnectProvider.on('*', function(event, data) {
-                            console.log('[wallet] 📡 Evento genérico:', event, data);
+                            console.log('[wallet] 📡 Evento genérico capturado:', event, data);
                             if (event === 'display_uri' || event === 'uri') {
-                                handleURI(data);
+                                var uri = typeof data === 'string' ? data : (data && data.uri ? data.uri : data);
+                                console.log('[wallet] 📡 URI del evento genérico:', uri ? uri.substring(0, 50) + '...' : 'null');
+                                handleURI(uri);
                             }
                         });
                         
