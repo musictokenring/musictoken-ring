@@ -1574,7 +1574,7 @@
                     '<div class="flex gap-2"><input type="text" id="joinRoomCode" placeholder="Código" class="flex-1 px-3 py-2.5 rounded-lg bg-black/40 border border-white/10 text-white text-sm" maxlength="6">' +
                     '<button type="button" onclick="joinRoom()" class="' + btnSecondary + ' w-auto px-4" id="joinRoomBtn" disabled>Unirse</button></div>';
             } else if (mode === 'practice') {
-                buttonsDiv.innerHTML = '<button type="button" onclick="if(typeof window.startPractice===\'function\'){window.startPractice();}else{console.error(\'startPractice no disponible\');if(typeof startPractice===\'function\'){startPractice();}else{alert(\'Error: Función de práctica no disponible\');}}" class="' + btnPrimary + '" id="startPracticeBtn" disabled>🎯 Iniciar Práctica</button>';
+                buttonsDiv.innerHTML = '<button type="button" onclick="window.startPractice()" class="' + btnPrimary + '" id="startPracticeBtn" disabled>🎯 Iniciar Práctica</button>';
                 
                 // Asegurar que el campo de apuesta tenga un valor por defecto
                 var betAmountInput = document.getElementById('betAmount');
