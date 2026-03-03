@@ -1604,56 +1604,109 @@ const GameEngine = {
             addedArena.classList.remove('hidden');
             console.log('[createBattleUI] ✅ battleArena visible');
             
-            // SCROLL AUTOMÁTICO AL ÁREA DE BATALLA
+            // SCROLL AUTOMÁTICO AL ÁREA DE BATALLA (CON DETECCIÓN DE PLATAFORMA)
             setTimeout(() => {
                 try {
+                    // Detectar si es dispositivo móvil
+                    const isMobile = typeof window !== 'undefined' && (
+                        /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) ||
+                        (window.innerWidth <= 768) ||
+                        (typeof isMobileDevice === 'function' && isMobileDevice())
+                    );
+                    
                     console.log('[createBattleUI] Iniciando scroll automático a battleArena...');
+                    console.log('[createBattleUI] Plataforma detectada:', isMobile ? 'MÓVIL' : 'DESKTOP');
+                    
                     const header = document.querySelector('header');
-                    const headerHeight = header ? header.offsetHeight : 80;
+                    const headerHeight = header ? header.offsetHeight : (isMobile ? 64 : 80);
                     
                     // Obtener posición del elemento
                     const rect = addedArena.getBoundingClientRect();
-                    const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
+                    const scrollTop = window.pageYOffset || document.documentElement.scrollTop || window.scrollY;
                     const elementTop = rect.top + scrollTop;
                     
-                    // Calcular posición objetivo (elemento - header - padding)
-                    const offset = headerHeight + 20;
+                    // Calcular offset según plataforma
+                    // Móvil: menos padding, más preciso
+                    // Desktop: más padding, más espacio
+                    const paddingOffset = isMobile ? 10 : 20;
+                    const offset = headerHeight + paddingOffset;
                     const targetPosition = Math.max(0, elementTop - offset);
                     
                     console.log('[createBattleUI] Scroll calculado:', {
+                        plataforma: isMobile ? 'MÓVIL' : 'DESKTOP',
                         elementTop: elementTop,
                         headerHeight: headerHeight,
+                        paddingOffset: paddingOffset,
                         offset: offset,
                         targetPosition: targetPosition,
-                        currentScroll: scrollTop
+                        currentScroll: scrollTop,
+                        windowWidth: window.innerWidth,
+                        windowHeight: window.innerHeight
                     });
                     
-                    // Hacer scroll suave al área de batalla
-                    window.scrollTo({
-                        top: targetPosition,
-                        behavior: 'smooth'
-                    });
-                    
-                    // Verificación después del scroll
-                    setTimeout(() => {
-                        const finalRect = addedArena.getBoundingClientRect();
-                        const finalTop = finalRect.top;
-                        console.log('[createBattleUI] ✅ Scroll completado. Posición final del elemento:', finalTop);
+                    // En móvil, usar scrollIntoView para mejor compatibilidad
+                    if (isMobile) {
+                        console.log('[createBattleUI] Usando scrollIntoView para móvil...');
+                        addedArena.scrollIntoView({
+                            behavior: 'smooth',
+                            block: 'start',
+                            inline: 'nearest'
+                        });
                         
-                        // Si aún no está bien visible, hacer ajuste fino
-                        if (finalTop > headerHeight + 50) {
-                            const fineAdjustment = finalTop - headerHeight - 20;
-                            window.scrollBy({
-                                top: fineAdjustment,
-                                behavior: 'smooth'
+                        // Ajuste adicional después del scrollIntoView
+                        setTimeout(() => {
+                            const finalRect = addedArena.getBoundingClientRect();
+                            const finalScrollTop = window.pageYOffset || document.documentElement.scrollTop || window.scrollY;
+                            const finalTop = finalRect.top;
+                            const expectedTop = headerHeight + paddingOffset;
+                            
+                            console.log('[createBattleUI] Verificación móvil:', {
+                                finalTop: finalTop,
+                                expectedTop: expectedTop,
+                                diferencia: finalTop - expectedTop
                             });
-                            console.log('[createBattleUI] Ajuste fino aplicado:', fineAdjustment);
-                        }
-                    }, 500);
+                            
+                            // Si hay diferencia significativa, hacer ajuste fino
+                            if (Math.abs(finalTop - expectedTop) > 15) {
+                                const adjustment = finalTop - expectedTop;
+                                const currentScroll = window.pageYOffset || document.documentElement.scrollTop || window.scrollY;
+                                window.scrollTo({
+                                    top: currentScroll - adjustment,
+                                    behavior: 'smooth'
+                                });
+                                console.log('[createBattleUI] Ajuste fino móvil aplicado:', -adjustment);
+                            }
+                        }, 400);
+                    } else {
+                        // Desktop: usar scrollTo normal
+                        console.log('[createBattleUI] Usando scrollTo para desktop...');
+                        window.scrollTo({
+                            top: targetPosition,
+                            behavior: 'smooth'
+                        });
+                        
+                        // Verificación después del scroll (desktop)
+                        setTimeout(() => {
+                            const finalRect = addedArena.getBoundingClientRect();
+                            const finalTop = finalRect.top;
+                            console.log('[createBattleUI] ✅ Scroll desktop completado. Posición final:', finalTop);
+                            
+                            // Si aún no está bien visible, hacer ajuste fino
+                            if (finalTop > headerHeight + 30) {
+                                const fineAdjustment = finalTop - headerHeight - paddingOffset;
+                                window.scrollBy({
+                                    top: -fineAdjustment,
+                                    behavior: 'smooth'
+                                });
+                                console.log('[createBattleUI] Ajuste fino desktop aplicado:', -fineAdjustment);
+                            }
+                        }, 500);
+                    }
                 } catch (scrollError) {
                     console.error('[createBattleUI] ❌ Error en scroll automático:', scrollError);
+                    console.error('[createBattleUI] Stack:', scrollError.stack);
                 }
-            }, 150);
+            }, isMobile ? 200 : 150); // Más delay en móvil para asegurar que el DOM esté listo
         } else {
             console.error('[createBattleUI] ❌ battleArena NO encontrado después de agregar');
         }
