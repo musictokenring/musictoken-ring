@@ -1017,26 +1017,37 @@ const GameEngine = {
     // ==========================================
     
     async startPracticeMatch(userSong, demoBet = 100) {
+        console.log('[startPracticeMatch] ✅ INICIANDO práctica');
+        console.log('[startPracticeMatch] Parámetros:', { userSong, demoBet });
+        
         try {
             if (!userSong || !userSong.id) {
+                console.error('[startPracticeMatch] ❌ Canción no válida:', userSong);
                 showToast('Error: Canción no válida', 'error');
                 return;
             }
 
+            console.log('[startPracticeMatch] Canción válida:', userSong.name);
+
             if (this.practiceDemoBalance <= 0) {
+                console.log('[startPracticeMatch] Balance demo en 0, reseteando a', this.practiceDemoInitialBalance);
                 this.practiceDemoBalance = this.practiceDemoInitialBalance;
                 localStorage.setItem('mtr_practice_demo_balance', String(this.practiceDemoBalance));
             }
 
             const normalizedBet = Math.max(this.minBet, Math.round(demoBet || this.minBet));
+            console.log('[startPracticeMatch] Apuesta normalizada:', normalizedBet, 'Balance demo:', this.practiceDemoBalance);
             
             if (normalizedBet > this.practiceDemoBalance) {
+                console.error('[startPracticeMatch] ❌ Saldo insuficiente');
                 showToast(`Saldo demo insuficiente. Disponible: ${this.practiceDemoBalance} MTR`, 'error');
                 return;
             }
 
+            console.log('[startPracticeMatch] Descontando apuesta del balance demo...');
             this.setPracticeDemoBalance(this.practiceDemoBalance - normalizedBet);
             this.updatePracticeBetDisplay();
+            console.log('[startPracticeMatch] Balance actualizado');
             let cpuSong;
             try {
                 cpuSong = await Promise.race([
@@ -1119,39 +1130,53 @@ const GameEngine = {
                 console.log('[practice] Using local fallback match');
             }
 
+            console.log('[startPracticeMatch] ✅ Match creado:', match.id);
             showToast(`¡Práctica iniciada: ${normalizedBet} MTR demo!`, 'success');
             
+            console.log('[startPracticeMatch] Llamando a startLocalPractice...');
             await this.startLocalPractice(match);
+            console.log('[startPracticeMatch] ✅✅✅ Práctica iniciada exitosamente');
 
         } catch (error) {
-            console.error('[practice] Error starting practice:', error);
+            console.error('[startPracticeMatch] ❌❌❌ ERROR:', error);
+            console.error('[startPracticeMatch] Stack:', error.stack);
             showToast('Error al iniciar práctica: ' + (error.message || 'Error desconocido'), 'error');
             
             // Restaurar balance si falla
+            const normalizedBet = Math.max(this.minBet, Math.round(demoBet || this.minBet));
             this.setPracticeDemoBalance(this.practiceDemoBalance + normalizedBet);
             this.updatePracticeBetDisplay();
         }
     },
 
     async startLocalPractice(match) {
+        console.log('[startLocalPractice] ✅ INICIANDO batalla local');
+        console.log('[startLocalPractice] Match:', match);
+        
         if (!match) {
+            console.error('[startLocalPractice] ❌ Match inválido');
             showToast('Error: Datos de batalla inválidos', 'error');
             return;
         }
 
+        console.log('[startLocalPractice] Ocultando secciones...');
         // Ocultar secciones
         document.getElementById('songSelection')?.classList.add('hidden');
         document.getElementById('waitingScreen')?.classList.add('hidden');
         document.getElementById('roomScreen')?.classList.add('hidden');
         document.getElementById('modeSelector')?.classList.add('hidden');
+        console.log('[startLocalPractice] Secciones ocultadas');
 
         this.currentMatch = match;
         
         try {
+            console.log('[startLocalPractice] Creando UI de batalla...');
             this.createBattleUI(match);
+            console.log('[startLocalPractice] ✅ UI de batalla creada');
         } catch (uiError) {
-            console.error('[practice] Error creating battle UI:', uiError);
-            showToast('Error al crear la interfaz de batalla', 'error');
+            console.error('[startLocalPractice] ❌ Error creating battle UI:', uiError);
+            console.error('[startLocalPractice] Stack:', uiError.stack);
+            showToast('Error al crear la interfaz de batalla: ' + (uiError.message || 'Error desconocido'), 'error');
             return;
         }
 
@@ -1465,12 +1490,23 @@ const GameEngine = {
     battleParticles: [],
 
     createBattleUI(match) {
+        console.log('[createBattleUI] ✅ Creando UI de batalla');
+        console.log('[createBattleUI] Match:', match);
+        
         // Ocultar todas las secciones principales primero
         const songSelection = document.getElementById('songSelection');
         const waitingScreen = document.getElementById('waitingScreen');
         const roomScreen = document.getElementById('roomScreen');
         const modeSelector = document.getElementById('modeSelector');
         const battleArena = document.getElementById('battleArena');
+        
+        console.log('[createBattleUI] Elementos encontrados:', {
+            songSelection: !!songSelection,
+            waitingScreen: !!waitingScreen,
+            roomScreen: !!roomScreen,
+            modeSelector: !!modeSelector,
+            battleArena: !!battleArena
+        });
         
         if (songSelection) songSelection.classList.add('hidden');
         if (waitingScreen) waitingScreen.classList.add('hidden');
@@ -1479,23 +1515,29 @@ const GameEngine = {
         
         // Si ya existe battleArena, limpiarlo primero
         if (battleArena) {
+            console.log('[createBattleUI] Removiendo battleArena existente');
             battleArena.remove();
         }
         
         // Buscar el contenedor principal
         const container = document.querySelector('main');
         if (!container) { 
-            console.error('[battle] No main container found');
+            console.error('[createBattleUI] ❌ No main container found');
             showToast('Error: No se encontró el contenedor principal', 'error');
             return; 
         }
+        
+        console.log('[createBattleUI] Contenedor principal encontrado');
 
         const pot = (match.player1_bet || 0) + (match.player2_bet || 0);
         
         // Crear la sección de batalla y agregarla al contenedor
+        console.log('[createBattleUI] Creando elemento battleSection...');
         const battleSection = document.createElement('section');
         battleSection.id = 'battleArena';
         battleSection.className = 'max-w-5xl mx-auto py-6 px-4';
+        
+        console.log('[createBattleUI] Generando HTML...');
         battleSection.innerHTML = `
             <div class="text-center mb-4">
                 <div class="inline-flex items-center gap-3 px-6 py-2 rounded-full bg-white/5 border border-white/10 mb-2">
@@ -1550,15 +1592,30 @@ const GameEngine = {
             <div id="battleStatusText" class="text-center text-gray-500 text-sm"></div>
         `;
         
+        console.log('[createBattleUI] HTML generado, agregando al DOM...');
         // Agregar la sección al contenedor
         container.appendChild(battleSection);
+        console.log('[createBattleUI] ✅ battleSection agregado al DOM');
+        
+        // Verificar que el elemento esté visible
+        const addedArena = document.getElementById('battleArena');
+        if (addedArena) {
+            console.log('[createBattleUI] ✅ battleArena encontrado en DOM');
+            addedArena.classList.remove('hidden');
+            console.log('[createBattleUI] ✅ battleArena visible');
+        } else {
+            console.error('[createBattleUI] ❌ battleArena NO encontrado después de agregar');
+        }
         
         // Inicializar el canvas después de agregar al DOM
         setTimeout(() => {
             try {
+                console.log('[createBattleUI] Inicializando canvas...');
                 this.initBattleCanvas();
+                console.log('[createBattleUI] ✅ Canvas inicializado');
             } catch (canvasError) {
-                console.error('[battle] Error initializing canvas:', canvasError);
+                console.error('[createBattleUI] ❌ Error initializing canvas:', canvasError);
+                console.error('[createBattleUI] Stack:', canvasError.stack);
             }
         }, 100);
     },
