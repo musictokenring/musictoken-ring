@@ -1354,10 +1354,36 @@
                         }
 
                         // Escuchar eventos de conexión ANTES de llamar a connect() - CRÍTICO
+                        // Múltiples listeners para asegurar que capturamos el URI
+                        var uriReceived = false;
+                        
+                        function handleURI(uri) {
+                            if (uriReceived) return; // Evitar múltiples llamadas
+                            uriReceived = true;
+                            console.log('[wallet] ✅✅✅ URI recibido:', uri ? uri.substring(0, 50) + '...' : 'null');
+                            if (uri) {
+                                displayQRCodeModal(uri);
+                            }
+                        }
+                        
+                        // Listener 1: display_uri event (método estándar)
                         walletConnectProvider.on('display_uri', function(uri) {
-                            console.log('[wallet] ✅✅✅ URI recibido en evento display_uri:', uri);
-                            // Mostrar el QR code inmediatamente cuando recibimos el URI
-                            displayQRCodeModal(uri);
+                            console.log('[wallet] 📡 Evento display_uri capturado');
+                            handleURI(uri);
+                        });
+                        
+                        // Listener 2: También escuchar 'uri' event (algunas versiones usan este)
+                        walletConnectProvider.on('uri', function(uri) {
+                            console.log('[wallet] 📡 Evento uri capturado');
+                            handleURI(uri);
+                        });
+                        
+                        // Listener 3: Escuchar todos los eventos para debugging
+                        walletConnectProvider.on('*', function(event, data) {
+                            console.log('[wallet] 📡 Evento genérico:', event, data);
+                            if (event === 'display_uri' || event === 'uri') {
+                                handleURI(data);
+                            }
                         });
                         
                         walletConnectProvider.on('connect', function() {
@@ -1395,16 +1421,64 @@
                     showToast('Generando código QR... Por favor espera...', 'info');
                 }
                 
-                console.log('[wallet] Iniciando conexión WalletConnect (método Aerodrome)...');
+                console.log('[wallet] Iniciando conexión WalletConnect (método mejorado)...');
+                
+                // Intentar múltiples métodos para obtener el URI
+                var connectPromise;
+                var uriCheckAttempts = 0;
+                var maxUriChecks = 30; // 15 segundos (30 * 500ms)
+                
+                // Función para verificar si el provider tiene un URI disponible
+                function checkProviderURI() {
+                    uriCheckAttempts++;
+                    try {
+                        // Método 1: Verificar si el provider tiene una propiedad 'uri' o 'pairingUri'
+                        if (walletConnectProvider && (walletConnectProvider.uri || walletConnectProvider.pairingUri)) {
+                            var uri = walletConnectProvider.uri || walletConnectProvider.pairingUri;
+                            console.log('[wallet] ✅ URI encontrado en provider:', uri ? uri.substring(0, 50) + '...' : 'null');
+                            if (uri) {
+                                displayQRCodeModal(uri);
+                                return true;
+                            }
+                        }
+                        
+                        // Método 2: Verificar si hay un session o pairing disponible
+                        if (walletConnectProvider && walletConnectProvider.session) {
+                            console.log('[wallet] Session encontrada:', walletConnectProvider.session);
+                        }
+                        
+                        // Método 3: Verificar el core del provider
+                        if (walletConnectProvider && walletConnectProvider.core && walletConnectProvider.core.pairing) {
+                            var pairings = walletConnectProvider.core.pairing.getAll();
+                            console.log('[wallet] Pairings encontrados:', pairings);
+                            if (pairings && pairings.length > 0 && pairings[0].topic) {
+                                // Intentar obtener URI del pairing
+                                console.log('[wallet] Pairing topic:', pairings[0].topic);
+                            }
+                        }
+                    } catch (e) {
+                        console.log('[wallet] Error al verificar URI del provider:', e);
+                    }
+                    return false;
+                }
+                
+                // Verificar URI inmediatamente antes de conectar
+                checkProviderURI();
                 
                 // Método similar a Aerodrome: llamar connect() que dispara display_uri
                 // El evento display_uri se dispara ANTES de que se complete la conexión
-                var connectPromise;
                 try {
+                    // Llamar a connect() que debería disparar display_uri
                     connectPromise = walletConnectProvider.connect({
                         optionalChains: [8453, 1, 137, 56]
                     }).then(function() {
                         console.log('[wallet] ✅ WalletConnect connect() completado');
+                        
+                        // Verificar URI después de conectar también
+                        setTimeout(function() {
+                            checkProviderURI();
+                        }, 500);
+                        
                         if (qrCheckInterval) clearInterval(qrCheckInterval);
                         if (qrTimeout) clearTimeout(qrTimeout);
                     }).catch(function(error) {
@@ -1413,6 +1487,14 @@
                         if (qrTimeout) clearTimeout(qrTimeout);
                         throw error;
                     });
+                    
+                    // Verificar URI periódicamente mientras se conecta (cada 500ms)
+                    var uriCheckInterval = setInterval(function() {
+                        if (checkProviderURI() || uriCheckAttempts >= maxUriChecks) {
+                            clearInterval(uriCheckInterval);
+                        }
+                    }, 500);
+                    
                 } catch (connectError) {
                     console.error('[wallet] ❌ Error al llamar connect():', connectError);
                     throw connectError;
