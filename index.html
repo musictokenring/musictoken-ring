@@ -1467,84 +1467,117 @@
             }
             
             // En móvil, hacer scroll automático al INICIO EXACTO del selector de canciones
-            // ESTRATEGIA NUEVA: Usar scrollIntoView y luego ajustar manualmente para compensar header sticky
+            // ESPECIALMENTE IMPORTANTE PARA MODO PRÁCTICA
             if (typeof isMobileDevice === 'function' && isMobileDevice()) {
+                console.log('[selectMode] 📱 Modo móvil detectado, preparando scroll a selector de canciones...');
+                console.log('[selectMode] Modo seleccionado:', mode);
+                
+                // Delay inicial para asegurar que el DOM esté completamente actualizado
                 setTimeout(function() {
                     var songSelectionEl = document.getElementById('songSelection');
                     if (!songSelectionEl) {
-                        console.error('[mobile] ❌ songSelection no encontrado');
+                        console.error('[selectMode] ❌ songSelection no encontrado');
                         return;
                     }
                     
-                    // Asegurar que el elemento esté visible
+                    console.log('[selectMode] ✅ songSelection encontrado');
+                    
+                    // Asegurar que el elemento esté visible y forzar reflow
                     songSelectionEl.classList.remove('hidden');
                     songSelectionEl.style.display = 'block';
+                    songSelectionEl.offsetHeight; // Forzar reflow
                     
-                    // Forzar reflow
-                    songSelectionEl.offsetHeight;
-                    
-                    // Obtener altura del header sticky ANTES del scroll
+                    // Obtener altura del header sticky
                     var headerEl = document.querySelector('header');
                     var headerHeight = headerEl ? headerEl.offsetHeight : 64;
                     
-                    // PRIMERO: Usar scrollIntoView para llevar el elemento a la vista (sin comportamiento smooth para ser más preciso)
-                    songSelectionEl.scrollIntoView({ 
-                        block: 'start', 
-                        behavior: 'auto' // Usar 'auto' para ser instantáneo y más preciso
-                    });
+                    console.log('[selectMode] Header height:', headerHeight);
                     
-                    // INMEDIATAMENTE después, ajustar manualmente restando la altura del header
-                    setTimeout(function() {
+                    // Usar requestAnimationFrame para asegurar que el DOM esté completamente renderizado
+                    requestAnimationFrame(function() {
+                        // Obtener posición precisa del elemento
                         var rect = songSelectionEl.getBoundingClientRect();
-                        var currentScroll = window.pageYOffset || document.documentElement.scrollTop || window.scrollY;
-                        var elementTop = rect.top + currentScroll;
+                        var scrollTop = window.pageYOffset || document.documentElement.scrollTop || window.scrollY;
+                        var elementTop = rect.top + scrollTop;
                         
-                        // Calcular la posición correcta: elemento menos header menos pequeño padding
-                        var targetPosition = elementTop - headerHeight - 10;
+                        // Calcular posición objetivo: elemento menos header menos padding pequeño
+                        var paddingOffset = 8; // Padding mínimo para móvil
+                        var targetPosition = Math.max(0, elementTop - headerHeight - paddingOffset);
                         
-                        console.log('[mobile] 📱 Ajuste después de scrollIntoView:', {
+                        console.log('[selectMode] 📱 Scroll calculado:', {
+                            mode: mode,
                             rectTop: rect.top,
-                            currentScroll: currentScroll,
+                            scrollTop: scrollTop,
                             elementTop: elementTop,
                             headerHeight: headerHeight,
-                            targetPosition: targetPosition
+                            paddingOffset: paddingOffset,
+                            targetPosition: targetPosition,
+                            windowHeight: window.innerHeight
                         });
                         
-                        // Hacer el ajuste final con smooth scroll
+                        // Hacer scroll suave directamente a la posición calculada
                         window.scrollTo({
-                            top: Math.max(0, targetPosition),
+                            top: targetPosition,
                             behavior: 'smooth'
                         });
                         
-                        // Verificación final después del ajuste
+                        // Verificación y ajuste fino después del scroll
                         setTimeout(function() {
                             var finalRect = songSelectionEl.getBoundingClientRect();
-                            var expectedTop = headerHeight + 10;
-                            var actualTop = finalRect.top;
-                            var difference = actualTop - expectedTop;
+                            var finalTop = finalRect.top;
+                            var expectedTop = headerHeight + paddingOffset;
+                            var difference = finalTop - expectedTop;
                             
-                            console.log('[mobile] 📱 Verificación final:', {
+                            console.log('[selectMode] 📱 Verificación después del scroll:', {
+                                finalTop: finalTop,
                                 expectedTop: expectedTop,
-                                actualTop: actualTop,
-                                diferencia: difference
+                                diferencia: difference,
+                                isVisible: finalTop >= headerHeight && finalTop < window.innerHeight - 100
                             });
                             
-                            // Si aún hay diferencia significativa, hacer un último ajuste
-                            if (Math.abs(difference) > 15) {
-                                var finalScroll = window.pageYOffset || document.documentElement.scrollTop || window.scrollY;
-                                var finalElementTop = finalRect.top + finalScroll;
-                                var finalPosition = finalElementTop - headerHeight - 10;
+                            // Si hay diferencia significativa, hacer ajuste fino
+                            if (Math.abs(difference) > 10) {
+                                var currentScroll = window.pageYOffset || document.documentElement.scrollTop || window.scrollY;
+                                var finalElementTop = finalRect.top + currentScroll;
+                                var fineTarget = finalElementTop - headerHeight - paddingOffset;
                                 
                                 window.scrollTo({
-                                    top: Math.max(0, finalPosition),
+                                    top: fineTarget,
                                     behavior: 'smooth'
                                 });
                                 
-                                console.log('[mobile] 📱 Último ajuste aplicado:', finalPosition);
+                                console.log('[selectMode] 📱 Ajuste fino aplicado:', fineTarget);
                             }
-                        }, 600);
-                    }, 50); // Delay muy corto después de scrollIntoView
-                }, 400); // Delay inicial para asegurar que el DOM esté listo
+                            
+                            // Verificación final - asegurar que el selector esté completamente visible
+                            setTimeout(function() {
+                                var checkRect = songSelectionEl.getBoundingClientRect();
+                                var checkTop = checkRect.top;
+                                var viewportHeight = window.innerHeight;
+                                var isFullyVisible = checkTop >= headerHeight && checkTop < viewportHeight - 50;
+                                
+                                console.log('[selectMode] 📱 Verificación final:', {
+                                    checkTop: checkTop,
+                                    headerHeight: headerHeight,
+                                    viewportHeight: viewportHeight,
+                                    isFullyVisible: isFullyVisible
+                                });
+                                
+                                if (!isFullyVisible) {
+                                    console.warn('[selectMode] ⚠️ Selector no completamente visible, ajustando...');
+                                    var finalScroll = window.pageYOffset || document.documentElement.scrollTop || window.scrollY;
+                                    var finalElementTop = checkRect.top + finalScroll;
+                                    window.scrollTo({
+                                        top: finalElementTop - headerHeight - paddingOffset,
+                                        behavior: 'smooth'
+                                    });
+                                } else {
+                                    console.log('[selectMode] ✅ Selector de canciones completamente visible');
+                                }
+                            }, 400);
+                        }, 500);
+                    });
+                }, mode === 'practice' ? 300 : 400); // Delay más corto para práctica
             }
         }
 
