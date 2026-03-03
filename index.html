@@ -1781,28 +1781,23 @@
             }
         }
         
-        // ACTUALIZAR la función global con la versión completa (si ya existe, la mejora)
-        if (typeof window.quickBet === 'function') {
-            // Guardar referencia a la función global existente
-            var globalQuickBet = window.quickBet;
-            // Reemplazar con versión completa que incluye más funcionalidad
-            window.quickBet = function(amount) {
-                // Llamar función completa primero
-                quickBet(amount);
-                // También llamar función global si existe (fallback)
-                if (globalQuickBet && globalQuickBet !== window.quickBet) {
-                    try {
-                        globalQuickBet(amount);
-                    } catch (e) {
-                        console.warn('[quickBet] Error en función global:', e);
-                    }
-                }
-            };
-        } else {
-            // Si no existe, definirla
-            window.quickBet = quickBet;
-        }
-        console.log('[INIT] ✅ window.quickBet actualizada con versión completa');
+        // ACTUALIZAR la función global con la versión completa
+        // CRÍTICO: Guardar referencia a la función local antes de asignar a window
+        var localQuickBet = quickBet;
+        
+        // Asignar directamente la función local a window.quickBet
+        window.quickBet = function(amount) {
+            console.log('[quickBet-GLOBAL] ✅ Llamado con amount:', amount);
+            try {
+                // Llamar directamente a la función local (no recursión)
+                return localQuickBet(amount);
+            } catch (e) {
+                console.error('[quickBet-GLOBAL] ❌ Error:', e);
+                throw e;
+            }
+        };
+        
+        console.log('[INIT] ✅ window.quickBet definida correctamente sin recursión');
 
         function updateBetEligibility() {
             console.log('[updateBetEligibility] ⚡ Iniciando actualización de elegibilidad...');
