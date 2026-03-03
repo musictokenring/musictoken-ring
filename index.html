@@ -27,6 +27,11 @@
     <link rel="icon" type="image/png" href="https://pink-blank-vicuna-260.mypinata.cloud/ipfs/bafybeie24pisqmw6teijdng4flzjwumgwpesilowjxq3kww3p7kxlmuywm">
 
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <!-- QR Code Generator para WalletConnect -->
+    <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
+    <!-- WalletConnect v2 Core -->
+    <script src="https://unpkg.com/@walletconnect/core@2.14.0/dist/index.umd.js"></script>
+    <script src="https://unpkg.com/@walletconnect/web3wallet@1.8.0/dist/index.umd.js"></script>
 
     <script>
         const CONFIG = {
@@ -34,8 +39,12 @@
             SUPABASE_ANON_KEY: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJzY21nY255bmJ4YWxjdXdkcWxtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzA0NTYwOTUsImV4cCI6MjA4NjAzMjA5NX0.1iasFQ5H0GmrFqi6poWNE1aZOtbmQuB113RCyg2BBK4',
             BATTLE_DURATION: 60,
             BACKEND_API: 'https://musictoken-backend.onrender.com',
-            MTR_TOKEN_ADDRESS: window.MTR_TOKEN_ADDRESS || '0x99cd1eb32846c9027ed9cb8710066fa08791c33b'
+            MTR_TOKEN_ADDRESS: window.MTR_TOKEN_ADDRESS || '0x99cd1eb32846c9027ed9cb8710066fa08791c33b',
+            WALLETCONNECT_PROJECT_ID: 'a01e2f3b4c5d6e7f8a9b0c1d2e3f4a5b' // Project ID público para desarrollo
         };
+        
+        // Variable global para WalletConnect
+        var walletConnectInstance = null;
 
         function extractMetaMaskErrorMessage(reason) {
             if (!reason) return '';
@@ -1257,6 +1266,148 @@
             }
         };
 
+        // Mostrar QR code para conectar Binance Wallet usando WalletConnect
+        async function showBinanceWalletConnectQR() {
+            var qrModal = document.getElementById('binanceQRModal');
+            
+            if (!qrModal) {
+                // Crear el modal de QR code
+                qrModal = document.createElement('div');
+                qrModal.id = 'binanceQRModal';
+                qrModal.className = 'fixed inset-0 z-50 flex items-center justify-center bg-black/90 backdrop-blur-sm';
+                qrModal.innerHTML = `
+                    <div class="bg-gray-900 border border-cyan-500/30 rounded-xl p-6 max-w-sm w-full mx-4 shadow-2xl">
+                        <div class="flex justify-between items-center mb-4">
+                            <h3 class="text-xl font-bold text-white">Conectar Binance Wallet</h3>
+                            <button onclick="closeBinanceQRModal()" class="text-gray-400 hover:text-white text-2xl leading-none">&times;</button>
+                        </div>
+                        <p class="text-gray-400 text-sm mb-4 text-center">Escanea este código QR con Binance Wallet</p>
+                        <div id="qrCodeContainer" class="flex justify-center mb-4 p-4 bg-white rounded-lg">
+                            <canvas id="binanceQRCode"></canvas>
+                        </div>
+                        <p class="text-gray-500 text-xs text-center mb-4">O copia el código y pégalo en Binance Wallet</p>
+                        <div class="flex gap-2">
+                            <input type="text" id="walletConnectURI" readonly class="flex-1 px-3 py-2 bg-gray-800 border border-gray-700 rounded text-xs text-gray-300 font-mono" value="">
+                            <button onclick="copyWalletConnectURI()" class="px-4 py-2 bg-cyan-500/20 border border-cyan-500/50 rounded text-cyan-400 text-sm hover:bg-cyan-500/30 transition">Copiar</button>
+                        </div>
+                        <p class="text-gray-500 text-xs mt-4 text-center">El código expira en 5 minutos</p>
+                    </div>
+                `;
+                document.body.appendChild(qrModal);
+                
+                // Cerrar al hacer clic fuera del modal
+                qrModal.addEventListener('click', function(e) {
+                    if (e.target === qrModal) {
+                        closeBinanceQRModal();
+                    }
+                });
+            }
+            
+            // Generar URI de WalletConnect
+            var walletConnectURI = generateWalletConnectURI();
+            document.getElementById('walletConnectURI').value = walletConnectURI;
+            
+            // Generar QR code
+            if (typeof QRCode !== 'undefined') {
+                var qrCanvas = document.getElementById('binanceQRCode');
+                QRCode.toCanvas(qrCanvas, walletConnectURI, {
+                    width: 256,
+                    margin: 2,
+                    color: {
+                        dark: '#000000',
+                        light: '#FFFFFF'
+                    }
+                }, function(error) {
+                    if (error) {
+                        console.error('[wallet] QR code generation error:', error);
+                        if (typeof showToast === 'function') {
+                            showToast('Error al generar QR code. Usa el código de texto.', 'error');
+                        }
+                    }
+                });
+            } else {
+                // Si QRCode no está disponible, mostrar solo el texto
+                document.getElementById('qrCodeContainer').innerHTML = '<p class="text-gray-400 text-sm">Usa el código de abajo</p>';
+            }
+            
+            qrModal.classList.remove('hidden');
+            
+            // Iniciar detección de conexión
+            startWalletConnectDetection(walletConnectURI);
+        }
+
+        // Generar URI de WalletConnect para Binance Wallet
+        function generateWalletConnectURI() {
+            // Generar un ID único para la sesión
+            var sessionId = 'mtr_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+            var bridgeURL = 'https://bridge.walletconnect.org'; // Bridge público de WalletConnect
+            
+            // Crear URI de WalletConnect v1 (más compatible con Binance Wallet)
+            var uri = 'wc:' + sessionId + '@1?bridge=' + encodeURIComponent(bridgeURL) + '&key=' + generateRandomKey();
+            
+            return uri;
+        }
+
+        // Generar clave aleatoria para WalletConnect
+        function generateRandomKey() {
+            var chars = '0123456789ABCDEF';
+            var key = '';
+            for (var i = 0; i < 64; i++) {
+                key += chars.charAt(Math.floor(Math.random() * chars.length));
+            }
+            return key;
+        }
+
+        // Detectar cuando se establece la conexión WalletConnect
+        function startWalletConnectDetection(uri) {
+            // Verificar periódicamente si window.ethereum o window.BinanceChain está disponible
+            var checkInterval = setInterval(function() {
+                if (window.ethereum || window.BinanceChain) {
+                    clearInterval(checkInterval);
+                    closeBinanceQRModal();
+                    
+                    setTimeout(function() {
+                        if (window.BinanceChain) {
+                            connectBinanceWallet();
+                        } else {
+                            connectWallet();
+                        }
+                    }, 500);
+                }
+            }, 1000);
+            
+            // Limpiar después de 5 minutos
+            setTimeout(function() {
+                clearInterval(checkInterval);
+                if (typeof showToast === 'function') {
+                    showToast('El código QR expiró. Genera uno nuevo.', 'info');
+                }
+                closeBinanceQRModal();
+            }, 300000); // 5 minutos
+        }
+
+        // Cerrar modal de QR de Binance
+        window.closeBinanceQRModal = function closeBinanceQRModal() {
+            var modal = document.getElementById('binanceQRModal');
+            if (modal) {
+                modal.classList.add('hidden');
+            }
+        };
+
+        // Copiar URI de WalletConnect al portapapeles
+        window.copyWalletConnectURI = function copyWalletConnectURI() {
+            var uriInput = document.getElementById('walletConnectURI');
+            if (uriInput) {
+                uriInput.select();
+                uriInput.setSelectionRange(0, 99999); // Para móviles
+                document.execCommand('copy');
+                
+                if (typeof showToast === 'function') {
+                    showToast('Código copiado al portapapeles', 'success');
+                }
+            }
+        };
+
         // Conectar wallet móvil usando deep linking
         function connectMobileWallet(wallet) {
             closeMobileWalletModal();
@@ -1295,67 +1446,9 @@
                 // MetaMask móvil usa un formato especial
                 deepLink = 'https://metamask.app.link/dapp/' + encodeURIComponent(window.location.href);
             } else if (wallet.id === 'binance') {
-                // Binance Wallet - manejo especial para iOS y Android
-                var isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
-                
-                if (isIOS) {
-                    // En iOS, Safari bloquea protocolos personalizados si la app no está instalada
-                    // Usar un enfoque más seguro que no cause errores de Safari
-                    if (typeof showToast === 'function') {
-                        showToast('Para conectar Binance Wallet en iOS, abre la app manualmente y escanea el código QR o usa WalletConnect', 'info');
-                    }
-                    
-                    // Intentar abrir con iframe primero (más silencioso)
-                    try {
-                        var iframe = document.createElement('iframe');
-                        iframe.style.display = 'none';
-                        iframe.style.width = '1px';
-                        iframe.style.height = '1px';
-                        iframe.src = 'bnbapp://wc?uri=' + encodeURIComponent(window.location.href);
-                        document.body.appendChild(iframe);
-                        
-                        // Remover después de intentar
-                        setTimeout(function() {
-                            try {
-                                document.body.removeChild(iframe);
-                            } catch(e) {}
-                        }, 2000);
-                    } catch(e) {
-                        console.log('[wallet] Binance iOS iframe method failed');
-                    }
-                    
-                    // No usar window.location.href en iOS para evitar el error de Safari
-                    // En su lugar, mostrar instrucciones claras
-                    if (typeof showToast === 'function') {
-                        setTimeout(function() {
-                            showToast('Abre Binance Wallet desde tu pantalla de inicio y vuelve aquí', 'info');
-                        }, 3000);
-                    }
-                    return;
-                } else {
-                    // Android - usar método estándar con elemento <a>
-                    deepLink = 'bnbapp://wc?uri=' + encodeURIComponent(window.location.href);
-                    
-                    try {
-                        var link = document.createElement('a');
-                        link.href = deepLink;
-                        link.style.display = 'none';
-                        document.body.appendChild(link);
-                        link.click();
-                        document.body.removeChild(link);
-                        
-                        // Si no se abre en 2 segundos, mostrar instrucciones
-                        setTimeout(function() {
-                            if (typeof showToast === 'function') {
-                                showToast('Abre Binance Wallet manualmente si no se abrió automáticamente', 'info');
-                            }
-                        }, 2000);
-                        return;
-                    } catch(e) {
-                        console.log('[wallet] Binance Android link failed:', e);
-                        // Continuar con window.location.href como fallback
-                    }
-                }
+                // Binance Wallet - usar WalletConnect con QR code (método estándar y más confiable)
+                showBinanceWalletConnectQR();
+                return;
             } else if (wallet.id === 'trust') {
                 deepLink = 'https://link.trustwallet.com/open_url?coin_id=60&url=' + encodeURIComponent(window.location.href);
             } else if (wallet.id === 'coinbase') {
