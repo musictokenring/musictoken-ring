@@ -1926,11 +1926,19 @@
             }
             
             // Deep linking para wallets móviles
-            // Para MetaMask, usar el formato correcto
+            // Para MetaMask, intentar usar el método estándar primero
             var deepLink;
             if (wallet.id === 'metamask') {
-                // MetaMask móvil usa un formato especial
-                deepLink = 'https://metamask.app.link/dapp/' + encodeURIComponent(window.location.href);
+                // En móvil, MetaMask puede estar disponible a través de window.ethereum
+                // Si no está disponible, usar el deep link pero con un formato que evite el navegador interno
+                // Intentar primero con el método directo
+                console.log('[wallet] MetaMask: Intentando conexión directa...');
+                // Si window.ethereum no está disponible, mostrar instrucciones
+                if (typeof showToast === 'function') {
+                    showToast('Abre MetaMask y aprueba la conexión, luego regresa aquí', 'info');
+                }
+                // Usar un formato que MetaMask reconozca pero que no abra navegador interno
+                deepLink = 'metamask://wc?uri=' + encodeURIComponent(window.location.href);
             } else if (wallet.id === 'binance') {
                 // Binance Wallet - usar WalletConnect con QR code (método estándar y más confiable)
                 showBinanceWalletConnectQR();
