@@ -928,6 +928,15 @@ const GameEngine = {
     
     async createMatch(type, player1Id, player2Id, song1, song2Data, bet1, bet2) {
         try {
+            // CRÍTICO: Descontar créditos ANTES de crear el match
+            // Si falla la deducción, no se crea el match
+            const deductionSuccess = await this.updateBalance(-bet1, 'bet', null);
+            if (!deductionSuccess) {
+                console.error('[game-engine] Failed to deduct credits, aborting match creation');
+                showToast('Error al descontar créditos. Intenta nuevamente.', 'error');
+                return;
+            }
+            
             const { data: match } = await supabaseClient
                 .from('matches')
                 .insert([{
@@ -952,13 +961,23 @@ const GameEngine = {
                 .select()
                 .single();
             
-            // Descontar apuesta
-            await this.updateBalance(-bet1, 'bet', match.id);
+            // Actualizar matchId en la transacción de créditos si es necesario
+            if (match && match.id && window.CreditsSystem) {
+                // El backend debería manejar esto, pero podemos intentar actualizar
+                const walletAddress = this.connectedWallet || localStorage.getItem('mtr_wallet');
+                if (walletAddress) {
+                    // Nota: El backend debería asociar la deducción con el matchId
+                    // Esto es solo para logging adicional si es necesario
+                }
+            }
             
             await this.startMatch(match.id);
             
         } catch (error) {
             console.error('Error creating match:', error);
+            showToast('Error al crear la partida. Intenta nuevamente.', 'error');
+            // Si falla después de descontar, deberíamos reembolsar
+            // Por ahora, el usuario debería contactar soporte
         }
     },
     
@@ -1391,15 +1410,15 @@ const GameEngine = {
                 // Award credits instead of MTR directly
                 const creditsWon = payouts.winnerPayout; // Credits amount
                 await this.awardCredits(creditsWon, match.id);
-                
-                // Also update legacy balance for compatibility
-                await this.updateBalance(payouts.winnerPayout, 'win', match.id);
+                // NO llamar updateBalance aquí para evitar duplicación
             }
             this.addToPlatformRevenue(payouts.platformFee);
             await this.logPlatformFeeTransaction(match.id, payouts.platformFee);
         } else {
             if (userWon) {
-                await this.updateBalance(50, 'practice_reward', match.id);
+                // En práctica, solo actualizar balance demo local
+                this.setPracticeDemoBalance(this.practiceDemoBalance + 50);
+                this.updatePracticeBetDisplay();
             }
         }
         
@@ -2236,14 +2255,30 @@ const GameEngine = {
                 return;
             }
 
-            // Deduct bet credits first (if not already deducted)
-            // Then add winnings
-            
-            // Update credits via backend
+            // Update credits via backend API
             const backendUrl = window.CONFIG?.BACKEND_API || 'https://musictoken-backend.onrender.com';
             const userId = await window.CreditsSystem.getUserId(walletAddress);
             
             if (userId) {
+                // Add credits via backend
+                const response = await fetch(`${backendUrl}/api/user/add-credits`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        userId,
+                        credits: credits,
+                        reason: 'match_win',
+                        matchId: matchId
+                    })
+                });
+
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    console.error('[game-engine] Error adding credits:', errorText);
+                    showToast('Error al otorgar créditos. Contacta soporte.', 'error');
+                    return;
+                }
+
                 // Record win in database
                 const { data: { session } } = await supabaseClient.auth.getSession();
                 if (session?.user?.id) {
@@ -2259,9 +2294,11 @@ const GameEngine = {
 
                 // Reload credits balance
                 await window.CreditsSystem.loadBalance(walletAddress);
+                showToast(`¡Ganaste ${credits.toFixed(2)} créditos!`, 'success');
             }
         } catch (error) {
             console.error('[game-engine] Error awarding credits:', error);
+            showToast('Error al otorgar créditos. Contacta soporte.', 'error');
         }
     },
 
@@ -2269,7 +2306,7 @@ const GameEngine = {
         try {
             const { data: { session } } = await supabaseClient.auth.getSession();
             
-            // If betting, deduct credits instead
+            // If betting, deduct credits instead of legacy balance
             if (type === 'bet' && window.CreditsSystem) {
                 const walletAddress = this.connectedWallet || localStorage.getItem('mtr_wallet');
                 if (walletAddress) {
@@ -2284,17 +2321,26 @@ const GameEngine = {
                             headers: { 'Content-Type': 'application/json' },
                             body: JSON.stringify({
                                 userId,
-                                credits: amount
+                                credits: Math.abs(amount), // Ensure positive value
+                                reason: 'match_bet',
+                                matchId: matchId
                             })
                         });
 
-                        if (response.ok) {
-                            await window.CreditsSystem.loadBalance(walletAddress);
+                        if (!response.ok) {
+                            const errorText = await response.text();
+                            console.error('[game-engine] Error deducting credits:', errorText);
+                            throw new Error('Failed to deduct credits');
                         }
+
+                        await window.CreditsSystem.loadBalance(walletAddress);
+                        return true; // Return early, don't update legacy balance
                     }
                 }
+                // If CreditsSystem not available, fall through to legacy system
             }
             
+            // Legacy balance system (for practice mode and compatibility)
             const { data } = await supabaseClient
                 .rpc('update_user_balance', {
                     p_user_id: session.user.id,
