@@ -1135,9 +1135,12 @@
         console.log('[selectSongForBattle] Función DEFINIDA INMEDIATAMENTE en window');
 
         // Inicializar cliente de Supabase si no existe
-        if (typeof supabaseClient === 'undefined' && typeof supabase !== 'undefined') {
-            var supabaseClient = supabase.createClient(CONFIG.SUPABASE_URL, CONFIG.SUPABASE_ANON_KEY);
-            window.supabaseClient = supabaseClient;
+        if (typeof supabaseClient === 'undefined' && typeof window.supabaseClient === 'undefined' && typeof supabase !== 'undefined') {
+            window.supabaseClient = supabase.createClient(CONFIG.SUPABASE_URL, CONFIG.SUPABASE_ANON_KEY);
+            // También asignar a variable local si no existe
+            if (typeof supabaseClient === 'undefined') {
+                var supabaseClient = window.supabaseClient;
+            }
         }
 
         // Función para login con Google - con detección de navegadores de wallet
@@ -1229,12 +1232,13 @@
             // Si no es navegador de wallet, proceder normalmente
             try {
                 // Asegurar que supabaseClient existe
-                if (typeof supabaseClient === 'undefined') {
-                    if (typeof supabase !== 'undefined') {
-                        window.supabaseClient = supabase.createClient(CONFIG.SUPABASE_URL, CONFIG.SUPABASE_ANON_KEY);
-                    } else {
-                        throw new Error('Supabase no está disponible');
-                    }
+                if (typeof window.supabaseClient === 'undefined' && typeof supabase !== 'undefined') {
+                    window.supabaseClient = supabase.createClient(CONFIG.SUPABASE_URL, CONFIG.SUPABASE_ANON_KEY);
+                }
+                // Usar window.supabaseClient como referencia
+                var supabaseClient = window.supabaseClient || (typeof supabase !== 'undefined' ? supabase.createClient(CONFIG.SUPABASE_URL, CONFIG.SUPABASE_ANON_KEY) : null);
+                if (!supabaseClient) {
+                    throw new Error('Supabase no está disponible');
                 }
                 
                 console.log('[auth] Iniciando OAuth con Google...');
