@@ -1042,41 +1042,46 @@
                         var headerEl = document.querySelector('header');
                         var headerHeight = headerEl ? headerEl.offsetHeight : 64; // Default 64px (h-16)
                         
-                        // Usar scrollIntoView con opciones para mejor control
-                        // block: 'start' posiciona el elemento al inicio del viewport
-                        // inline: 'nearest' mantiene la posición horizontal
-                        songSelectionEl.scrollIntoView({
-                            behavior: 'smooth',
-                            block: 'start',
-                            inline: 'nearest'
+                        // Calcular posición exacta del elemento
+                        var rect = songSelectionEl.getBoundingClientRect();
+                        var currentScroll = window.pageYOffset || document.documentElement.scrollTop;
+                        var elementTop = rect.top + currentScroll;
+                        
+                        // Calcular posición objetivo: inicio del elemento menos header y padding
+                        var offset = headerHeight + 20; // Header + 20px de padding para mejor visualización
+                        var targetPosition = Math.max(0, elementTop - offset);
+                        
+                        // Hacer scroll directamente a la posición calculada
+                        window.scrollTo({
+                            top: targetPosition,
+                            behavior: 'smooth'
                         });
                         
-                        // Ajuste adicional después del scroll para considerar el header sticky
+                        // Verificación adicional después del scroll para asegurar posición correcta
                         setTimeout(function() {
-                            var currentScroll = window.pageYOffset || document.documentElement.scrollTop;
-                            var rect = songSelectionEl.getBoundingClientRect();
-                            var elementTop = rect.top + currentScroll;
+                            var newRect = songSelectionEl.getBoundingClientRect();
+                            var newScroll = window.pageYOffset || document.documentElement.scrollTop;
                             
-                            // Si el elemento está muy cerca del header, ajustar
-                            if (rect.top < headerHeight + 10) {
-                                var offset = headerHeight + 20; // Header + padding
-                                var targetPosition = Math.max(0, elementTop - offset);
+                            // Si aún no está bien posicionado, ajustar nuevamente
+                            if (newRect.top < headerHeight + 10 || newRect.top > headerHeight + 50) {
+                                var finalOffset = headerHeight + 20;
+                                var finalPosition = (newRect.top + newScroll) - finalOffset;
                                 window.scrollTo({
-                                    top: targetPosition,
+                                    top: Math.max(0, finalPosition),
                                     behavior: 'smooth'
                                 });
                             }
                             
                             console.log('[mobile] 📱 Scroll automático completado:', {
                                 headerHeight: headerHeight,
-                                elementTop: elementTop,
-                                currentScroll: currentScroll,
-                                rectTop: rect.top,
+                                initialPosition: targetPosition,
+                                finalRectTop: newRect.top,
+                                finalScroll: newScroll,
                                 modo: mode
                             });
-                        }, 300); // Esperar a que scrollIntoView termine
+                        }, 400); // Esperar a que el scroll termine
                     }
-                }, 200); // Delay para asegurar que el DOM se actualizó completamente
+                }, 250); // Delay para asegurar que el DOM se actualizó completamente
             }
         }
 
