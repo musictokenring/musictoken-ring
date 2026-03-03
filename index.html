@@ -29,6 +29,14 @@
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <!-- QR Code Generator para WalletConnect -->
     <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
+    <!-- Polyfills necesarios para WalletConnect v2 -->
+    <script>
+        // Polyfill para 'process' que WalletConnect necesita
+        if (typeof process === 'undefined') {
+            window.process = { env: {} };
+        }
+    </script>
+    
     <!-- WalletConnect v2 SDK - cargar de forma asíncrona para no bloquear -->
     <script>
         // Cargar WalletConnect SDK de forma asíncrona
@@ -40,6 +48,12 @@
             script.onload = function() {
                 console.log('[wallet] ✅ WalletConnect SDK cargado correctamente');
                 window.__walletConnectLoaded = true;
+                // Verificar que EthereumProvider esté disponible
+                if (typeof EthereumProvider !== 'undefined') {
+                    console.log('[wallet] ✅ EthereumProvider disponible');
+                } else {
+                    console.error('[wallet] ❌ EthereumProvider no disponible después de cargar');
+                }
             };
             script.onerror = function() {
                 console.error('[wallet] ❌ Error al cargar WalletConnect SDK');
