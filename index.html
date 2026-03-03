@@ -27,11 +27,8 @@
     <link rel="icon" type="image/png" href="https://pink-blank-vicuna-260.mypinata.cloud/ipfs/bafybeie24pisqmw6teijdng4flzjwumgwpesilowjxq3kww3p7kxlmuywm">
 
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <!-- QR Code Generator para WalletConnect -->
+    <!-- QR Code Generator para WalletConnect - usar versión compatible -->
     <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
-    <!-- WalletConnect v2 Core -->
-    <script src="https://unpkg.com/@walletconnect/core@2.14.0/dist/index.umd.js"></script>
-    <script src="https://unpkg.com/@walletconnect/web3wallet@1.8.0/dist/index.umd.js"></script>
 
     <script>
         const CONFIG = {
@@ -1307,28 +1304,51 @@
             var walletConnectURI = generateWalletConnectURI();
             document.getElementById('walletConnectURI').value = walletConnectURI;
             
-            // Generar QR code
-            if (typeof QRCode !== 'undefined') {
-                var qrCanvas = document.getElementById('binanceQRCode');
-                QRCode.toCanvas(qrCanvas, walletConnectURI, {
-                    width: 256,
-                    margin: 2,
-                    color: {
-                        dark: '#000000',
-                        light: '#FFFFFF'
-                    }
-                }, function(error) {
-                    if (error) {
-                        console.error('[wallet] QR code generation error:', error);
-                        if (typeof showToast === 'function') {
-                            showToast('Error al generar QR code. Usa el código de texto.', 'error');
+            // Generar QR code - esperar a que la librería esté cargada
+            var qrCanvas = document.getElementById('binanceQRCode');
+            var qrContainer = document.getElementById('qrCodeContainer');
+            
+            function generateQRCode() {
+                if (typeof QRCode !== 'undefined') {
+                    // Limpiar el contenedor
+                    qrContainer.innerHTML = '<canvas id="binanceQRCode"></canvas>';
+                    qrCanvas = document.getElementById('binanceQRCode');
+                    
+                    QRCode.toCanvas(qrCanvas, walletConnectURI, {
+                        width: 256,
+                        margin: 2,
+                        color: {
+                            dark: '#000000',
+                            light: '#FFFFFF'
                         }
-                    }
-                });
-            } else {
-                // Si QRCode no está disponible, mostrar solo el texto
-                document.getElementById('qrCodeContainer').innerHTML = '<p class="text-gray-400 text-sm">Usa el código de abajo</p>';
+                    }, function(error) {
+                        if (error) {
+                            console.error('[wallet] QR code generation error:', error);
+                            // Fallback: mostrar QR code usando una API externa
+                            var qrImageUrl = 'https://api.qrserver.com/v1/create-qr-code/?size=256x256&data=' + encodeURIComponent(walletConnectURI);
+                            qrContainer.innerHTML = '<img src="' + qrImageUrl + '" alt="QR Code" class="w-64 h-64 mx-auto">';
+                        } else {
+                            console.log('[wallet] QR code generated successfully');
+                        }
+                    });
+                } else {
+                    // Si QRCode no está disponible, usar API externa como fallback
+                    console.log('[wallet] QRCode library not loaded, using external API');
+                    var qrImageUrl = 'https://api.qrserver.com/v1/create-qr-code/?size=256x256&data=' + encodeURIComponent(walletConnectURI);
+                    qrContainer.innerHTML = '<img src="' + qrImageUrl + '" alt="QR Code" class="w-64 h-64 mx-auto">';
+                }
             }
+            
+            // Intentar generar inmediatamente
+            generateQRCode();
+            
+            // Si no funciona, esperar un momento y reintentar
+            setTimeout(function() {
+                if (qrContainer.querySelector('canvas') === null && qrContainer.querySelector('img') === null) {
+                    console.log('[wallet] Retrying QR code generation...');
+                    generateQRCode();
+                }
+            }, 500);
             
             qrModal.classList.remove('hidden');
             
