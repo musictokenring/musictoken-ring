@@ -46,8 +46,12 @@
                             <div class="text-sm text-green-400" id="claimStatusText"></div>
                         </div>
 
-                        <div class="text-xs text-gray-500">
-                            <strong>Nota:</strong> El pago se procesa automáticamente. El monto en USDC se calcula usando el precio actual de MTR/USDC.
+                        <div class="p-3 rounded-lg bg-green-500/10 border border-green-500/20">
+                            <div class="text-xs text-green-400 space-y-1">
+                                <div><strong>✓ Créditos Estables:</strong> 1 crédito = 1 USDC fijo</div>
+                                <div><strong>✓ Sin Volatilidad:</strong> Siempre cobrás en USDC lo que ganaste</div>
+                                <div><strong>✓ Fee de Retiro:</strong> 5% (va al vault de liquidez)</div>
+                            </div>
                         </div>
                     </div>
                 `;

@@ -63,12 +63,14 @@
                             <div class="p-4 rounded-lg bg-black/40 border border-white/10">
                                 <div class="text-sm text-gray-400 mb-1">Token MTR</div>
                                 <div class="text-xs font-mono text-cyan-400 break-all">${this.mtrTokenAddress}</div>
-                                <div class="text-xs text-gray-500 mt-2">Rate: <span id="mtrRate">778</span> MTR = 1 crédito</div>
+                                <div class="text-xs text-gray-500 mt-2">Se convierte a créditos estables usando precio USDC actual</div>
+                                <div class="text-xs text-green-400 mt-1">✓ 1 crédito = 1 USDC fijo</div>
                             </div>
                             <div class="p-4 rounded-lg bg-black/40 border border-white/10">
                                 <div class="text-sm text-gray-400 mb-1">Token USDC</div>
                                 <div class="text-xs font-mono text-cyan-400 break-all">${this.usdcAddress}</div>
-                                <div class="text-xs text-gray-500 mt-2">Se convierte automáticamente</div>
+                                <div class="text-xs text-gray-500 mt-2">1 USDC = 1 crédito (directo)</div>
+                                <div class="text-xs text-green-400 mt-1">✓ Sin conversión variable</div>
                             </div>
                         </div>
 

@@ -225,22 +225,33 @@ class DepositListener {
             const decimals = tokenName === 'USDC' ? 6 : 18;
             const amount = parseFloat(formatUnits(value, decimals));
 
-            // Calculate credits
-            let credits = 0;
-            if (tokenName === 'MTR') {
-                credits = amount / this.currentRate; // MTR to credits
-            } else if (tokenName === 'USDC') {
-                // Convert USDC to MTR equivalent first, then to credits
+            // NUEVO SISTEMA: Créditos estables (1 crédito = 1 USDC fijo)
+            // Calcular valor en USDC al momento del depósito
+            let usdcValue = 0;
+            if (tokenName === 'USDC') {
+                // USDC directo: 1 USDC = 1 crédito
+                usdcValue = amount;
+            } else if (tokenName === 'MTR') {
+                // MTR: convertir a USDC usando precio actual
                 const mtrPrice = await this.getMTRPrice();
-                const mtrEquivalent = amount / mtrPrice;
-                credits = mtrEquivalent / this.currentRate;
+                if (!mtrPrice || mtrPrice <= 0) {
+                    throw new Error('MTR price unavailable');
+                }
+                usdcValue = amount * mtrPrice; // Valor en USDC
             }
 
-            // Round credits to 4 decimal places
-            credits = Math.round(credits * 10000) / 10000;
+            // Fee de depósito: 5% del valor en USDC
+            const DEPOSIT_FEE_RATE = 0.05; // 5%
+            const depositFee = usdcValue * DEPOSIT_FEE_RATE;
+            
+            // Créditos otorgados: valor USDC - fee (1 crédito = 1 USDC)
+            const credits = usdcValue - depositFee;
 
-            if (credits <= 0) {
-                console.warn(`[deposit-listener] Credits too low: ${credits}, skipping`);
+            // Round credits to 4 decimal places
+            const creditsRounded = Math.round(credits * 10000) / 10000;
+
+            if (creditsRounded <= 0) {
+                console.warn(`[deposit-listener] Credits too low: ${creditsRounded}, skipping`);
                 return;
             }
 
@@ -268,13 +279,13 @@ class DepositListener {
                     return;
                 }
 
-                await this.creditUser(newUser.id, credits, txHash, tokenName, amount);
+                await this.creditUser(newUser.id, creditsRounded, txHash, tokenName, amount, usdcValue, depositFee);
             } else {
-                await this.creditUser(user.id, credits, txHash, tokenName, amount);
+                await this.creditUser(user.id, creditsRounded, txHash, tokenName, amount, usdcValue, depositFee);
             }
 
             this.processedTxHashes.add(txHash);
-            console.log(`[deposit-listener] ✅ Credited ${credits} credits to user ${from}`);
+            console.log(`[deposit-listener] ✅ Credited ${creditsRounded} credits (${usdcValue} USDC - ${depositFee} fee) to user ${from}`);
 
         } catch (error) {
             console.error('[deposit-listener] Error processing deposit:', error);
@@ -284,9 +295,9 @@ class DepositListener {
     /**
      * Credit user account
      */
-    async creditUser(userId, credits, txHash, tokenName, amount) {
+    async creditUser(userId, credits, txHash, tokenName, amount, usdcValue, depositFee) {
         try {
-            // Record deposit
+            // Record deposit with new fields
             const { error: depositError } = await supabase
                 .from('deposits')
                 .insert([{
@@ -295,7 +306,9 @@ class DepositListener {
                     token: tokenName,
                     amount: amount,
                     credits_awarded: credits,
-                    rate_used: this.currentRate,
+                    usdc_value_at_deposit: usdcValue, // Nuevo campo
+                    deposit_fee: depositFee, // Nuevo campo
+                    rate_used: null, // Ya no se usa rate variable
                     status: 'processed',
                     processed_at: new Date().toISOString()
                 }]);
@@ -332,7 +345,10 @@ class DepositListener {
                     });
             }
 
-            console.log(`[deposit-listener] ✅ Credited ${credits} credits to user ${userId}`);
+            // Enviar fee al vault (5% del depósito)
+            await this.sendFeeToVault(depositFee, 'deposit', txHash);
+
+            console.log(`[deposit-listener] ✅ Credited ${credits} credits to user ${userId}, fee ${depositFee} USDC sent to vault`);
 
         } catch (error) {
             console.error('[deposit-listener] Error crediting user:', error);
@@ -353,6 +369,34 @@ class DepositListener {
             return data?.mtr_usdc_price || 0.001; // Fallback price
         } catch (error) {
             return 0.001; // Fallback
+        }
+    }
+
+    /**
+     * Send fee to vault (for future implementation)
+     * Por ahora registra el fee, luego se implementará transferencia real al vault
+     */
+    async sendFeeToVault(feeAmount, feeType, txHash) {
+        try {
+            // Registrar fee en base de datos para tracking
+            // TODO: Implementar transferencia real al vault cuando esté listo
+            const { error } = await supabase
+                .from('vault_fees')
+                .insert([{
+                    fee_type: feeType, // 'deposit', 'bet', 'withdrawal'
+                    amount: feeAmount,
+                    source_tx_hash: txHash,
+                    status: 'pending', // 'pending', 'sent_to_vault'
+                    created_at: new Date().toISOString()
+                }]);
+
+            if (error) {
+                console.error('[deposit-listener] Error recording fee:', error);
+            } else {
+                console.log(`[deposit-listener] Fee ${feeAmount} USDC recorded for vault (type: ${feeType})`);
+            }
+        } catch (error) {
+            console.error('[deposit-listener] Error sending fee to vault:', error);
         }
     }
 

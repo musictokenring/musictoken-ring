@@ -89,18 +89,13 @@ class ClaimService {
                 throw new Error('Insufficient credits');
             }
 
-            // Get current MTR/USDC price
-            const mtrPrice = await this.getMTRPrice();
-            if (!mtrPrice || mtrPrice <= 0) {
-                throw new Error('Price data unavailable');
-            }
-
-            // Get current rate
-            const rate = await this.getCurrentRate();
-
-            // Calculate: credits → MTR equivalent → USDC
-            const mtrEquivalent = credits * rate;
-            const usdcAmount = mtrEquivalent * mtrPrice;
+            // NUEVO SISTEMA: Retiro directo 1 crédito = 1 USDC (fijo)
+            // Fee de retiro: 5%
+            const WITHDRAWAL_FEE_RATE = 0.05; // 5%
+            const withdrawalFee = credits * WITHDRAWAL_FEE_RATE;
+            
+            // USDC a enviar: créditos - fee (1:1)
+            const usdcAmount = credits - withdrawalFee;
 
             // Round to 6 decimals (USDC precision)
             const usdcAmountRounded = Math.floor(usdcAmount * 1000000) / 1000000;
@@ -124,16 +119,17 @@ class ClaimService {
                 throw new Error(`Insufficient USDC in admin wallet. Available: ${adminBalanceFormatted}, Required: ${usdcAmountRounded}`);
             }
 
-            // Record claim request
+            // Record claim request (nuevo formato sin conversión MTR)
             const { data: claimRecord, error: claimError } = await supabase
                 .from('claims')
                 .insert([{
                     user_id: userId,
                     credits_amount: credits,
-                    mtr_equivalent: mtrEquivalent,
+                    mtr_equivalent: null, // Ya no se usa
                     usdc_amount: usdcAmountRounded,
-                    mtr_price_used: mtrPrice,
-                    rate_used: rate,
+                    withdrawal_fee: withdrawalFee, // Nuevo campo
+                    mtr_price_used: null, // Ya no se usa
+                    rate_used: null, // Ya no se usa
                     recipient_wallet: recipientWallet.toLowerCase(),
                     status: 'processing',
                     created_at: new Date().toISOString()
@@ -161,6 +157,9 @@ class ClaimService {
                 credits_to_subtract: credits
             });
 
+            // Enviar fee al vault (5% del retiro)
+            await this.sendFeeToVault(withdrawalFee, 'withdrawal', txHash);
+
             // Update claim record
             await supabase
                 .from('claims')
@@ -171,16 +170,15 @@ class ClaimService {
                 })
                 .eq('id', claimRecord.id);
 
-            console.log(`[claim-service] ✅ Claim processed: ${usdcAmountRounded} USDC sent to ${recipientWallet}`);
+            console.log(`[claim-service] ✅ Claim processed: ${usdcAmountRounded} USDC sent to ${recipientWallet}, fee ${withdrawalFee} USDC to vault`);
 
             return {
                 success: true,
                 txHash,
                 usdcAmount: usdcAmountRounded,
                 creditsUsed: credits,
-                mtrEquivalent,
-                mtrPrice,
-                rate
+                withdrawalFee: withdrawalFee,
+                note: '1 crédito = 1 USDC fijo'
             };
 
         } catch (error) {
@@ -243,19 +241,29 @@ class ClaimService {
     }
 
     /**
-     * Get current MTR to credit rate
+     * Send fee to vault (for future implementation)
      */
-    async getCurrentRate() {
+    async sendFeeToVault(feeAmount, feeType, txHash) {
         try {
-            const { data } = await supabase
-                .from('platform_settings')
-                .select('mtr_to_credit_rate')
-                .eq('key', 'mtr_to_credit_rate')
-                .single();
+            // Registrar fee en base de datos para tracking
+            // TODO: Implementar transferencia real al vault cuando esté listo
+            const { error } = await supabase
+                .from('vault_fees')
+                .insert([{
+                    fee_type: feeType, // 'deposit', 'bet', 'withdrawal'
+                    amount: feeAmount,
+                    source_tx_hash: txHash,
+                    status: 'pending', // 'pending', 'sent_to_vault'
+                    created_at: new Date().toISOString()
+                }]);
 
-            return data?.mtr_to_credit_rate || parseFloat(process.env.MTR_TO_CREDIT_RATE || '778');
+            if (error) {
+                console.error('[claim-service] Error recording fee:', error);
+            } else {
+                console.log(`[claim-service] Fee ${feeAmount} USDC recorded for vault (type: ${feeType})`);
+            }
         } catch (error) {
-            return parseFloat(process.env.MTR_TO_CREDIT_RATE || '778');
+            console.error('[claim-service] Error sending fee to vault:', error);
         }
     }
 }

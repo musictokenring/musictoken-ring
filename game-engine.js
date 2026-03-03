@@ -2367,10 +2367,12 @@ const GameEngine = {
         if (match.match_type !== 'practice') {
             if (userWon) {
                 // Award credits instead of MTR directly
-                const creditsWon = payouts.winnerPayout; // Credits amount
+                const creditsWon = payouts.winnerPayout; // Credits amount (ya con fee descontado)
                 await this.awardCredits(creditsWon, match.id);
                 // NO llamar updateBalance aquí para evitar duplicación
             }
+            // Enviar fee de apuesta (2%) al vault
+            await this.sendBetFeeToVault(payouts.platformFee, match.id);
             this.addToPlatformRevenue(payouts.platformFee);
             await this.logPlatformFeeTransaction(match.id, payouts.platformFee);
         } else {
@@ -2842,10 +2844,14 @@ const GameEngine = {
     },
 
     calculateMatchPayouts(totalPot) {
-        const split = this.calculatePoolSplit(totalPot, this.platformFeeRate);
+        // NUEVO: Fee de apuesta fijo 2% (va al vault)
+        const BET_FEE_RATE = 0.02; // 2%
+        const betFee = totalPot * BET_FEE_RATE;
+        const winnerPayout = totalPot - betFee;
+        
         return {
-            platformFee: split.platformFee,
-            winnerPayout: split.netPool
+            platformFee: betFee, // Fee va al vault
+            winnerPayout: winnerPayout // Ganador recibe pozo - fee
         };
     },
 
@@ -3280,6 +3286,7 @@ const GameEngine = {
     
     /**
      * Award credits to user (for wins)
+     * NUEVO: Los créditos otorgados ya tienen el fee del 2% descontado del pozo
      */
     async awardCredits(credits, matchId = null) {
         try {
@@ -3328,11 +3335,41 @@ const GameEngine = {
 
                 // Reload credits balance
                 await window.CreditsSystem.loadBalance(walletAddress);
-                showToast(`¡Ganaste ${credits.toFixed(2)} créditos!`, 'success');
+                showToast(`¡Ganaste ${credits.toFixed(2)} créditos (estables)!`, 'success');
             }
         } catch (error) {
             console.error('[game-engine] Error awarding credits:', error);
             showToast('Error al otorgar créditos. Contacta soporte.', 'error');
+        }
+    },
+
+    /**
+     * Send bet fee to vault (2% del pozo)
+     */
+    async sendBetFeeToVault(feeAmount, matchId) {
+        try {
+            const backendUrl = window.CONFIG?.BACKEND_API || 'https://musictoken-backend.onrender.com';
+            
+            // Registrar fee en backend para que se envíe al vault
+            const response = await fetch(`${backendUrl}/api/vault/add-fee`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    feeType: 'bet',
+                    amount: feeAmount,
+                    matchId: matchId,
+                    source: 'match_payout'
+                })
+            });
+
+            if (!response.ok) {
+                console.warn('[game-engine] Error sending bet fee to vault (non-critical):', await response.text());
+            } else {
+                console.log(`[game-engine] Bet fee ${feeAmount} créditos sent to vault`);
+            }
+        } catch (error) {
+            console.error('[game-engine] Error sending bet fee to vault:', error);
+            // No bloquear el flujo si falla el registro del fee
         }
     },
 

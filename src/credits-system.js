@@ -47,16 +47,18 @@
                 const data = await response.json();
                 
                 this.currentCredits = data.credits || 0;
-                this.currentUsdcValue = data.usdcValue || 0;
-                this.currentRate = data.rate || 778;
-                this.currentMtrPrice = data.mtrPrice || 0;
+                // NUEVO: 1 crédito = 1 USDC fijo siempre
+                this.currentUsdcValue = this.currentCredits; // 1:1 fijo
+                this.currentRate = null; // Ya no se usa rate variable
+                this.currentMtrPrice = null; // Ya no relevante para créditos
 
                 // Update UI
                 this.updateCreditsDisplay();
 
-                console.log('[credits-system] Balance loaded:', {
+                console.log('[credits-system] Balance loaded (créditos estables):', {
                     credits: this.currentCredits,
-                    usdcValue: this.currentUsdcValue
+                    usdcValue: this.currentUsdcValue,
+                    note: '1 crédito = 1 USDC fijo'
                 });
 
             } catch (error) {
@@ -77,10 +79,11 @@
                 creditsBadge.textContent = `${this.currentCredits.toFixed(2)} créditos`;
             }
 
-            // Update USDC equivalent
+            // Update USDC equivalent (1:1 fijo)
             const usdcDisplay = document.getElementById('usdcValueDisplay');
             if (usdcDisplay) {
-                usdcDisplay.textContent = `≈ $${this.currentUsdcValue.toFixed(2)} USDC`;
+                // Mostrar como igual (no aproximado) porque es 1:1 fijo
+                usdcDisplay.textContent = `= $${this.currentUsdcValue.toFixed(2)} USDC`;
             }
 
             // Update combined display
@@ -88,7 +91,8 @@
             if (combinedDisplay) {
                 combinedDisplay.innerHTML = `
                     <span class="text-cyan-400 font-bold">${this.currentCredits.toFixed(2)} créditos</span>
-                    <span class="text-gray-400 text-sm">≈ $${this.currentUsdcValue.toFixed(2)} USDC</span>
+                    <span class="text-gray-400 text-sm">= $${this.currentUsdcValue.toFixed(2)} USDC</span>
+                    <span class="text-xs text-green-400 ml-1" title="Créditos estables: 1 crédito = 1 USDC fijo">✓</span>
                 `;
             }
 
