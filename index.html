@@ -1035,53 +1035,74 @@
             // En móvil, hacer scroll automático al selector de canciones para mejor UX
             // Esto asegura que el usuario vea inmediatamente el selector de canciones y la apuesta
             if (typeof isMobileDevice === 'function' && isMobileDevice()) {
+                // Esperar a que el DOM se actualice completamente
                 setTimeout(function() {
                     var songSelectionEl = document.getElementById('songSelection');
-                    if (songSelectionEl) {
-                        // Obtener altura del header sticky
-                        var headerEl = document.querySelector('header');
-                        var headerHeight = headerEl ? headerEl.offsetHeight : 64; // Default 64px (h-16)
-                        
-                        // Calcular posición exacta del elemento
-                        var rect = songSelectionEl.getBoundingClientRect();
-                        var currentScroll = window.pageYOffset || document.documentElement.scrollTop;
-                        var elementTop = rect.top + currentScroll;
-                        
-                        // Calcular posición objetivo: inicio del elemento menos header y padding
-                        var offset = headerHeight + 20; // Header + 20px de padding para mejor visualización
-                        var targetPosition = Math.max(0, elementTop - offset);
-                        
-                        // Hacer scroll directamente a la posición calculada
-                        window.scrollTo({
-                            top: targetPosition,
-                            behavior: 'smooth'
-                        });
-                        
-                        // Verificación adicional después del scroll para asegurar posición correcta
-                        setTimeout(function() {
-                            var newRect = songSelectionEl.getBoundingClientRect();
-                            var newScroll = window.pageYOffset || document.documentElement.scrollTop;
-                            
-                            // Si aún no está bien posicionado, ajustar nuevamente
-                            if (newRect.top < headerHeight + 10 || newRect.top > headerHeight + 50) {
-                                var finalOffset = headerHeight + 20;
-                                var finalPosition = (newRect.top + newScroll) - finalOffset;
-                                window.scrollTo({
-                                    top: Math.max(0, finalPosition),
-                                    behavior: 'smooth'
-                                });
-                            }
-                            
-                            console.log('[mobile] 📱 Scroll automático completado:', {
-                                headerHeight: headerHeight,
-                                initialPosition: targetPosition,
-                                finalRectTop: newRect.top,
-                                finalScroll: newScroll,
-                                modo: mode
-                            });
-                        }, 400); // Esperar a que el scroll termine
+                    if (!songSelectionEl) {
+                        console.error('[mobile] ❌ songSelection no encontrado');
+                        return;
                     }
-                }, 250); // Delay para asegurar que el DOM se actualizó completamente
+                    
+                    // Forzar reflow para asegurar que las dimensiones estén actualizadas
+                    songSelectionEl.offsetHeight;
+                    
+                    // Obtener altura del header sticky
+                    var headerEl = document.querySelector('header');
+                    var headerHeight = headerEl ? headerEl.offsetHeight : 64;
+                    
+                    // Calcular posición usando getBoundingClientRect y scrollY
+                    var rect = songSelectionEl.getBoundingClientRect();
+                    var scrollY = window.scrollY || window.pageYOffset || document.documentElement.scrollTop;
+                    var elementTop = rect.top + scrollY;
+                    
+                    // Offset: header + padding adicional para mejor visualización
+                    var offset = headerHeight + 20;
+                    var targetPosition = Math.max(0, elementTop - offset);
+                    
+                    console.log('[mobile] 📱 Calculando scroll:', {
+                        rectTop: rect.top,
+                        scrollY: scrollY,
+                        elementTop: elementTop,
+                        headerHeight: headerHeight,
+                        offset: offset,
+                        targetPosition: targetPosition,
+                        modo: mode
+                    });
+                    
+                    // Hacer scroll directamente a la posición calculada
+                    window.scrollTo({
+                        top: targetPosition,
+                        behavior: 'smooth'
+                    });
+                    
+                    // Verificación y ajuste fino después del scroll
+                    setTimeout(function() {
+                        var newRect = songSelectionEl.getBoundingClientRect();
+                        var newScrollY = window.scrollY || window.pageYOffset || document.documentElement.scrollTop;
+                        var expectedTop = headerHeight + 20;
+                        var difference = Math.abs(newRect.top - expectedTop);
+                        
+                        // Si la diferencia es mayor a 30px, ajustar
+                        if (difference > 30) {
+                            var finalPosition = (newRect.top + newScrollY) - expectedTop;
+                            window.scrollTo({
+                                top: Math.max(0, finalPosition),
+                                behavior: 'smooth'
+                            });
+                            console.log('[mobile] 📱 Ajuste fino aplicado:', {
+                                diferencia: difference,
+                                nuevaPosicion: finalPosition
+                            });
+                        }
+                        
+                        console.log('[mobile] 📱 Scroll final:', {
+                            rectTop: newRect.top,
+                            esperado: expectedTop,
+                            diferencia: difference,
+                            scrollY: newScrollY
+                        });
+                    }, 500); // Esperar más tiempo para que el scroll termine completamente
+                }, 300); // Delay inicial aumentado para asegurar que el DOM esté completamente actualizado
             }
         }
 
