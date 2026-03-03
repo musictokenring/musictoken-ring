@@ -1042,31 +1042,41 @@
                         var headerEl = document.querySelector('header');
                         var headerHeight = headerEl ? headerEl.offsetHeight : 64; // Default 64px (h-16)
                         
-                        // Calcular posición exacta considerando el header sticky
-                        var rect = songSelectionEl.getBoundingClientRect();
-                        var scrollTop = window.pageYOffset || document.documentElement.scrollTop;
-                        var elementTop = rect.top + scrollTop;
-                        
-                        // Offset: header + padding adicional para mejor visualización
-                        var offset = headerHeight + 20; // Header + 20px de padding
-                        var targetPosition = Math.max(0, elementTop - offset);
-                        
-                        // Scroll suave y preciso al selector de canciones
-                        window.scrollTo({
-                            top: targetPosition,
-                            behavior: 'smooth'
+                        // Usar scrollIntoView con opciones para mejor control
+                        // block: 'start' posiciona el elemento al inicio del viewport
+                        // inline: 'nearest' mantiene la posición horizontal
+                        songSelectionEl.scrollIntoView({
+                            behavior: 'smooth',
+                            block: 'start',
+                            inline: 'nearest'
                         });
                         
-                        console.log('[mobile] 📱 Scroll automático calculado:', {
-                            elementTop: elementTop,
-                            headerHeight: headerHeight,
-                            offset: offset,
-                            targetPosition: targetPosition,
-                            currentScroll: scrollTop,
-                            modo: mode
-                        });
+                        // Ajuste adicional después del scroll para considerar el header sticky
+                        setTimeout(function() {
+                            var currentScroll = window.pageYOffset || document.documentElement.scrollTop;
+                            var rect = songSelectionEl.getBoundingClientRect();
+                            var elementTop = rect.top + currentScroll;
+                            
+                            // Si el elemento está muy cerca del header, ajustar
+                            if (rect.top < headerHeight + 10) {
+                                var offset = headerHeight + 20; // Header + padding
+                                var targetPosition = Math.max(0, elementTop - offset);
+                                window.scrollTo({
+                                    top: targetPosition,
+                                    behavior: 'smooth'
+                                });
+                            }
+                            
+                            console.log('[mobile] 📱 Scroll automático completado:', {
+                                headerHeight: headerHeight,
+                                elementTop: elementTop,
+                                currentScroll: currentScroll,
+                                rectTop: rect.top,
+                                modo: mode
+                            });
+                        }, 300); // Esperar a que scrollIntoView termine
                     }
-                }, 200); // Delay aumentado para asegurar que el DOM se actualizó completamente
+                }, 200); // Delay para asegurar que el DOM se actualizó completamente
             }
         }
 
