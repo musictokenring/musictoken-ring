@@ -1180,6 +1180,9 @@
                 wallets.push({ name: 'MetaMask', id: 'metamask', icon: '🦊', deepLink: 'metamask://wc?uri=' });
             }
             
+            // Binance Wallet
+            wallets.push({ name: 'Binance Wallet', id: 'binance', icon: '🟡', deepLink: 'bnbapp://wc?uri=' });
+            
             // Trust Wallet
             wallets.push({ name: 'Trust Wallet', id: 'trust', icon: '🔷', deepLink: 'trust://wc?uri=' });
             
@@ -1283,6 +1286,9 @@
             if (wallet.id === 'metamask') {
                 // MetaMask móvil usa un formato especial
                 deepLink = 'https://metamask.app.link/dapp/' + encodeURIComponent(window.location.href);
+            } else if (wallet.id === 'binance') {
+                // Binance Wallet - usar protocolo nativo bnbapp://
+                deepLink = 'bnbapp://wc?uri=' + encodeURIComponent(window.location.href);
             } else if (wallet.id === 'trust') {
                 deepLink = 'https://link.trustwallet.com/open_url?coin_id=60&url=' + encodeURIComponent(window.location.href);
             } else if (wallet.id === 'coinbase') {
