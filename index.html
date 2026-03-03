@@ -1330,9 +1330,16 @@
 
                     // Escuchar eventos de conexión
                     walletConnectProvider.on('display_uri', function(uri) {
-                        console.log('[wallet] WalletConnect URI:', uri);
+                        console.log('[wallet] WalletConnect URI recibido:', uri);
+                        // Mostrar el QR code inmediatamente cuando recibimos el URI
                         displayQRCodeModal(uri);
                     });
+                    
+                    // También verificar si ya hay un URI disponible (por si el evento ya se disparó)
+                    if (walletConnectProvider.uri) {
+                        console.log('[wallet] URI ya disponible:', walletConnectProvider.uri);
+                        displayQRCodeModal(walletConnectProvider.uri);
+                    }
 
                     walletConnectProvider.on('connect', function() {
                         console.log('[wallet] WalletConnect connected');
@@ -1350,12 +1357,35 @@
                 }
 
                 // Conectar usando WalletConnect con timeout
-                var connectPromise = walletConnectProvider.connect();
+                // El evento 'display_uri' debería dispararse antes de que se complete la conexión
+                console.log('[wallet] Iniciando conexión WalletConnect...');
+                
+                var connectPromise = walletConnectProvider.connect().then(function() {
+                    console.log('[wallet] WalletConnect connect() completado');
+                });
+                
                 var timeoutPromise = new Promise(function(_, reject) {
                     setTimeout(function() {
-                        reject(new Error('Timeout: WalletConnect no respondió en 10 segundos'));
-                    }, 10000); // 10 segundos máximo
+                        reject(new Error('Timeout: WalletConnect no respondió en 15 segundos'));
+                    }, 15000); // 15 segundos máximo (más tiempo para que aparezca el QR)
                 });
+                
+                // Esperar a que aparezca el URI (el QR debería mostrarse antes de que se complete la conexión)
+                var uriReceived = false;
+                walletConnectProvider.once('display_uri', function(uri) {
+                    uriReceived = true;
+                    console.log('[wallet] URI recibido durante connect()');
+                });
+                
+                // Si después de 2 segundos no hay URI, mostrar mensaje
+                setTimeout(function() {
+                    if (!uriReceived && !document.getElementById('binanceQRModal') || document.getElementById('binanceQRModal').classList.contains('hidden')) {
+                        console.log('[wallet] Esperando URI...');
+                        if (typeof showToast === 'function') {
+                            showToast('Generando código QR...', 'info');
+                        }
+                    }
+                }, 2000);
                 
                 await Promise.race([connectPromise, timeoutPromise]);
                 
