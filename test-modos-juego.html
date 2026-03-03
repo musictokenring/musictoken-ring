@@ -1,0 +1,362 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test - Modos de Juego</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #0a0a0a;
+            color: #e0e0e0;
+        }
+        .mode-card {
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            border-radius: 12px;
+            padding: 25px;
+            margin-bottom: 25px;
+            border-left: 5px solid;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+        }
+        .mode-card.quick { border-left-color: #00d4ff; }
+        .mode-card.private { border-left-color: #ec4899; }
+        .mode-card.practice { border-left-color: #8b5cf6; }
+        .mode-card.tournament { border-left-color: #f59e0b; }
+        .mode-card h2 {
+            margin-top: 0;
+            font-size: 24px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .test-steps {
+            background: #1e1e1e;
+            padding: 15px;
+            border-radius: 8px;
+            margin: 15px 0;
+        }
+        .test-steps ol {
+            margin: 10px 0;
+            padding-left: 25px;
+        }
+        .test-steps li {
+            margin: 8px 0;
+            line-height: 1.6;
+        }
+        button {
+            background: linear-gradient(135deg, #00d4ff 0%, #ec4899 100%);
+            color: #000;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: bold;
+            margin: 5px;
+            transition: transform 0.2s;
+        }
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0,212,255,0.4);
+        }
+        .code-block {
+            background: #0a0a0a;
+            padding: 12px;
+            border-radius: 6px;
+            font-family: 'Courier New', monospace;
+            font-size: 13px;
+            margin: 10px 0;
+            border: 1px solid #333;
+            overflow-x: auto;
+        }
+        .status-badge {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: bold;
+            margin-left: 10px;
+        }
+        .status-ready { background: #10b981; color: #fff; }
+        .status-needs-wallet { background: #f59e0b; color: #fff; }
+        .status-needs-player { background: #3b82f6; color: #fff; }
+        .info-box {
+            background: rgba(0,212,255,0.1);
+            border: 1px solid rgba(0,212,255,0.3);
+            padding: 15px;
+            border-radius: 8px;
+            margin: 15px 0;
+        }
+    </style>
+</head>
+<body>
+    <h1>🎮 Test Suite - Modos de Juego</h1>
+    <p style="color: #888;">Guía interactiva para probar cada modo de juego paso a paso</p>
+
+    <!-- MODO RÁPIDO -->
+    <div class="mode-card quick">
+        <h2>⚔️ Modo Rápido (Quick Match) <span class="status-badge status-needs-wallet">Requiere Wallet</span> <span class="status-badge status-needs-player">Requiere Oponente</span></h2>
+        <div class="info-box">
+            <strong>Descripción:</strong> Matchmaking automático que busca oponentes en cola. Validación de apuesta mínima (100 MTR) y streams en tiempo real.
+        </div>
+        <div class="test-steps">
+            <h3>📋 Pasos para Probar:</h3>
+            <ol>
+                <li><strong>Conecta tu wallet</strong> (MetaMask en Base network)</li>
+                <li><strong>Accede al modo:</strong> 
+                    <button onclick="testSelectMode('quick')">Seleccionar Modo Rápido</button>
+                    O haz clic en "⚔️ Modo Rápido" en la app
+                </li>
+                <li><strong>Busca y selecciona una canción</strong></li>
+                <li><strong>Configura apuesta:</strong>
+                    <input type="number" id="quickBet" value="100" min="0" style="padding: 8px; margin: 0 10px; background: #333; color: #fff; border: 1px solid #555; border-radius: 4px; width: 100px;">
+                    <button onclick="testQuickBet()">Probar Validación</button>
+                </li>
+                <li><strong>Inicia búsqueda:</strong> Haz clic en "⚔️ Buscar Rival"</li>
+                <li><strong>Verifica en consola:</strong>
+                    <div class="code-block">
+// Verificar validación
+console.log('MinBet:', GameEngine.minBet);
+
+// Verificar matchmaking
+// Abre Network > Filtra por "matchmaking_queue"
+
+// Si hay match activo
+const matchId = GameEngine.currentMatch?.id;
+if (matchId) {
+    console.log('Streams:', window.StreamsRealtime?.getStreamPercentages(matchId));
+}
+                    </div>
+                </li>
+            </ol>
+        </div>
+        <div id="quickResult"></div>
+    </div>
+
+    <!-- SALA PRIVADA -->
+    <div class="mode-card private">
+        <h2>🎵 Sala Privada (Private Room) <span class="status-badge status-needs-wallet">Requiere Wallet</span> <span class="status-badge status-needs-player">Requiere Oponente</span></h2>
+        <div class="info-box">
+            <strong>Descripción:</strong> Crear sala con código o unirse a una existente. Validación de código (6 caracteres) y apuesta mínima.
+        </div>
+        <div class="test-steps">
+            <h3>📋 Escenario A: Crear Sala</h3>
+            <ol>
+                <li><strong>Conecta tu wallet</strong></li>
+                <li><strong>Accede al modo:</strong>
+                    <button onclick="testSelectMode('private')">Seleccionar Sala Privada</button>
+                </li>
+                <li><strong>Selecciona canción y apuesta (mín 100 MTR)</strong></li>
+                <li><strong>Crea la sala:</strong> Haz clic en "🎵 Crear Sala"</li>
+                <li><strong>Verifica código generado:</strong>
+                    <div class="code-block">
+const roomCode = document.getElementById('roomCode')?.textContent;
+console.log('Código de sala:', roomCode);
+// Debe tener 6 caracteres
+                    </div>
+                </li>
+            </ol>
+            <h3>📋 Escenario B: Unirse a Sala</h3>
+            <ol>
+                <li><strong>Obtén código de sala</strong> (de Escenario A o existente)</li>
+                <li><strong>Accede al modo Sala Privada</strong></li>
+                <li><strong>Ingresa código:</strong>
+                    <input type="text" id="roomCodeInput" placeholder="ABC123" maxlength="6" style="padding: 8px; margin: 0 10px; background: #333; color: #fff; border: 1px solid #555; border-radius: 4px; width: 120px; text-transform: uppercase;">
+                    <button onclick="testJoinRoom()">Probar Unirse</button>
+                </li>
+                <li><strong>Verifica resultado</strong></li>
+            </ol>
+        </div>
+        <div id="privateResult"></div>
+    </div>
+
+    <!-- MODO PRÁCTICA -->
+    <div class="mode-card practice">
+        <h2>🎯 Modo Práctica (Practice) <span class="status-badge status-ready">Listo para Probar</span></h2>
+        <div class="info-box">
+            <strong>Descripción:</strong> Batalla contra CPU sin riesgo real. Usa saldo demo (1000 MTR inicial). NO requiere wallet. Perfecto para pruebas.
+        </div>
+        <div class="test-steps">
+            <h3>📋 Pasos para Probar (MÁS FÁCIL):</h3>
+            <ol>
+                <li><strong>NO necesitas wallet conectada</strong> ✅</li>
+                <li><strong>Accede al modo:</strong>
+                    <button onclick="testSelectMode('practice')">Seleccionar Modo Práctica</button>
+                </li>
+                <li><strong>Verifica saldo demo:</strong>
+                    <button onclick="checkPracticeBalance()">Ver Saldo Demo</button>
+                    <div id="practiceBalance"></div>
+                </li>
+                <li><strong>Selecciona canción y apuesta (mín 100 MTR)</strong></li>
+                <li><strong>Inicia práctica:</strong> Haz clic en "🎯 Iniciar Práctica"</li>
+                <li><strong>Verifica en consola durante batalla:</strong>
+                    <div class="code-block">
+// Verificar tipo de match
+console.log('Match type:', GameEngine.currentMatch?.match_type);
+// Debe ser 'practice'
+
+// Verificar streams
+const matchId = GameEngine.currentMatch?.id;
+if (matchId) {
+    const streams = window.StreamsRealtime?.getStreamPercentages(matchId);
+    console.log('Streams en práctica:', streams);
+}
+                    </div>
+                </li>
+                <li><strong>Al terminar:</strong> Verifica que saldo demo se actualiza</li>
+            </ol>
+        </div>
+        <div id="practiceResult"></div>
+    </div>
+
+    <!-- TORNEO -->
+    <div class="mode-card tournament">
+        <h2>🏆 Torneo (Tournament) <span class="status-badge status-needs-wallet">Requiere Wallet</span> <span class="status-badge status-needs-player">Requiere Torneo</span></h2>
+        <div class="info-box">
+            <strong>Descripción:</strong> Unirse a torneo existente con ID. Requiere torneo configurado en Supabase.
+        </div>
+        <div class="test-steps">
+            <h3>📋 Pasos para Probar:</h3>
+            <ol>
+                <li><strong>Conecta tu wallet</strong></li>
+                <li><strong>Necesitas ID de torneo existente</strong> ⚠️</li>
+                <li><strong>Accede al modo:</strong>
+                    <button onclick="testSelectMode('tournament')">Seleccionar Torneo</button>
+                </li>
+                <li><strong>Ingresa ID de torneo:</strong>
+                    <input type="text" id="tournamentIdInput" placeholder="tournament-id" style="padding: 8px; margin: 0 10px; background: #333; color: #fff; border: 1px solid #555; border-radius: 4px; width: 200px;">
+                    <button onclick="testJoinTournament()">Probar Unirse</button>
+                </li>
+                <li><strong>Verifica resultado</strong></li>
+            </ol>
+            <p style="color: #f59e0b; margin-top: 10px;">
+                ⚠️ <strong>Nota:</strong> Este modo requiere un torneo existente en Supabase. Si no tienes torneos configurados, puedes omitir esta prueba.
+            </p>
+        </div>
+        <div id="tournamentResult"></div>
+    </div>
+
+    <!-- COMANDOS ÚTILES -->
+    <div class="mode-card" style="border-left-color: #10b981;">
+        <h2>🔧 Comandos Útiles para Consola</h2>
+        <div class="test-steps">
+            <h3>Comandos para ejecutar en la consola del navegador (F12):</h3>
+            <div class="code-block">
+// 1. Acceder directamente a un modo
+selectMode('quick');    // Modo Rápido
+selectMode('private');  // Sala Privada
+selectMode('practice'); // Modo Práctica (RECOMENDADO para empezar)
+selectMode('tournament'); // Torneo
+
+// 2. Verificar estado actual
+console.log('Modo actual:', window.currentMode);
+console.log('Canción seleccionada:', selectedSong);
+console.log('Match actual:', GameEngine.currentMatch);
+
+// 3. Verificar StreamsRealtime
+console.log('StreamsRealtime cargado:', typeof window.StreamsRealtime);
+console.log('Matches activos:', Array.from(window.StreamsRealtime?.state.activeMatches.keys() || []));
+
+// 4. Verificar validación de apuesta
+console.log('Apuesta mínima:', GameEngine.minBet); // Debe ser 100
+
+// 5. Ver datos de streams de un match
+const matchId = GameEngine.currentMatch?.id;
+if (matchId) {
+    const data = window.StreamsRealtime?.getStreamPercentages(matchId);
+    console.log('Datos de streams:', data);
+}
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function testSelectMode(mode) {
+            if (typeof selectMode === 'function') {
+                selectMode(mode);
+                showResult('quickResult', `✅ Modo ${mode} seleccionado. Ve a la aplicación para continuar.`, 'success');
+            } else {
+                showResult('quickResult', '❌ La función selectMode no está disponible. Abre la aplicación primero.', 'error');
+            }
+        }
+
+        function testQuickBet() {
+            const bet = parseInt(document.getElementById('quickBet').value);
+            const minBet = 100;
+            
+            if (bet < minBet) {
+                showResult('quickResult', 
+                    `❌ Apuesta rechazada: ${bet} MTR es menor al mínimo de ${minBet} MTR`, 
+                    'error');
+            } else {
+                showResult('quickResult', 
+                    `✅ Apuesta válida: ${bet} MTR (mínimo: ${minBet} MTR)`, 
+                    'success');
+            }
+        }
+
+        function checkPracticeBalance() {
+            if (typeof GameEngine !== 'undefined') {
+                const balance = GameEngine.practiceDemoBalance || 1000;
+                showResult('practiceBalance', 
+                    `💰 Saldo demo actual: ${balance} MTR`, 
+                    'success');
+            } else {
+                showResult('practiceBalance', 
+                    '⚠️ GameEngine no está cargado. Abre la aplicación primero.', 
+                    'error');
+            }
+        }
+
+        function testJoinRoom() {
+            const code = document.getElementById('roomCodeInput').value.toUpperCase();
+            
+            if (code.length !== 6) {
+                showResult('privateResult', 
+                    `❌ Código inválido: debe tener exactamente 6 caracteres (tienes ${code.length})`, 
+                    'error');
+            } else {
+                showResult('privateResult', 
+                    `✅ Código válido: ${code}. Ahora puedes hacer clic en "Unirse" en la aplicación.`, 
+                    'success');
+            }
+        }
+
+        function testJoinTournament() {
+            const tournamentId = document.getElementById('tournamentIdInput').value.trim();
+            
+            if (!tournamentId) {
+                showResult('tournamentResult', 
+                    '❌ Ingresa un ID de torneo', 
+                    'error');
+            } else {
+                showResult('tournamentResult', 
+                    `✅ ID ingresado: ${tournamentId}. Verifica que el torneo existe en Supabase antes de unirte.`, 
+                    'success');
+            }
+        }
+
+        function showResult(elementId, message, type) {
+            const element = document.getElementById(elementId);
+            if (element) {
+                element.innerHTML = `<div style="margin-top: 15px; padding: 12px; border-radius: 6px; background: ${type === 'success' ? 'rgba(16,185,129,0.2)' : type === 'error' ? 'rgba(239,68,68,0.2)' : 'rgba(59,130,246,0.2)'}; border: 1px solid ${type === 'success' ? 'rgba(16,185,129,0.5)' : type === 'error' ? 'rgba(239,68,68,0.5)' : 'rgba(59,130,246,0.5)'}; color: ${type === 'success' ? '#10b981' : type === 'error' ? '#ef4444' : '#3b82f6'};">
+                    ${message}
+                </div>`;
+            }
+        }
+
+        // Auto-verificar al cargar
+        window.addEventListener('load', () => {
+            setTimeout(() => {
+                if (typeof selectMode === 'function') {
+                    console.log('✅ Funciones disponibles para testing');
+                } else {
+                    console.log('⚠️ Abre la aplicación principal primero para habilitar las funciones');
+                }
+            }, 500);
+        });
+    </script>
+</body>
+</html>

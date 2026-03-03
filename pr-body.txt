@@ -1,0 +1,49 @@
+﻿## Fix: Logica apuestas/juego real-time
+
+### Cambios implementados:
+
+#### 1. Modulo StreamsRealtime (src/streams-realtime.js)
+- Integracion con APIs Deezer/Twitch para datos de streams en tiempo real
+- WebSocket/API polling para actualizaciones cada 5 segundos
+- Manejo de estado real-time con patron useState
+- Fallback automatico entre WebSocket y polling
+- Error handling robusto con limite de reintentos
+
+#### 2. Mejoras en Game Engine (game-engine.js)
+- Validacion de apuesta minima (100 MTR) en todos los modos
+- Integracion con StreamsRealtime para datos reales durante batallas
+- Logica mejorada de determinacion de ganador basada en % streams reales
+- Payout on-chain mejorado con validacion de direccion y monto
+- Fallback a calculo simulado si APIs fallan
+- Limpieza automatica de tracking al finalizar batallas
+
+#### 3. Tests (tests/bet-logic.test.js)
+- Tests de validacion de apuesta minima
+- Tests de calculo de porcentajes de streams
+- Tests de determinacion de ganador
+- Tests de calculo de payout
+- Tests de validacion on-chain
+- Tests de manejo de errores
+
+### Archivos modificados:
+- src/streams-realtime.js (nuevo, 295 lineas)
+- game-engine.js (+179 lineas)
+- index.html (+1 linea para cargar modulo)
+- tests/bet-logic.test.js (nuevo, 189 lineas)
+
+### Estadisticas:
+- Total cambios: +641 lineas, -23 lineas
+- Archivos nuevos: 2
+- Archivos modificados: 2
+
+### Testing:
+Ejecutar tests con: npm test o jest tests/bet-logic.test.js
+
+### Checklist:
+- [x] Validacion de apuesta minima (100 MTR)
+- [x] Integracion APIs Deezer/Twitch
+- [x] WebSocket/API polling implementado
+- [x] Determinacion de ganador basada en % streams
+- [x] Payout on-chain con error handling
+- [x] Manejo de estado real-time
+- [x] Tests agregados

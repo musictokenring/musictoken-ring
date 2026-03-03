@@ -1,0 +1,37 @@
+---
+description: Reglas de configuración para el entorno de desarrollo D3D0
+alwaysApply: true
+---
+
+# Entorno de Desarrollo Setup D3D0
+
+Este perfil define las convenciones y configuraciones para el entorno de desarrollo `development-environment-setup-d3d0`.
+
+## Configuración del Entorno
+
+- **Formato automático**: Habilitado al guardar
+- **Auto-guardado**: Después de 1 segundo de inactividad
+- **Tamaño de tabulación**: 2 espacios
+- **Reglas de línea**: 80 y 120 caracteres
+
+## Estándares de Código
+
+- Usar indentación de 2 espacios
+- Formatear código automáticamente al guardar
+- Organizar imports automáticamente
+- Corregir problemas automáticamente cuando sea posible
+
+## Exclusiones de Archivos
+
+Los siguientes directorios/archivos están excluidos de búsquedas y exploración:
+- `node_modules`
+- `dist` / `build`
+- `.git`
+- `.DS_Store`
+
+## Extensiones Recomendadas
+
+- ESLint
+- Prettier
+- Python
+- TypeScript

@@ -361,6 +361,17 @@
                     <button type="button" class="w-full py-2.5 rounded-lg text-sm font-bold bg-fuchsia-500/15 border border-fuchsia-500/30 text-fuchsia-400 hover:bg-fuchsia-500/25 transition-all cursor-pointer" onclick="selectMode('private')">Crear Sala</button>
                 </div>
 
+                <div class="group p-6 rounded-2xl border border-orange-500/15 bg-gray-900/50 transition-all duration-300 card-glow-orange cursor-pointer" onclick="selectMode('social')">
+                    <div class="text-4xl mb-4">⚔️</div>
+                    <h3 class="text-lg font-bold text-white mb-2 group-hover:text-orange-400 transition-colors">Desafío Social</h3>
+                    <p class="text-gray-400 text-sm mb-4">Desafía a un amigo por redes sociales. Mínimo 100 créditos.</p>
+                    <div class="flex flex-wrap gap-1.5 mb-5">
+                        <span class="text-xs px-2 py-1 rounded-full bg-orange-500/10 text-orange-400 border border-orange-500/20">📱 Redes</span>
+                        <span class="text-xs px-2 py-1 rounded-full bg-orange-500/10 text-orange-400 border border-orange-500/20">💯 100+</span>
+                    </div>
+                    <button type="button" class="w-full py-2.5 rounded-lg text-sm font-bold bg-orange-500/15 border border-orange-500/30 text-orange-400 hover:bg-orange-500/25 transition-all cursor-pointer" onclick="selectMode('social')">Desafiar</button>
+                </div>
+
                 <div class="group p-6 rounded-2xl border border-purple-500/15 bg-gray-900/50 transition-all duration-300 card-glow-purple cursor-pointer" onclick="selectMode('tournament')">
                     <div class="text-4xl mb-4">🏆</div>
                     <h3 class="text-lg font-bold text-white mb-2 group-hover:text-purple-400 transition-colors">Torneo</h3>
@@ -954,7 +965,7 @@
 
                 var urlParams = new URLSearchParams(window.location.search);
                 var modeParam = urlParams.get('mode');
-                if (modeParam && ['quick', 'private', 'practice', 'tournament'].indexOf(modeParam) !== -1) {
+                if (modeParam && ['quick', 'private', 'practice', 'tournament', 'social'].indexOf(modeParam) !== -1) {
                     selectMode(modeParam);
                 }
                 var roomParam = urlParams.get('room');
@@ -963,6 +974,19 @@
                     var joinInput = document.getElementById('joinRoomCode');
                     if (joinInput) joinInput.value = roomParam.toUpperCase();
                     if (typeof showToast === 'function') showToast('Sala privada detectada. Selecciona tu canción para unirte.', 'info');
+                }
+                var challengeParam = urlParams.get('challenge');
+                if (challengeParam) {
+                    // Mostrar UI para aceptar desafío
+                    if (session) {
+                        selectMode('social');
+                        if (typeof showToast === 'function') showToast('Desafío detectado. Selecciona tu canción para aceptarlo.', 'info');
+                        // Guardar challenge ID para cuando el usuario seleccione canción
+                        window.pendingChallengeId = challengeParam;
+                    } else {
+                        if (typeof showToast === 'function') showToast('Inicia sesión para aceptar el desafío', 'info');
+                        window.pendingChallengeId = challengeParam; // Guardar para después del login
+                    }
                 }
             } catch (error) {
                 console.error('Error inicializando sesión:', error);
@@ -1027,7 +1051,7 @@
             window.currentMode = mode;
             document.getElementById('modeSelector').classList.add('hidden');
             document.getElementById('songSelection').classList.remove('hidden');
-            var titles = { quick: 'Modo Rápido', private: 'Sala Privada', practice: 'Modo Práctica', tournament: 'Modo Torneo' };
+            var titles = { quick: 'Modo Rápido', private: 'Sala Privada', practice: 'Modo Práctica', tournament: 'Modo Torneo', social: 'Desafío Social' };
             document.getElementById('modeTitle').textContent = titles[mode] || 'Modo de Juego';
             updateActionButtons(mode);
             if (typeof GameEngine !== 'undefined' && typeof GameEngine.updatePracticeBetDisplay === 'function') GameEngine.updatePracticeBetDisplay();
@@ -1164,6 +1188,9 @@
             } else if (mode === 'tournament') {
                 buttonsDiv.innerHTML = '<div class="flex gap-2"><input type="text" id="tournamentId" placeholder="ID de torneo" class="flex-1 px-3 py-2.5 rounded-lg bg-black/40 border border-white/10 text-white text-sm">' +
                     '<button type="button" onclick="joinTournamentMode()" class="' + btnPrimary + ' w-auto px-4" id="joinTournamentBtn" disabled>🏆 Unirme</button></div>';
+            } else if (mode === 'social') {
+                buttonsDiv.innerHTML = '<button type="button" onclick="createSocialChallenge()" class="' + btnPrimary + '" id="createSocialBtn" disabled>⚔️ Crear Desafío</button>';
+                updateBetEligibility(); // Actualizar estado del botón
             }
         }
 
@@ -1176,6 +1203,12 @@
             if (typeof GameEngine !== 'undefined' && typeof GameEngine.ensureSongEligibleForMatchmaking === 'function') {
                 var eloGate = await GameEngine.ensureSongEligibleForMatchmaking(song.id);
                 if (!eloGate.allowed) { showToast(eloGate.reason || 'Canción fuera del rango ELO permitido', 'error'); return; }
+            }
+            
+            // Si hay un desafío pendiente, intentar aceptarlo
+            if (window.pendingChallengeId && window.currentMode === 'social') {
+                await handleSocialChallengeAccept();
+                return;
             }
             selectedSong = song;
             var cardDiv = document.getElementById('selectedSongCard');
@@ -1193,13 +1226,25 @@
 
         function updateBetEligibility() {
             var startQuickBtn = document.getElementById('startQuickBtn');
+            var createSocialBtn = document.getElementById('createSocialBtn');
             var betAmountEl = document.getElementById('betAmount');
             var onchainBalance = Number(window.__mtrOnChainBalance || 0);
+            var credits = window.CreditsSystem ? (window.CreditsSystem.currentCredits || 0) : 0;
             var bet = parseFloat(betAmountEl?.value || '0');
-            if (!startQuickBtn) return;
-            var canCoverBet = !!bet && onchainBalance >= bet;
-            if (startQuickBtn.dataset.baseState === 'ready') startQuickBtn.disabled = !canCoverBet;
-            startQuickBtn.title = (!canCoverBet && bet > 0) ? 'Saldo on-chain insuficiente para la apuesta' : '';
+            
+            if (startQuickBtn) {
+                var canCoverBet = !!bet && onchainBalance >= bet;
+                if (startQuickBtn.dataset.baseState === 'ready') startQuickBtn.disabled = !canCoverBet;
+                startQuickBtn.title = (!canCoverBet && bet > 0) ? 'Saldo on-chain insuficiente para la apuesta' : '';
+            }
+            
+            // Para desafíos sociales, verificar créditos y mínimo de 100
+            if (createSocialBtn) {
+                var canCoverSocialBet = !!bet && bet >= 100 && credits >= bet;
+                createSocialBtn.disabled = !canCoverSocialBet || !selectedSong;
+                createSocialBtn.title = (!canCoverSocialBet && bet > 0) ? 
+                    (bet < 100 ? 'Apuesta mínima: 100 créditos' : 'Créditos insuficientes') : '';
+            }
         }
 
         async function startQuickMatch() {
@@ -1226,6 +1271,61 @@
             if (!selectedSong) { showToast('Selecciona una canción primero', 'error'); return; }
             var demoBet = parseInt(document.getElementById('betAmount').value) || 100;
             if (typeof GameEngine !== 'undefined') await GameEngine.startPracticeMatch(selectedSong, demoBet);
+        }
+
+        async function createSocialChallenge() {
+            if (!selectedSong) { showToast('Selecciona una canción primero', 'error'); return; }
+            var bet = parseFloat(document.getElementById('betAmount').value) || 100;
+            if (bet < 100) {
+                showToast('La apuesta mínima para desafíos sociales es 100 créditos', 'error');
+                return;
+            }
+            if (typeof GameEngine !== 'undefined') await GameEngine.createSocialChallenge(selectedSong, bet);
+            else showToast('GameEngine no está cargado', 'error');
+        }
+
+        function copyChallengeLink() {
+            var input = document.getElementById('challengeLinkInput');
+            if (input) {
+                input.select();
+                document.execCommand('copy');
+                showToast('Link copiado al portapapeles', 'success');
+            }
+        }
+
+        function shareChallenge(platform, link) {
+            var text = '¡Te desafío a una batalla musical! 🎵⚔️';
+            var url = encodeURIComponent(link);
+            var shareText = encodeURIComponent(text);
+            
+            var shareUrls = {
+                whatsapp: `https://wa.me/?text=${shareText}%20${url}`,
+                twitter: `https://twitter.com/intent/tweet?text=${shareText}&url=${url}`,
+                facebook: `https://www.facebook.com/sharer/sharer.php?u=${url}`,
+                telegram: `https://t.me/share/url?url=${url}&text=${shareText}`
+            };
+            
+            if (shareUrls[platform]) {
+                window.open(shareUrls[platform], '_blank', 'width=600,height=400');
+            }
+        }
+
+        function cancelSocialChallenge(challengeId) {
+            if (typeof GameEngine !== 'undefined' && typeof GameEngine.cancelSocialChallenge === 'function') {
+                GameEngine.cancelSocialChallenge(challengeId);
+            }
+        }
+
+        // Manejar aceptación de desafío cuando se selecciona canción
+        async function handleSocialChallengeAccept() {
+            if (window.pendingChallengeId && selectedSong) {
+                var bet = parseFloat(document.getElementById('betAmount').value) || 100;
+                if (typeof GameEngine !== 'undefined' && typeof GameEngine.acceptSocialChallenge === 'function') {
+                    await GameEngine.acceptSocialChallenge(window.pendingChallengeId, selectedSong, bet);
+                    window.pendingChallengeId = null; // Limpiar después de aceptar
+                }
+            }
+        }
             else showToast('Modo práctica en desarrollo', 'info');
         }
         async function joinTournamentMode() {

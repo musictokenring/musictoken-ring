@@ -1,0 +1,59 @@
+VALORES EXACTOS PARA CONFIGURAR EN VERCEL
+==========================================
+
+Copia y pega estos valores EXACTOS en Vercel Environment Variables:
+
+1. SUPABASE_URL
+   Key: SUPABASE_URL
+   Value: https://bscmgcnynbxalcuwdqlm.supabase.co
+   Environment: Production, Preview, Development
+
+2. SUPABASE_SERVICE_ROLE_KEY
+   Key: SUPABASE_SERVICE_ROLE_KEY
+   Value: [OBTENER DESDE SUPABASE DASHBOARD → Settings → API → service_role key]
+   Environment: SOLO Production
+
+3. BASE_RPC_URL
+   Key: BASE_RPC_URL
+   Value: https://mainnet.base.org
+   Environment: Production, Preview, Development
+
+4. MTR_TOKEN_ADDRESS
+   Key: MTR_TOKEN_ADDRESS
+   Value: 0x99cd1eb32846c9027ed9cb8710066fa08791c33b
+   Environment: Production, Preview, Development
+
+5. USDC_ADDRESS
+   Key: USDC_ADDRESS
+   Value: 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913
+   Environment: Production, Preview, Development
+
+6. PLATFORM_WALLET_ADDRESS
+   Key: PLATFORM_WALLET_ADDRESS
+   Value: 0x75376BC58830f27415402875D26B73A6BE8E2253
+   Environment: Production, Preview, Development
+
+7. ADMIN_WALLET_ADDRESS
+   Key: ADMIN_WALLET_ADDRESS
+   Value: [TU DIRECCIÓN DE WALLET ADMIN - OBTENER DESDE METAMASK]
+   Environment: Production, Preview, Development
+
+8. ADMIN_WALLET_PRIVATE_KEY
+   Key: ADMIN_WALLET_PRIVATE_KEY
+   Value: [TU CLAVE PRIVADA DE WALLET ADMIN - OBTENER DESDE METAMASK]
+   Environment: SOLO Production
+
+9. MTR_TO_CREDIT_RATE
+   Key: MTR_TO_CREDIT_RATE
+   Value: 778
+   Environment: Production, Preview, Development
+
+10. PORT
+    Key: PORT
+    Value: 3001
+    Environment: Production, Preview, Development
+
+11. NODE_ENV
+    Key: NODE_ENV
+    Value: production
+    Environment: SOLO Production

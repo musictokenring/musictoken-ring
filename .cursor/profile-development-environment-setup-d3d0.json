@@ -1,0 +1,43 @@
+{
+  "name": "development-environment-setup-d3d0",
+  "displayName": "Development Environment Setup D3D0",
+  "description": "Perfil de entorno de desarrollo para MusicTokenRing Operativo",
+  "settings": {
+    "editor.formatOnSave": true,
+    "editor.codeActionsOnSave": {
+      "source.fixAll": true,
+      "source.organizeImports": true
+    },
+    "files.autoSave": "afterDelay",
+    "files.autoSaveDelay": 1000,
+    "editor.tabSize": 2,
+    "editor.insertSpaces": true,
+    "editor.rulers": [80, 120],
+    "files.exclude": {
+      "**/.git": true,
+      "**/.DS_Store": true,
+      "**/node_modules": true,
+      "**/dist": true,
+      "**/build": true
+    },
+    "search.exclude": {
+      "**/node_modules": true,
+      "**/dist": true,
+      "**/build": true,
+      "**/.git": true
+    }
+  },
+  "extensions": {
+    "recommendations": [
+      "dbaeumer.vscode-eslint",
+      "esbenp.prettier-vscode",
+      "ms-python.python",
+      "ms-vscode.vscode-typescript-next"
+    ]
+  },
+  "environment": {
+    "type": "development-environment-setup-d3d0",
+    "version": "1.0.0",
+    "created": "2026-03-01"
+  }
+}

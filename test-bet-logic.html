@@ -1,0 +1,347 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test - Lógica de Apuestas</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #1a1a1a;
+            color: #e0e0e0;
+        }
+        .test-section {
+            background: #2a2a2a;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 20px;
+            border-left: 4px solid #00d4ff;
+        }
+        .test-section h2 {
+            margin-top: 0;
+            color: #00d4ff;
+        }
+        .test-item {
+            background: #333;
+            padding: 15px;
+            margin: 10px 0;
+            border-radius: 6px;
+        }
+        button {
+            background: #00d4ff;
+            color: #000;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: bold;
+            margin: 5px;
+        }
+        button:hover {
+            background: #00b8e6;
+        }
+        .result {
+            margin-top: 10px;
+            padding: 10px;
+            border-radius: 4px;
+        }
+        .success {
+            background: #2d5016;
+            color: #4ade80;
+        }
+        .error {
+            background: #5a1a1a;
+            color: #f87171;
+        }
+        .info {
+            background: #1e3a5f;
+            color: #60a5fa;
+        }
+        code {
+            background: #1a1a1a;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-family: 'Courier New', monospace;
+        }
+        .status-indicator {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            margin-right: 8px;
+        }
+        .status-ok { background: #4ade80; }
+        .status-error { background: #f87171; }
+        .status-warning { background: #fbbf24; }
+    </style>
+</head>
+<body>
+    <h1>🧪 Test Suite - Lógica de Apuestas y Streams</h1>
+    
+    <div class="test-section">
+        <h2>1. Verificación de Módulos Cargados</h2>
+        <div class="test-item">
+            <button onclick="testModuleLoad()">Verificar Módulos</button>
+            <div id="moduleResult"></div>
+        </div>
+    </div>
+
+    <div class="test-section">
+        <h2>2. Validación de Apuesta Mínima (100 MTR)</h2>
+        <div class="test-item">
+            <label>Ingresa monto de apuesta: </label>
+            <input type="number" id="betAmount" value="50" min="0" style="padding: 8px; margin: 10px; background: #333; color: #fff; border: 1px solid #555; border-radius: 4px;">
+            <button onclick="testMinBet()">Probar Validación</button>
+            <div id="betResult"></div>
+        </div>
+    </div>
+
+    <div class="test-section">
+        <h2>3. Test de StreamsRealtime</h2>
+        <div class="test-item">
+            <button onclick="testStreamsRealtime()">Inicializar Tracking de Prueba</button>
+            <button onclick="getStreamsData()">Obtener Datos de Streams</button>
+            <div id="streamsResult"></div>
+        </div>
+    </div>
+
+    <div class="test-section">
+        <h2>4. Test de Cálculo de Porcentajes</h2>
+        <div class="test-item">
+            <button onclick="testPercentageCalculation()">Calcular Porcentajes</button>
+            <div id="percentageResult"></div>
+        </div>
+    </div>
+
+    <div class="test-section">
+        <h2>5. Test de Determinación de Ganador</h2>
+        <div class="test-item">
+            <button onclick="testWinnerDetermination()">Determinar Ganador</button>
+            <div id="winnerResult"></div>
+        </div>
+    </div>
+
+    <div class="test-section">
+        <h2>6. Test de Validación de Wallet</h2>
+        <div class="test-item">
+            <label>Dirección de wallet: </label>
+            <input type="text" id="walletAddress" value="0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb" style="width: 400px; padding: 8px; margin: 10px; background: #333; color: #fff; border: 1px solid #555; border-radius: 4px;">
+            <button onclick="testWalletValidation()">Validar Dirección</button>
+            <div id="walletResult"></div>
+        </div>
+    </div>
+
+    <div class="test-section">
+        <h2>7. Estado del Sistema</h2>
+        <div class="test-item">
+            <button onclick="showSystemStatus()">Mostrar Estado</button>
+            <div id="statusResult"></div>
+        </div>
+    </div>
+
+    <!-- Cargar módulos necesarios -->
+    <script src="./src/streams-realtime.js"></script>
+    <script>
+        // Mock GameEngine para pruebas
+        const GameEngine = {
+            minBet: 100,
+            currentMatch: null
+        };
+
+        function showResult(elementId, message, type = 'info') {
+            const element = document.getElementById(elementId);
+            element.innerHTML = `<div class="result ${type}">
+                <span class="status-indicator status-${type === 'success' ? 'ok' : type === 'error' ? 'error' : 'warning'}"></span>
+                ${message}
+            </div>`;
+        }
+
+        function testModuleLoad() {
+            const results = [];
+            
+            // Test 1: StreamsRealtime
+            if (typeof window.StreamsRealtime !== 'undefined') {
+                results.push('✅ StreamsRealtime cargado correctamente');
+            } else {
+                results.push('❌ StreamsRealtime NO está cargado');
+            }
+
+            // Test 2: Funciones disponibles
+            if (window.StreamsRealtime) {
+                const hasStartTracking = typeof window.StreamsRealtime.startTracking === 'function';
+                const hasGetStreamPercentages = typeof window.StreamsRealtime.getStreamPercentages === 'function';
+                const hasDetermineWinner = typeof window.StreamsRealtime.determineWinner === 'function';
+                
+                results.push(hasStartTracking ? '✅ startTracking disponible' : '❌ startTracking NO disponible');
+                results.push(hasGetStreamPercentages ? '✅ getStreamPercentages disponible' : '❌ getStreamPercentages NO disponible');
+                results.push(hasDetermineWinner ? '✅ determineWinner disponible' : '❌ determineWinner NO disponible');
+            }
+
+            showResult('moduleResult', results.join('<br>'), 
+                results.every(r => r.includes('✅')) ? 'success' : 'error');
+        }
+
+        function testMinBet() {
+            const betAmount = parseInt(document.getElementById('betAmount').value);
+            const minBet = GameEngine.minBet || 100;
+            
+            if (betAmount < minBet) {
+                showResult('betResult', 
+                    `❌ Apuesta rechazada: ${betAmount} MTR es menor al mínimo de ${minBet} MTR`, 
+                    'error');
+            } else {
+                showResult('betResult', 
+                    `✅ Apuesta aceptada: ${betAmount} MTR (mínimo: ${minBet} MTR)`, 
+                    'success');
+            }
+        }
+
+        function testStreamsRealtime() {
+            if (!window.StreamsRealtime) {
+                showResult('streamsResult', '❌ StreamsRealtime no está cargado', 'error');
+                return;
+            }
+
+            const testMatchId = 'test-match-' + Date.now();
+            const song1 = { id: '123', name: 'Test Song 1', artist: 'Artist 1' };
+            const song2 = { id: '456', name: 'Test Song 2', artist: 'Artist 2' };
+
+            try {
+                window.StreamsRealtime.startTracking(testMatchId, song1, song2, (s1, s2, p1, p2) => {
+                    console.log('Streams actualizados:', { s1, s2, p1, p2 });
+                });
+
+                showResult('streamsResult', 
+                    `✅ Tracking iniciado para match: ${testMatchId}<br>
+                    El sistema comenzará a obtener datos de streams cada 5 segundos`, 
+                    'success');
+            } catch (error) {
+                showResult('streamsResult', 
+                    `❌ Error al iniciar tracking: ${error.message}`, 
+                    'error');
+            }
+        }
+
+        function getStreamsData() {
+            if (!window.StreamsRealtime) {
+                showResult('streamsResult', '❌ StreamsRealtime no está cargado', 'error');
+                return;
+            }
+
+            const matches = Array.from(window.StreamsRealtime.state.activeMatches.keys());
+            if (matches.length === 0) {
+                showResult('streamsResult', 
+                    '⚠️ No hay matches activos. Inicia un tracking primero.', 
+                    'info');
+                return;
+            }
+
+            const matchId = matches[0];
+            const data = window.StreamsRealtime.getStreamPercentages(matchId);
+            
+            showResult('streamsResult', 
+                `📊 Datos de streams para ${matchId}:<br>
+                Streams 1: ${data.streams1.toLocaleString()}<br>
+                Streams 2: ${data.streams2.toLocaleString()}<br>
+                Porcentaje 1: ${data.percentage1.toFixed(2)}%<br>
+                Porcentaje 2: ${data.percentage2.toFixed(2)}%<br>
+                Última actualización: ${new Date(data.lastUpdate).toLocaleTimeString()}`, 
+                'success');
+        }
+
+        function testPercentageCalculation() {
+            const streams1 = 600;
+            const streams2 = 400;
+            const total = streams1 + streams2;
+            const pct1 = (streams1 / total) * 100;
+            const pct2 = (streams2 / total) * 100;
+
+            showResult('percentageResult', 
+                `📊 Cálculo de porcentajes:<br>
+                Streams 1: ${streams1.toLocaleString()}<br>
+                Streams 2: ${streams2.toLocaleString()}<br>
+                Total: ${total.toLocaleString()}<br>
+                Porcentaje 1: ${pct1.toFixed(2)}%<br>
+                Porcentaje 2: ${pct2.toFixed(2)}%<br>
+                Suma: ${(pct1 + pct2).toFixed(2)}% (debe ser 100%)`, 
+                Math.abs(pct1 + pct2 - 100) < 0.01 ? 'success' : 'error');
+        }
+
+        function testWinnerDetermination() {
+            if (!window.StreamsRealtime) {
+                showResult('winnerResult', '❌ StreamsRealtime no está cargado', 'error');
+                return;
+            }
+
+            const testMatchId = 'test-winner-' + Date.now();
+            const song1 = { id: '123', name: 'Song 1', artist: 'Artist 1' };
+            const song2 = { id: '456', name: 'Song 2', artist: 'Artist 2' };
+
+            // Simular datos de streams
+            window.StreamsRealtime.state.activeMatches.set(testMatchId, {
+                song1Id: '123',
+                song2Id: '456',
+                streams1: 650,
+                streams2: 350,
+                percentage1: 65,
+                percentage2: 35,
+                lastUpdate: Date.now()
+            });
+
+            const winner = window.StreamsRealtime.determineWinner(testMatchId);
+            
+            showResult('winnerResult', 
+                `🏆 Determinación de ganador:<br>
+                Streams 1: 650 (65%)<br>
+                Streams 2: 350 (35%)<br>
+                Ganador: Player ${winner || 'Empate'}<br>
+                ${winner === 1 ? '✅ Correcto: Player 1 tiene más streams' : winner === 2 ? '✅ Correcto: Player 2 tiene más streams' : '⚠️ Empate'}`, 
+                winner ? 'success' : 'info');
+        }
+
+        function testWalletValidation() {
+            const address = document.getElementById('walletAddress').value.trim();
+            const isValid = /^0x[a-fA-F0-9]{40}$/.test(address);
+
+            if (isValid) {
+                showResult('walletResult', 
+                    `✅ Dirección válida: ${address}<br>
+                    Formato correcto para payout on-chain`, 
+                    'success');
+            } else {
+                showResult('walletResult', 
+                    `❌ Dirección inválida: ${address}<br>
+                    Debe tener formato: 0x seguido de 40 caracteres hexadecimales`, 
+                    'error');
+            }
+        }
+
+        function showSystemStatus() {
+            const status = [];
+            
+            // StreamsRealtime
+            if (window.StreamsRealtime) {
+                const activeMatches = window.StreamsRealtime.state.activeMatches.size;
+                status.push(`✅ StreamsRealtime: Activo (${activeMatches} matches activos)`);
+                status.push(`   Polling interval: ${window.StreamsRealtime.state.pollingInterval}ms`);
+                status.push(`   Error count: ${window.StreamsRealtime.state.errorCount}`);
+            } else {
+                status.push('❌ StreamsRealtime: NO cargado');
+            }
+
+            // GameEngine
+            status.push(`✅ GameEngine minBet: ${GameEngine.minBet || 100} MTR`);
+
+            showResult('statusResult', status.join('<br>'), 'info');
+        }
+
+        // Auto-verificar al cargar
+        window.addEventListener('load', () => {
+            setTimeout(testModuleLoad, 1000);
+        });
+    </script>
+</body>
+</html>

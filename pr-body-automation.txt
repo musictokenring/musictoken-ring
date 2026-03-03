@@ -1,0 +1,48 @@
+﻿## ðŸŽ¯ Sistema de AutomatizaciÃ³n Completo
+
+Este PR implementa un sistema completamente automatizado para MusicTokenRing que elimina toda intervenciÃ³n manual.
+
+### âœ¨ CaracterÃ­sticas Principales
+
+- âœ… **DepÃ³sitos AutomÃ¡ticos**: Detecta transferencias MTR/USDC y convierte a crÃ©ditos automÃ¡ticamente
+- âœ… **Sistema de CrÃ©ditos**: ConversiÃ³n off-chain (778 MTR = 1 crÃ©dito)
+- âœ… **Apuestas en CrÃ©ditos**: MÃ­nimo 100 crÃ©ditos por apuesta
+- âœ… **Premios AutomÃ¡ticos**: Los crÃ©ditos ganados se acreditan automÃ¡ticamente
+- âœ… **ReclamaciÃ³n AutomÃ¡tica**: BotÃ³n para convertir crÃ©ditos a USDC con envÃ­o automÃ¡tico
+- âœ… **ActualizaciÃ³n de Precios**: Cron job cada minuto para precio MTR/USDC
+- âœ… **Ajuste AutomÃ¡tico de Rate**: Se ajusta automÃ¡ticamente si el precio cambia >5%
+
+### ðŸ“ Archivos Nuevos
+
+**Backend:**
+- ackend/deposit-listener.js - Escucha eventos de depÃ³sito
+- ackend/price-updater.js - Actualiza precios y rates
+- ackend/claim-service.js - Procesa reclamaciones
+- ackend/server-auto.js - Servidor Express con todos los servicios
+
+**Frontend:**
+- src/credits-system.js - GestiÃ³n de crÃ©ditos
+- src/wallet-credits-integration.js - IntegraciÃ³n wallet â†” crÃ©ditos
+- src/deposit-ui.js - UI para depÃ³sitos
+- src/claim-ui.js - UI para reclamar premios
+
+**Base de Datos:**
+- supabase/migrations/001_credits_system.sql - MigraciÃ³n SQL
+
+### ðŸ”§ ConfiguraciÃ³n Requerida
+
+Ver README-AUTOMATION.md para instrucciones completas de configuraciÃ³n.
+
+### âœ… Testing
+
+- [ ] Ejecutar migraciÃ³n SQL en Supabase
+- [ ] Configurar variables de entorno del backend
+- [ ] Probar depÃ³sito automÃ¡tico
+- [ ] Probar apuesta con crÃ©ditos
+- [ ] Probar reclamaciÃ³n de premios
+
+### ðŸ“ Notas
+
+- No modifica el smart contract existente
+- Todo funciona off-chain excepto las transacciones finales de USDC
+- Sistema completamente automatizado sin intervenciÃ³n manual

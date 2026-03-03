@@ -420,6 +420,290 @@ const GameEngine = {
     },
     
     // ==========================================
+    // MODO DESAFÍO SOCIAL (Social Challenge)
+    // ==========================================
+    
+    async createSocialChallenge(song, betAmount) {
+        // Validar apuesta mínima (100 créditos)
+        const normalizedBet = Math.max(100, Math.round(betAmount || 100));
+        if (normalizedBet < 100) {
+            showToast('Apuesta mínima: 100 créditos', 'error');
+            return;
+        }
+        
+        // Verificar créditos suficientes
+        if (!(await this.hasSufficientCredits(normalizedBet))) {
+            return;
+        }
+        
+        try {
+            const { data: { session } } = await supabaseClient.auth.getSession();
+            
+            // Generar ID único para el desafío
+            const challengeId = this.generateChallengeId();
+            
+            // Crear desafío en la base de datos
+            const { data: challenge, error: challengeError } = await supabaseClient
+                .from('social_challenges')
+                .insert([{
+                    challenge_id: challengeId,
+                    challenger_id: session.user.id,
+                    challenger_song_id: song.id,
+                    challenger_song_name: song.name,
+                    challenger_song_artist: song.artist,
+                    challenger_song_image: song.image,
+                    challenger_song_preview: song.preview,
+                    bet_amount: normalizedBet,
+                    status: 'pending',
+                    created_at: new Date().toISOString(),
+                    expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString() // 7 días
+                }])
+                .select()
+                .single();
+            
+            if (challengeError) throw challengeError;
+            
+            // Descontar créditos del desafío
+            const deductionSuccess = await this.updateBalance(-normalizedBet, 'bet', null);
+            if (!deductionSuccess) {
+                // Si falla la deducción, eliminar el desafío
+                await supabaseClient
+                    .from('social_challenges')
+                    .delete()
+                    .eq('id', challenge.id);
+                showToast('Error al descontar créditos. Intenta nuevamente.', 'error');
+                return;
+            }
+            
+            // Generar link único
+            const challengeLink = `${window.location.origin}${window.location.pathname}?challenge=${challengeId}`;
+            
+            // Mostrar UI para compartir
+            this.showSocialChallengeShareUI(challenge, challengeLink, song, normalizedBet);
+            
+            showToast('Desafío creado. Comparte el link con tu amigo.', 'success');
+            
+        } catch (error) {
+            console.error('Error creating social challenge:', error);
+            showToast('Error al crear desafío', 'error');
+        }
+    },
+    
+    generateChallengeId() {
+        const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+        let id = '';
+        for (let i = 0; i < 12; i++) {
+            id += chars.charAt(Math.floor(Math.random() * chars.length));
+        }
+        return id;
+    },
+    
+    showSocialChallengeShareUI(challenge, challengeLink, song, betAmount) {
+        // Ocultar selección de canciones
+        document.getElementById('songSelection')?.classList.add('hidden');
+        
+        // Crear o mostrar UI de compartir
+        let shareContainer = document.getElementById('socialChallengeShare');
+        if (!shareContainer) {
+            shareContainer = document.createElement('div');
+            shareContainer.id = 'socialChallengeShare';
+            shareContainer.className = 'max-w-2xl mx-auto p-6 sm:p-8 rounded-2xl border border-orange-500/15 bg-gradient-to-br from-gray-900/80 to-orange-950/30';
+            document.querySelector('main').appendChild(shareContainer);
+        }
+        
+        shareContainer.innerHTML = `
+            <div class="text-center mb-6">
+                <div class="text-5xl mb-4">⚔️</div>
+                <h2 class="text-2xl font-bold text-white mb-2">Desafío Creado</h2>
+                <p class="text-gray-400 text-sm mb-4">Comparte este link con tu amigo para que acepte tu desafío</p>
+            </div>
+            
+            <div class="mb-6 p-4 rounded-xl bg-black/40 border border-white/10">
+                <div class="flex items-center gap-4 mb-3">
+                    <img src="${song.image}" alt="${song.name}" class="w-16 h-16 rounded-lg object-cover">
+                    <div class="flex-1 text-left">
+                        <h3 class="text-white font-bold">${song.name}</h3>
+                        <p class="text-gray-400 text-sm">${song.artist}</p>
+                        <p class="text-orange-400 text-sm font-semibold mt-1">Apuesta: ${betAmount} créditos</p>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="mb-6">
+                <label class="text-sm text-gray-400 mb-2 block">Link del desafío</label>
+                <div class="flex gap-2">
+                    <input type="text" id="challengeLinkInput" readonly value="${challengeLink}" 
+                           class="flex-1 px-4 py-3 rounded-lg bg-black/40 border border-white/10 text-white text-sm">
+                    <button type="button" onclick="copyChallengeLink()" 
+                            class="px-4 py-3 rounded-lg text-sm bg-orange-500/15 border border-orange-500/30 text-orange-400 hover:bg-orange-500/25 transition cursor-pointer">
+                        📋 Copiar
+                    </button>
+                </div>
+            </div>
+            
+            <div class="mb-6">
+                <p class="text-sm text-gray-400 mb-3 text-center">Compartir en:</p>
+                <div class="flex flex-wrap justify-center gap-3">
+                    <button type="button" onclick="shareChallenge('whatsapp', '${challengeLink}')" 
+                            class="px-4 py-2 rounded-lg text-sm font-semibold bg-green-500/15 border border-green-500/30 text-green-400 hover:bg-green-500/25 transition cursor-pointer">
+                        📱 WhatsApp
+                    </button>
+                    <button type="button" onclick="shareChallenge('twitter', '${challengeLink}')" 
+                            class="px-4 py-2 rounded-lg text-sm font-semibold bg-blue-500/15 border border-blue-500/30 text-blue-400 hover:bg-blue-500/25 transition cursor-pointer">
+                        🐦 Twitter
+                    </button>
+                    <button type="button" onclick="shareChallenge('facebook', '${challengeLink}')" 
+                            class="px-4 py-2 rounded-lg text-sm font-semibold bg-blue-600/15 border border-blue-600/30 text-blue-500 hover:bg-blue-600/25 transition cursor-pointer">
+                        📘 Facebook
+                    </button>
+                    <button type="button" onclick="shareChallenge('telegram', '${challengeLink}')" 
+                            class="px-4 py-2 rounded-lg text-sm font-semibold bg-cyan-500/15 border border-cyan-500/30 text-cyan-400 hover:bg-cyan-500/25 transition cursor-pointer">
+                        ✈️ Telegram
+                    </button>
+                </div>
+            </div>
+            
+            <div class="text-center">
+                <button type="button" onclick="cancelSocialChallenge('${challenge.challenge_id}')" 
+                        class="px-6 py-2 rounded-lg text-sm font-medium bg-white/5 border border-white/10 text-gray-300 hover:text-white transition cursor-pointer">
+                    Cancelar Desafío
+                </button>
+            </div>
+        `;
+        
+        shareContainer.classList.remove('hidden');
+    },
+    
+    async acceptSocialChallenge(challengeId, song, betAmount) {
+        try {
+            const { data: { session } } = await supabaseClient.auth.getSession();
+            if (!session) {
+                showToast('Debes iniciar sesión para aceptar el desafío', 'error');
+                return;
+            }
+            
+            // Buscar el desafío
+            const { data: challenge, error: challengeError } = await supabaseClient
+                .from('social_challenges')
+                .select('*')
+                .eq('challenge_id', challengeId)
+                .eq('status', 'pending')
+                .single();
+            
+            if (challengeError || !challenge) {
+                showToast('Desafío no encontrado o ya fue aceptado', 'error');
+                return;
+            }
+            
+            // Verificar que no sea el mismo usuario
+            if (challenge.challenger_id === session.user.id) {
+                showToast('No puedes aceptar tu propio desafío', 'error');
+                return;
+            }
+            
+            // Verificar que la apuesta sea suficiente
+            const normalizedBet = Math.max(challenge.bet_amount, Math.round(betAmount || challenge.bet_amount));
+            if (normalizedBet < challenge.bet_amount) {
+                showToast(`La apuesta mínima para este desafío es ${challenge.bet_amount} créditos`, 'error');
+                return;
+            }
+            
+            // Verificar créditos suficientes
+            if (!(await this.hasSufficientCredits(normalizedBet))) {
+                return;
+            }
+            
+            // Verificar ELO si está habilitado
+            const eloGate = await this.canMatchByElo(song.id, challenge.challenger_song_id);
+            if (!eloGate.allowed) {
+                showToast(`Matchmaking ELO bloqueado: diferencia ${eloGate.diff} (>300)`, 'error');
+                return;
+            }
+            
+            // Crear match
+            await this.createMatch(
+                'social',
+                challenge.challenger_id,
+                session.user.id,
+                {
+                    id: challenge.challenger_song_id,
+                    name: challenge.challenger_song_name,
+                    artist: challenge.challenger_song_artist,
+                    image: challenge.challenger_song_image,
+                    preview: challenge.challenger_song_preview
+                },
+                {
+                    song_id: song.id,
+                    song_name: song.name,
+                    song_artist: song.artist,
+                    song_image: song.image,
+                    song_preview: song.preview
+                },
+                challenge.bet_amount,
+                normalizedBet
+            );
+            
+            // Actualizar estado del desafío
+            await supabaseClient
+                .from('social_challenges')
+                .update({
+                    status: 'accepted',
+                    challenger_id: session.user.id,
+                    accepted_at: new Date().toISOString()
+                })
+                .eq('id', challenge.id);
+            
+            // Limpiar parámetro de URL
+            if (window.history && window.history.replaceState) {
+                const url = new URL(window.location);
+                url.searchParams.delete('challenge');
+                window.history.replaceState({}, '', url);
+            }
+            
+            showToast('¡Desafío aceptado! Iniciando partida...', 'success');
+            
+        } catch (error) {
+            console.error('Error accepting social challenge:', error);
+            showToast('Error al aceptar desafío', 'error');
+        }
+    },
+    
+    async cancelSocialChallenge(challengeId) {
+        try {
+            const { data: { session } } = await supabaseClient.auth.getSession();
+            
+            // Buscar y eliminar el desafío
+            const { data: challenge } = await supabaseClient
+                .from('social_challenges')
+                .select('*')
+                .eq('challenge_id', challengeId)
+                .eq('challenger_id', session.user.id)
+                .eq('status', 'pending')
+                .single();
+            
+            if (challenge) {
+                // Reembolsar créditos
+                await this.updateBalance(challenge.bet_amount, 'refund', null);
+                
+                // Eliminar desafío
+                await supabaseClient
+                    .from('social_challenges')
+                    .delete()
+                    .eq('id', challenge.id);
+                
+                showToast('Desafío cancelado. Créditos reembolsados.', 'info');
+            }
+            
+            // Volver a selección de modos
+            document.getElementById('socialChallengeShare')?.classList.add('hidden');
+            document.getElementById('songSelection')?.classList.remove('hidden');
+            
+        } catch (error) {
+            console.error('Error canceling social challenge:', error);
+            showToast('Error al cancelar desafío', 'error');
+        }
+    },
+    
     // MODO SALA PRIVADA (Private Room)
     // ==========================================
     
