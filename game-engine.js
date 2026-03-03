@@ -1603,6 +1603,57 @@ const GameEngine = {
             console.log('[createBattleUI] ✅ battleArena encontrado en DOM');
             addedArena.classList.remove('hidden');
             console.log('[createBattleUI] ✅ battleArena visible');
+            
+            // SCROLL AUTOMÁTICO AL ÁREA DE BATALLA
+            setTimeout(() => {
+                try {
+                    console.log('[createBattleUI] Iniciando scroll automático a battleArena...');
+                    const header = document.querySelector('header');
+                    const headerHeight = header ? header.offsetHeight : 80;
+                    
+                    // Obtener posición del elemento
+                    const rect = addedArena.getBoundingClientRect();
+                    const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
+                    const elementTop = rect.top + scrollTop;
+                    
+                    // Calcular posición objetivo (elemento - header - padding)
+                    const offset = headerHeight + 20;
+                    const targetPosition = Math.max(0, elementTop - offset);
+                    
+                    console.log('[createBattleUI] Scroll calculado:', {
+                        elementTop: elementTop,
+                        headerHeight: headerHeight,
+                        offset: offset,
+                        targetPosition: targetPosition,
+                        currentScroll: scrollTop
+                    });
+                    
+                    // Hacer scroll suave al área de batalla
+                    window.scrollTo({
+                        top: targetPosition,
+                        behavior: 'smooth'
+                    });
+                    
+                    // Verificación después del scroll
+                    setTimeout(() => {
+                        const finalRect = addedArena.getBoundingClientRect();
+                        const finalTop = finalRect.top;
+                        console.log('[createBattleUI] ✅ Scroll completado. Posición final del elemento:', finalTop);
+                        
+                        // Si aún no está bien visible, hacer ajuste fino
+                        if (finalTop > headerHeight + 50) {
+                            const fineAdjustment = finalTop - headerHeight - 20;
+                            window.scrollBy({
+                                top: fineAdjustment,
+                                behavior: 'smooth'
+                            });
+                            console.log('[createBattleUI] Ajuste fino aplicado:', fineAdjustment);
+                        }
+                    }, 500);
+                } catch (scrollError) {
+                    console.error('[createBattleUI] ❌ Error en scroll automático:', scrollError);
+                }
+            }, 150);
         } else {
             console.error('[createBattleUI] ❌ battleArena NO encontrado después de agregar');
         }
