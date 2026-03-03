@@ -1269,12 +1269,17 @@
 
         // Mostrar QR code para conectar Binance Wallet usando WalletConnect v2
         async function showBinanceWalletConnectQR() {
+            // Mostrar indicador de carga inmediatamente
+            if (typeof showToast === 'function') {
+                showToast('Iniciando conexión WalletConnect...', 'info');
+            }
+            
             try {
                 // Esperar a que WalletConnect se cargue si aún no está disponible
                 if (typeof EthereumProvider === 'undefined') {
                     console.log('[wallet] Waiting for WalletConnect SDK to load...');
                     
-                    // Esperar hasta 10 segundos para que se cargue (más tiempo para conexiones lentas)
+                    // Esperar máximo 3 segundos (más rápido para no dejar al usuario esperando)
                     var waitTime = 0;
                     var checkInterval = setInterval(function() {
                         waitTime += 200;
@@ -1284,26 +1289,22 @@
                             showBinanceWalletConnectQR(); // Reintentar
                             return;
                         }
-                        if (waitTime >= 10000) {
+                        if (waitTime >= 3000) {
                             clearInterval(checkInterval);
-                            console.error('[wallet] WalletConnect SDK failed to load after 10 seconds');
+                            console.error('[wallet] WalletConnect SDK failed to load after 3 seconds');
                             
-                            // Intentar cargar el SDK manualmente como último recurso
+                            // Mostrar modal alternativo inmediatamente sin esperar más
+                            showBinanceManualConnection();
+                            
+                            // Intentar cargar el SDK en segundo plano (sin bloquear)
                             var script = document.createElement('script');
                             script.src = 'https://cdn.jsdelivr.net/npm/@walletconnect/ethereum-provider@2.23.6/dist/index.umd.js';
                             script.onload = function() {
-                                console.log('[wallet] WalletConnect SDK loaded manually, retrying...');
-                                setTimeout(function() {
-                                    showBinanceWalletConnectQR();
-                                }, 500);
+                                console.log('[wallet] WalletConnect SDK loaded manually in background');
+                                // No hacer nada, el usuario ya tiene el modal alternativo
                             };
                             script.onerror = function() {
-                                console.error('[wallet] Failed to load WalletConnect SDK even manually');
-                                if (typeof showToast === 'function') {
-                                    showToast('WalletConnect no disponible. Usa otra wallet o recarga la página.', 'error');
-                                }
-                                // Fallback: mostrar modal con instrucciones manuales
-                                showBinanceManualConnection();
+                                console.error('[wallet] Failed to load WalletConnect SDK');
                             };
                             document.head.appendChild(script);
                             return;
@@ -1348,13 +1349,33 @@
                     });
                 }
 
-                // Conectar usando WalletConnect
-                await walletConnectProvider.connect();
+                // Conectar usando WalletConnect con timeout
+                var connectPromise = walletConnectProvider.connect();
+                var timeoutPromise = new Promise(function(_, reject) {
+                    setTimeout(function() {
+                        reject(new Error('Timeout: WalletConnect no respondió en 10 segundos'));
+                    }, 10000); // 10 segundos máximo
+                });
+                
+                await Promise.race([connectPromise, timeoutPromise]);
                 
             } catch (error) {
                 console.error('[wallet] WalletConnect error:', error);
-                if (typeof showToast === 'function') {
-                    showToast('Error al conectar con WalletConnect: ' + error.message, 'error');
+                
+                // Si es timeout o error de conexión, mostrar modal alternativo
+                if (error.message && error.message.includes('Timeout')) {
+                    if (typeof showToast === 'function') {
+                        showToast('WalletConnect tardó demasiado. Mostrando opciones alternativas...', 'info');
+                    }
+                    showBinanceManualConnection();
+                } else {
+                    if (typeof showToast === 'function') {
+                        showToast('Error: ' + (error.message || 'Error desconocido'), 'error');
+                    }
+                    // Mostrar modal alternativo en cualquier caso de error
+                    setTimeout(function() {
+                        showBinanceManualConnection();
+                    }, 1000);
                 }
             }
         }
@@ -1504,16 +1525,24 @@
                         </div>
                         <p class="text-gray-400 text-sm mb-4 text-center">WalletConnect no está disponible</p>
                         <div class="space-y-3">
-                            <p class="text-gray-300 text-sm">Para conectar Binance Wallet:</p>
-                            <ol class="text-gray-400 text-xs space-y-2 list-decimal list-inside">
+                            <p class="text-gray-300 text-sm font-semibold">Opción 1: Usar Binance Wallet directamente</p>
+                            <ol class="text-gray-400 text-xs space-y-2 list-decimal list-inside mb-4">
                                 <li>Abre Binance Wallet en tu móvil</li>
-                                <li>Ve a la sección "dApps" o "Conectar"</li>
-                                <li>Busca "MusicToken Ring" o escanea un código QR</li>
-                                <li>O usa el navegador dentro de Binance Wallet</li>
+                                <li>Ve a la sección "dApps" o "Explorar"</li>
+                                <li>Busca "MusicToken Ring" o visita: <span class="text-cyan-400 break-all">musictokenring.xyz</span></li>
                             </ol>
-                            <button onclick="window.location.reload()" class="w-full px-4 py-2 bg-cyan-500/20 border border-cyan-500/50 rounded text-cyan-400 text-sm hover:bg-cyan-500/30 transition mt-4">
-                                Recargar página
-                            </button>
+                            
+                            <p class="text-gray-300 text-sm font-semibold">Opción 2: Usar otra wallet</p>
+                            <p class="text-gray-400 text-xs mb-4">Puedes usar MetaMask, Trust Wallet u otra wallet compatible</p>
+                            
+                            <div class="flex gap-2">
+                                <button onclick="closeBinanceQRModal(); showMobileWalletModal();" class="flex-1 px-4 py-2 bg-cyan-500/20 border border-cyan-500/50 rounded text-cyan-400 text-sm hover:bg-cyan-500/30 transition">
+                                    Ver otras wallets
+                                </button>
+                                <button onclick="window.location.reload()" class="px-4 py-2 bg-gray-700 border border-gray-600 rounded text-gray-300 text-sm hover:bg-gray-600 transition">
+                                    Recargar
+                                </button>
+                            </div>
                         </div>
                     </div>
                 `;
