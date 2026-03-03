@@ -6,7 +6,7 @@
     <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
     <meta http-equiv="Pragma" content="no-cache">
     <meta http-equiv="Expires" content="0">
-    <meta name="mtr-build" content="v3.4-URGENT-FIX">
+    <meta name="mtr-build" content="v3.5-balance-fix">
     <title>MusicToken Ring - Music Battle Arena</title>
 
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -79,7 +79,7 @@
         });
 
         var PLATFORM_WALLET_ADDRESSES = { base: window.PLATFORM_WALLET_BASE_ADDRESS || '0x75376BC58830f27415402875D26B73A6BE8E2253' };
-        window.MTR_BUILD_ID = 'v3.4-URGENT-FIX';
+        window.MTR_BUILD_ID = 'v3.5-balance-fix';
 
         if (typeof window.selectMode !== 'function') {
             window.selectMode = function selectModeCriticalFallback(mode) {
@@ -1286,9 +1286,20 @@
                 // Si es modo práctica, asegurar que el balance demo esté cargado primero
                 if (mode === 'practice') {
                     console.log('[selectMode] Modo práctica seleccionado, cargando balance demo...');
-                    if (typeof GameEngine.loadPracticeDemoBalance === 'function') {
-                        GameEngine.loadPracticeDemoBalance();
-                        console.log('[selectMode] Balance demo cargado:', GameEngine.practiceDemoBalance);
+                    if (typeof GameEngine !== 'undefined') {
+                        // FORZAR carga del balance demo
+                        if (typeof GameEngine.loadPracticeDemoBalance === 'function') {
+                            GameEngine.loadPracticeDemoBalance();
+                        }
+                        // Si el balance está en 0 o no existe, forzar reset a 1000
+                        if (!GameEngine.practiceDemoBalance || GameEngine.practiceDemoBalance <= 0) {
+                            GameEngine.practiceDemoBalance = GameEngine.practiceDemoInitialBalance || 1000;
+                            if (typeof GameEngine.setPracticeDemoBalance === 'function') {
+                                GameEngine.setPracticeDemoBalance(GameEngine.practiceDemoBalance);
+                            }
+                            console.log('[selectMode] Balance demo forzado a', GameEngine.practiceDemoBalance);
+                        }
+                        console.log('[selectMode] Balance demo final:', GameEngine.practiceDemoBalance);
                     }
                     // Actualizar display múltiples veces para asegurar que se muestre
                     setTimeout(function() {
@@ -1459,10 +1470,33 @@
                     betAmountInput.value = '100';
                 }
                 
-                // Actualizar estado del botón inmediatamente
+                // FORZAR carga y actualización del balance demo
+                if (typeof GameEngine !== 'undefined') {
+                    if (typeof GameEngine.loadPracticeDemoBalance === 'function') {
+                        GameEngine.loadPracticeDemoBalance();
+                    }
+                    // Si el balance está en 0, forzar reset
+                    if (GameEngine.practiceDemoBalance <= 0) {
+                        GameEngine.practiceDemoBalance = 1000;
+                        if (typeof GameEngine.setPracticeDemoBalance === 'function') {
+                            GameEngine.setPracticeDemoBalance(1000);
+                        }
+                        console.log('[updateActionButtons] Balance demo forzado a 1000');
+                    }
+                    // Actualizar display inmediatamente
+                    if (typeof GameEngine.updatePracticeBetDisplay === 'function') {
+                        GameEngine.updatePracticeBetDisplay();
+                    }
+                }
+                
+                // Actualizar estado del botón inmediatamente y con delays
+                updateBetEligibility();
                 setTimeout(function() {
                     updateBetEligibility();
                 }, 100);
+                setTimeout(function() {
+                    updateBetEligibility();
+                }, 300);
             } else if (mode === 'tournament') {
                 buttonsDiv.innerHTML = '<div class="flex gap-2"><input type="text" id="tournamentId" placeholder="ID de torneo" class="flex-1 px-3 py-2.5 rounded-lg bg-black/40 border border-white/10 text-white text-sm">' +
                     '<button type="button" onclick="joinTournamentMode()" class="' + btnPrimary + ' w-auto px-4" id="joinTournamentBtn" disabled>🏆 Unirme</button></div>';
@@ -1523,12 +1557,24 @@
             
             // Para modo práctica, habilitar cuando hay canción seleccionada
             if (startPracticeBtn) {
-                // Asegurar que el balance demo esté cargado
-                if (typeof GameEngine !== 'undefined' && typeof GameEngine.loadPracticeDemoBalance === 'function') {
-                    GameEngine.loadPracticeDemoBalance();
+                // Asegurar que el balance demo esté cargado y sea válido
+                if (typeof GameEngine !== 'undefined') {
+                    if (typeof GameEngine.loadPracticeDemoBalance === 'function') {
+                        GameEngine.loadPracticeDemoBalance();
+                    }
+                    // Si el balance sigue en 0, forzar reset
+                    if (GameEngine.practiceDemoBalance <= 0) {
+                        GameEngine.practiceDemoBalance = GameEngine.practiceDemoInitialBalance || 1000;
+                        if (typeof GameEngine.setPracticeDemoBalance === 'function') {
+                            GameEngine.setPracticeDemoBalance(GameEngine.practiceDemoBalance);
+                        }
+                        console.log('[updateBetEligibility] Balance demo forzado a', GameEngine.practiceDemoBalance);
+                    }
                 }
                 
-                var practiceBalance = (typeof GameEngine !== 'undefined' && GameEngine.practiceDemoBalance) ? GameEngine.practiceDemoBalance : 1000;
+                var practiceBalance = (typeof GameEngine !== 'undefined' && GameEngine.practiceDemoBalance > 0) 
+                    ? GameEngine.practiceDemoBalance 
+                    : 1000; // Fallback a 1000 si no está disponible
                 var effectiveBet = bet || 100;
                 var canCoverPracticeBet = practiceBalance >= effectiveBet;
                 var shouldBeEnabled = !!selectedSong && canCoverPracticeBet;
@@ -1536,6 +1582,7 @@
                 console.log('[updateBetEligibility] Modo práctica:', {
                     selectedSong: !!selectedSong,
                     practiceBalance: practiceBalance,
+                    GameEngineBalance: typeof GameEngine !== 'undefined' ? GameEngine.practiceDemoBalance : 'N/A',
                     effectiveBet: effectiveBet,
                     canCoverPracticeBet: canCoverPracticeBet,
                     shouldBeEnabled: shouldBeEnabled
@@ -1831,6 +1878,7 @@
                 
                 var numericBalance = Number(formatUnits(balance, 18));
                 window.__mtrOnChainBalance = numericBalance;
+                console.log('[refreshMtrBalance] Balance cargado:', numericBalance);
                 var formatted = numericBalance.toLocaleString('es-ES', { maximumFractionDigits: 4 });
                 var badge = document.getElementById('onchainBalanceDisplay');
                 var onchain = document.getElementById('onchainMtrBalance');
@@ -1841,12 +1889,20 @@
                 if (badge) badge.textContent = 'Tu MTR: ' + formatted;
                 if (onchain && !isPracticeMode) {
                     onchain.textContent = formatted;
+                    console.log('[refreshMtrBalance] Balance actualizado en UI:', formatted);
                 }
                 // Si estamos en modo práctica, actualizar el display del balance demo
                 if (isPracticeMode && typeof GameEngine !== 'undefined' && typeof GameEngine.updatePracticeBetDisplay === 'function') {
                     GameEngine.updatePracticeBetDisplay();
                 }
-                if (typeof window.updateBetEligibility === 'function') window.updateBetEligibility();
+                // Actualizar elegibilidad de apuestas
+                if (typeof window.updateBetEligibility === 'function') {
+                    window.updateBetEligibility();
+                }
+                // Actualizar display de balance normal si no es práctica
+                if (!isPracticeMode && typeof GameEngine !== 'undefined' && typeof GameEngine.updateBalanceDisplay === 'function') {
+                    GameEngine.updateBalanceDisplay();
+                }
             } catch (e) {
                 // Silenciar errores para no bloquear la página
                 setOnchainBalanceError();
@@ -1873,6 +1929,12 @@
                 if (window.CreditsSystem && typeof window.CreditsSystem.init === 'function') {
                     window.CreditsSystem.init(connectedAddress);
                     if (creditsDisplay) creditsDisplay.classList.remove('hidden');
+                }
+                
+                // CARGAR BALANCE DE LA WALLET INMEDIATAMENTE
+                if (connectedAddress) {
+                    console.log('[renderWallet] Cargando balance para:', connectedAddress);
+                    refreshMtrBalance(connectedAddress);
                 }
             } else {
                 walletEl.classList.add('hidden');

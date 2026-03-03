@@ -83,12 +83,24 @@ const GameEngine = {
     },
 
     loadPracticeDemoBalance() {
-        const stored = parseInt(localStorage.getItem('mtr_practice_demo_balance') || `${this.practiceDemoInitialBalance}`, 10);
-        this.practiceDemoBalance = Number.isFinite(stored) && stored > 0 ? stored : this.practiceDemoInitialBalance;
-        if (this.practiceDemoBalance <= 0) {
+        try {
+            const stored = localStorage.getItem('mtr_practice_demo_balance');
+            if (stored !== null) {
+                const parsed = parseInt(stored, 10);
+                if (Number.isFinite(parsed) && parsed > 0) {
+                    this.practiceDemoBalance = parsed;
+                    console.log('[practice] Demo balance cargado desde localStorage:', this.practiceDemoBalance);
+                    return;
+                }
+            }
+            // Si no hay valor válido en localStorage, establecer el inicial
             this.practiceDemoBalance = this.practiceDemoInitialBalance;
             localStorage.setItem('mtr_practice_demo_balance', String(this.practiceDemoBalance));
-            console.log('[practice] Demo balance reset to', this.practiceDemoBalance);
+            console.log('[practice] Demo balance inicializado a', this.practiceDemoBalance);
+        } catch (e) {
+            console.error('[practice] Error cargando demo balance:', e);
+            this.practiceDemoBalance = this.practiceDemoInitialBalance;
+            localStorage.setItem('mtr_practice_demo_balance', String(this.practiceDemoBalance));
         }
     },
 
@@ -239,14 +251,24 @@ const GameEngine = {
             const onChainBalance = Number(window.__mtrOnChainBalance || 0);
             const playableBalance = onChainBalance > 0 ? onChainBalance : this.userBalance;
             
+            console.log('[updateBalanceDisplay] Modo normal - Balance jugable:', playableBalance, 'On-chain:', onChainBalance, 'User:', this.userBalance);
+            
             const balanceEl = document.getElementById('appBalanceDisplay');
             if (balanceEl) {
                 balanceEl.textContent = `Jugable: ${playableBalance.toLocaleString('es-ES')} MTR`;
+                balanceEl.style.color = '';
+                console.log('[updateBalanceDisplay] appBalanceDisplay actualizado a', playableBalance);
+            } else {
+                console.warn('[updateBalanceDisplay] appBalanceDisplay no encontrado');
             }
 
             const userBalanceEl = document.getElementById('userBalance');
             if (userBalanceEl) {
                 userBalanceEl.textContent = playableBalance.toLocaleString('es-ES');
+                userBalanceEl.style.color = '';
+                console.log('[updateBalanceDisplay] userBalance actualizado a', playableBalance);
+            } else {
+                console.warn('[updateBalanceDisplay] userBalance no encontrado');
             }
         }
         
