@@ -1269,6 +1269,14 @@
                 return;
             }
             
+            // Para Binance Wallet, verificar window.BinanceChain además de window.ethereum
+            if (wallet.id === 'binance') {
+                if (window.BinanceChain) {
+                    connectBinanceWallet();
+                    return;
+                }
+            }
+            
             // Intentar conectar usando window.ethereum primero (si está disponible)
             if (window.ethereum) {
                 connectWallet();
@@ -1287,8 +1295,27 @@
                 // MetaMask móvil usa un formato especial
                 deepLink = 'https://metamask.app.link/dapp/' + encodeURIComponent(window.location.href);
             } else if (wallet.id === 'binance') {
-                // Binance Wallet - usar protocolo nativo bnbapp://
-                deepLink = 'bnbapp://wc?uri=' + encodeURIComponent(window.location.href);
+                // Binance Wallet - usar formato WalletConnect o link directo
+                // Binance Wallet móvil puede usar diferentes formatos
+                deepLink = 'https://bscscan.com/walletconnect?uri=' + encodeURIComponent(window.location.href);
+                // También intentar protocolo nativo como fallback
+                var nativeLink = 'bnbapp://wc?uri=' + encodeURIComponent(window.location.href);
+                // Crear un elemento temporal para intentar ambos
+                try {
+                    var link = document.createElement('a');
+                    link.href = nativeLink;
+                    link.style.display = 'none';
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+                    // Si el protocolo nativo no funciona, usar el web link después de un delay
+                    setTimeout(function() {
+                        window.location.href = deepLink;
+                    }, 1500);
+                    return;
+                } catch(e) {
+                    console.log('[wallet] Binance native link failed, using web link');
+                }
             } else if (wallet.id === 'trust') {
                 deepLink = 'https://link.trustwallet.com/open_url?coin_id=60&url=' + encodeURIComponent(window.location.href);
             } else if (wallet.id === 'coinbase') {
@@ -1309,13 +1336,17 @@
             window.location.href = deepLink;
             opened = true;
             
-            // Detectar cuando regresamos a la página
+            // Detectar cuando regresamos a la página (para Binance también verificar BinanceChain)
             var checkInterval = setInterval(function() {
-                if (window.ethereum) {
+                if (window.ethereum || (wallet.id === 'binance' && window.BinanceChain)) {
                     clearInterval(checkInterval);
                     clearTimeout(timeout);
                     setTimeout(function() {
-                        connectWallet();
+                        if (wallet.id === 'binance' && window.BinanceChain) {
+                            connectBinanceWallet();
+                        } else {
+                            connectWallet();
+                        }
                     }, 500);
                 }
             }, 500);
@@ -1327,21 +1358,104 @@
             }, 30000);
         }
 
+        // Función específica para conectar Binance Wallet
+        async function connectBinanceWallet() {
+            if (!window.BinanceChain) {
+                if (typeof showToast === 'function') {
+                    showToast('Binance Wallet no detectada. Asegúrate de tenerla instalada.', 'error');
+                }
+                return;
+            }
+            
+            try {
+                console.log('[wallet] Connecting to Binance Wallet...');
+                
+                // Binance Chain Wallet usa un método diferente
+                var accounts = await window.BinanceChain.request({ method: 'eth_requestAccounts' });
+                if (accounts && accounts.length > 0) {
+                    connectedAddress = accounts[0];
+                    console.log('[wallet] Connected via BinanceChain:', connectedAddress);
+                    
+                    // Verificar y cambiar a Base si es necesario
+                    var chainId = await window.BinanceChain.request({ method: 'eth_chainId' });
+                    connectedChainId = Number.parseInt(chainId, 16);
+                    
+                    if (connectedChainId !== 8453) {
+                        try {
+                            await window.BinanceChain.request({
+                                method: 'wallet_switchEthereumChain',
+                                params: [{ chainId: '0x2105' }]
+                            });
+                            connectedChainId = 8453;
+                        } catch (e) {
+                            // Si falla, intentar agregar la red
+                            try {
+                                await window.BinanceChain.request({
+                                    method: 'wallet_addEthereumChain',
+                                    params: [{
+                                        chainId: '0x2105',
+                                        chainName: 'Base',
+                                        nativeCurrency: { name: 'ETH', symbol: 'ETH', decimals: 18 },
+                                        rpcUrls: ['https://mainnet.base.org'],
+                                        blockExplorerUrls: ['https://basescan.org']
+                                    }]
+                                });
+                                connectedChainId = 8453;
+                            } catch (addError) {
+                                console.warn('[wallet] Could not switch/add Base network');
+                            }
+                        }
+                    }
+                    
+                    renderWallet();
+                    if (connectedChainId === 8453 && connectedAddress) {
+                        await refreshMtrBalance(connectedAddress);
+                        if (typeof showToast === 'function') {
+                            showToast('Binance Wallet conectada en Base ✓', 'success');
+                        }
+                    } else {
+                        if (typeof showToast === 'function') {
+                            showToast('Wallet conectada pero necesitas cambiar a Base (8453)', 'error');
+                        }
+                    }
+                }
+            } catch (e) {
+                console.error('[wallet] Binance connect error:', e);
+                var msg = 'No se pudo conectar Binance Wallet';
+                if (e.code === 4001 || (e.message && e.message.includes('rejected'))) {
+                    msg = 'Conexión rechazada por el usuario';
+                } else if (e.message) {
+                    msg = 'Error: ' + e.message;
+                }
+                if (typeof showToast === 'function') {
+                    showToast(msg, 'error');
+                } else {
+                    alert(msg);
+                }
+            }
+        }
+
         async function connectWallet() {
-            // Si estamos en móvil y no hay window.ethereum, mostrar modal de selección
-            if (isMobileDevice() && !window.ethereum) {
+            // Si Binance Wallet está disponible, usarla
+            if (window.BinanceChain && !window.ethereum) {
+                connectBinanceWallet();
+                return;
+            }
+            
+            // Si estamos en móvil y no hay window.ethereum ni BinanceChain, mostrar modal de selección
+            if (isMobileDevice() && !window.ethereum && !window.BinanceChain) {
                 showMobileWalletModal();
                 return;
             }
             
-            if (!window.ethereum) {
-                console.warn('[wallet] window.ethereum not found');
+            if (!window.ethereum && !window.BinanceChain) {
+                console.warn('[wallet] No wallet provider found');
                 // En desktop, mostrar mensaje de instalación
                 if (!isMobileDevice()) {
                     if (typeof showToast === 'function') {
-                        showToast('Instala MetaMask para conectar tu wallet en Base', 'error');
+                        showToast('Instala MetaMask o Binance Wallet para conectar', 'error');
                     } else {
-                        alert('Instala MetaMask para conectar tu wallet en Base');
+                        alert('Instala MetaMask o Binance Wallet para conectar');
                     }
                 } else {
                     // En móvil, mostrar modal de wallets
@@ -1424,16 +1538,20 @@
             initWalletButton();
         }
 
-        // Detectar cuando window.ethereum se vuelve disponible (útil en móviles)
+        // Detectar cuando window.ethereum o BinanceChain se vuelve disponible (útil en móviles)
         var ethereumCheckInterval = setInterval(function() {
-            if (window.ethereum && !window.__mtrEthereumDetected) {
+            if ((window.ethereum || window.BinanceChain) && !window.__mtrEthereumDetected) {
                 window.__mtrEthereumDetected = true;
-                console.log('[wallet] window.ethereum detectado');
+                console.log('[wallet] Wallet provider detectado:', window.ethereum ? 'ethereum' : 'binance');
                 
                 // Si estamos en móvil y el usuario acaba de regresar, intentar conectar automáticamente
                 if (isMobileDevice() && !connectedAddress) {
                     setTimeout(function() {
-                        connectWallet();
+                        if (window.BinanceChain) {
+                            connectBinanceWallet();
+                        } else {
+                            connectWallet();
+                        }
                     }, 1000);
                 }
             }
