@@ -1295,26 +1295,29 @@
                 // MetaMask móvil usa un formato especial
                 deepLink = 'https://metamask.app.link/dapp/' + encodeURIComponent(window.location.href);
             } else if (wallet.id === 'binance') {
-                // Binance Wallet - usar formato WalletConnect o link directo
-                // Binance Wallet móvil puede usar diferentes formatos
-                deepLink = 'https://bscscan.com/walletconnect?uri=' + encodeURIComponent(window.location.href);
-                // También intentar protocolo nativo como fallback
-                var nativeLink = 'bnbapp://wc?uri=' + encodeURIComponent(window.location.href);
-                // Crear un elemento temporal para intentar ambos
+                // Binance Wallet - usar protocolo nativo directamente
+                // Binance Wallet móvil usa bnbapp:// para deep linking
+                deepLink = 'bnbapp://wc?uri=' + encodeURIComponent(window.location.href);
+                
+                // Intentar abrir usando un elemento <a> primero (más confiable en móviles)
                 try {
                     var link = document.createElement('a');
-                    link.href = nativeLink;
+                    link.href = deepLink;
                     link.style.display = 'none';
                     document.body.appendChild(link);
                     link.click();
                     document.body.removeChild(link);
-                    // Si el protocolo nativo no funciona, usar el web link después de un delay
+                    
+                    // Si no se abre en 2 segundos, mostrar instrucciones
                     setTimeout(function() {
-                        window.location.href = deepLink;
-                    }, 1500);
+                        if (typeof showToast === 'function') {
+                            showToast('Abre Binance Wallet manualmente y autoriza la conexión', 'info');
+                        }
+                    }, 2000);
                     return;
                 } catch(e) {
-                    console.log('[wallet] Binance native link failed, using web link');
+                    console.log('[wallet] Binance link element failed, using window.location');
+                    // Fallback a window.location.href
                 }
             } else if (wallet.id === 'trust') {
                 deepLink = 'https://link.trustwallet.com/open_url?coin_id=60&url=' + encodeURIComponent(window.location.href);
