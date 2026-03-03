@@ -6,7 +6,7 @@
     <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
     <meta http-equiv="Pragma" content="no-cache">
     <meta http-equiv="Expires" content="0">
-    <meta name="mtr-build" content="v3.7-bet-fix-urgent">
+    <meta name="mtr-build" content="v3.8-bet-global-fix">
     <title>MusicToken Ring - Music Battle Arena</title>
 
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -79,7 +79,7 @@
         });
 
         var PLATFORM_WALLET_ADDRESSES = { base: window.PLATFORM_WALLET_BASE_ADDRESS || '0x75376BC58830f27415402875D26B73A6BE8E2253' };
-        window.MTR_BUILD_ID = 'v3.7-bet-fix-urgent';
+        window.MTR_BUILD_ID = 'v3.8-bet-global-fix';
 
         if (typeof window.selectMode !== 'function') {
             window.selectMode = function selectModeCriticalFallback(mode) {
@@ -670,6 +670,53 @@
     <script src="./src/claim-ui.js?v=v2.7"></script>
     <script src="./game-engine.js?v=v2.7"></script>
     <script>window.MTR_INLINE_TOP_STREAMS_ACTIVE = true;</script>
+    <!-- DEFINIR quickBet INMEDIATAMENTE - ANTES DE CUALQUIER OTRO SCRIPT -->
+    <script>
+        // DEFINIR quickBet GLOBALMENTE ANTES DE QUE SE CARGUE CUALQUIER HTML
+        window.quickBet = function(amount) {
+            console.log('[quickBet-GLOBAL] ✅ Llamado con amount:', amount);
+            try {
+                var betInput = document.getElementById('betAmount');
+                if (!betInput) {
+                    console.error('[quickBet-GLOBAL] ❌ Campo betAmount no encontrado');
+                    return;
+                }
+                
+                // Establecer el valor
+                betInput.value = amount;
+                console.log('[quickBet-GLOBAL] Valor establecido:', betInput.value);
+                
+                // Feedback visual
+                var betButtons = document.querySelectorAll('.bet-amount-btn');
+                betButtons.forEach(function(btn) {
+                    btn.classList.remove('bg-cyan-500/30', 'border-cyan-500/50', 'text-white');
+                    btn.classList.add('bg-white/5', 'border-white/10', 'text-gray-300');
+                });
+                
+                var clickedBtn = document.querySelector('.bet-amount-btn[data-amount="' + amount + '"]');
+                if (clickedBtn) {
+                    clickedBtn.classList.remove('bg-white/5', 'border-white/10', 'text-gray-300');
+                    clickedBtn.classList.add('bg-cyan-500/30', 'border-cyan-500/50', 'text-white');
+                }
+                
+                // Disparar eventos
+                betInput.dispatchEvent(new Event('input', { bubbles: true }));
+                betInput.dispatchEvent(new Event('change', { bubbles: true }));
+                
+                // Actualizar elegibilidad
+                setTimeout(function() {
+                    if (typeof window.updateBetEligibility === 'function') {
+                        window.updateBetEligibility();
+                    } else if (typeof updateBetEligibility === 'function') {
+                        updateBetEligibility();
+                    }
+                }, 50);
+            } catch (e) {
+                console.error('[quickBet-GLOBAL] ❌ Error:', e);
+            }
+        };
+        console.log('[INIT] ✅ window.quickBet definida globalmente');
+    </script>
     <!-- DEFINIR selectSongForBattle INMEDIATAMENTE - ANTES DE CUALQUIER OTRO SCRIPT -->
     <script>
         // ESTA FUNCIÓN DEBE ESTAR DISPONIBLE ANTES DE QUE app.js SE CARGUE
@@ -1641,8 +1688,28 @@
             }
         }
         
-        // REEMPLAZAR la función temprana con la versión completa
-        window.quickBet = quickBet;
+        // ACTUALIZAR la función global con la versión completa (si ya existe, la mejora)
+        if (typeof window.quickBet === 'function') {
+            // Guardar referencia a la función global existente
+            var globalQuickBet = window.quickBet;
+            // Reemplazar con versión completa que incluye más funcionalidad
+            window.quickBet = function(amount) {
+                // Llamar función completa primero
+                quickBet(amount);
+                // También llamar función global si existe (fallback)
+                if (globalQuickBet && globalQuickBet !== window.quickBet) {
+                    try {
+                        globalQuickBet(amount);
+                    } catch (e) {
+                        console.warn('[quickBet] Error en función global:', e);
+                    }
+                }
+            };
+        } else {
+            // Si no existe, definirla
+            window.quickBet = quickBet;
+        }
+        console.log('[INIT] ✅ window.quickBet actualizada con versión completa');
 
         function updateBetEligibility() {
             console.log('[updateBetEligibility] ⚡ Iniciando actualización de elegibilidad...');
