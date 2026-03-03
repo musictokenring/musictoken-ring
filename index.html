@@ -2069,9 +2069,19 @@
                     console.log('[wallet] Connected via viem:', connectedAddress);
                 }
                 
+                // Obtener chain ID después de conectar
+                try {
+                    var chainIdHex = await window.ethereum.request({ method: 'eth_chainId' });
+                    connectedChainId = Number.parseInt(chainIdHex, 16);
+                    console.log('[wallet] Chain ID después de conectar:', connectedChainId);
+                } catch (e) {
+                    console.error('[wallet] Error al obtener chain ID:', e);
+                }
+                
                 var onBase = await ensureBaseChain();
                 renderWallet();
-                if (onBase) {
+                
+                if (onBase && connectedChainId === 8453) {
                     await refreshMtrBalance(connectedAddress);
                     if (typeof showToast === 'function') {
                         showToast('Wallet conectada en Base ✓', 'success');
@@ -2080,6 +2090,14 @@
                     if (typeof showToast === 'function') {
                         showToast('Wallet conectada pero necesitas cambiar a Base (8453)', 'error');
                     }
+                }
+                
+                // En móvil, forzar una verificación adicional después de un breve delay
+                if (isMobileDevice()) {
+                    setTimeout(async function() {
+                        console.log('[wallet] 📱 Verificación adicional en móvil después de conectar...');
+                        await checkAndUpdateWalletState();
+                    }, 1000);
                 }
             } catch (e) {
                 console.error('[wallet] connect error:', e);
