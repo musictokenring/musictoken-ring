@@ -1890,15 +1890,20 @@
                     return;
                 }
                 
-                // Si no está disponible, usar deep link (igual que Trust Wallet)
+                // Si no está disponible, usar deep link con formato correcto de MetaMask
                 if (typeof showToast === 'function') {
                     showToast('Abriendo MetaMask...', 'info');
                 }
                 
-                // Usar el mismo formato que Trust Wallet funciona
-                var deepLink = 'https://metamask.app.link/dapp/' + encodeURIComponent(window.location.href);
+                // Formato correcto de MetaMask: https://link.metamask.io/dapp/{dappUrl}
+                // Solo usar el dominio sin protocolo ni parámetros adicionales
+                var currentUrl = window.location.href;
+                var dappUrl = currentUrl.replace(/^https?:\/\//, ''); // Remover http:// o https://
+                var deepLink = 'https://link.metamask.io/dapp/' + dappUrl;
                 
-                console.log('[wallet] 📱 MetaMask: Abriendo deep link:', deepLink);
+                console.log('[wallet] 📱 MetaMask: URL actual:', currentUrl);
+                console.log('[wallet] 📱 MetaMask: DApp URL:', dappUrl);
+                console.log('[wallet] 📱 MetaMask: Deep link:', deepLink);
                 
                 // Intentar abrir MetaMask
                 try {
