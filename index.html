@@ -1057,13 +1057,14 @@
                     var scrollY = window.scrollY || window.pageYOffset || document.documentElement.scrollTop;
                     var elementTop = rect.top + scrollY;
                     
-                    // OBJETIVO: Posicionar el elemento para que:
-                    // - El header quede visible arriba
-                    // - "Busca tu Canción" quede visible justo después del header
-                    // - "Tu Apuesta" quede visible en la parte inferior de la pantalla
+                    // OBJETIVO basado en captura: 
+                    // - Header visible arriba
+                    // - "Busca tu Canción" visible justo después del header
+                    // - "Tu Apuesta" visible en la parte inferior
                     // 
-                    // Estrategia: Scroll para que el inicio del songSelection quede justo después del header
-                    var offset = headerHeight + 10; // Header + pequeño padding (10px en lugar de 20px)
+                    // Estrategia: Scroll mínimo necesario para que el inicio del songSelection
+                    // quede justo después del header, permitiendo ver ambas secciones
+                    var offset = headerHeight + 5; // Header + mínimo padding (5px para que quede pegado al header)
                     var targetPosition = Math.max(0, elementTop - offset);
                     
                     console.log('[mobile] 📱 Scroll para modo:', mode, {
@@ -1087,29 +1088,31 @@
                         var newScrollY = window.scrollY || window.pageYOffset || document.documentElement.scrollTop;
                         
                         // Verificar que el elemento esté bien posicionado (justo después del header)
-                        var expectedTop = headerHeight + 10;
+                        // Basado en la captura: el inicio debe quedar muy cerca del header
+                        var expectedTop = headerHeight + 5; // Muy cerca del header (5px)
                         var actualTop = newRect.top;
                         var difference = actualTop - expectedTop;
                         
-                        // Si está fuera del rango esperado (más de 20px de diferencia), ajustar
-                        if (Math.abs(difference) > 20) {
-                            var adjustment = difference;
-                            var finalPosition = newScrollY - adjustment;
+                        // Si está fuera del rango esperado (más de 15px de diferencia), ajustar
+                        if (Math.abs(difference) > 15) {
+                            // Calcular nueva posición: posición actual del elemento menos el offset deseado
+                            var elementAbsoluteTop = actualTop + newScrollY;
+                            var finalPosition = elementAbsoluteTop - expectedTop;
                             
                             window.scrollTo({
                                 top: Math.max(0, finalPosition),
                                 behavior: 'smooth'
                             });
                             
-                            console.log('[mobile] 📱 Ajuste fino:', {
+                            console.log('[mobile] 📱 Ajuste fino aplicado:', {
                                 esperado: expectedTop,
                                 actual: actualTop,
                                 diferencia: difference,
-                                ajuste: adjustment,
+                                elementoAbsoluto: elementAbsoluteTop,
                                 nuevaPosicion: finalPosition
                             });
                         } else {
-                            console.log('[mobile] 📱 ✅ Posición correcta:', {
+                            console.log('[mobile] 📱 ✅ Posición correcta (dentro del rango):', {
                                 esperado: expectedTop,
                                 actual: actualTop,
                                 diferencia: difference
