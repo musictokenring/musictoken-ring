@@ -1821,29 +1821,133 @@ const GameEngine = {
                             }, 500);
                         });
                     } else {
-                        // Desktop: usar scrollTo normal
-                        console.log('[createBattleUI] Usando scrollTo para desktop...');
-                        window.scrollTo({
-                            top: targetPosition,
-                            behavior: 'smooth'
+                        // Desktop: usar método mejorado con requestAnimationFrame para precisión
+                        console.log('[createBattleUI] Usando scroll mejorado para desktop...');
+                        
+                        // CRÍTICO: Verificar que estamos scrollando al elemento correcto
+                        const elementId = addedArena.id;
+                        const elementClasses = addedArena.className;
+                        console.log('[createBattleUI] Verificando elemento para desktop:', {
+                            id: elementId,
+                            classes: elementClasses,
+                            isCorrectElement: elementId === 'battleArena'
                         });
                         
-                        // Verificación después del scroll (desktop)
-                        setTimeout(() => {
-                            const finalRect = addedArena.getBoundingClientRect();
-                            const finalTop = finalRect.top;
-                            console.log('[createBattleUI] ✅ Scroll desktop completado. Posición final:', finalTop);
-                            
-                            // Si aún no está bien visible, hacer ajuste fino
-                            if (finalTop > headerHeight + 30) {
-                                const fineAdjustment = finalTop - headerHeight - paddingOffset;
-                                window.scrollBy({
-                                    top: -fineAdjustment,
-                                    behavior: 'smooth'
+                        if (elementId !== 'battleArena') {
+                            console.error('[createBattleUI] ❌ ERROR DESKTOP: Elemento incorrecto detectado!');
+                            return;
+                        }
+                        
+                        // Usar requestAnimationFrame para asegurar renderizado completo
+                        requestAnimationFrame(() => {
+                            requestAnimationFrame(() => {
+                                // Obtener posición ABSOLUTA del elemento en el documento
+                                const rect = addedArena.getBoundingClientRect();
+                                const currentScrollY = window.pageYOffset || document.documentElement.scrollTop || window.scrollY;
+                                const absoluteTop = rect.top + currentScrollY;
+                                
+                                // Calcular posición objetivo: posición absoluta menos header menos padding
+                                const desktopPaddingOffset = 25; // Padding adecuado para desktop
+                                const desktopOffset = headerHeight + desktopPaddingOffset;
+                                const desktopTargetPosition = Math.max(0, absoluteTop - desktopOffset);
+                                
+                                console.log('[createBattleUI] Scroll desktop calculado:', {
+                                    rectTop: rect.top,
+                                    currentScrollY: currentScrollY,
+                                    absoluteTop: absoluteTop,
+                                    headerHeight: headerHeight,
+                                    desktopPaddingOffset: desktopPaddingOffset,
+                                    desktopOffset: desktopOffset,
+                                    desktopTargetPosition: desktopTargetPosition,
+                                    windowWidth: window.innerWidth,
+                                    windowHeight: window.innerHeight
                                 });
-                                console.log('[createBattleUI] Ajuste fino desktop aplicado:', -fineAdjustment);
-                            }
-                        }, 500);
+                                
+                                // Hacer scroll DIRECTO a la posición calculada (instantáneo primero para precisión)
+                                window.scrollTo({
+                                    top: desktopTargetPosition,
+                                    behavior: 'auto' // Instantáneo primero
+                                });
+                                
+                                // Después de scroll instantáneo, verificar y hacer ajuste fino suave
+                                setTimeout(() => {
+                                    const verifyRect = addedArena.getBoundingClientRect();
+                                    const verifyScroll = window.pageYOffset || document.documentElement.scrollTop || window.scrollY;
+                                    const verifyTop = verifyRect.top;
+                                    const expectedTop = headerHeight + desktopPaddingOffset;
+                                    const difference = verifyTop - expectedTop;
+                                    
+                                    console.log('[createBattleUI] Verificación desktop después de scroll instantáneo:', {
+                                        verifyTop: verifyTop,
+                                        expectedTop: expectedTop,
+                                        diferencia: difference,
+                                        verifyScroll: verifyScroll,
+                                        isInViewport: verifyTop >= headerHeight && verifyTop < window.innerHeight - 50
+                                    });
+                                    
+                                    // Si hay diferencia, hacer ajuste fino suave
+                                    if (Math.abs(difference) > 5) {
+                                        const adjustedPosition = verifyRect.top + verifyScroll - desktopOffset;
+                                        console.log('[createBattleUI] Aplicando ajuste fino desktop a:', adjustedPosition);
+                                        
+                                        window.scrollTo({
+                                            top: Math.max(0, adjustedPosition),
+                                            behavior: 'smooth'
+                                        });
+                                        
+                                        // Verificación final después del ajuste
+                                        setTimeout(() => {
+                                            const finalRect = addedArena.getBoundingClientRect();
+                                            const finalTop = finalRect.top;
+                                            const finalScroll = window.pageYOffset || document.documentElement.scrollTop || window.scrollY;
+                                            
+                                            console.log('[createBattleUI] Verificación FINAL desktop:', {
+                                                finalTop: finalTop,
+                                                finalScroll: finalScroll,
+                                                headerHeight: headerHeight,
+                                                isCorrectlyPositioned: finalTop >= headerHeight && finalTop <= headerHeight + 40,
+                                                elementVisible: finalTop >= 0 && finalTop < window.innerHeight
+                                            });
+                                            
+                                            // Verificar que NO estamos en otra sección (como contactSection)
+                                            const contactSection = document.getElementById('contactSection');
+                                            if (contactSection) {
+                                                const contactRect = contactSection.getBoundingClientRect();
+                                                const contactTop = contactRect.top;
+                                                console.log('[createBattleUI] Verificando que NO estamos en contactSection:', {
+                                                    contactTop: contactTop,
+                                                    battleArenaTop: finalTop,
+                                                    isInContactSection: Math.abs(contactTop - finalTop) < 100
+                                                });
+                                                
+                                                // Si estamos cerca de contactSection, corregir
+                                                if (Math.abs(contactTop - finalTop) < 100 && contactTop < finalTop) {
+                                                    console.warn('[createBattleUI] ⚠️ Detectado scroll incorrecto cerca de contactSection, corrigiendo...');
+                                                    const correctPosition = finalRect.top + finalScroll - desktopOffset;
+                                                    window.scrollTo({
+                                                        top: Math.max(0, correctPosition),
+                                                        behavior: 'smooth'
+                                                    });
+                                                }
+                                            }
+                                            
+                                            if (finalTop < headerHeight || finalTop > headerHeight + 50) {
+                                                console.warn('[createBattleUI] ⚠️ Posición desktop aún no perfecta, último ajuste...');
+                                                const lastPosition = finalRect.top + finalScroll - desktopOffset;
+                                                window.scrollTo({
+                                                    top: Math.max(0, lastPosition),
+                                                    behavior: 'smooth'
+                                                });
+                                            } else {
+                                                console.log('[createBattleUI] ✅ battleArena PERFECTAMENTE posicionado en desktop');
+                                            }
+                                        }, 600);
+                                    } else {
+                                        console.log('[createBattleUI] ✅ Posición desktop correcta desde el primer intento');
+                                    }
+                                }, 100);
+                            });
+                        });
                     }
                 } catch (scrollError) {
                     console.error('[createBattleUI] ❌ Error en scroll automático:', scrollError);
