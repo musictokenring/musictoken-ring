@@ -6,7 +6,7 @@
     <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
     <meta http-equiv="Pragma" content="no-cache">
     <meta http-equiv="Expires" content="0">
-    <meta name="mtr-build" content="v3.8-bet-global-fix">
+    <meta name="mtr-build" content="v3.9-start-battle-fix">
     <title>MusicToken Ring - Music Battle Arena</title>
 
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -79,7 +79,7 @@
         });
 
         var PLATFORM_WALLET_ADDRESSES = { base: window.PLATFORM_WALLET_BASE_ADDRESS || '0x75376BC58830f27415402875D26B73A6BE8E2253' };
-        window.MTR_BUILD_ID = 'v3.8-bet-global-fix';
+        window.MTR_BUILD_ID = 'v3.9-start-battle-fix';
 
         if (typeof window.selectMode !== 'function') {
             window.selectMode = function selectModeCriticalFallback(mode) {
@@ -716,6 +716,25 @@
             }
         };
         console.log('[INIT] ✅ window.quickBet definida globalmente');
+        
+        // DEFINIR startPractice y startQuickMatch TEMPRANO (placeholders que se actualizarán después)
+        window.startPractice = function() {
+            console.log('[startPractice-PLACEHOLDER] Función llamada antes de que se defina completamente');
+            if (typeof startPractice === 'function' && startPractice !== window.startPractice) {
+                return startPractice.apply(this, arguments);
+            }
+            console.error('[startPractice-PLACEHOLDER] Función completa aún no disponible');
+        };
+        
+        window.startQuickMatch = function() {
+            console.log('[startQuickMatch-PLACEHOLDER] Función llamada antes de que se defina completamente');
+            if (typeof startQuickMatch === 'function' && startQuickMatch !== window.startQuickMatch) {
+                return startQuickMatch.apply(this, arguments);
+            }
+            console.error('[startQuickMatch-PLACEHOLDER] Función completa aún no disponible');
+        };
+        
+        console.log('[INIT] ✅ window.startPractice y window.startQuickMatch definidas como placeholders');
     </script>
     <!-- DEFINIR selectSongForBattle INMEDIATAMENTE - ANTES DE CUALQUIER OTRO SCRIPT -->
     <script>
@@ -1545,7 +1564,7 @@
             var btnSecondary = btnBase + ' bg-white/5 border border-white/10 text-gray-300 hover:text-white';
 
             if (mode === 'quick') {
-                buttonsDiv.innerHTML = '<button type="button" onclick="startQuickMatch()" class="' + btnPrimary + '" id="startQuickBtn" disabled>⚔️ Buscar Rival</button>';
+                buttonsDiv.innerHTML = '<button type="button" onclick="window.startQuickMatch()" class="' + btnPrimary + '" id="startQuickBtn" disabled>⚔️ Buscar Rival</button>';
                 var sq = document.getElementById('startQuickBtn');
                 if (sq) sq.dataset.baseState = 'ready';
                 updateBetEligibility();
@@ -1555,7 +1574,7 @@
                     '<div class="flex gap-2"><input type="text" id="joinRoomCode" placeholder="Código" class="flex-1 px-3 py-2.5 rounded-lg bg-black/40 border border-white/10 text-white text-sm" maxlength="6">' +
                     '<button type="button" onclick="joinRoom()" class="' + btnSecondary + ' w-auto px-4" id="joinRoomBtn" disabled>Unirse</button></div>';
             } else if (mode === 'practice') {
-                buttonsDiv.innerHTML = '<button type="button" onclick="startPractice()" class="' + btnPrimary + '" id="startPracticeBtn" disabled>🎯 Iniciar Práctica</button>';
+                buttonsDiv.innerHTML = '<button type="button" onclick="if(typeof window.startPractice===\'function\'){window.startPractice();}else{console.error(\'startPractice no disponible\');if(typeof startPractice===\'function\'){startPractice();}else{alert(\'Error: Función de práctica no disponible\');}}" class="' + btnPrimary + '" id="startPracticeBtn" disabled>🎯 Iniciar Práctica</button>';
                 
                 // Asegurar que el campo de apuesta tenga un valor por defecto
                 var betAmountInput = document.getElementById('betAmount');
@@ -1794,12 +1813,28 @@
         }
 
         async function startQuickMatch() {
-            if (!selectedSong) return;
+            console.log('[startQuickMatch] ✅ Función llamada');
+            if (!selectedSong) {
+                console.error('[startQuickMatch] ❌ No hay canción seleccionada');
+                return;
+            }
             var bet = parseInt(document.getElementById('betAmount').value) || 100;
-            if (Number(window.__mtrOnChainBalance || 0) < bet) { showToast('Saldo on-chain insuficiente', 'error'); updateBetEligibility(); return; }
-            if (typeof GameEngine !== 'undefined') await GameEngine.joinQuickMatch(selectedSong, bet);
-            else showToast('GameEngine no está cargado', 'error');
+            if (Number(window.__mtrOnChainBalance || 0) < bet) { 
+                showToast('Saldo on-chain insuficiente', 'error'); 
+                updateBetEligibility(); 
+                return; 
+            }
+            if (typeof GameEngine !== 'undefined') {
+                console.log('[startQuickMatch] Llamando a GameEngine.joinQuickMatch...');
+                await GameEngine.joinQuickMatch(selectedSong, bet);
+            } else {
+                console.error('[startQuickMatch] ❌ GameEngine no está cargado');
+                showToast('GameEngine no está cargado', 'error');
+            }
         }
+        
+        // Asegurar que startQuickMatch esté disponible globalmente
+        window.startQuickMatch = startQuickMatch;
         async function createRoom() {
             if (!selectedSong) return;
             var bet = parseInt(document.getElementById('betAmount').value) || 100;
@@ -1814,18 +1849,40 @@
             else showToast('GameEngine no está cargado', 'error');
         }
         async function startPractice() {
+            console.log('[startPractice] ✅ Función llamada');
+            console.log('[startPractice] Estado:', {
+                selectedSong: !!selectedSong,
+                selectedSongData: selectedSong,
+                GameEngine: typeof GameEngine !== 'undefined',
+                betAmount: document.getElementById('betAmount')?.value
+            });
+            
             if (!selectedSong) { 
+                console.error('[startPractice] ❌ No hay canción seleccionada');
                 showToast('Selecciona una canción primero', 'error'); 
                 return; 
             }
             
             if (typeof GameEngine === 'undefined') {
+                console.error('[startPractice] ❌ GameEngine no está definido');
                 showToast('GameEngine no está cargado. Recarga la página.', 'error');
-                console.error('[practice] GameEngine is not defined');
                 return;
             }
             
-            var demoBet = parseInt(document.getElementById('betAmount').value) || 100;
+            if (typeof GameEngine.startPracticeMatch !== 'function') {
+                console.error('[startPractice] ❌ GameEngine.startPracticeMatch no es una función');
+                showToast('Error: Función de práctica no disponible', 'error');
+                return;
+            }
+            
+            var betInput = document.getElementById('betAmount');
+            var demoBet = betInput ? parseInt(betInput.value) || 100 : 100;
+            
+            console.log('[startPractice] Iniciando práctica con:', {
+                song: selectedSong.name,
+                bet: demoBet,
+                practiceBalance: GameEngine.practiceDemoBalance
+            });
             
             try {
                 // Deshabilitar el botón mientras se procesa
@@ -1833,11 +1890,15 @@
                 if (btn) {
                     btn.disabled = true;
                     btn.textContent = '🎯 Iniciando...';
+                    console.log('[startPractice] Botón deshabilitado');
                 }
                 
+                console.log('[startPractice] Llamando a GameEngine.startPracticeMatch...');
                 await GameEngine.startPracticeMatch(selectedSong, demoBet);
+                console.log('[startPractice] ✅ startPracticeMatch completado');
             } catch (error) {
-                console.error('[practice] Error in startPractice:', error);
+                console.error('[startPractice] ❌❌❌ ERROR:', error);
+                console.error('[startPractice] Stack:', error.stack);
                 showToast('Error al iniciar práctica: ' + (error.message || 'Error desconocido'), 'error');
                 
                 // Rehabilitar el botón en caso de error
@@ -1848,6 +1909,10 @@
                 }
             }
         }
+        
+        // Asegurar que startPractice esté disponible globalmente
+        window.startPractice = startPractice;
+        console.log('[INIT] ✅ window.startPractice definida globalmente');
 
         async function createSocialChallenge() {
             if (!selectedSong) { showToast('Selecciona una canción primero', 'error'); return; }
