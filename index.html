@@ -1858,6 +1858,44 @@
 
         // Conectar wallet móvil usando deep linking
         function connectMobileWallet(wallet) {
+            console.log('[wallet] 📱 Conectando wallet móvil:', wallet.name);
+            
+            // Para MetaMask, simplemente usar el método estándar en lugar de deep links
+            // Esto evita que MetaMask abra su navegador interno
+            if (wallet.id === 'metamask') {
+                console.log('[wallet] 📱 MetaMask detectada, usando método estándar...');
+                closeMobileWalletModal();
+                
+                // Verificar si window.ethereum está disponible
+                if (window.ethereum) {
+                    console.log('[wallet] window.ethereum disponible, conectando...');
+                    connectWallet();
+                } else {
+                    // Si no está disponible, mostrar instrucciones
+                    if (typeof showToast === 'function') {
+                        showToast('MetaMask no detectada. Asegúrate de tenerla instalada y habilitada.', 'error');
+                    }
+                    // Intentar abrir MetaMask directamente
+                    try {
+                        window.location.href = 'metamask://';
+                        // Después de 2 segundos, verificar si se conectó
+                        setTimeout(async function() {
+                            await checkAndUpdateWalletState();
+                        }, 2000);
+                    } catch (e) {
+                        console.error('[wallet] Error al abrir MetaMask:', e);
+                    }
+                }
+                return;
+            }
+            
+            // Para Binance Wallet, usar WalletConnect
+            if (wallet.id === 'binance') {
+                console.log('[wallet] 📱 Binance Wallet detectada, usando WalletConnect...');
+                closeMobileWalletModal();
+                showBinanceWalletConnectQR();
+                return;
+            }
             closeMobileWalletModal();
             
             if (wallet.id === 'walletconnect') {
@@ -1918,11 +1956,34 @@
             opened = true;
             
             // Detectar cuando regresamos a la página (para Binance también verificar BinanceChain)
-            var checkInterval = setInterval(function() {
+            var checkInterval = setInterval(async function() {
                 if (window.ethereum || (wallet.id === 'binance' && window.BinanceChain)) {
                     clearInterval(checkInterval);
                     clearTimeout(timeout);
-                    setTimeout(function() {
+                    console.log('[wallet] 📱 Wallet detectada después de deep link, verificando estado...');
+                    
+                    // Esperar un momento para que MetaMask termine de procesar
+                    setTimeout(async function() {
+                        if (wallet.id === 'binance' && window.BinanceChain) {
+                            connectBinanceWallet();
+                        } else {
+                            // Para MetaMask, verificar estado primero antes de conectar
+                            await checkAndUpdateWalletState();
+                            // Si aún no está conectada, intentar conectar
+                            if (!connectedAddress) {
+                                connectWallet();
+                            }
+                        }
+                    }, 1000); // Esperar 1 segundo para que MetaMask termine de procesar
+                }
+            }, 500);
+            
+            // También escuchar cuando la página vuelve a tener foco
+            var focusHandler = async function() {
+                console.log('[wallet] 📱 Página recuperó foco después de deep link...');
+                await checkAndUpdateWalletState();
+                if (!connectedAddress && (window.ethereum || (wallet.id === 'binance' && window.BinanceChain))) {
+                    setTimeout(async function() {
                         if (wallet.id === 'binance' && window.BinanceChain) {
                             connectBinanceWallet();
                         } else {
@@ -1930,13 +1991,20 @@
                         }
                     }, 500);
                 }
-            }, 500);
+            };
+            window.addEventListener('focus', focusHandler);
+            document.addEventListener('visibilitychange', function() {
+                if (!document.hidden) {
+                    focusHandler();
+                }
+            });
             
-            // Limpiar después de 30 segundos
+            // Limpiar después de 60 segundos
             setTimeout(function() {
                 clearInterval(checkInterval);
                 clearTimeout(timeout);
-            }, 30000);
+                window.removeEventListener('focus', focusHandler);
+            }, 60000);
         }
 
         // Función específica para conectar Binance Wallet
@@ -2262,20 +2330,35 @@
         // En móvil, verificar periódicamente si MetaMask se conectó después de la carga inicial
         if (isMobileDevice()) {
             console.log('[wallet] 📱 Dispositivo móvil detectado, configurando verificación periódica...');
+            
+            // CRÍTICO: Detectar cuando la página vuelve a tener foco (usuario regresa de MetaMask)
+            window.addEventListener('focus', async function() {
+                console.log('[wallet] 📱 Página recuperó foco, verificando estado de wallet...');
+                await checkAndUpdateWalletState();
+            });
+            
+            // También detectar cuando la página se vuelve visible (útil cuando el usuario cambia de app)
+            document.addEventListener('visibilitychange', async function() {
+                if (!document.hidden) {
+                    console.log('[wallet] 📱 Página visible nuevamente, verificando estado de wallet...');
+                    await checkAndUpdateWalletState();
+                }
+            });
+            
             var mobileCheckInterval = setInterval(async function() {
                 if (window.ethereum && !connectedAddress) {
                     console.log('[wallet] 📱 Verificando conexión en móvil...');
                     await checkAndUpdateWalletState();
                 } else if (connectedAddress) {
-                    // Si ya hay conexión, dejar de verificar
+                    // Si ya hay conexión, dejar de verificar periódicamente pero mantener listeners
                     clearInterval(mobileCheckInterval);
                 }
             }, 2000); // Verificar cada 2 segundos
             
-            // Limpiar después de 30 segundos
+            // Limpiar después de 60 segundos (más tiempo para móvil)
             setTimeout(function() {
                 clearInterval(mobileCheckInterval);
-            }, 30000);
+            }, 60000);
         }
 
         // Manejar video de batallas en vivo
