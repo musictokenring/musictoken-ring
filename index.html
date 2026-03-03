@@ -6,7 +6,7 @@
     <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
     <meta http-equiv="Pragma" content="no-cache">
     <meta http-equiv="Expires" content="0">
-    <meta name="mtr-build" content="v3.6-bet-buttons-fix">
+    <meta name="mtr-build" content="v3.7-bet-fix-urgent">
     <title>MusicToken Ring - Music Battle Arena</title>
 
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -79,7 +79,7 @@
         });
 
         var PLATFORM_WALLET_ADDRESSES = { base: window.PLATFORM_WALLET_BASE_ADDRESS || '0x75376BC58830f27415402875D26B73A6BE8E2253' };
-        window.MTR_BUILD_ID = 'v3.6-bet-buttons-fix';
+        window.MTR_BUILD_ID = 'v3.7-bet-fix-urgent';
 
         if (typeof window.selectMode !== 'function') {
             window.selectMode = function selectModeCriticalFallback(mode) {
@@ -434,10 +434,10 @@
                         <input type="number" id="betAmount" placeholder="100" min="100"
                                class="w-full px-4 py-3 rounded-lg bg-black/40 border border-white/10 text-white placeholder-gray-500 text-sm focus:outline-none focus:border-cyan-500/50 focus:ring-1 focus:ring-cyan-500/20 transition mb-3">
                         <div class="flex gap-2 mb-5" id="betAmountButtons">
-                            <button type="button" onclick="if(typeof window.quickBet==='function'){window.quickBet(100);}else{console.error('quickBet no disponible');}" class="bet-amount-btn flex-1 py-2 rounded-lg text-xs font-bold bg-white/5 border border-white/10 text-gray-300 hover:text-white hover:border-cyan-500/30 transition cursor-pointer" data-amount="100">100</button>
-                            <button type="button" onclick="if(typeof window.quickBet==='function'){window.quickBet(500);}else{console.error('quickBet no disponible');}" class="bet-amount-btn flex-1 py-2 rounded-lg text-xs font-bold bg-white/5 border border-white/10 text-gray-300 hover:text-white hover:border-cyan-500/30 transition cursor-pointer" data-amount="500">500</button>
-                            <button type="button" onclick="if(typeof window.quickBet==='function'){window.quickBet(1000);}else{console.error('quickBet no disponible');}" class="bet-amount-btn flex-1 py-2 rounded-lg text-xs font-bold bg-white/5 border border-white/10 text-gray-300 hover:text-white hover:border-cyan-500/30 transition cursor-pointer" data-amount="1000">1K</button>
-                            <button type="button" onclick="if(typeof window.quickBet==='function'){window.quickBet(5000);}else{console.error('quickBet no disponible');}" class="bet-amount-btn flex-1 py-2 rounded-lg text-xs font-bold bg-white/5 border border-white/10 text-gray-300 hover:text-white hover:border-cyan-500/30 transition cursor-pointer" data-amount="5000">5K</button>
+                            <button type="button" onclick="window.quickBet(100)" class="bet-amount-btn flex-1 py-2 rounded-lg text-xs font-bold bg-white/5 border border-white/10 text-gray-300 hover:text-white hover:border-cyan-500/30 transition cursor-pointer" data-amount="100">100</button>
+                            <button type="button" onclick="window.quickBet(500)" class="bet-amount-btn flex-1 py-2 rounded-lg text-xs font-bold bg-white/5 border border-white/10 text-gray-300 hover:text-white hover:border-cyan-500/30 transition cursor-pointer" data-amount="500">500</button>
+                            <button type="button" onclick="window.quickBet(1000)" class="bet-amount-btn flex-1 py-2 rounded-lg text-xs font-bold bg-white/5 border border-white/10 text-gray-300 hover:text-white hover:border-cyan-500/30 transition cursor-pointer" data-amount="1000">1K</button>
+                            <button type="button" onclick="window.quickBet(5000)" class="bet-amount-btn flex-1 py-2 rounded-lg text-xs font-bold bg-white/5 border border-white/10 text-gray-300 hover:text-white hover:border-cyan-500/30 transition cursor-pointer" data-amount="5000">5K</button>
                         </div>
                         <div id="actionButtons"></div>
                     </div>
@@ -966,11 +966,40 @@
         // DEFINIR quickBet TEMPRANO para que esté disponible cuando se carguen los botones
         window.quickBet = function quickBetEarly(amount) {
             console.log('[quickBetEarly] Llamado con amount:', amount);
-            // Esta función será reemplazada por la versión completa más adelante
-            var betInput = document.getElementById('betAmount');
-            if (betInput) {
-                betInput.value = amount;
-                console.log('[quickBetEarly] Valor establecido:', amount);
+            try {
+                var betInput = document.getElementById('betAmount');
+                if (betInput) {
+                    betInput.value = amount;
+                    console.log('[quickBetEarly] Valor establecido:', amount);
+                    
+                    // Feedback visual básico
+                    var betButtons = document.querySelectorAll('.bet-amount-btn');
+                    betButtons.forEach(function(btn) {
+                        btn.classList.remove('bg-cyan-500/30', 'border-cyan-500/50', 'text-white');
+                        btn.classList.add('bg-white/5', 'border-white/10', 'text-gray-300');
+                    });
+                    
+                    var clickedBtn = document.querySelector('.bet-amount-btn[data-amount="' + amount + '"]');
+                    if (clickedBtn) {
+                        clickedBtn.classList.remove('bg-white/5', 'border-white/10', 'text-gray-300');
+                        clickedBtn.classList.add('bg-cyan-500/30', 'border-cyan-500/50', 'text-white');
+                    }
+                    
+                    // Disparar eventos
+                    betInput.dispatchEvent(new Event('input', { bubbles: true }));
+                    betInput.dispatchEvent(new Event('change', { bubbles: true }));
+                    
+                    // Actualizar elegibilidad después de un pequeño delay
+                    setTimeout(function() {
+                        if (typeof updateBetEligibility === 'function') {
+                            updateBetEligibility();
+                        } else if (typeof window.updateBetEligibility === 'function') {
+                            window.updateBetEligibility();
+                        }
+                    }, 100);
+                }
+            } catch (e) {
+                console.error('[quickBetEarly] Error:', e);
             }
         };
         
@@ -1546,10 +1575,10 @@
 
         function quickBet(amount) {
             try {
-                console.log('[quickBet] Seleccionando apuesta:', amount);
+                console.log('[quickBet] ✅ Seleccionando apuesta:', amount);
                 var betInput = document.getElementById('betAmount');
                 if (!betInput) {
-                    console.error('[quickBet] Campo betAmount no encontrado');
+                    console.error('[quickBet] ❌ Campo betAmount no encontrado');
                     if (typeof showToast === 'function') {
                         showToast('Error: Campo de apuesta no encontrado', 'error');
                     }
@@ -1572,39 +1601,51 @@
                 if (clickedBtn) {
                     clickedBtn.classList.remove('bg-white/5', 'border-white/10', 'text-gray-300');
                     clickedBtn.classList.add('bg-cyan-500/30', 'border-cyan-500/50', 'text-white');
-                    console.log('[quickBet] Botón visualmente actualizado');
+                    console.log('[quickBet] ✅ Botón visualmente actualizado');
                 } else {
-                    console.warn('[quickBet] Botón con amount', amount, 'no encontrado');
+                    console.warn('[quickBet] ⚠️ Botón con amount', amount, 'no encontrado');
                 }
                 
                 // Disparar eventos para asegurar que el valor se registre
                 betInput.dispatchEvent(new Event('input', { bubbles: true }));
                 betInput.dispatchEvent(new Event('change', { bubbles: true }));
                 
-                // Pequeño delay para asegurar que el DOM se actualice
+                // Actualizar elegibilidad INMEDIATAMENTE y con delay
+                if (typeof updateBetEligibility === 'function') {
+                    updateBetEligibility();
+                } else if (typeof window.updateBetEligibility === 'function') {
+                    window.updateBetEligibility();
+                }
+                
+                // También con delay para asegurar que se actualice
                 setTimeout(function() {
-                    // Actualizar elegibilidad
                     if (typeof updateBetEligibility === 'function') {
                         updateBetEligibility();
                     } else if (typeof window.updateBetEligibility === 'function') {
                         window.updateBetEligibility();
                     }
-                    console.log('[quickBet] Elegibilidad actualizada');
-                }, 50);
+                    console.log('[quickBet] ✅ Elegibilidad actualizada (delay)');
+                    
+                    // Verificar estado del botón
+                    var startQuickBtn = document.getElementById('startQuickBtn');
+                    var startPracticeBtn = document.getElementById('startPracticeBtn');
+                    console.log('[quickBet] Estado botones - Quick:', startQuickBtn?.disabled, 'Practice:', startPracticeBtn?.disabled);
+                }, 100);
                 
-                console.log('[quickBet] ✅ Apuesta establecida correctamente:', amount);
+                console.log('[quickBet] ✅✅✅ Apuesta establecida correctamente:', amount);
             } catch (e) {
-                console.error('[quickBet] ❌ Error:', e);
+                console.error('[quickBet] ❌❌❌ Error:', e);
                 if (typeof showToast === 'function') {
                     showToast('Error al seleccionar apuesta: ' + e.message, 'error');
                 }
             }
         }
         
-        // Asegurar que quickBet esté disponible globalmente ANTES de que se carguen los botones
+        // REEMPLAZAR la función temprana con la versión completa
         window.quickBet = quickBet;
 
         function updateBetEligibility() {
+            console.log('[updateBetEligibility] ⚡ Iniciando actualización de elegibilidad...');
             var startQuickBtn = document.getElementById('startQuickBtn');
             var createSocialBtn = document.getElementById('createSocialBtn');
             var startPracticeBtn = document.getElementById('startPracticeBtn');
@@ -1613,10 +1654,21 @@
             var credits = window.CreditsSystem ? (window.CreditsSystem.currentCredits || 0) : 0;
             var bet = parseFloat(betAmountEl?.value || '0');
             
+            console.log('[updateBetEligibility] Estado actual:', {
+                selectedSong: !!selectedSong,
+                bet: bet,
+                onchainBalance: onchainBalance,
+                credits: credits,
+                currentMode: window.currentMode || currentMode
+            });
+            
             if (startQuickBtn) {
-                var canCoverBet = !!bet && onchainBalance >= bet;
-                if (startQuickBtn.dataset.baseState === 'ready') startQuickBtn.disabled = !canCoverBet;
-                startQuickBtn.title = (!canCoverBet && bet > 0) ? 'Saldo on-chain insuficiente para la apuesta' : '';
+                var canCoverBet = !!bet && bet > 0 && onchainBalance >= bet;
+                var shouldEnableQuick = !!selectedSong && canCoverBet;
+                startQuickBtn.disabled = !shouldEnableQuick;
+                startQuickBtn.title = (!shouldEnableQuick) ? 
+                    (!selectedSong ? 'Selecciona una canción primero' : (!canCoverBet ? 'Saldo on-chain insuficiente para la apuesta' : '')) : '';
+                console.log('[updateBetEligibility] Quick Match - Song:', !!selectedSong, 'Bet:', bet, 'Balance:', onchainBalance, 'CanCover:', canCoverBet, 'Enabled:', !startQuickBtn.disabled);
             }
             
             // Para desafíos sociales, verificar créditos y mínimo de 100
@@ -1648,7 +1700,7 @@
                     ? GameEngine.practiceDemoBalance 
                     : 1000; // Fallback a 1000 si no está disponible
                 var effectiveBet = bet || 100;
-                var canCoverPracticeBet = practiceBalance >= effectiveBet;
+                var canCoverPracticeBet = practiceBalance >= effectiveBet && effectiveBet > 0;
                 var shouldBeEnabled = !!selectedSong && canCoverPracticeBet;
                 
                 console.log('[updateBetEligibility] Modo práctica:', {
@@ -1656,11 +1708,13 @@
                     practiceBalance: practiceBalance,
                     GameEngineBalance: typeof GameEngine !== 'undefined' ? GameEngine.practiceDemoBalance : 'N/A',
                     effectiveBet: effectiveBet,
+                    betValue: bet,
                     canCoverPracticeBet: canCoverPracticeBet,
                     shouldBeEnabled: shouldBeEnabled
                 });
                 
                 startPracticeBtn.disabled = !shouldBeEnabled;
+                console.log('[updateBetEligibility] Practice button disabled:', startPracticeBtn.disabled);
                 
                 if (!selectedSong) {
                     startPracticeBtn.title = 'Selecciona una canción primero';
@@ -1857,7 +1911,24 @@
         }
 
         var betAmountInput = document.getElementById('betAmount');
-        if (betAmountInput) betAmountInput.addEventListener('input', updateBetEligibility);
+        if (betAmountInput) {
+            betAmountInput.addEventListener('input', function() {
+                console.log('[betAmount] Input event - valor:', betAmountInput.value);
+                if (typeof updateBetEligibility === 'function') {
+                    updateBetEligibility();
+                } else if (typeof window.updateBetEligibility === 'function') {
+                    window.updateBetEligibility();
+                }
+            });
+            betAmountInput.addEventListener('change', function() {
+                console.log('[betAmount] Change event - valor:', betAmountInput.value);
+                if (typeof updateBetEligibility === 'function') {
+                    updateBetEligibility();
+                } else if (typeof window.updateBetEligibility === 'function') {
+                    window.updateBetEligibility();
+                }
+            });
+        }
 
         window.showIncomingChallenge = showIncomingChallenge;
         window.verifyPurchasedMtrTx = verifyPurchasedMtrTx;
