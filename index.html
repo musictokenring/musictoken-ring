@@ -1535,16 +1535,25 @@
                     }
                     
                     // Método 1: Intentar usar enable() en lugar de connect()
-                    console.log('[wallet] Llamando enable()...');
-                    connectPromise = walletConnectProvider.enable({
+                    console.log('[wallet] 🚀 Llamando enable()...');
+                    
+                    // IMPORTANTE: Llamar enable() de forma asíncrona pero NO esperar a que complete
+                    // El evento display_uri debe dispararse ANTES de que enable() complete
+                    var enablePromise = walletConnectProvider.enable({
                         optionalChains: [8453, 1, 137, 56]
-                    }).then(function(accounts) {
+                    });
+                    
+                    // No esperar a que complete - el URI debe llegar antes
+                    enablePromise.then(function(accounts) {
                         console.log('[wallet] ✅ WalletConnect enable() completado, cuentas:', accounts);
                         
-                        // Verificar URI después de enable también
-                        setTimeout(function() {
-                            checkProviderURI();
-                        }, 500);
+                        // Si llegamos aquí sin haber recibido el URI, verificar manualmente
+                        if (!uriReceived) {
+                            console.log('[wallet] ⚠️ enable() completó pero no recibimos URI, verificando manualmente...');
+                            setTimeout(function() {
+                                checkProviderURI();
+                            }, 500);
+                        }
                         
                         if (qrCheckInterval) clearInterval(qrCheckInterval);
                         if (qrTimeout) clearTimeout(qrTimeout);
@@ -1557,11 +1566,15 @@
                             optionalChains: [8453, 1, 137, 56]
                         }).then(function() {
                             console.log('[wallet] ✅ WalletConnect connect() completado (fallback)');
-                            setTimeout(function() {
-                                checkProviderURI();
-                            }, 500);
+                            if (!uriReceived) {
+                                setTimeout(function() {
+                                    checkProviderURI();
+                                }, 500);
+                            }
                         });
                     });
+                    
+                    connectPromise = enablePromise;
                     
                     // Verificar URI periódicamente mientras se conecta (cada 300ms - más frecuente)
                     var uriCheckInterval = setInterval(function() {
@@ -1569,29 +1582,53 @@
                         
                         // Verificar múltiples propiedades del provider
                         try {
-                            // Verificar provider.uri directamente
-                            if (walletConnectProvider.uri) {
-                                console.log('[wallet] ✅ URI encontrado en provider.uri');
-                                displayQRCodeModal(walletConnectProvider.uri);
+                            // Método 1: Verificar provider.uri directamente
+                            if (walletConnectProvider.uri && typeof walletConnectProvider.uri === 'string' && walletConnectProvider.uri.startsWith('wc:')) {
+                                console.log('[wallet] ✅✅✅ URI encontrado en provider.uri:', walletConnectProvider.uri.substring(0, 50) + '...');
+                                handleURI(walletConnectProvider.uri);
                                 clearInterval(uriCheckInterval);
                                 return;
                             }
                             
-                            // Verificar core.pairing para obtener URI
+                            // Método 2: Verificar provider.pairingUri
+                            if (walletConnectProvider.pairingUri && typeof walletConnectProvider.pairingUri === 'string' && walletConnectProvider.pairingUri.startsWith('wc:')) {
+                                console.log('[wallet] ✅✅✅ URI encontrado en provider.pairingUri:', walletConnectProvider.pairingUri.substring(0, 50) + '...');
+                                handleURI(walletConnectProvider.pairingUri);
+                                clearInterval(uriCheckInterval);
+                                return;
+                            }
+                            
+                            // Método 3: Verificar core.pairing para obtener URI
                             if (walletConnectProvider.core && walletConnectProvider.core.pairing) {
                                 var pairings = walletConnectProvider.core.pairing.getAll();
+                                console.log('[wallet] Pairings disponibles:', pairings ? pairings.length : 0);
                                 if (pairings && pairings.length > 0) {
                                     for (var i = 0; i < pairings.length; i++) {
                                         var pairing = pairings[i];
-                                        // El URI puede estar en pairing.uri o en el topic
-                                        if (pairing.uri) {
-                                            console.log('[wallet] ✅ URI encontrado en pairing:', pairing.uri.substring(0, 50) + '...');
-                                            displayQRCodeModal(pairing.uri);
+                                        console.log('[wallet] Pairing', i, ':', pairing);
+                                        
+                                        // El URI puede estar en pairing.uri
+                                        if (pairing.uri && typeof pairing.uri === 'string' && pairing.uri.startsWith('wc:')) {
+                                            console.log('[wallet] ✅✅✅ URI encontrado en pairing.uri:', pairing.uri.substring(0, 50) + '...');
+                                            handleURI(pairing.uri);
+                                            clearInterval(uriCheckInterval);
+                                            return;
+                                        }
+                                        
+                                        // O puede estar en pairing.params.uri
+                                        if (pairing.params && pairing.params.uri && typeof pairing.params.uri === 'string' && pairing.params.uri.startsWith('wc:')) {
+                                            console.log('[wallet] ✅✅✅ URI encontrado en pairing.params.uri:', pairing.params.uri.substring(0, 50) + '...');
+                                            handleURI(pairing.params.uri);
                                             clearInterval(uriCheckInterval);
                                             return;
                                         }
                                     }
                                 }
+                            }
+                            
+                            // Método 4: Intentar acceder al signClient del core
+                            if (walletConnectProvider.core && walletConnectProvider.core.relayer) {
+                                console.log('[wallet] Core relayer disponible');
                             }
                         } catch (e) {
                             console.log('[wallet] Error al verificar URI:', e);
