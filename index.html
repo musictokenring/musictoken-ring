@@ -216,6 +216,11 @@
     <!-- ==================== MAIN ==================== -->
     <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-20">
 
+        <!-- Indicador de versión (solo visible en desarrollo/debug) -->
+        <div id="version-indicator" class="fixed bottom-2 right-2 z-40 px-2 py-1 bg-black/60 border border-cyan-500/30 rounded text-xs text-cyan-400 font-mono opacity-50 hover:opacity-100 transition">
+            v2.1-walletconnect-fix
+        </div>
+
         <!-- BATTLE ANIMATION -->
         <div id="battle-animation" class="h-96 w-full max-w-5xl mx-auto my-12 relative overflow-hidden rounded-xl border border-cyan-500/30 bg-black/40 neon-border-cyan">
             <!-- Video en loop para Batallas en vivo -->
@@ -1413,6 +1418,16 @@
                     throw connectError;
                 }
                 
+                // Contador visible para debugging en móvil
+                var timerSeconds = 0;
+                window.qrTimerInterval = setInterval(function() {
+                    timerSeconds++;
+                    var timerEl = document.getElementById('qrTimer');
+                    if (timerEl) {
+                        timerEl.textContent = 'Esperando: ' + timerSeconds + 's';
+                    }
+                }, 1000);
+                
                 // Verificar cada 500ms si el QR apareció (más frecuente)
                 qrCheckInterval = setInterval(function() {
                     var qrModal = document.getElementById('binanceQRModal');
@@ -1420,15 +1435,23 @@
                         qrShown = true;
                         clearInterval(qrCheckInterval);
                         if (qrTimeout) clearTimeout(qrTimeout);
+                        if (window.qrTimerInterval) {
+                            clearInterval(window.qrTimerInterval);
+                            window.qrTimerInterval = null;
+                        }
                         console.log('[wallet] ✅ QR code visible - cancelando timeout');
                     }
                 }, 500);
                 
-                // Timeout aumentado: si después de 15 segundos no hay QR, mostrar modal alternativo
-                qrTimeout = setTimeout(function() {
-                    if (!qrShown) {
-                        console.error('[wallet] ❌ QR no apareció después de 15 segundos - WalletConnect no funciona');
-                        if (qrCheckInterval) clearInterval(qrCheckInterval);
+                        // Timeout aumentado: si después de 15 segundos no hay QR, mostrar modal alternativo
+                        qrTimeout = setTimeout(function() {
+                            if (!qrShown) {
+                                console.error('[wallet] ❌ QR no apareció después de 15 segundos - WalletConnect no funciona');
+                                if (qrCheckInterval) clearInterval(qrCheckInterval);
+                                if (window.qrTimerInterval) {
+                                    clearInterval(window.qrTimerInterval);
+                                    window.qrTimerInterval = null;
+                                }
                         
                         // Cancelar la conexión pendiente
                         try {
@@ -1483,6 +1506,14 @@
         // Mostrar modal con QR code
         // Última actualización: 2026-03-01 - WalletConnect QR fix
         function displayQRCodeModal(uri) {
+            console.log('[wallet] 🎯 displayQRCodeModal llamado con URI:', uri ? uri.substring(0, 50) + '...' : 'null');
+            
+            // Detener cualquier timer de espera
+            if (window.qrTimerInterval) {
+                clearInterval(window.qrTimerInterval);
+                window.qrTimerInterval = null;
+            }
+            
             var qrModal = document.getElementById('binanceQRModal');
             
             if (!qrModal) {
@@ -1497,9 +1528,11 @@
                             <button onclick="closeBinanceQRModal()" class="text-gray-400 hover:text-white text-2xl leading-none">&times;</button>
                         </div>
                         <p class="text-gray-400 text-sm mb-4 text-center">Escanea este código QR con Binance Wallet</p>
-                        <div id="qrCodeContainer" class="flex justify-center mb-4 p-4 bg-white rounded-lg min-h-[256px] relative">
-                            <div id="qrLoadingSpinner" class="flex items-center justify-center absolute inset-0">
-                                <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-cyan-500"></div>
+                        <div id="qrCodeContainer" class="flex flex-col items-center justify-center mb-4 p-4 bg-white rounded-lg min-h-[256px] relative">
+                            <div id="qrLoadingSpinner" class="flex flex-col items-center justify-center absolute inset-0">
+                                <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-cyan-500 mb-2"></div>
+                                <p class="text-gray-600 text-xs mt-2">Generando QR code...</p>
+                                <p id="qrTimer" class="text-gray-500 text-xs mt-1">Esperando: 0s</p>
                             </div>
                         </div>
                         <button onclick="openBinanceApp()" class="w-full mb-4 px-4 py-3 bg-yellow-500 hover:bg-yellow-600 text-black font-semibold rounded-lg transition flex items-center justify-center gap-2">
@@ -1525,7 +1558,21 @@
             }
             
             // Actualizar URI
-            document.getElementById('walletConnectURI').value = uri;
+            var uriInput = document.getElementById('walletConnectURI');
+            if (uriInput) {
+                uriInput.value = uri;
+            }
+            
+            // Detener timer de espera si existe
+            if (window.qrTimerInterval) {
+                clearInterval(window.qrTimerInterval);
+                window.qrTimerInterval = null;
+            }
+            
+            // Mostrar toast de éxito
+            if (typeof showToast === 'function') {
+                showToast('✅ QR code generado correctamente', 'success');
+            }
             
             // Generar QR code
             var qrContainer = document.getElementById('qrCodeContainer');
@@ -1554,6 +1601,10 @@
                             qrContainer.innerHTML = '<img src="' + qrImageUrl + '" alt="QR Code" class="w-72 h-72 mx-auto rounded-lg">';
                         } else {
                             console.log('[wallet] ✅ QR code generated successfully');
+                            // Mostrar toast cuando el QR está listo
+                            if (typeof showToast === 'function') {
+                                showToast('QR listo - Escanea con Binance Wallet', 'success');
+                            }
                             // Agregar logo de Binance en el centro del QR (opcional, como Aerodrome)
                             var ctx = qrCanvas.getContext('2d');
                             var logoSize = 50;
