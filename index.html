@@ -49,7 +49,7 @@
             SUPABASE_URL: 'https://bscmgcnynbxalcuwdqlm.supabase.co',
             SUPABASE_ANON_KEY: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJzY21nY255bmJ4YWxjdXdkcWxtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzA0NTYwOTUsImV4cCI6MjA4NjAzMjA5NX0.1iasFQ5H0GmrFqi6poWNE1aZOtbmQuB113RCyg2BBK4',
             BATTLE_DURATION: 60,
-            BACKEND_API: 'https://musictoken-backend.onrender.com',
+            BACKEND_API: 'https://musictoken-ring.onrender.com',
             MTR_TOKEN_ADDRESS: window.MTR_TOKEN_ADDRESS || '0x99cd1eb32846c9027ed9cb8710066fa08791c33b',
             WALLETCONNECT_PROJECT_ID: 'ed97c5607e9ee5748e9b519a33830e04' // Project ID real de WalletConnect
         };
@@ -1420,11 +1420,22 @@
         // Cargar balance del vault públicamente
         async function loadPublicVaultBalance() {
             try {
-                const backendUrl = window.CONFIG?.BACKEND_API || 'https://musictoken-backend.onrender.com';
-                const response = await fetch(`${backendUrl}/api/vault/balance`);
+                const backendUrl = window.CONFIG?.BACKEND_API || 'https://musictoken-ring.onrender.com';
+                console.log('[vault] Loading vault balance from:', backendUrl);
+                
+                const response = await fetch(`${backendUrl}/api/vault/balance`, {
+                    method: 'GET',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    }
+                });
+                
+                console.log('[vault] Response status:', response.status);
                 
                 if (response.ok) {
                     const data = await response.json();
+                    console.log('[vault] Vault data received:', data);
+                    
                     const balance = data.balance || 0;
                     const vaultAddress = data.vaultAddress;
                     const baseScanUrl = data.baseScanUrl;
@@ -1434,7 +1445,7 @@
 
                     if (vaultBalanceEl) {
                         vaultBalanceEl.textContent = balance.toFixed(2) + ' USDC';
-                        vaultBalanceEl.classList.remove('text-gray-400');
+                        vaultBalanceEl.classList.remove('text-gray-400', 'text-red-400', 'text-gray-500');
                         vaultBalanceEl.classList.add('text-cyan-400');
                     }
 
@@ -1443,20 +1454,48 @@
                             vaultLinkEl.href = baseScanUrl;
                         } else if (vaultAddress) {
                             vaultLinkEl.href = `https://basescan.org/address/${vaultAddress}`;
+                        } else {
+                            vaultLinkEl.style.display = 'none';
                         }
                     }
                 } else {
+                    // Intentar obtener el mensaje de error
+                    let errorMessage = 'No disponible';
+                    try {
+                        const errorData = await response.json();
+                        errorMessage = errorData.error || `Error ${response.status}`;
+                        console.error('[vault] Backend error:', errorMessage);
+                    } catch (e) {
+                        errorMessage = `Error ${response.status}`;
+                    }
+                    
                     const vaultBalanceEl = document.getElementById('publicVaultBalance');
                     if (vaultBalanceEl) {
-                        vaultBalanceEl.textContent = 'No disponible';
+                        vaultBalanceEl.textContent = errorMessage;
+                        vaultBalanceEl.classList.remove('text-cyan-400', 'text-red-400');
                         vaultBalanceEl.classList.add('text-gray-500');
                     }
                 }
             } catch (error) {
                 console.error('[vault] Error loading public vault balance:', error);
+                console.error('[vault] Error details:', {
+                    message: error.message,
+                    stack: error.stack,
+                    name: error.name
+                });
+                
                 const vaultBalanceEl = document.getElementById('publicVaultBalance');
                 if (vaultBalanceEl) {
-                    vaultBalanceEl.textContent = 'Error al cargar';
+                    // Mostrar mensaje más descriptivo
+                    let errorMsg = 'Error al cargar';
+                    if (error.message.includes('Failed to fetch') || error.message.includes('NetworkError')) {
+                        errorMsg = 'Backend no disponible';
+                    } else if (error.message) {
+                        errorMsg = 'Error: ' + error.message.substring(0, 30);
+                    }
+                    
+                    vaultBalanceEl.textContent = errorMsg;
+                    vaultBalanceEl.classList.remove('text-cyan-400', 'text-gray-500');
                     vaultBalanceEl.classList.add('text-red-400');
                 }
             }

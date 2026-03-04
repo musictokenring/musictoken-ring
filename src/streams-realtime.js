@@ -20,7 +20,7 @@
             apiEndpoints: {
                 deezer: 'https://api.deezer.com',
                 twitch: null, // TODO: Add Twitch API endpoint
-                backend: window.CONFIG?.BACKEND_API || 'https://musictoken-backend.onrender.com'
+                backend: window.CONFIG?.BACKEND_API || 'https://musictoken-ring.onrender.com'
             }
         },
 

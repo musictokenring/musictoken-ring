@@ -117,7 +117,7 @@
          */
         async checkRecentDeposits(walletAddress) {
             try {
-                const backendUrl = window.CONFIG?.BACKEND_API || 'https://musictoken-backend.onrender.com';
+                const backendUrl = window.CONFIG?.BACKEND_API || 'https://musictoken-ring.onrender.com';
                 const response = await fetch(`${backendUrl}/api/deposits/${walletAddress}`);
                 
                 if (response.ok) {

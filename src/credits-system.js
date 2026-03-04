@@ -7,7 +7,7 @@
     'use strict';
 
     const CreditsSystem = {
-        backendUrl: window.CONFIG?.BACKEND_API || 'https://musictoken-backend.onrender.com',
+        backendUrl: window.CONFIG?.BACKEND_API || 'https://musictoken-ring.onrender.com',
         currentCredits: 0,
         currentUsdcValue: 0,
         currentRate: 778,
