@@ -15,9 +15,26 @@ const { createClient } = require('@supabase/supabase-js');
 const app = express();
 const PORT = process.env.PORT || 3001;
 
-// Middleware
-app.use(cors());
+// Middleware - CORS configuration
+const corsOptions = {
+    origin: [
+        'https://www.musictokenring.xyz',
+        'https://musictokenring.xyz',
+        'http://localhost:3000',
+        'http://localhost:8080',
+        'http://127.0.0.1:5500',
+        'http://127.0.0.1:3000'
+    ],
+    credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
+};
+
+app.use(cors(corsOptions));
 app.use(express.json());
+
+// Handle preflight requests
+app.options('*', cors(corsOptions));
 
 // Supabase client
 const SUPABASE_URL = process.env.SUPABASE_URL || 'https://bscmgcnynbxalcuwdqlm.supabase.co';
@@ -305,7 +322,11 @@ app.post('/api/user/add-credits', async (req, res) => {
 app.get('/api/vault/balance', async (req, res) => {
     try {
         if (!vaultService) {
-            return res.status(503).json({ error: 'Vault service not initialized' });
+            console.error('[server] Vault service not initialized');
+            return res.status(503).json({ 
+                error: 'Vault service not initialized',
+                message: 'El servicio del vault no está disponible. Verifica que las variables de entorno estén configuradas.'
+            });
         }
 
         const balance = await vaultService.getVaultBalance();
@@ -315,13 +336,17 @@ app.get('/api/vault/balance', async (req, res) => {
             balance: balance,
             stats: stats,
             vaultAddress: process.env.VAULT_WALLET_ADDRESS || process.env.ADMIN_WALLET_ADDRESS,
-            baseScanUrl: process.env.VAULT_WALLET_ADDRESS 
+            baseScanUrl: process.env.VAULT_WALLET_ADDRESS
                 ? `https://basescan.org/address/${process.env.VAULT_WALLET_ADDRESS}`
                 : null
         });
     } catch (error) {
         console.error('[server] Error getting vault balance:', error);
-        res.status(500).json({ error: error.message });
+        console.error('[server] Error stack:', error.stack);
+        res.status(500).json({ 
+            error: error.message,
+            details: 'Error al obtener balance del vault. Verifica que la migración SQL se haya ejecutado correctamente.'
+        });
     }
 });
 
@@ -386,7 +411,38 @@ app.get('/api/health', (req, res) => {
             claimService: claimService ? true : false,
             vaultService: vaultService ? true : false
         },
-        timestamp: new Date().toISOString()
+        timestamp: new Date().toISOString(),
+        cors: 'enabled'
+    });
+});
+
+/**
+ * Root endpoint - helps verify server is running
+ */
+app.get('/', (req, res) => {
+    res.json({
+        message: 'MusicToken Ring Backend API',
+        version: '2.0',
+        endpoints: {
+            health: '/api/health',
+            vaultBalance: '/api/vault/balance',
+            userCredits: '/api/user/credits/:walletAddress',
+            deposits: '/api/deposits/:walletAddress',
+            claims: '/api/claims/:walletAddress',
+            price: '/api/price'
+        }
+    });
+});
+
+/**
+ * 404 handler for API routes
+ */
+app.use('/api/*', (req, res) => {
+    res.status(404).json({
+        error: 'Endpoint not found',
+        path: req.path,
+        method: req.method,
+        message: 'El endpoint solicitado no existe. Verifica la URL.'
     });
 });
 
