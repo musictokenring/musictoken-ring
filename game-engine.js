@@ -1064,7 +1064,11 @@ const GameEngine = {
                 console.log('[startPracticeMatch] Obteniendo canción del CPU...');
                 cpuSong = await Promise.race([
                     this.fetchCpuOpponentByElo(userSong),
-                    new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout obteniendo canción CPU')), 15000)) // Aumentado a 15s
+                    new Promise((_, reject) => {
+                        setTimeout(() => {
+                            reject(new Error('Timeout obteniendo canción CPU'));
+                        }, 20000); // Aumentado a 20s para evitar timeouts prematuros
+                    })
                 ]);
 
                 if (!cpuSong || !cpuSong.id) {

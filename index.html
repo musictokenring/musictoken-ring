@@ -69,6 +69,20 @@
         }
         var __mtrMetaMaskToastShown = false;
         window.addEventListener('unhandledrejection', function (event) {
+            // Ignorar errores de extensiones del navegador (content.js)
+            if (event.reason && typeof event.reason === 'object') {
+                const errorMessage = event.reason.message || event.reason.toString() || '';
+                const errorStack = event.reason.stack || '';
+                
+                // Ignorar errores de timeouts de extensiones
+                if (errorMessage.includes('Timeout exceeded') && 
+                    (errorStack.includes('content.js') || errorMessage.includes('content.js'))) {
+                    console.warn('[extensions] Error de extensión del navegador ignorado:', errorMessage);
+                    event.preventDefault();
+                    return;
+                }
+            }
+            
             if (!isMetaMaskUnavailableError(event.reason)) return;
             event.preventDefault();
             if (__mtrMetaMaskToastShown) return;
@@ -76,6 +90,16 @@
             console.warn('[wallet] MetaMask no disponible.');
             setTimeout(function () { __mtrMetaMaskToastShown = false; }, 5000);
             if (typeof showToast === 'function') showToast('MetaMask no está disponible. Instala la extensión para conectar tu wallet.', 'error');
+        });
+        
+        // Manejar errores generales de extensiones
+        window.addEventListener('error', function (event) {
+            // Ignorar errores de content.js (extensiones del navegador)
+            if (event.filename && event.filename.includes('content.js')) {
+                console.warn('[extensions] Error de extensión del navegador ignorado:', event.message);
+                event.preventDefault();
+                return;
+            }
         });
 
         var PLATFORM_WALLET_ADDRESSES = { base: window.PLATFORM_WALLET_BASE_ADDRESS || '0x75376BC58830f27415402875D26B73A6BE8E2253' };
@@ -1327,11 +1351,12 @@
                     try {
                         var resp = await Promise.race([
                             supabaseClient.auth.getSession(),
-                            new Promise((_, reject) => setTimeout(() => reject(new Error('Session timeout')), 5000))
+                            new Promise((_, reject) => setTimeout(() => reject(new Error('Session timeout')), 10000)) // Aumentado a 10s
                         ]);
                         session = resp?.data?.session;
                     } catch (sessionError) {
                         // Continuar sin sesión si hay error
+                        console.warn('[init] Session timeout o error (continuando sin sesión):', sessionError.message);
                     }
                 }
                 
@@ -2348,7 +2373,7 @@
                 
                 var balance = await Promise.race([
                     balancePromise,
-                    new Promise((_, reject) => setTimeout(() => reject(new Error('Balance timeout')), 5000))
+                    new Promise((_, reject) => setTimeout(() => reject(new Error('Balance timeout')), 10000)) // Aumentado a 10s
                 ]);
                 
                 var numericBalance = Number(formatUnits(balance, 18));
