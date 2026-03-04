@@ -50,37 +50,65 @@ END $$;
 -- 2. CREATE RLS POLICIES FOR USERS TABLE
 -- ==========================================
 
--- Users can only see their own user record
+-- Users can view their own user record by wallet address
+-- Note: public.users.id is UUID, not linked to auth.users.id directly
+-- We match by wallet_address instead
 CREATE POLICY "Users can view own user record" ON public.users
     FOR SELECT
-    USING (auth.uid()::text = id::text OR wallet_address = (SELECT wallet_address FROM public.users WHERE id = auth.uid()::uuid));
+    USING (
+        wallet_address IN (
+            SELECT raw_user_meta_data->>'wallet_address'::text 
+            FROM auth.users 
+            WHERE id = auth.uid()
+        )
+        OR wallet_address IN (
+            SELECT email FROM auth.users WHERE id = auth.uid()
+        )
+        OR EXISTS (
+            SELECT 1 FROM auth.users 
+            WHERE id = auth.uid() 
+            AND (raw_user_meta_data->>'wallet_address' = users.wallet_address 
+                 OR email = users.wallet_address)
+        )
+    );
 
 -- Users can insert their own user record
 CREATE POLICY "Users can insert own user record" ON public.users
     FOR INSERT
-    WITH CHECK (auth.uid()::text = id::text OR wallet_address IN (
-        SELECT wallet_address FROM auth.users WHERE id = auth.uid()
-    ));
+    WITH CHECK (
+        wallet_address IN (
+            SELECT COALESCE(raw_user_meta_data->>'wallet_address', email)::text 
+            FROM auth.users 
+            WHERE id = auth.uid()
+        )
+    );
 
 -- Users can update their own user record
 CREATE POLICY "Users can update own user record" ON public.users
     FOR UPDATE
-    USING (auth.uid()::text = id::text OR wallet_address IN (
-        SELECT wallet_address FROM auth.users WHERE id = auth.uid()
-    ));
+    USING (
+        wallet_address IN (
+            SELECT COALESCE(raw_user_meta_data->>'wallet_address', email)::text 
+            FROM auth.users 
+            WHERE id = auth.uid()
+        )
+    );
 
 -- ==========================================
 -- 3. CREATE RLS POLICIES FOR USER_CREDITS TABLE
 -- ==========================================
 
 -- Users can only view their own credits
+-- Match by wallet_address from auth.users metadata
 CREATE POLICY "Users can view own credits" ON public.user_credits
     FOR SELECT
     USING (
         user_id IN (
             SELECT id FROM public.users 
             WHERE wallet_address IN (
-                SELECT wallet_address FROM auth.users WHERE id = auth.uid()
+                SELECT COALESCE(raw_user_meta_data->>'wallet_address', email)::text 
+                FROM auth.users 
+                WHERE id = auth.uid()
             )
         )
     );
@@ -101,7 +129,7 @@ CREATE POLICY "Users can view own deposits" ON public.deposits
         user_id IN (
             SELECT id FROM public.users 
             WHERE wallet_address IN (
-                SELECT wallet_address FROM auth.users WHERE id = auth.uid()
+                SELECT COALESCE(raw_user_meta_data->>'wallet_address', email)::text FROM auth.users WHERE id = auth.uid()
             )
         )
     );
@@ -122,7 +150,7 @@ CREATE POLICY "Users can view own claims" ON public.claims
         user_id IN (
             SELECT id FROM public.users 
             WHERE wallet_address IN (
-                SELECT wallet_address FROM auth.users WHERE id = auth.uid()
+                SELECT COALESCE(raw_user_meta_data->>'wallet_address', email)::text FROM auth.users WHERE id = auth.uid()
             )
         )
     );
@@ -134,7 +162,7 @@ CREATE POLICY "Users can insert own claims" ON public.claims
         user_id IN (
             SELECT id FROM public.users 
             WHERE wallet_address IN (
-                SELECT wallet_address FROM auth.users WHERE id = auth.uid()
+                SELECT COALESCE(raw_user_meta_data->>'wallet_address', email)::text FROM auth.users WHERE id = auth.uid()
             )
         )
     );
@@ -183,7 +211,7 @@ CREATE POLICY "Users can view own match wins" ON public.match_wins
         user_id IN (
             SELECT id FROM public.users 
             WHERE wallet_address IN (
-                SELECT wallet_address FROM auth.users WHERE id = auth.uid()
+                SELECT COALESCE(raw_user_meta_data->>'wallet_address', email)::text FROM auth.users WHERE id = auth.uid()
             )
         )
     );
@@ -244,9 +272,17 @@ END $$;
 -- 12. FIX VIEWS EXPOSING auth.users DATA
 -- ==========================================
 
--- Drop problematic views if they exist
-DROP VIEW IF EXISTS public.user_stats_extended CASCADE;
-DROP VIEW IF EXISTS public.user_stats CASCADE;
+-- Drop problematic views if they exist (drop policies first if they exist)
+DO $$
+BEGIN
+    -- Drop policies if they exist
+    DROP POLICY IF EXISTS "Users can view own stats" ON public.user_stats;
+    DROP POLICY IF EXISTS "Users can view own extended stats" ON public.user_stats_extended;
+    
+    -- Drop views
+    DROP VIEW IF EXISTS public.user_stats_extended CASCADE;
+    DROP VIEW IF EXISTS public.user_stats CASCADE;
+END $$;
 
 -- Recreate user_stats view WITHOUT exposing auth.users directly
 -- Only show data from public.users table
@@ -280,14 +316,18 @@ GRANT SELECT ON public.user_stats_extended TO authenticated, anon;
 -- 13. CREATE RLS POLICIES FOR VIEWS
 -- ==========================================
 
+-- Enable RLS on views (views can have RLS policies in PostgreSQL)
+-- Note: RLS on views works differently - we need to ensure the underlying tables have RLS
+
 -- Users can only see their own stats
+-- This policy ensures users can only see their own data through the view
 CREATE POLICY "Users can view own stats" ON public.user_stats
     FOR SELECT
     USING (
         id IN (
             SELECT id FROM public.users 
             WHERE wallet_address IN (
-                SELECT wallet_address FROM auth.users WHERE id = auth.uid()
+                SELECT COALESCE(raw_user_meta_data->>'wallet_address', email)::text FROM auth.users WHERE id = auth.uid()
             )
         )
     );
@@ -299,7 +339,7 @@ CREATE POLICY "Users can view own extended stats" ON public.user_stats_extended
         id IN (
             SELECT id FROM public.users 
             WHERE wallet_address IN (
-                SELECT wallet_address FROM auth.users WHERE id = auth.uid()
+                SELECT COALESCE(raw_user_meta_data->>'wallet_address', email)::text FROM auth.users WHERE id = auth.uid()
             )
         )
     );
