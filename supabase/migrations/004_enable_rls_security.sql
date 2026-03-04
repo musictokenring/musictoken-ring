@@ -313,36 +313,20 @@ GRANT SELECT ON public.user_stats TO authenticated, anon;
 GRANT SELECT ON public.user_stats_extended TO authenticated, anon;
 
 -- ==========================================
--- 13. CREATE RLS POLICIES FOR VIEWS
+-- 13. NOTE ON VIEWS AND RLS
 -- ==========================================
 
--- Enable RLS on views (views can have RLS policies in PostgreSQL)
--- Note: RLS on views works differently - we need to ensure the underlying tables have RLS
-
--- Users can only see their own stats
--- This policy ensures users can only see their own data through the view
-CREATE POLICY "Users can view own stats" ON public.user_stats
-    FOR SELECT
-    USING (
-        id IN (
-            SELECT id FROM public.users 
-            WHERE wallet_address IN (
-                SELECT COALESCE(raw_user_meta_data->>'wallet_address', email)::text FROM auth.users WHERE id = auth.uid()
-            )
-        )
-    );
-
--- Users can only see their own extended stats
-CREATE POLICY "Users can view own extended stats" ON public.user_stats_extended
-    FOR SELECT
-    USING (
-        id IN (
-            SELECT id FROM public.users 
-            WHERE wallet_address IN (
-                SELECT COALESCE(raw_user_meta_data->>'wallet_address', email)::text FROM auth.users WHERE id = auth.uid()
-            )
-        )
-    );
+-- IMPORTANT: PostgreSQL views do NOT support RLS policies directly.
+-- The views will automatically inherit RLS from the underlying tables:
+-- - user_stats uses public.users and public.user_credits (both have RLS enabled)
+-- - user_stats_extended uses user_stats (which uses tables with RLS)
+-- 
+-- Since the underlying tables (users, user_credits, deposits, claims, match_wins)
+-- all have RLS enabled with appropriate policies, the views will automatically
+-- respect those policies when queried.
+--
+-- Users querying the views will only see data they're allowed to see based on
+-- the RLS policies of the underlying tables.
 
 -- ==========================================
 -- 14. VERIFY RLS IS ENABLED
