@@ -1385,7 +1385,7 @@ const GameEngine = {
         }
 
         // Calcular ganancias correctamente: pozo total - fee 2%
-        const totalPot = match.total_pot || (normalizedBet * 2);
+        const totalPot = match.total_pot || (match.player1_bet * 2);
         const payouts = this.calculateMatchPayouts(totalPot);
         
         if (userWon) {
@@ -1393,6 +1393,26 @@ const GameEngine = {
             const winnings = payouts.winnerPayout;
             this.setPracticeDemoBalance(this.practiceDemoBalance + winnings);
             console.log(`[practice] User won! Pozo: ${totalPot}, Fee (2%): ${payouts.platformFee}, Ganancia: +${winnings} MTR demo`);
+            
+            // Actualizar mensaje de victoria con ganancia real
+            if (statusEl) {
+                const isMobile = typeof window !== 'undefined' && (
+                    /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) ||
+                    (window.innerWidth <= 768) ||
+                    (typeof isMobileDevice === 'function' && isMobileDevice())
+                );
+                const textSize = isMobile ? 'text-base sm:text-lg' : 'text-xl sm:text-2xl';
+                const paddingSize = isMobile ? 'py-3 px-3' : 'py-4 px-6';
+                
+                statusEl.innerHTML = `<div class="inline-block ${paddingSize} rounded-2xl bg-gradient-to-r from-cyan-500/20 to-cyan-600/20 border-2 border-cyan-400/50 shadow-2xl animate-pulse">
+                    <span class="${textSize} text-cyan-300 font-black drop-shadow-lg" style="text-shadow: 0 0 20px rgba(0,243,255,0.8);">
+                        🏆 ¡VICTORIA! 🏆
+                    </span>
+                    <div class="mt-2 ${isMobile ? 'text-sm' : 'text-base'} text-cyan-200 font-bold">
+                        Tu canción gana +${winnings} MTR demo
+                    </div>
+                   </div>`;
+            }
         } else {
             console.log('[practice] CPU won - No ganancias');
         }
