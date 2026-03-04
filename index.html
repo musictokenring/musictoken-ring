@@ -2351,17 +2351,19 @@
                     onchain.textContent = formatted;
                     console.log('[refreshMtrBalance] Balance actualizado en UI:', formatted);
                 }
-                // Si estamos en modo práctica, actualizar el display del balance demo
+                // SIEMPRE actualizar el header con balance real, incluso en modo práctica
+                if (typeof GameEngine !== 'undefined' && typeof GameEngine.updateBalanceDisplay === 'function') {
+                    GameEngine.updateBalanceDisplay();
+                }
+                
+                // Si estamos en modo práctica, también actualizar el display del balance demo
                 if (isPracticeMode && typeof GameEngine !== 'undefined' && typeof GameEngine.updatePracticeBetDisplay === 'function') {
                     GameEngine.updatePracticeBetDisplay();
                 }
+                
                 // Actualizar elegibilidad de apuestas
                 if (typeof window.updateBetEligibility === 'function') {
                     window.updateBetEligibility();
-                }
-                // Actualizar display de balance normal si no es práctica
-                if (!isPracticeMode && typeof GameEngine !== 'undefined' && typeof GameEngine.updateBalanceDisplay === 'function') {
-                    GameEngine.updateBalanceDisplay();
                 }
             } catch (e) {
                 // Silenciar errores para no bloquear la página
@@ -2404,6 +2406,11 @@
                 if (creditsDisplay) creditsDisplay.classList.add('hidden');
                 window.__mtrOnChainBalance = 0;
                 setOnchainBalanceError('Wallet no conectada');
+                
+                // SIEMPRE actualizar header con balance real (0 cuando no hay wallet)
+                if (typeof GameEngine !== 'undefined' && typeof GameEngine.updateBalanceDisplay === 'function') {
+                    GameEngine.updateBalanceDisplay();
+                }
                 
                 // Stop credits updates
                 if (window.CreditsSystem && typeof window.CreditsSystem.stopPeriodicUpdates === 'function') {

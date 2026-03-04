@@ -160,19 +160,15 @@ const GameEngine = {
                 console.error('[updatePracticeBetDisplay] onchainMtrBalance no encontrado en el DOM');
             }
             
-            // NO actualizar appBalanceDisplay con balance de práctica - mantener balance real
-            // El balance de práctica solo se muestra en la sección de práctica, no en el header
+            // NO actualizar appBalanceDisplay con balance de práctica - SIEMPRE mantener balance real
+            // El balance de práctica solo se muestra en la sección de práctica, NUNCA en el header
             const appBalanceDisplay = document.getElementById('appBalanceDisplay');
             if (appBalanceDisplay) {
-                // En modo práctica, mostrar que es balance de práctica o mantener balance real
+                // SIEMPRE mostrar balance real (on-chain), incluso si es 0
                 const onChainBalance = Number(window.__mtrOnChainBalance || 0);
-                if (onChainBalance > 0) {
-                    appBalanceDisplay.textContent = `Jugable: ${onChainBalance.toLocaleString('es-ES')} MTR`;
-                    appBalanceDisplay.style.color = '';
-                } else {
-                    appBalanceDisplay.textContent = `Práctica: ${formattedBalance} MTR`;
-                    appBalanceDisplay.style.color = '#8b5cf6';
-                }
+                appBalanceDisplay.textContent = `Jugable: ${onChainBalance.toLocaleString('es-ES')} MTR`;
+                appBalanceDisplay.style.color = '';
+                console.log('[updatePracticeBetDisplay] Header actualizado con balance real:', onChainBalance, '(NO balance de práctica)');
             }
             
         } else {
@@ -253,22 +249,23 @@ const GameEngine = {
         // Verificar si estamos en modo práctica
         const isPracticeMode = typeof window !== 'undefined' && window.currentMode === 'practice';
         
-        // NO actualizar estos elementos si estamos en modo práctica (dejar que updatePracticeBetDisplay lo maneje)
+        // SIEMPRE actualizar appBalanceDisplay con balance REAL (on-chain), incluso en modo práctica
+        // El header siempre debe mostrar el balance real de la wallet, nunca el balance de práctica
+        const onChainBalance = Number(window.__mtrOnChainBalance || 0);
+        const balanceEl = document.getElementById('appBalanceDisplay');
+        if (balanceEl) {
+            // SIEMPRE mostrar balance real, incluso si es 0
+            balanceEl.textContent = `Jugable: ${onChainBalance.toLocaleString('es-ES')} MTR`;
+            balanceEl.style.color = '';
+            console.log('[updateBalanceDisplay] Header actualizado con balance REAL:', onChainBalance, '(modo práctica:', isPracticeMode, ')');
+        }
+        
+        // NO actualizar userBalance si estamos en modo práctica (dejar que updatePracticeBetDisplay lo maneje)
         if (!isPracticeMode) {
             // Para modo normal, usar saldo on-chain si está disponible, sino usar userBalance
-            const onChainBalance = Number(window.__mtrOnChainBalance || 0);
             const playableBalance = onChainBalance > 0 ? onChainBalance : this.userBalance;
             
             console.log('[updateBalanceDisplay] Modo normal - Balance jugable:', playableBalance, 'On-chain:', onChainBalance, 'User:', this.userBalance);
-            
-            const balanceEl = document.getElementById('appBalanceDisplay');
-            if (balanceEl) {
-                balanceEl.textContent = `Jugable: ${playableBalance.toLocaleString('es-ES')} MTR`;
-                balanceEl.style.color = '';
-                console.log('[updateBalanceDisplay] appBalanceDisplay actualizado a', playableBalance);
-            } else {
-                console.warn('[updateBalanceDisplay] appBalanceDisplay no encontrado');
-            }
 
             const userBalanceEl = document.getElementById('userBalance');
             if (userBalanceEl) {
