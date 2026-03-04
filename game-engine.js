@@ -160,11 +160,19 @@ const GameEngine = {
                 console.error('[updatePracticeBetDisplay] onchainMtrBalance no encontrado en el DOM');
             }
             
-            // También actualizar el display de "Jugable" en el header
+            // NO actualizar appBalanceDisplay con balance de práctica - mantener balance real
+            // El balance de práctica solo se muestra en la sección de práctica, no en el header
             const appBalanceDisplay = document.getElementById('appBalanceDisplay');
             if (appBalanceDisplay) {
-                appBalanceDisplay.textContent = `Jugable: ${formattedBalance} MTR`;
-                appBalanceDisplay.style.color = '#8b5cf6';
+                // En modo práctica, mostrar que es balance de práctica o mantener balance real
+                const onChainBalance = Number(window.__mtrOnChainBalance || 0);
+                if (onChainBalance > 0) {
+                    appBalanceDisplay.textContent = `Jugable: ${onChainBalance.toLocaleString('es-ES')} MTR`;
+                    appBalanceDisplay.style.color = '';
+                } else {
+                    appBalanceDisplay.textContent = `Práctica: ${formattedBalance} MTR`;
+                    appBalanceDisplay.style.color = '#8b5cf6';
+                }
             }
             
         } else {
@@ -1376,15 +1384,19 @@ const GameEngine = {
             }, 300); // Pequeño delay para que el mensaje se renderice
         }
 
+        // Calcular ganancias correctamente: pozo total - fee 2%
+        const totalPot = match.total_pot || (normalizedBet * 2);
+        const payouts = this.calculateMatchPayouts(totalPot);
+        
         if (userWon) {
-            this.setPracticeDemoBalance(this.practiceDemoBalance + 50);
-            console.log('[practice] User won! +50 MTR demo');
+            // Agregar ganancias calculadas (pozo - fee) al balance de práctica
+            const winnings = payouts.winnerPayout;
+            this.setPracticeDemoBalance(this.practiceDemoBalance + winnings);
+            console.log(`[practice] User won! Pozo: ${totalPot}, Fee (2%): ${payouts.platformFee}, Ganancia: +${winnings} MTR demo`);
         } else {
-            console.log('[practice] CPU won');
+            console.log('[practice] CPU won - No ganancias');
         }
         this.updatePracticeBetDisplay();
-
-        var payouts = { platformFee: 0, winnerPayout: userWon ? 50 : 0 };
         var self = this;
         setTimeout(function () {
             self.showVictoryScreen(match, winner, userWon, payouts);
@@ -2381,8 +2393,12 @@ const GameEngine = {
             await this.logPlatformFeeTransaction(match.id, payouts.platformFee);
         } else {
             if (userWon) {
-                // En práctica, solo actualizar balance demo local
-                this.setPracticeDemoBalance(this.practiceDemoBalance + 50);
+                // En práctica, calcular ganancias correctamente: pozo total - fee 2%
+                const totalPot = match.total_pot || 0;
+                const practicePayouts = this.calculateMatchPayouts(totalPot);
+                const winnings = practicePayouts.winnerPayout;
+                this.setPracticeDemoBalance(this.practiceDemoBalance + winnings);
+                console.log(`[practice] User won! Pozo: ${totalPot}, Fee (2%): ${practicePayouts.platformFee}, Ganancia: +${winnings} MTR demo`);
                 this.updatePracticeBetDisplay();
             }
         }
