@@ -57,18 +57,12 @@ CREATE POLICY "Users can view own user record" ON public.users
     FOR SELECT
     USING (
         wallet_address IN (
-            SELECT raw_user_meta_data->>'wallet_address'::text 
+            SELECT COALESCE(
+                raw_user_meta_data->>'wallet_address',
+                email
+            )::text 
             FROM auth.users 
             WHERE id = auth.uid()
-        )
-        OR wallet_address IN (
-            SELECT email FROM auth.users WHERE id = auth.uid()
-        )
-        OR EXISTS (
-            SELECT 1 FROM auth.users 
-            WHERE id = auth.uid() 
-            AND (raw_user_meta_data->>'wallet_address' = users.wallet_address 
-                 OR email = users.wallet_address)
         )
     );
 
@@ -126,11 +120,11 @@ CREATE POLICY "Service role can manage credits" ON public.user_credits
 CREATE POLICY "Users can view own deposits" ON public.deposits
     FOR SELECT
     USING (
-        user_id IN (
-            SELECT id FROM public.users 
-            WHERE wallet_address IN (
-                SELECT COALESCE(raw_user_meta_data->>'wallet_address', email)::text FROM auth.users WHERE id = auth.uid()
-            )
+        EXISTS (
+            SELECT 1 FROM public.users u
+            JOIN auth.users au ON COALESCE(au.raw_user_meta_data->>'wallet_address', au.email)::text = u.wallet_address
+            WHERE u.id = deposits.user_id
+            AND au.id = auth.uid()
         )
     );
 
@@ -147,11 +141,11 @@ CREATE POLICY "Service role can manage deposits" ON public.deposits
 CREATE POLICY "Users can view own claims" ON public.claims
     FOR SELECT
     USING (
-        user_id IN (
-            SELECT id FROM public.users 
-            WHERE wallet_address IN (
-                SELECT COALESCE(raw_user_meta_data->>'wallet_address', email)::text FROM auth.users WHERE id = auth.uid()
-            )
+        EXISTS (
+            SELECT 1 FROM public.users u
+            JOIN auth.users au ON COALESCE(au.raw_user_meta_data->>'wallet_address', au.email)::text = u.wallet_address
+            WHERE u.id = claims.user_id
+            AND au.id = auth.uid()
         )
     );
 
@@ -159,11 +153,11 @@ CREATE POLICY "Users can view own claims" ON public.claims
 CREATE POLICY "Users can insert own claims" ON public.claims
     FOR INSERT
     WITH CHECK (
-        user_id IN (
-            SELECT id FROM public.users 
-            WHERE wallet_address IN (
-                SELECT COALESCE(raw_user_meta_data->>'wallet_address', email)::text FROM auth.users WHERE id = auth.uid()
-            )
+        EXISTS (
+            SELECT 1 FROM public.users u
+            JOIN auth.users au ON COALESCE(au.raw_user_meta_data->>'wallet_address', au.email)::text = u.wallet_address
+            WHERE u.id = claims.user_id
+            AND au.id = auth.uid()
         )
     );
 
@@ -208,11 +202,11 @@ CREATE POLICY "Service role can manage rate changes" ON public.rate_changes
 CREATE POLICY "Users can view own match wins" ON public.match_wins
     FOR SELECT
     USING (
-        user_id IN (
-            SELECT id FROM public.users 
-            WHERE wallet_address IN (
-                SELECT COALESCE(raw_user_meta_data->>'wallet_address', email)::text FROM auth.users WHERE id = auth.uid()
-            )
+        EXISTS (
+            SELECT 1 FROM public.users u
+            JOIN auth.users au ON COALESCE(au.raw_user_meta_data->>'wallet_address', au.email)::text = u.wallet_address
+            WHERE u.id = match_wins.user_id
+            AND au.id = auth.uid()
         )
     );
 
