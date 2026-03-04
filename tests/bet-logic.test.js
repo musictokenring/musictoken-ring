@@ -4,7 +4,7 @@
  */
 
 describe('Betting Logic Tests', () => {
-    const minBet = 100; // Minimum bet in MTR
+    const minBet = 5; // Minimum bet in créditos
 
     describe('Minimum Bet Validation', () => {
         test('should reject bets below 100 MTR', () => {
@@ -174,8 +174,8 @@ describe('Error Handling', () => {
         const invalidBets = [0, -10, 'invalid', null, undefined];
         
         invalidBets.forEach(bet => {
-            const normalized = Math.max(100, Math.round(bet || 100));
-            expect(normalized).toBeGreaterThanOrEqual(100);
+            const normalized = Math.max(5, Math.round(bet || 5));
+            expect(normalized).toBeGreaterThanOrEqual(5);
         });
     });
 

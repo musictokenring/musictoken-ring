@@ -186,7 +186,7 @@
 
         function testMinBet() {
             const betAmount = parseInt(document.getElementById('betAmount').value);
-            const minBet = GameEngine.minBet || 100;
+            const minBet = GameEngine.minBet || 5;
             
             if (betAmount < minBet) {
                 showResult('betResult', 
@@ -333,7 +333,7 @@
             }
 
             // GameEngine
-            status.push(`✅ GameEngine minBet: ${GameEngine.minBet || 100} MTR`);
+            status.push(`✅ GameEngine minBet: ${GameEngine.minBet || 5} créditos`);
 
             showResult('statusResult', status.join('<br>'), 'info');
         }

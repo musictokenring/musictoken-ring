@@ -147,9 +147,9 @@
          */
         async claimCredits(credits, walletAddress) {
             try {
-                if (!credits || credits < 100) {
+                if (!credits || credits < minClaim) {
                     if (typeof showToast === 'function') {
-                        showToast('Mínimo 100 créditos para reclamar', 'error');
+                        showToast('Mínimo 5 créditos para reclamar', 'error');
                     }
                     return null;
                 }

@@ -434,9 +434,9 @@
                         <input type="number" id="betAmount" placeholder="5" min="5"
                                class="w-full px-4 py-3 rounded-lg bg-black/40 border border-white/10 text-white placeholder-gray-500 text-sm focus:outline-none focus:border-cyan-500/50 focus:ring-1 focus:ring-cyan-500/20 transition mb-3">
                         <div class="flex gap-2 mb-5" id="betAmountButtons">
-                            <button type="button" onclick="window.quickBet(100)" class="bet-amount-btn flex-1 py-2 rounded-lg text-xs font-bold bg-white/5 border border-white/10 text-gray-300 hover:text-white hover:border-cyan-500/30 transition cursor-pointer" data-amount="100">100</button>
+                            <button type="button" onclick="window.quickBet(5)" class="bet-amount-btn flex-1 py-2 rounded-lg text-xs font-bold bg-white/5 border border-white/10 text-gray-300 hover:text-white hover:border-cyan-500/30 transition cursor-pointer" data-amount="5">5</button>
+                            <button type="button" onclick="window.quickBet(50)" class="bet-amount-btn flex-1 py-2 rounded-lg text-xs font-bold bg-white/5 border border-white/10 text-gray-300 hover:text-white hover:border-cyan-500/30 transition cursor-pointer" data-amount="50">50</button>
                             <button type="button" onclick="window.quickBet(500)" class="bet-amount-btn flex-1 py-2 rounded-lg text-xs font-bold bg-white/5 border border-white/10 text-gray-300 hover:text-white hover:border-cyan-500/30 transition cursor-pointer" data-amount="500">500</button>
-                            <button type="button" onclick="window.quickBet(1000)" class="bet-amount-btn flex-1 py-2 rounded-lg text-xs font-bold bg-white/5 border border-white/10 text-gray-300 hover:text-white hover:border-cyan-500/30 transition cursor-pointer" data-amount="1000">1K</button>
                             <button type="button" onclick="window.quickBet(5000)" class="bet-amount-btn flex-1 py-2 rounded-lg text-xs font-bold bg-white/5 border border-white/10 text-gray-300 hover:text-white hover:border-cyan-500/30 transition cursor-pointer" data-amount="5000">5K</button>
                         </div>
                         <div id="actionButtons"></div>
@@ -2160,7 +2160,7 @@
         // Manejar aceptación de desafío cuando se selecciona canción
         async function handleSocialChallengeAccept() {
             if (window.pendingChallengeId && selectedSong) {
-                var bet = parseFloat(document.getElementById('betAmount').value) || 100;
+                var bet = parseFloat(document.getElementById('betAmount').value) || 5;
                 if (typeof GameEngine !== 'undefined' && typeof GameEngine.acceptSocialChallenge === 'function') {
                     await GameEngine.acceptSocialChallenge(window.pendingChallengeId, selectedSong, bet);
                     window.pendingChallengeId = null; // Limpiar después de aceptar
@@ -2171,7 +2171,7 @@
             if (!selectedSong) return;
             var tournamentId = document.getElementById('tournamentId').value;
             if (!tournamentId) { showToast('Ingresa el ID del torneo', 'error'); return; }
-            var bet = parseInt(document.getElementById('betAmount').value) || 100;
+            var bet = parseInt(document.getElementById('betAmount').value) || 5;
             if (typeof GameEngine !== 'undefined') await GameEngine.joinTournament(tournamentId, selectedSong, bet);
             else showToast('Modo torneo en desarrollo', 'info');
         }

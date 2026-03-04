@@ -329,7 +329,7 @@ const GameEngine = {
     // ==========================================
     
     async joinQuickMatch(song, betAmount) {
-        // Validate minimum bet (100 credits)
+        // Validate minimum bet (MIN_BET_AMOUNT créditos)
         const normalizedBet = Math.max(this.minBet, Math.round(betAmount || this.minBet));
         if (normalizedBet < this.minBet) {
             showToast(`Apuesta mínima: ${this.minBet} créditos`, 'error');
@@ -819,7 +819,7 @@ const GameEngine = {
     // ==========================================
     
     async createPrivateRoom(song, betAmount) {
-        // Validate minimum bet (100 MTR)
+        // Validate minimum bet (MIN_BET_AMOUNT créditos)
         const normalizedBet = Math.max(this.minBet, Math.round(betAmount || this.minBet));
         if (normalizedBet < this.minBet) {
             showToast(`Apuesta mínima: ${this.minBet} MTR`, 'error');
@@ -3221,7 +3221,7 @@ const GameEngine = {
             return null;
         }
 
-        // Validate amount (minimum 100 MTR for payout)
+        // Validate amount (minimum MIN_BET_AMOUNT créditos for payout)
         const normalizedAmount = Math.max(this.minBet, Math.round(amountMtr));
         if (normalizedAmount < this.minBet) {
             console.error('[prize] Amount below minimum:', normalizedAmount);
