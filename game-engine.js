@@ -1050,15 +1050,18 @@ const GameEngine = {
             console.log('[startPracticeMatch] Balance actualizado');
             let cpuSong;
             try {
+                console.log('[startPracticeMatch] Obteniendo canción del CPU...');
                 cpuSong = await Promise.race([
                     this.fetchCpuOpponentByElo(userSong),
-                    new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout')), 10000))
+                    new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout obteniendo canción CPU')), 15000)) // Aumentado a 15s
                 ]);
-                
+
                 if (!cpuSong || !cpuSong.id) {
                     throw new Error('CPU song fetch returned invalid result');
                 }
+                console.log('[startPracticeMatch] ✅ Canción CPU obtenida:', cpuSong.name);
             } catch (cpuError) {
+                console.warn('[startPracticeMatch] ⚠️ Error obteniendo canción CPU, usando fallback:', cpuError.message);
                 // Fallback: usar una canción genérica
                 cpuSong = {
                     id: `cpu_fallback_${Date.now()}`,
@@ -1067,6 +1070,7 @@ const GameEngine = {
                     image: userSong.image || 'https://via.placeholder.com/500x500.png?text=CPU+Rival',
                     preview: userSong.preview || ''
                 };
+                console.log('[startPracticeMatch] ✅ Usando canción fallback para CPU');
             }
 
             let match = null;

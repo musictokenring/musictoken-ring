@@ -215,7 +215,7 @@
                 const response = await fetch(backendUrl, {
                     method: 'GET',
                     headers: { 'Content-Type': 'application/json' },
-                    signal: AbortSignal.timeout(5000) // 5s timeout
+                    signal: AbortSignal.timeout(10000) // 10s timeout (aumentado de 5s)
                 });
 
                 if (!response.ok) {
