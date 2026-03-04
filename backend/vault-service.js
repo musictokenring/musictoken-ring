@@ -65,12 +65,36 @@ class VaultService {
     async getVaultBalance() {
         try {
             // Get from database
-            const { data: dbBalance } = await supabase
+            const { data: dbBalance, error: dbError } = await supabase
                 .from('vault_balance')
                 .select('balance_usdc')
                 .order('last_updated', { ascending: false })
                 .limit(1)
                 .single();
+
+            // Si la tabla no existe, crear registro inicial
+            if (dbError && dbError.code === 'PGRST116') {
+                console.warn('[vault-service] vault_balance table not found, creating initial record');
+                const { error: insertError } = await supabase
+                    .from('vault_balance')
+                    .insert([{
+                        balance_usdc: 0,
+                        last_updated: new Date().toISOString(),
+                        updated_by: 'system'
+                    }]);
+                
+                if (insertError) {
+                    console.error('[vault-service] Error creating initial vault balance:', insertError);
+                    return 0;
+                }
+                
+                return 0; // Retornar 0 si es la primera vez
+            }
+
+            if (dbError) {
+                console.error('[vault-service] Error getting vault balance from DB:', dbError);
+                return 0;
+            }
 
             let dbBalanceValue = dbBalance?.balance_usdc || 0;
 

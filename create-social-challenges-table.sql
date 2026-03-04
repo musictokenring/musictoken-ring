@@ -8,7 +8,7 @@ CREATE TABLE IF NOT EXISTS social_challenges (
     challenger_song_artist TEXT NOT NULL,
     challenger_song_image TEXT,
     challenger_song_preview TEXT,
-    bet_amount DECIMAL(10, 2) NOT NULL CHECK (bet_amount >= 100),
+    bet_amount DECIMAL(10, 2) NOT NULL CHECK (bet_amount >= 5),
     status VARCHAR(20) NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'accepted', 'expired', 'cancelled')),
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     expires_at TIMESTAMPTZ NOT NULL,
@@ -52,5 +52,5 @@ $$ LANGUAGE plpgsql;
 -- Comentarios
 COMMENT ON TABLE social_challenges IS 'Desafíos sociales entre usuarios';
 COMMENT ON COLUMN social_challenges.challenge_id IS 'ID único público del desafío (12 caracteres)';
-COMMENT ON COLUMN social_challenges.bet_amount IS 'Apuesta mínima: 100 créditos';
+COMMENT ON COLUMN social_challenges.bet_amount IS 'Apuesta mínima: 5 créditos (~$5 USDC)';
 COMMENT ON COLUMN social_challenges.expires_at IS 'Fecha de expiración del desafío (7 días por defecto)';

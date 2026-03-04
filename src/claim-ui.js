@@ -37,7 +37,7 @@
                         </div>
 
                         <div class="flex flex-col sm:flex-row gap-3 mb-4">
-                            <input id="claimCreditsAmount" type="number" min="100" placeholder="Mínimo 100 créditos"
+                            <input id="claimCreditsAmount" type="number" min="5" placeholder="Mínimo 5 créditos (~$5)"
                                    class="flex-1 px-4 py-3 rounded-lg bg-black/40 border border-white/10 text-white placeholder-gray-500 text-sm focus:outline-none focus:border-fuchsia-500/50 focus:ring-1 focus:ring-fuchsia-500/20 transition">
                             <button type="button" onclick="ClaimUI.processClaim()" 
                                     class="px-6 py-3 rounded-lg text-sm font-bold bg-gradient-to-r from-fuchsia-500 to-purple-600 text-white hover:opacity-90 transition-all shadow-lg shadow-fuchsia-500/20 cursor-pointer whitespace-nowrap">
@@ -107,9 +107,10 @@
                     return;
                 }
 
-                if (!credits || credits < 100) {
+                const minClaim = 5; // Mínimo para reclamar (mismo que apuesta mínima)
+                if (!credits || credits < minClaim) {
                     if (typeof showToast === 'function') {
-                        showToast('Mínimo 100 créditos para reclamar', 'error');
+                        showToast(`Mínimo ${minClaim} créditos para reclamar`, 'error');
                     }
                     return;
                 }

@@ -364,7 +364,7 @@
                 <div class="group p-6 rounded-2xl border border-orange-500/15 bg-gray-900/50 transition-all duration-300 card-glow-orange cursor-pointer" onclick="selectMode('social')">
                     <div class="text-4xl mb-4">⚔️</div>
                     <h3 class="text-lg font-bold text-white mb-2 group-hover:text-orange-400 transition-colors">Desafío Social</h3>
-                    <p class="text-gray-400 text-sm mb-4">Desafía a un amigo por redes sociales. Mínimo 100 créditos.</p>
+                    <p class="text-gray-400 text-sm mb-4">Desafía a un amigo por redes sociales. Mínimo 5 créditos (~$5).</p>
                     <div class="flex flex-wrap gap-1.5 mb-5">
                         <span class="text-xs px-2 py-1 rounded-full bg-orange-500/10 text-orange-400 border border-orange-500/20">📱 Redes</span>
                         <span class="text-xs px-2 py-1 rounded-full bg-orange-500/10 text-orange-400 border border-orange-500/20">💯 100+</span>
@@ -429,9 +429,9 @@
                         <div class="grid grid-cols-2 gap-3 text-sm text-gray-400 mb-4">
                             <span><span id="balanceLabel">Tu MTR (on-chain)</span>: <strong id="onchainMtrBalance" class="text-white">--</strong></span>
                             <span>Jugable: <strong id="userBalance" class="text-white">0</strong> MTR</span>
-                            <span>Mínimo: <strong id="minBet" class="text-white">100</strong> MTR</span>
+                            <span>Mínimo: <strong id="minBet" class="text-white">5</strong> créditos</span>
                         </div>
-                        <input type="number" id="betAmount" placeholder="100" min="100"
+                        <input type="number" id="betAmount" placeholder="5" min="5"
                                class="w-full px-4 py-3 rounded-lg bg-black/40 border border-white/10 text-white placeholder-gray-500 text-sm focus:outline-none focus:border-cyan-500/50 focus:ring-1 focus:ring-cyan-500/20 transition mb-3">
                         <div class="flex gap-2 mb-5" id="betAmountButtons">
                             <button type="button" onclick="window.quickBet(100)" class="bet-amount-btn flex-1 py-2 rounded-lg text-xs font-bold bg-white/5 border border-white/10 text-gray-300 hover:text-white hover:border-cyan-500/30 transition cursor-pointer" data-amount="100">100</button>
@@ -731,6 +731,12 @@
                 
                 // Actualizar elegibilidad
                 setTimeout(function() {
+                    // Actualizar display del mínimo dinámicamente
+                    const minBetEl = document.getElementById('minBet');
+                    if (minBetEl && typeof GameEngine !== 'undefined' && GameEngine.minBet) {
+                        minBetEl.textContent = GameEngine.minBet;
+                    }
+                    
                     if (typeof window.updateBetEligibility === 'function') {
                         window.updateBetEligibility();
                     } else if (typeof updateBetEligibility === 'function') {
@@ -1769,7 +1775,9 @@
                 // Asegurar que el campo de apuesta tenga un valor por defecto
                 var betAmountInput = document.getElementById('betAmount');
                 if (betAmountInput && !betAmountInput.value) {
-                    betAmountInput.value = '100';
+                    // Usar mínimo dinámico desde GameEngine si está disponible, sino 5
+                    const minBet = (typeof GameEngine !== 'undefined' && GameEngine.minBet) ? GameEngine.minBet : 5;
+                    betAmountInput.value = String(minBet);
                 }
                 
                 // FORZAR carga y actualización del balance demo
@@ -1942,12 +1950,13 @@
                 console.log('[updateBetEligibility] Quick Match - Song:', !!selectedSong, 'Bet:', bet, 'Balance:', onchainBalance, 'CanCover:', canCoverBet, 'Enabled:', !startQuickBtn.disabled);
             }
             
-            // Para desafíos sociales, verificar créditos y mínimo de 100
+            // Para desafíos sociales, verificar créditos y mínimo dinámico
+            const minBetAmount = (typeof GameEngine !== 'undefined' && GameEngine.minBet) ? GameEngine.minBet : 5;
             if (createSocialBtn) {
-                var canCoverSocialBet = !!bet && bet >= 100 && credits >= bet;
+                var canCoverSocialBet = !!bet && bet >= minBetAmount && credits >= bet;
                 createSocialBtn.disabled = !canCoverSocialBet || !selectedSong;
                 createSocialBtn.title = (!canCoverSocialBet && bet > 0) ? 
-                    (bet < 100 ? 'Apuesta mínima: 100 créditos' : 'Créditos insuficientes') : '';
+                    (bet < minBetAmount ? `Apuesta mínima: ${minBetAmount} créditos` : 'Créditos insuficientes') : '';
             }
             
             // Para modo práctica, habilitar cuando hay canción seleccionada
@@ -1970,7 +1979,8 @@
                 var practiceBalance = (typeof GameEngine !== 'undefined' && GameEngine.practiceDemoBalance > 0) 
                     ? GameEngine.practiceDemoBalance 
                     : 1000; // Fallback a 1000 si no está disponible
-                var effectiveBet = bet || 100;
+                // Modo práctica: sin mínimo, acepta cualquier apuesta (incluso 0)
+                var effectiveBet = bet || 0;
                 var canCoverPracticeBet = practiceBalance >= effectiveBet && effectiveBet > 0;
                 var shouldBeEnabled = !!selectedSong && canCoverPracticeBet;
                 
@@ -2003,7 +2013,8 @@
                 console.error('[startQuickMatch] ❌ No hay canción seleccionada');
                 return;
             }
-            var bet = parseInt(document.getElementById('betAmount').value) || 100;
+            const minBetAmount = (typeof GameEngine !== 'undefined' && GameEngine.minBet) ? GameEngine.minBet : 5;
+            var bet = parseInt(document.getElementById('betAmount').value) || minBetAmount;
             if (Number(window.__mtrOnChainBalance || 0) < bet) { 
                 showToast('Saldo on-chain insuficiente', 'error'); 
                 updateBetEligibility(); 
@@ -2022,14 +2033,16 @@
         window.startQuickMatch = startQuickMatch;
         async function createRoom() {
             if (!selectedSong) return;
-            var bet = parseInt(document.getElementById('betAmount').value) || 100;
+            const minBetAmount = (typeof GameEngine !== 'undefined' && GameEngine.minBet) ? GameEngine.minBet : 5;
+            var bet = parseInt(document.getElementById('betAmount').value) || minBetAmount;
             if (typeof GameEngine !== 'undefined') await GameEngine.createPrivateRoom(selectedSong, bet);
             else showToast('GameEngine no está cargado', 'error');
         }
         async function joinRoom() {
             if (!selectedSong) return;
             var roomCode = document.getElementById('joinRoomCode').value.toUpperCase();
-            var bet = parseInt(document.getElementById('betAmount').value) || 100;
+            const minBetAmount = (typeof GameEngine !== 'undefined' && GameEngine.minBet) ? GameEngine.minBet : 5;
+            var bet = parseInt(document.getElementById('betAmount').value) || minBetAmount;
             if (typeof GameEngine !== 'undefined') await GameEngine.joinPrivateRoom(roomCode, selectedSong, bet);
             else showToast('GameEngine no está cargado', 'error');
         }
@@ -2061,7 +2074,8 @@
             }
             
             var betInput = document.getElementById('betAmount');
-            var demoBet = betInput ? parseInt(betInput.value) || 100 : 100;
+            // Modo práctica: sin mínimo, acepta cualquier apuesta (incluso 0)
+            var demoBet = betInput ? parseInt(betInput.value) || 0 : 0;
             
             console.log('[startPractice] Iniciando práctica con:', {
                 song: selectedSong.name,
@@ -2101,9 +2115,10 @@
 
         async function createSocialChallenge() {
             if (!selectedSong) { showToast('Selecciona una canción primero', 'error'); return; }
-            var bet = parseFloat(document.getElementById('betAmount').value) || 100;
-            if (bet < 100) {
-                showToast('La apuesta mínima para desafíos sociales es 100 créditos', 'error');
+            const minBetAmount = (typeof GameEngine !== 'undefined' && GameEngine.minBet) ? GameEngine.minBet : 5;
+            var bet = parseFloat(document.getElementById('betAmount').value) || minBetAmount;
+            if (bet < minBetAmount) {
+                showToast(`La apuesta mínima para desafíos sociales es ${minBetAmount} créditos`, 'error');
                 return;
             }
             if (typeof GameEngine !== 'undefined') await GameEngine.createSocialChallenge(selectedSong, bet);

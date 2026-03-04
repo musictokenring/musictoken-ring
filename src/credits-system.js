@@ -104,7 +104,7 @@
          * Update bet eligibility based on credits
          */
         updateBetEligibility() {
-            const minBet = 100; // Minimum bet in credits
+            const minBet = typeof MIN_BET_AMOUNT !== 'undefined' ? MIN_BET_AMOUNT : (typeof GameEngine !== 'undefined' ? GameEngine.minBet : 5); // Minimum bet in credits (5)
             const canBet = this.currentCredits >= minBet;
 
             // Enable/disable bet buttons

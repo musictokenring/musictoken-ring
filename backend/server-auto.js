@@ -181,8 +181,9 @@ app.post('/api/claim', async (req, res) => {
             return res.status(400).json({ error: 'Missing required parameters' });
         }
 
-        if (credits < 100) {
-            return res.status(400).json({ error: 'Minimum claim: 100 credits' });
+        const MIN_CLAIM_AMOUNT = 5; // Mínimo para reclamar (mismo que apuesta mínima)
+        if (credits < MIN_CLAIM_AMOUNT) {
+            return res.status(400).json({ error: `Minimum claim: ${MIN_CLAIM_AMOUNT} credits` });
         }
 
         const result = await claimService.processClaim(userId, credits, walletAddress);

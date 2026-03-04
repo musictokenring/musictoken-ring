@@ -3,12 +3,16 @@
 // Sistema completo funcional con todos los modos
 // =========================================
 
+// Constante global para mínimo de apuesta (aplica a todos los modos con apuesta real)
+const MIN_BET_AMOUNT = 5; // créditos (~$5 USDC, ya que créditos son estables 1:1)
+const MIN_BET_TORNEO = 5; // mismo mínimo para Torneo (puede ajustarse después si se desea)
+
 const GameEngine = {
     currentMatch: null,
     currentMode: null,
     currentUserId: null,
     userBalance: 0,
-    minBet: 100,
+    minBet: MIN_BET_AMOUNT, // Usar constante global
     battleDuration: 60,
     victoryAudioDuration: 15,
     platformFeeRate: 0.3,
@@ -233,7 +237,8 @@ const GameEngine = {
                 .single();
             
             if (data) {
-                this.minBet = data.min_bet;
+                // Mantener minBet desde config si existe, sino usar constante global
+                this.minBet = data.min_bet || MIN_BET_AMOUNT;
                 this.battleDuration = data.battle_duration;
                 this.victoryAudioDuration = data.victory_audio_duration;
                 if (data.platform_fee_rate) this.platformFeeRate = data.platform_fee_rate;
@@ -530,10 +535,10 @@ const GameEngine = {
     // ==========================================
     
     async createSocialChallenge(song, betAmount) {
-        // Validar apuesta mínima (100 créditos)
-        const normalizedBet = Math.max(100, Math.round(betAmount || 100));
-        if (normalizedBet < 100) {
-            showToast('Apuesta mínima: 100 créditos', 'error');
+        // Validar apuesta mínima (MIN_BET_AMOUNT créditos)
+        const normalizedBet = Math.max(MIN_BET_AMOUNT, Math.round(betAmount || MIN_BET_AMOUNT));
+        if (normalizedBet < MIN_BET_AMOUNT) {
+            showToast(`Apuesta mínima: ${MIN_BET_AMOUNT} créditos`, 'error');
             return;
         }
         
@@ -1021,7 +1026,7 @@ const GameEngine = {
     // MODO PRÁCTICA (Practice)
     // ==========================================
     
-    async startPracticeMatch(userSong, demoBet = 100) {
+    async startPracticeMatch(userSong, demoBet = 0) {
         console.log('[startPracticeMatch] ✅ INICIANDO práctica');
         console.log('[startPracticeMatch] Parámetros:', { userSong, demoBet });
         
@@ -1040,7 +1045,8 @@ const GameEngine = {
                 localStorage.setItem('mtr_practice_demo_balance', String(this.practiceDemoBalance));
             }
 
-            const normalizedBet = Math.max(this.minBet, Math.round(demoBet || this.minBet));
+            // Modo práctica: sin mínimo, acepta cualquier apuesta (incluso 0)
+            const normalizedBet = Math.max(0, Math.round(demoBet || 0));
             console.log('[startPracticeMatch] Apuesta normalizada:', normalizedBet, 'Balance demo:', this.practiceDemoBalance);
             
             if (normalizedBet > this.practiceDemoBalance) {
@@ -3528,7 +3534,7 @@ if (typeof window !== 'undefined') {
     }
 
     function fallbackBetAmount() {
-        return Number(document.getElementById('betAmount')?.value || 100);
+        return Number(document.getElementById('betAmount')?.value || MIN_BET_AMOUNT);
     }
 
     function updateActionButtonsFallback(mode) {
