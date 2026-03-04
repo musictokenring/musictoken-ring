@@ -10,9 +10,6 @@ const { base } = require('viem/chains');
 const { createClient } = require('@supabase/supabase-js');
 const { VaultService } = require('./vault-service');
 
-// Fix: Ensure ADMIN_WALLET is set from env
-const ADMIN_WALLET = process.env.ADMIN_WALLET_ADDRESS;
-
 const SUPABASE_URL = process.env.SUPABASE_URL || 'https://bscmgcnynbxalcuwdqlm.supabase.co';
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const USDC_ADDRESS = process.env.USDC_ADDRESS || '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913';
