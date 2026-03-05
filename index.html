@@ -13,22 +13,40 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
 
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script>
-        tailwind.config = {
-            theme: {
-                extend: {
-                    fontFamily: { sans: ['Inter', 'system-ui', 'sans-serif'] }
+    <!-- Tailwind CSS - Cargar con defer para no bloquear renderizado -->
+    <script src="https://cdn.tailwindcss.com" defer></script>
+    <script defer>
+        // Tailwind config se aplicará cuando el script cargue
+        if (typeof tailwind !== 'undefined') {
+            tailwind.config = {
+                theme: {
+                    extend: {
+                        fontFamily: { sans: ['Inter', 'system-ui', 'sans-serif'] }
+                    }
                 }
-            }
-        };
+            };
+        } else {
+            // Si tailwind aún no está cargado, esperar
+            document.addEventListener('DOMContentLoaded', function() {
+                if (typeof tailwind !== 'undefined') {
+                    tailwind.config = {
+                        theme: {
+                            extend: {
+                                fontFamily: { sans: ['Inter', 'system-ui', 'sans-serif'] }
+                            }
+                        }
+                    };
+                }
+            });
+        }
     </script>
 
     <link rel="icon" type="image/png" href="https://pink-blank-vicuna-260.mypinata.cloud/ipfs/bafybeie24pisqmw6teijdng4flzjwumgwpesilowjxq3kww3p7kxlmuywm">
 
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <!-- QR Code Generator para WalletConnect -->
-    <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
+    <!-- Supabase - Crítico, cargar primero pero sin bloquear -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2" defer></script>
+    <!-- QR Code Generator para WalletConnect - No crítico para render inicial -->
+    <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js" defer></script>
     <!-- Polyfills necesarios para WalletConnect v2 -->
     <script>
         // Polyfill para 'process' que WalletConnect necesita
@@ -37,12 +55,12 @@
         }
     </script>
     
-    <!-- Web3Modal v2 - Similar a como lo usa Aerodrome Finance -->
-    <script src="https://cdn.jsdelivr.net/npm/@web3modal/standalone@2.7.1/dist/index.umd.js"></script>
+    <!-- Web3Modal v2 - Cargar con defer (no crítico para render inicial) -->
+    <script src="https://cdn.jsdelivr.net/npm/@web3modal/standalone@2.7.1/dist/index.umd.js" defer></script>
     
-    <!-- WalletConnect v2 Core SDK -->
-    <script src="https://cdn.jsdelivr.net/npm/@walletconnect/core@2.14.0/dist/index.umd.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@walletconnect/ethereum-provider@2.23.6/dist/index.umd.js"></script>
+    <!-- WalletConnect v2 Core SDK - Cargar con defer -->
+    <script src="https://cdn.jsdelivr.net/npm/@walletconnect/core@2.14.0/dist/index.umd.js" defer></script>
+    <script src="https://cdn.jsdelivr.net/npm/@walletconnect/ethereum-provider@2.23.6/dist/index.umd.js" defer></script>
 
     <script>
         const CONFIG = {
@@ -712,14 +730,17 @@
     <div id="toastContainer" class="fixed top-20 right-4 z-[200] flex flex-col gap-2"></div>
 
     <!-- ==================== SCRIPTS ==================== -->
+    <!-- Scripts críticos para funcionalidad básica - mantener sin defer -->
     <script src="./auth-system.js?v=v2.7"></script>
-    <script src="./src/streams-realtime.js?v=v2.7"></script>
     <script src="./src/credits-system.js?v=v2.7"></script>
     <script src="./src/wallet-credits-integration.js?v=v2.7"></script>
-    <script src="./src/deposit-ui.js?v=v2.7"></script>
-    <script src="./src/ramp-integration.js?v=v2.7"></script>
-    <script src="./src/claim-ui.js?v=v2.7"></script>
-    <script src="./game-engine.js?v=v2.7"></script>
+    
+    <!-- Scripts que pueden cargarse después del render inicial -->
+    <script src="./src/streams-realtime.js?v=v2.7" defer></script>
+    <script src="./src/deposit-ui.js?v=v2.7" defer></script>
+    <script src="./src/ramp-integration.js?v=v2.7" defer></script>
+    <script src="./src/claim-ui.js?v=v2.7" defer></script>
+    <script src="./game-engine.js?v=v2.7" defer></script>
     <script>window.MTR_INLINE_TOP_STREAMS_ACTIVE = true;</script>
     <!-- DEFINIR quickBet INMEDIATAMENTE - ANTES DE CUALQUIER OTRO SCRIPT -->
     <script>
@@ -915,7 +936,8 @@
             var random = Math.random();
             var script = document.createElement('script');
             script.src = './app.js?v=v3.3&nocache=' + timestamp + '&r=' + random;
-            script.async = false; // Cargar síncronamente para asegurar orden
+            script.async = true; // Cargar asíncronamente para no bloquear renderizado
+            script.defer = true; // Ejecutar después de que el HTML esté parseado
             script.onload = function() {
                 console.log('[SUCCESS] ✅ app.js v3.3 cargado');
                 console.log('[CHECK] window.selectSongForBattle:', typeof window.selectSongForBattle);
@@ -2294,8 +2316,8 @@
         // selectSongForBattle ya está asignado arriba directamente a window
     </script>
 
-    <!-- VIEM WALLET MODULE -->
-    <script type="module">
+    <!-- VIEM WALLET MODULE - Cargar con defer para no bloquear -->
+    <script type="module" defer>
         import { createPublicClient, createWalletClient, custom, http, formatUnits, isAddress, getAddress } from 'https://esm.sh/viem@2';
         import { base } from 'https://esm.sh/viem@2/chains';
 
