@@ -242,25 +242,25 @@
     <!-- ==================== HEADER ==================== -->
     <header class="sticky top-0 z-50 border-b border-white/5" style="background: rgba(3,7,18,0.85); backdrop-filter: blur(16px);">
         <div class="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8">
-            <div class="flex items-center justify-between h-16 gap-2">
-                <div class="flex items-center gap-2 sm:gap-3 min-w-0 flex-shrink">
+            <div class="flex items-center justify-between h-16 gap-2 min-w-0">
+                <div class="flex items-center gap-2 sm:gap-3 flex-shrink-0">
                     <img src="https://pink-blank-vicuna-260.mypinata.cloud/ipfs/bafybeiah2fffgw6y6aomfx5b5pgav7wedo3qdtqxqteg2glvmgzs6fpivu" alt="MTR" class="w-7 h-7 sm:w-9 sm:h-9 rounded-full ring-2 ring-cyan-500/30 flex-shrink-0" onerror="this.style.display='none'">
-                    <span class="text-base sm:text-xl lg:text-2xl font-extrabold text-cyan-400 neon-text-cyan tracking-tight truncate">MusicToken Ring</span>
+                    <span class="text-base sm:text-xl lg:text-2xl font-extrabold text-cyan-400 neon-text-cyan tracking-tight whitespace-nowrap">MusicToken Ring</span>
                 </div>
 
-                <div class="flex items-center gap-1.5 sm:gap-2 lg:gap-4 text-sm flex-shrink-0">
-                    <span id="onchainBalanceDisplay" class="hidden sm:inline px-2 py-1 rounded-md bg-cyan-500/10 text-cyan-400 text-xs font-semibold">On-chain: --</span>
-                    <span id="creditsCombinedDisplay" class="hidden sm:inline px-2 py-1 rounded-md bg-fuchsia-500/10 text-fuchsia-400 text-xs font-semibold flex items-center gap-2">
+                <div class="flex items-center gap-1.5 sm:gap-2 lg:gap-4 text-sm flex-shrink min-w-0 overflow-x-auto">
+                    <span id="onchainBalanceDisplay" class="hidden sm:inline px-2 py-1 rounded-md bg-cyan-500/10 text-cyan-400 text-xs font-semibold whitespace-nowrap">On-chain: --</span>
+                    <span id="creditsCombinedDisplay" class="hidden sm:inline px-2 py-1 rounded-md bg-fuchsia-500/10 text-fuchsia-400 text-xs font-semibold flex items-center gap-2 whitespace-nowrap">
                         <span id="creditsDisplay">0 créditos</span>
                         <span id="usdcValueDisplay" class="text-gray-400">≈ $0 USDC</span>
                     </span>
-                    <span id="appBalanceDisplay" class="hidden sm:inline px-2 py-1 rounded-md bg-fuchsia-500/10 text-fuchsia-400 text-xs font-semibold">Jugable: --</span>
-                    <span id="walletAddress" class="hidden text-cyan-300 font-mono text-xs bg-cyan-500/10 px-2 py-1 rounded-md"></span>
-                    <button type="button" id="walletConnectBtn" class="px-2.5 sm:px-4 py-2 rounded-lg text-xs sm:text-sm font-semibold bg-cyan-500/10 border border-cyan-500/30 text-cyan-400 hover:bg-cyan-500/20 transition-all duration-200 cursor-pointer whitespace-nowrap">
+                    <span id="appBalanceDisplay" class="hidden sm:inline px-2 py-1 rounded-md bg-fuchsia-500/10 text-fuchsia-400 text-xs font-semibold whitespace-nowrap">Jugable: --</span>
+                    <span id="walletAddress" class="hidden text-cyan-300 font-mono text-xs bg-cyan-500/10 px-2 py-1 rounded-md whitespace-nowrap"></span>
+                    <button type="button" id="walletConnectBtn" class="px-2.5 sm:px-4 py-2 rounded-lg text-xs sm:text-sm font-semibold bg-cyan-500/10 border border-cyan-500/30 text-cyan-400 hover:bg-cyan-500/20 transition-all duration-200 cursor-pointer whitespace-nowrap flex-shrink-0">
                         <span class="hidden sm:inline">Conectar Wallet</span>
                         <span class="sm:hidden">Wallet</span>
                     </button>
-                    <div id="authButton">
+                    <div id="authButton" class="flex-shrink-0">
                         <button type="button" onclick="openAuthModal()" class="px-2.5 sm:px-4 py-2 rounded-lg text-xs sm:text-sm font-semibold bg-fuchsia-500/10 border border-fuchsia-500/30 text-fuchsia-400 hover:bg-fuchsia-500/20 transition-all duration-200 cursor-pointer whitespace-nowrap">
                             <span class="hidden sm:inline">Iniciar Sesión</span>
                             <span class="sm:hidden">Login</span>
