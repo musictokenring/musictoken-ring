@@ -118,35 +118,39 @@ class DepositListener {
             const latestBlock = await this.publicClient.getBlockNumber();
             const fromBlock = this.lastBlockProcessed || latestBlock - 1000n; // Check last 1000 blocks initially
             
-            // Create filter for Transfer events to platform wallet
-            const filter = await this.publicClient.createEventFilter({
-                address: tokenAddress,
-                event: {
-                    type: 'event',
-                    name: 'Transfer',
-                    inputs: [
-                        { name: 'from', type: 'address', indexed: true },
-                        { name: 'to', type: 'address', indexed: true },
-                        { name: 'value', type: 'uint256', indexed: false }
-                    ]
-                },
-                args: {
-                    to: PLATFORM_WALLET
-                },
-                fromBlock: fromBlock,
-                toBlock: 'latest'
-            });
-
-            // Process existing events
-            const events = await this.publicClient.getFilterLogs({ filter });
-            console.log(`[deposit-listener] Found ${events.length} ${tokenName} transfer events`);
-            
-            for (const event of events) {
-                await this.processDeposit(event, tokenName, tokenAddress);
+            // Process existing events first (scan blocks directly, don't use filters)
+            try {
+                const events = await this.publicClient.getLogs({
+                    address: tokenAddress,
+                    event: {
+                        type: 'event',
+                        name: 'Transfer',
+                        inputs: [
+                            { name: 'from', type: 'address', indexed: true },
+                            { name: 'to', type: 'address', indexed: true },
+                            { name: 'value', type: 'uint256', indexed: false }
+                        ]
+                    },
+                    args: {
+                        to: PLATFORM_WALLET
+                    },
+                    fromBlock: fromBlock,
+                    toBlock: latestBlock
+                });
+                
+                console.log(`[deposit-listener] Found ${events.length} ${tokenName} transfer events in historical blocks`);
+                
+                for (const event of events) {
+                    await this.processDeposit(event, tokenName, tokenAddress);
+                }
+            } catch (scanError) {
+                console.warn(`[deposit-listener] Error scanning historical ${tokenName} events:`, scanError.message);
+                // Continue with watchEvent even if scan fails
             }
 
-            // Watch for new events
+            // Watch for new events (this doesn't use filters, so it won't fail)
             this.publicClient.watchEvent({
+                address: tokenAddress,
                 event: {
                     type: 'event',
                     name: 'Transfer',
@@ -161,7 +165,7 @@ class DepositListener {
                 },
                 onLogs: async (logs) => {
                     for (const log of logs) {
-                        if (log.address.toLowerCase() === tokenAddress.toLowerCase()) {
+                        if (log.address && log.address.toLowerCase() === tokenAddress.toLowerCase()) {
                             await this.processDeposit(log, tokenName, tokenAddress);
                         }
                     }
@@ -169,8 +173,10 @@ class DepositListener {
             });
 
             this.lastBlockProcessed = latestBlock;
+            console.log(`[deposit-listener] ✅ ${tokenName} listener active, watching from block ${latestBlock}`);
         } catch (error) {
             console.error(`[deposit-listener] Error listening for ${tokenName}:`, error);
+            // Don't throw - allow other listeners to continue
         }
     }
 
@@ -444,7 +450,9 @@ class DepositListener {
      */
     async scanBlockRange(tokenAddress, tokenName, fromBlock, toBlock) {
         try {
-            const filter = await this.publicClient.createEventFilter({
+            // Use getLogs directly instead of createEventFilter + getFilterLogs
+            // This avoids "filter not found" errors when filters expire
+            const events = await this.publicClient.getLogs({
                 address: tokenAddress,
                 event: {
                     type: 'event',
@@ -461,14 +469,15 @@ class DepositListener {
                 fromBlock: fromBlock,
                 toBlock: toBlock
             });
-
-            const events = await this.publicClient.getFilterLogs({ filter });
+            
+            console.log(`[deposit-listener] Scanned ${tokenName} blocks ${fromBlock}-${toBlock}: found ${events.length} events`);
             
             for (const event of events) {
                 await this.processDeposit(event, tokenName, tokenAddress);
             }
         } catch (error) {
-            console.error(`[deposit-listener] Error scanning ${tokenName}:`, error);
+            console.error(`[deposit-listener] Error scanning ${tokenName}:`, error.message);
+            // Don't throw - allow periodic scan to continue
         }
     }
 }
