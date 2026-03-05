@@ -17,22 +17,123 @@ function closeAuthModal() {
 
 function switchToSignup() {
     document.getElementById('loginForm')?.classList.add('hidden');
+    document.getElementById('forgotPasswordForm')?.classList.add('hidden');
     document.getElementById('signupForm')?.classList.remove('hidden');
 }
 
 function switchToLogin() {
     document.getElementById('signupForm')?.classList.add('hidden');
+    document.getElementById('forgotPasswordForm')?.classList.add('hidden');
     document.getElementById('loginForm')?.classList.remove('hidden');
 }
 
+function showForgotPassword() {
+    document.getElementById('loginForm')?.classList.add('hidden');
+    document.getElementById('signupForm')?.classList.add('hidden');
+    document.getElementById('forgotPasswordForm')?.classList.remove('hidden');
+}
+
+// Función para toggle de visibilidad de contraseña
+function togglePasswordVisibility(inputId, button) {
+    const input = document.getElementById(inputId);
+    const eyeIcon = button.querySelector('svg');
+    
+    if (input.type === 'password') {
+        input.type = 'text';
+        // Cambiar icono a "ojo tachado"
+        eyeIcon.innerHTML = '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.88 9.88l4.242 4.242M9.88 9.88L3 3m6.88 6.88l4.242 4.242M15 12a3 3 0 11-6 0 3 3 0 016 0zm6 0a9 9 0 11-18 0 9 9 0 0118 0z"></path>';
+    } else {
+        input.type = 'password';
+        // Cambiar icono a "ojo normal"
+        eyeIcon.innerHTML = '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path>';
+    }
+}
+
+// Función para manejar recuperación de contraseña
+async function handleForgotPasswordSubmit(event) {
+    event.preventDefault();
+    
+    if (!supabaseClient) {
+        supabaseClient = initSupabaseClient();
+    }
+    
+    if (!supabaseClient) {
+        showToast('Error: Supabase no está disponible. Recarga la página.', 'error');
+        return;
+    }
+    
+    const email = document.getElementById('forgotEmail').value;
+    
+    if (!email) {
+        showToast('Por favor ingresa tu email', 'error');
+        return;
+    }
+    
+    try {
+        const { data, error } = await supabaseClient.auth.resetPasswordForEmail(email, {
+            redirectTo: `${window.location.origin}${window.location.pathname}?reset=true`
+        });
+        
+        if (error) throw error;
+        
+        showToast('Se ha enviado un email con instrucciones para resetear tu contraseña. Revisa tu bandeja de entrada.', 'success');
+        setTimeout(() => {
+            switchToLogin();
+        }, 2000);
+    } catch (error) {
+        console.error('Error resetting password:', error);
+        showToast(error.message || 'Error al enviar email de recuperación', 'error');
+    }
+}
+
+// Exportar funciones globalmente
+window.switchToSignup = switchToSignup;
+window.switchToLogin = switchToLogin;
+window.showForgotPassword = showForgotPassword;
+window.togglePasswordVisibility = togglePasswordVisibility;
+window.handleForgotPasswordSubmit = handleForgotPasswordSubmit;
+
 // Initialize Supabase client (if not already initialized)
-if (typeof window.supabaseClient === 'undefined') {
+// Esperar a que Supabase esté disponible
+function initSupabaseClient() {
+    if (typeof window.supabaseClient !== 'undefined') {
+        return window.supabaseClient;
+    }
+    
+    if (typeof window.supabase === 'undefined') {
+        console.warn('[auth-system] Supabase SDK no está disponible aún, esperando...');
+        // Esperar a que Supabase cargue
+        return null;
+    }
+    
     const SUPABASE_URL = 'https://bscmgcnynbxalcuwdqlm.supabase.co';
     const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJzY21nY255bmJ4YWxjdXdkcWxtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzA0NTYwOTUsImV4cCI6MjA4NjAzMjA5NX0.1iasFQ5H0GmrFqi6poWNE1aZOtbmQuB113RCyg2BBK4';
     window.supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    return window.supabaseClient;
 }
 
-const supabaseClient = window.supabaseClient;
+// Intentar inicializar inmediatamente
+let supabaseClient = initSupabaseClient();
+
+// Si no está disponible, esperar a que el DOM esté listo
+if (!supabaseClient && typeof document !== 'undefined') {
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', function() {
+            supabaseClient = initSupabaseClient();
+            if (supabaseClient) {
+                console.log('[auth-system] Supabase client inicializado después de DOMContentLoaded');
+            }
+        });
+    } else {
+        // DOM ya está listo, intentar de nuevo
+        setTimeout(function() {
+            supabaseClient = initSupabaseClient();
+            if (supabaseClient) {
+                console.log('[auth-system] Supabase client inicializado después de timeout');
+            }
+        }, 100);
+    }
+}
 
 // ==========================================
 // AUTH FUNCTIONS
@@ -40,6 +141,15 @@ const supabaseClient = window.supabaseClient;
 
 async function loginWithGoogle() {
     try {
+        // Asegurar que supabaseClient esté inicializado
+        if (!supabaseClient) {
+            supabaseClient = initSupabaseClient();
+        }
+        
+        if (!supabaseClient) {
+            throw new Error('Supabase no está disponible. Recarga la página.');
+        }
+        
         const redirectTo = `${window.location.origin}${window.location.pathname}`;
         const { data, error } = await supabaseClient.auth.signInWithOAuth({
             provider: 'google',
@@ -75,23 +185,67 @@ function parseOAuthErrorFromUrl() {
 }
 
 async function processOAuthCallbackIfNeeded() {
+    if (!supabaseClient) {
+        supabaseClient = initSupabaseClient();
+    }
+    
+    if (!supabaseClient) {
+        console.warn('[auth] Supabase no disponible para callback');
+        return;
+    }
+    
+    // Verificar si hay hash de reset de contraseña
+    if (window.location.hash && window.location.hash.includes('type=recovery')) {
+        console.log('[auth] Password reset callback detectado');
+        if (typeof openAuthModal === 'function') {
+            openAuthModal();
+        }
+        if (typeof showToast === 'function') {
+            showToast('Ingresa tu nueva contraseña', 'info');
+        }
+        // Limpiar URL
+        const cleanUrl = `${window.location.origin}${window.location.pathname}`;
+        window.history.replaceState({}, document.title, cleanUrl);
+        return;
+    }
+    
+    // Manejar callback de OAuth normal
     const params = new URLSearchParams(window.location.search);
     const code = params.get('code');
     if (!code) return;
 
-    const { error } = await supabaseClient.auth.exchangeCodeForSession(window.location.href);
-    if (error) {
-        console.error('OAuth callback error:', error);
-        showToast('No se pudo completar el login con Google', 'error');
-        return;
-    }
+    try {
+        const { error } = await supabaseClient.auth.exchangeCodeForSession(window.location.href);
+        if (error) {
+            console.error('OAuth callback error:', error);
+            showToast('No se pudo completar el login con Google', 'error');
+            return;
+        }
 
-    const cleanUrl = `${window.location.origin}${window.location.pathname}`;
-    window.history.replaceState({}, document.title, cleanUrl);
+        const cleanUrl = `${window.location.origin}${window.location.pathname}`;
+        window.history.replaceState({}, document.title, cleanUrl);
+        
+        if (typeof showToast === 'function') {
+            showToast('¡Bienvenido!', 'success');
+        }
+    } catch (e) {
+        console.error('[auth] Error en exchangeCodeForSession:', e);
+        showToast('Error al procesar el login', 'error');
+    }
 }
 
 async function handleLoginSubmit(event) {
     event.preventDefault();
+    
+    // Asegurar que supabaseClient esté inicializado
+    if (!supabaseClient) {
+        supabaseClient = initSupabaseClient();
+    }
+    
+    if (!supabaseClient) {
+        showToast('Error: Supabase no está disponible. Recarga la página.', 'error');
+        return;
+    }
     
     const email = document.getElementById('loginEmail').value;
     const password = document.getElementById('loginPassword').value;
@@ -107,6 +261,9 @@ async function handleLoginSubmit(event) {
         showToast('¡Bienvenido de vuelta!', 'success');
         closeAuthModal();
         
+        // Después del login exitoso, el usuario puede conectar su wallet manualmente
+        // No conectamos automáticamente para dar control al usuario
+        
     } catch (error) {
         console.error('Error logging in:', error);
         showToast(error.message || 'Error al iniciar sesión', 'error');
@@ -115,6 +272,16 @@ async function handleLoginSubmit(event) {
 
 async function handleSignupSubmit(event) {
     event.preventDefault();
+    
+    // Asegurar que supabaseClient esté inicializado
+    if (!supabaseClient) {
+        supabaseClient = initSupabaseClient();
+    }
+    
+    if (!supabaseClient) {
+        showToast('Error: Supabase no está disponible. Recarga la página.', 'error');
+        return;
+    }
     
     const name = document.getElementById('signupName').value;
     const email = document.getElementById('signupEmail').value;
@@ -142,8 +309,43 @@ async function handleSignupSubmit(event) {
     }
 }
 
+// Función para resetear contraseña
+async function resetPassword(email) {
+    try {
+        if (!supabaseClient) {
+            supabaseClient = initSupabaseClient();
+        }
+        
+        if (!supabaseClient) {
+            throw new Error('Supabase no está disponible');
+        }
+        
+        const { data, error } = await supabaseClient.auth.resetPasswordForEmail(email, {
+            redirectTo: `${window.location.origin}${window.location.pathname}?reset=true`
+        });
+        
+        if (error) throw error;
+        
+        showToast('Se ha enviado un email con instrucciones para resetear tu contraseña', 'success');
+        return { success: true };
+    } catch (error) {
+        console.error('Error resetting password:', error);
+        showToast(error.message || 'Error al enviar email de recuperación', 'error');
+        return { success: false, error: error.message };
+    }
+}
+
 async function logout() {
     try {
+        if (!supabaseClient) {
+            supabaseClient = initSupabaseClient();
+        }
+        
+        if (!supabaseClient) {
+            console.warn('[auth] Supabase no disponible para logout');
+            return;
+        }
+        
         const { error } = await supabaseClient.auth.signOut();
         
         if (error) throw error;
@@ -376,10 +578,53 @@ function closeProfileModal() {
 // AUTH STATE LISTENER
 // ==========================================
 
-supabaseClient.auth.onAuthStateChange((event, session) => {
-    console.log('Auth state changed:', event);
-    updateAuthUI(session);
-});
+// Escuchar cambios de autenticación y manejar wallet
+if (typeof supabaseClient !== 'undefined' && supabaseClient) {
+    supabaseClient.auth.onAuthStateChange((event, session) => {
+        console.log('Auth state changed:', event);
+        updateAuthUI(session);
+        
+        // Si el usuario se desconecta, desconectar wallet también
+        if (event === 'SIGNED_OUT') {
+            if (typeof window !== 'undefined') {
+                window.connectedAddress = null;
+                window.connectedChainId = null;
+                if (typeof window.renderWallet === 'function') {
+                    window.renderWallet();
+                }
+            }
+        }
+        
+        // Si el usuario se conecta, permitir conexión de wallet
+        if (event === 'SIGNED_IN' && session) {
+            console.log('[auth] Usuario logueado, wallet puede conectarse');
+        }
+    });
+} else {
+    // Si supabaseClient no está disponible aún, esperar
+    if (typeof document !== 'undefined') {
+        document.addEventListener('DOMContentLoaded', function() {
+            setTimeout(function() {
+                if (typeof supabaseClient !== 'undefined' && supabaseClient) {
+                    supabaseClient.auth.onAuthStateChange((event, session) => {
+                        console.log('Auth state changed:', event);
+                        updateAuthUI(session);
+                        
+                        if (event === 'SIGNED_OUT') {
+                            if (typeof window !== 'undefined') {
+                                window.connectedAddress = null;
+                                window.connectedChainId = null;
+                                if (typeof window.renderWallet === 'function') {
+                                    window.renderWallet();
+                                }
+                            }
+                        }
+                    });
+                }
+            }, 500);
+        });
+    }
+}
 
 // ==========================================
 // INITIALIZE ON LOAD
