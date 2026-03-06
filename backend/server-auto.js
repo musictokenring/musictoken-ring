@@ -454,7 +454,6 @@ app.get('/api/deposits/diagnose/:txHash', async (req, res) => {
         // Intentar obtener el receipt de la transacción
         // Si no se encuentra, intentar buscar por logs directamente (puede ser que el receipt aún no esté disponible)
         let receipt = null;
-        let transferLogs = [];
         
         try {
             console.log('[diagnose] Fetching transaction receipt...');
@@ -662,7 +661,9 @@ app.get('/api/deposits/diagnose/:txHash', async (req, res) => {
                 log.address.toLowerCase() === MTR_TOKEN_ADDRESS.toLowerCase()
             );
             console.log('[diagnose] MTR transfer logs found:', mtrLogs.length);
-            transferLogs = mtrLogs;
+            if (mtrLogs.length > 0) {
+                transferLogs = mtrLogs;
+            }
         }
 
         const transfers = [];
