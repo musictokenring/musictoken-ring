@@ -329,26 +329,71 @@ app.get('/api/deposits/diagnose/:txHash', async (req, res) => {
         const PLATFORM_WALLET = process.env.PLATFORM_WALLET_ADDRESS || '0x75376BC58830f27415402875D26B73A6BE8E2253';
         const USDC_ADDRESS = process.env.USDC_ADDRESS || '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913';
 
+        // Configurar RPC con múltiples fallbacks
+        const RPC_URLS = [
+            process.env.BASE_RPC_URL,
+            'https://mainnet.base.org',
+            'https://base-mainnet.g.alchemy.com/v2/demo',
+            'https://base.llamarpc.com'
+        ].filter(Boolean);
+        
+        const rpcUrl = RPC_URLS[0];
+        console.log('[diagnose] Using RPC URL:', rpcUrl);
+        console.log('[diagnose] Transaction hash:', txHash);
+
         const publicClient = createPublicClient({
             chain: base,
-            transport: http(process.env.BASE_RPC_URL || 'https://mainnet.base.org')
+            transport: http(rpcUrl)
         });
 
         // Get transaction receipt
         let receipt;
         try {
+            console.log('[diagnose] Fetching transaction receipt...');
             receipt = await publicClient.getTransactionReceipt({ hash: txHash });
+            console.log('[diagnose] Receipt received:', receipt ? 'OK' : 'NULL');
+            if (receipt) {
+                console.log('[diagnose] Receipt status:', receipt.status);
+                console.log('[diagnose] Block number:', receipt.blockNumber?.toString());
+            }
         } catch (rpcError) {
             console.error('[diagnose] Error fetching receipt:', rpcError);
-            if (rpcError.message && rpcError.message.includes('not found')) {
+            console.error('[diagnose] Error name:', rpcError.name);
+            console.error('[diagnose] Error message:', rpcError.message);
+            console.error('[diagnose] Error code:', rpcError.code);
+            console.error('[diagnose] Error stack:', rpcError.stack);
+            
+            // Errores específicos de viem/RPC
+            if (rpcError.name === 'TransactionNotFoundError' || 
+                (rpcError.message && rpcError.message.includes('not found'))) {
                 return res.status(404).json({ 
                     error: 'Transaction not found',
-                    message: 'La transacción no se encontró en la red Base. Verifica el hash.'
+                    message: 'La transacción no se encontró en la red Base. Verifica que el hash sea correcto y pertenezca a la red Base.'
                 });
             }
+            
+            if (rpcError.name === 'TimeoutError' || rpcError.message?.includes('timeout')) {
+                return res.status(504).json({ 
+                    error: 'RPC Timeout',
+                    message: 'El servidor RPC tardó demasiado en responder. Intenta nuevamente en unos momentos.'
+                });
+            }
+            
+            if (rpcError.message && rpcError.message.includes('invalid transaction hash')) {
+                return res.status(400).json({ 
+                    error: 'Invalid transaction hash',
+                    message: 'El hash de transacción proporcionado no es válido.'
+                });
+            }
+            
             return res.status(500).json({ 
                 error: 'RPC Error',
-                message: 'Error al consultar la blockchain: ' + (rpcError.message || 'Error desconocido')
+                message: 'Error al consultar la blockchain: ' + (rpcError.message || 'Error desconocido'),
+                details: process.env.NODE_ENV === 'development' ? {
+                    name: rpcError.name,
+                    code: rpcError.code,
+                    message: rpcError.message
+                } : undefined
             });
         }
 
@@ -411,9 +456,15 @@ app.get('/api/deposits/diagnose/:txHash', async (req, res) => {
             }
         ];
 
+        console.log('[diagnose] Total logs in receipt:', receipt.logs?.length || 0);
+        
         const transferLogs = receipt.logs.filter(log => 
             log.address.toLowerCase() === USDC_ADDRESS.toLowerCase()
         );
+        
+        console.log('[diagnose] USDC transfer logs found:', transferLogs.length);
+        console.log('[diagnose] USDC address:', USDC_ADDRESS);
+        console.log('[diagnose] Platform wallet:', PLATFORM_WALLET);
 
         const transfers = [];
         for (const log of transferLogs) {
@@ -428,6 +479,8 @@ app.get('/api/deposits/diagnose/:txHash', async (req, res) => {
                 const to = decoded.args.to;
                 const value = decoded.args.value;
                 const amount = parseFloat(formatUnits(value, 6));
+                
+                console.log('[diagnose] Transfer decoded:', { from, to, amount });
 
                 if (to.toLowerCase() === PLATFORM_WALLET.toLowerCase()) {
                     transfers.push({
@@ -436,15 +489,20 @@ app.get('/api/deposits/diagnose/:txHash', async (req, res) => {
                         amount,
                         isPlatformDeposit: true
                     });
+                    console.log('[diagnose] Platform deposit found:', { from, amount });
                 }
             } catch (e) {
+                console.warn('[diagnose] Error decoding log:', e.message);
                 // Skip invalid logs
             }
         }
 
         if (transfers.length === 0) {
+            console.log('[diagnose] No platform deposits found in transaction');
+            console.log('[diagnose] Transaction may not be a deposit to platform wallet');
             return res.status(400).json({ 
-                error: 'No USDC transfer to platform wallet found in this transaction' 
+                error: 'No USDC transfer to platform wallet found',
+                message: 'Esta transacción no contiene una transferencia de USDC a la dirección de la plataforma. Verifica que el hash sea correcto y que la transacción sea un depósito a la plataforma.'
             });
         }
 
