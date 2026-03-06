@@ -296,11 +296,17 @@ app.get('/api/deposits/:walletAddress', async (req, res) => {
  * Diagnose a deposit transaction
  */
 app.get('/api/deposits/diagnose/:txHash', async (req, res) => {
+    let txHash;
     try {
-        const txHash = req.params.txHash;
+        txHash = req.params.txHash;
+        
+        console.log('[diagnose] ========== NEW REQUEST ==========');
+        console.log('[diagnose] Raw txHash from params:', txHash);
         
         // Limpiar y validar formato del hash
         txHash = txHash.trim().replace(/\s+/g, '').replace(/\//g, '').replace(/\n/g, '').replace(/-/g, '');
+        
+        console.log('[diagnose] Cleaned txHash:', txHash);
         
         if (!txHash || !txHash.startsWith('0x')) {
             return res.status(400).json({ 
