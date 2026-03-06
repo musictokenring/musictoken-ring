@@ -46,17 +46,17 @@ Este documento contiene información sobre cómo restaurar el sistema a un punto
 
 ## 🔧 Cómo Restaurar este Backup
 
-### Opción 1: Restaurar desde Tag
+### Opción 1: Restaurar desde Tag (RECOMENDADO)
 
 ```bash
 # Ver todos los tags disponibles
 git tag -l
 
-# Restaurar al tag específico
-git checkout backup-YYYYMMDD-HHMMSS
+# Restaurar al tag específico de este backup
+git checkout backup-20260306-125219
 
 # O crear un nuevo branch desde el tag
-git checkout -b restore-backup backup-YYYYMMDD-HHMMSS
+git checkout -b restore-backup backup-20260306-125219
 ```
 
 ### Opción 2: Restaurar desde Branch de Backup
@@ -65,11 +65,11 @@ git checkout -b restore-backup backup-YYYYMMDD-HHMMSS
 # Ver branches de backup disponibles
 git branch -a | grep backup
 
-# Cambiar al branch de backup
-git checkout backup-stable-YYYYMMDD
+# Cambiar al branch de backup específico
+git checkout backup-stable-20260306
 
 # O crear un nuevo branch desde el backup
-git checkout -b restore-from-backup backup-stable-YYYYMMDD
+git checkout -b restore-from-backup backup-stable-20260306
 ```
 
 ### Opción 3: Restaurar desde Commit Específico
