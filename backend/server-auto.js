@@ -12,6 +12,7 @@ const { PriceUpdater } = require('./price-updater');
 const { ClaimService } = require('./claim-service');
 const { VaultService } = require('./vault-service');
 const { DepositSyncService } = require('./deposit-sync-service');
+const { LiquidityManager } = require('./liquidity-manager');
 const { createClient } = require('@supabase/supabase-js');
 
 const app = express();
@@ -50,6 +51,7 @@ let priceUpdater;
 let claimService;
 let vaultService;
 let depositSyncService;
+let liquidityManager;
 
 // Initialize all services
 async function initializeServices() {
@@ -92,6 +94,17 @@ async function initializeServices() {
         // Initialize deposit sync service (backup mechanism)
         depositSyncService = new DepositSyncService();
         await depositSyncService.init();
+
+        // Initialize liquidity manager (manages USDC buffer and MTR pool)
+        try {
+            liquidityManager = new LiquidityManager();
+            await liquidityManager.init();
+            console.log('[server] ✅ Liquidity manager initialized');
+        } catch (liquidityError) {
+            console.error('[server] ⚠️ Error initializing liquidity manager:', liquidityError);
+            console.log('[server] Continuing without liquidity manager...');
+            // Non-critical - continue without it
+        }
 
         console.log('[server] ✅ All services initialized');
     } catch (error) {

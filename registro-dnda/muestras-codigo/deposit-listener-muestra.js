@@ -7,7 +7,6 @@
 const { createPublicClient, http, formatUnits } = require('viem');
 const { base } = require('viem/chains');
 const { createClient } = require('@supabase/supabase-js');
-const { MTRSwapService } = require('./mtr-swap-service');
 
 // Configuration
 const PLATFORM_WALLET = process.env.PLATFORM_WALLET_ADDRESS || '0x75376BC58830f27415402875D26B73A6BE8E2253';
@@ -53,14 +52,6 @@ class DepositListener {
         this.processedTxHashes = new Set();
         this.currentRate = INITIAL_RATE;
         this.lastBlockProcessed = null;
-        
-        // Initialize MTR swap service (optional - will be disabled if no key)
-        try {
-            this.swapService = new MTRSwapService();
-        } catch (error) {
-            console.warn('[deposit-listener] MTR swap service not available:', error.message);
-            this.swapService = null;
-        }
     }
 
     /**
@@ -75,13 +66,10 @@ class DepositListener {
         // Start listening for transfers
         await this.startListening();
         
-        // Start periodic scan for missed deposits (mejorado: más frecuente y más bloques)
+        // Start periodic scan for missed deposits
         this.startPeriodicScan();
         
-        console.log('[deposit-listener] ✅ Initialized and listening');
-        console.log(`[deposit-listener] Platform wallet: ${PLATFORM_WALLET}`);
-        console.log(`[deposit-listener] Monitoring MTR: ${MTR_TOKEN_ADDRESS}`);
-        console.log(`[deposit-listener] Monitoring USDC: ${USDC_ADDRESS}`);
+        console.log('[deposit-listener] Initialized and listening');
     }
 
     /**
@@ -128,13 +116,10 @@ class DepositListener {
             
             // Get latest block
             const latestBlock = await this.publicClient.getBlockNumber();
-            // Escanear más bloques históricos al iniciar (últimos 5000 bloques)
-            const fromBlock = this.lastBlockProcessed || latestBlock - 5000n;
+            const fromBlock = this.lastBlockProcessed || latestBlock - 1000n; // Check last 1000 blocks initially
             
             // Process existing events first (scan blocks directly, don't use filters)
             try {
-                console.log(`[deposit-listener] Scanning ${tokenName} transfers from block ${fromBlock} to ${latestBlock}...`);
-                
                 const events = await this.publicClient.getLogs({
                     address: tokenAddress,
                     event: {
@@ -155,18 +140,9 @@ class DepositListener {
                 
                 console.log(`[deposit-listener] Found ${events.length} ${tokenName} transfer events in historical blocks`);
                 
-                let processedCount = 0;
                 for (const event of events) {
-                    try {
-                        await this.processDeposit(event, tokenName, tokenAddress);
-                        processedCount++;
-                    } catch (processError) {
-                        console.error(`[deposit-listener] Error processing event ${event.transactionHash}:`, processError.message);
-                        // Continue with next event
-                    }
+                    await this.processDeposit(event, tokenName, tokenAddress);
                 }
-                
-                console.log(`[deposit-listener] Processed ${processedCount}/${events.length} ${tokenName} deposits`);
             } catch (scanError) {
                 console.warn(`[deposit-listener] Error scanning historical ${tokenName} events:`, scanError.message);
                 // Continue with watchEvent even if scan fails
@@ -224,31 +200,16 @@ class DepositListener {
                 return;
             }
 
-            // PROTECCIÓN CRÍTICA: Verificar si ya está procesado en base de datos
-            // Esta es la verificación PRINCIPAL que previene duplicados
-            const { data: existing, error: checkError } = await supabase
+            // Check if already processed in database
+            const { data: existing } = await supabase
                 .from('deposits')
-                .select('id, user_id, credits_awarded, status, processed_at')
+                .select('id')
                 .eq('tx_hash', txHash)
                 .single();
 
             if (existing) {
-                console.log(`[deposit-listener] ⚠️ DEPÓSITO DUPLICADO DETECTADO Y RECHAZADO:`, {
-                    txHash,
-                    existingId: existing.id,
-                    userId: existing.user_id,
-                    creditsAlreadyAwarded: existing.credits_awarded,
-                    status: existing.status,
-                    processedAt: existing.processed_at
-                });
                 this.processedTxHashes.add(txHash);
-                return; // CRÍTICO: No procesar si ya existe
-            }
-
-            // Si hay error de consulta (no es "no encontrado"), registrar pero continuar con cuidado
-            if (checkError && checkError.code !== 'PGRST116') {
-                console.error('[deposit-listener] Error checking for existing deposit:', checkError);
-                // Continuar pero con precaución - la verificación de inserción también protegerá
+                return;
             }
 
             console.log(`[deposit-listener] Processing ${tokenName} deposit:`, {
@@ -332,38 +293,8 @@ class DepositListener {
             this.processedTxHashes.add(txHash);
             console.log(`[deposit-listener] ✅ Credited ${creditsRounded} credits (${usdcValue} USDC - ${depositFee} fee) to user ${from}`);
 
-            // AUTO-SWAP: If USDC deposit, automatically buy MTR
-            if (tokenName === 'USDC' && this.swapService && this.swapService.enabled) {
-                try {
-                    console.log(`[deposit-listener] 🔄 Triggering auto-swap for ${usdcValue.toFixed(2)} USDC deposit...`);
-                    // Execute swap asynchronously (don't block deposit processing)
-                    this.swapService.autoBuyMTR(usdcValue, txHash).then(result => {
-                        if (result.success) {
-                            console.log(`[deposit-listener] ✅ Auto-swap completed: ${result.amountMTR.toFixed(2)} MTR purchased`);
-                        } else {
-                            console.log(`[deposit-listener] ⚠️ Auto-swap skipped: ${result.reason || result.error}`);
-                        }
-                    }).catch(err => {
-                        console.error('[deposit-listener] Error in auto-swap:', err);
-                        // Don't fail deposit processing if swap fails
-                    });
-                } catch (swapError) {
-                    console.error('[deposit-listener] Error triggering auto-swap:', swapError);
-                    // Continue - deposit is already credited
-                }
-            }
-
         } catch (error) {
             console.error('[deposit-listener] Error processing deposit:', error);
-            // Log más detalles para debugging
-            console.error('[deposit-listener] Deposit details:', {
-                txHash: event?.transactionHash,
-                from: event?.args?.from,
-                tokenName,
-                error: error.message,
-                stack: error.stack
-            });
-            // No re-throw para que otros depósitos puedan procesarse
         }
     }
 
@@ -372,65 +303,26 @@ class DepositListener {
      */
     async creditUser(userId, credits, txHash, tokenName, amount, usdcValue, depositFee) {
         try {
-            // PROTECCIÓN CRÍTICA: Verificar una vez más antes de insertar (race condition protection)
-            const { data: lastCheck } = await supabase
-                .from('deposits')
-                .select('id')
-                .eq('tx_hash', txHash)
-                .single();
-
-            if (lastCheck) {
-                console.error(`[deposit-listener] ⚠️ DUPLICADO DETECTADO EN ÚLTIMO MOMENTO - TxHash ${txHash} ya existe en DB. Abortando crédito.`);
-                return; // CRÍTICO: No continuar si ya existe
-            }
-
-            // Obtener el rate actual para USDC (siempre 1:1) o MTR (desde price updater)
-            let rateUsed = 1.0; // Default para USDC (1 USDC = 1 crédito)
-            
-            if (tokenName === 'MTR') {
-                // Para MTR, obtener el rate desde el price updater si está disponible
-                // El rate se carga en init() y se almacena en this.rate
-                rateUsed = this.rate || 1.0; // Fallback a 1.0 si no hay rate disponible
-            }
-            
             // Record deposit with new fields
-            // NOTA: Si tx_hash tiene constraint UNIQUE en DB, esto fallará si hay duplicado
-            const { data: insertedDeposit, error: depositError } = await supabase
+            const { error: depositError } = await supabase
                 .from('deposits')
                 .insert([{
                     user_id: userId,
-                    tx_hash: txHash, // Debe ser UNIQUE en la base de datos
+                    tx_hash: txHash,
                     token: tokenName,
                     amount: amount,
                     credits_awarded: credits,
-                    usdc_value_at_deposit: usdcValue,
-                    deposit_fee: depositFee,
-                    rate_used: rateUsed, // Usar el rate actual en lugar de null
+                    usdc_value_at_deposit: usdcValue, // Nuevo campo
+                    deposit_fee: depositFee, // Nuevo campo
+                    rate_used: null, // Ya no se usa rate variable
                     status: 'processed',
                     processed_at: new Date().toISOString()
-                }])
-                .select()
-                .single();
+                }]);
 
-            // PROTECCIÓN: Si hay error de duplicado, no continuar
             if (depositError) {
-                // Verificar si es error de constraint único (duplicado)
-                if (depositError.code === '23505' || depositError.message?.includes('duplicate') || depositError.message?.includes('unique')) {
-                    console.error(`[deposit-listener] ⚠️ DUPLICADO BLOQUEADO POR CONSTRAINT DE BD - TxHash ${txHash} ya existe. No se acreditarán créditos.`);
-                    return; // CRÍTICO: No continuar
-                }
-                
                 console.error('[deposit-listener] Error recording deposit:', depositError);
-                return; // No continuar si hay error al insertar
-            }
-
-            if (!insertedDeposit) {
-                console.error('[deposit-listener] Error: Deposit insert returned no data');
                 return;
             }
-
-            // PROTECCIÓN: Solo acreditar créditos si el depósito se insertó correctamente
-            // Si llegamos aquí, el depósito fue insertado exitosamente (sin duplicado)
 
             // Update user credits balance (atomic operation)
             const { error: balanceError } = await supabase.rpc('increment_user_credits', {
@@ -448,7 +340,7 @@ class DepositListener {
 
                 const newBalance = (currentBalance?.credits || 0) + credits;
 
-                const { error: updateError } = await supabase
+                await supabase
                     .from('user_credits')
                     .upsert([{
                         user_id: userId,
@@ -457,20 +349,12 @@ class DepositListener {
                     }], {
                         onConflict: 'user_id'
                     });
-
-                if (updateError) {
-                    console.error('[deposit-listener] Error updating user credits:', updateError);
-                    // IMPORTANTE: Si falla actualizar créditos, el depósito ya está registrado
-                    // Esto es aceptable - el depósito existe y puede ser corregido manualmente
-                }
             }
 
             // Enviar fee al vault (5% del depósito)
-            // Solo enviar fee si todo fue exitoso (depósito registrado y créditos acreditados)
             await this.sendFeeToVault(depositFee, 'deposit', txHash);
 
             console.log(`[deposit-listener] ✅ Credited ${credits} credits to user ${userId}, fee ${depositFee} USDC sent to vault`);
-            console.log(`[deposit-listener] ✅ Deposit ${txHash} processed successfully - NO DUPLICATES POSSIBLE`);
 
         } catch (error) {
             console.error('[deposit-listener] Error crediting user:', error);
@@ -544,29 +428,12 @@ class DepositListener {
 
     /**
      * Periodic scan for missed deposits
-     * Mejorado: escanea más bloques y con mayor frecuencia
      */
     startPeriodicScan() {
-        // Escanear inmediatamente al iniciar
-        setTimeout(async () => {
-            console.log('[deposit-listener] Running initial scan...');
-            const latestBlock = await this.publicClient.getBlockNumber();
-            const fromBlock = this.lastBlockProcessed || latestBlock - 5000n; // Últimos 5000 bloques
-            
-            // Scan MTR
-            await this.scanBlockRange(MTR_TOKEN_ADDRESS, 'MTR', fromBlock, latestBlock);
-            
-            // Scan USDC
-            await this.scanBlockRange(USDC_ADDRESS, 'USDC', fromBlock, latestBlock);
-            
-            this.lastBlockProcessed = latestBlock;
-        }, 10000); // Esperar 10 segundos después de iniciar
-
-        // Escanear periódicamente cada 2 minutos (más frecuente)
         setInterval(async () => {
             console.log('[deposit-listener] Running periodic scan...');
             const latestBlock = await this.publicClient.getBlockNumber();
-            const fromBlock = this.lastBlockProcessed || latestBlock - 2000n; // Últimos 2000 bloques
+            const fromBlock = this.lastBlockProcessed || latestBlock - 5000n;
             
             // Scan MTR
             await this.scanBlockRange(MTR_TOKEN_ADDRESS, 'MTR', fromBlock, latestBlock);
@@ -575,12 +442,11 @@ class DepositListener {
             await this.scanBlockRange(USDC_ADDRESS, 'USDC', fromBlock, latestBlock);
             
             this.lastBlockProcessed = latestBlock;
-        }, 2 * 60 * 1000); // Every 2 minutes (más frecuente que antes)
+        }, 5 * 60 * 1000); // Every 5 minutes
     }
 
     /**
      * Scan block range for deposits
-     * Mejorado: mejor manejo de errores y logging
      */
     async scanBlockRange(tokenAddress, tokenName, fromBlock, toBlock) {
         try {
@@ -606,38 +472,11 @@ class DepositListener {
             
             console.log(`[deposit-listener] Scanned ${tokenName} blocks ${fromBlock}-${toBlock}: found ${events.length} events`);
             
-            let processedCount = 0;
-            let skippedCount = 0;
-            let errorCount = 0;
-
             for (const event of events) {
-                try {
-                    // Verificar si ya está procesado antes de intentar procesar
-                    const { data: existing } = await supabase
-                        .from('deposits')
-                        .select('id')
-                        .eq('tx_hash', event.transactionHash)
-                        .single();
-
-                    if (existing) {
-                        skippedCount++;
-                        continue;
-                    }
-
-                    await this.processDeposit(event, tokenName, tokenAddress);
-                    processedCount++;
-                } catch (processError) {
-                    errorCount++;
-                    console.error(`[deposit-listener] Error processing ${tokenName} deposit ${event.transactionHash}:`, processError.message);
-                    // Continuar con el siguiente evento
-                }
-            }
-
-            if (processedCount > 0 || errorCount > 0) {
-                console.log(`[deposit-listener] ${tokenName} scan results: ${processedCount} processed, ${skippedCount} skipped, ${errorCount} errors`);
+                await this.processDeposit(event, tokenName, tokenAddress);
             }
         } catch (error) {
-            console.error(`[deposit-listener] Error scanning ${tokenName} blocks ${fromBlock}-${toBlock}:`, error.message);
+            console.error(`[deposit-listener] Error scanning ${tokenName}:`, error.message);
             // Don't throw - allow periodic scan to continue
         }
     }

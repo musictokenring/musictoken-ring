@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="es" class="scroll-smooth">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MusicToken Ring - Music Battle Arena</title>
+    
+    <!-- [MUESTRA PARCIAL - Primeras 200 líneas del archivo index.html completo] -->
+    <!-- El archivo completo contiene aproximadamente 4000+ líneas -->
+    
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com" defer></script>
+    
+    <!-- Supabase -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    
+    <!-- [CONTINUACIÓN DEL CÓDIGO EN ARCHIVO COMPLETO...] -->
+    
+</head>
+<body class="min-h-screen text-white font-sans antialiased">
+
+    <!-- ==================== HEADER ==================== -->
+    <header class="sticky top-0 z-50 border-b border-white/5" style="background: rgba(3,7,18,0.85); backdrop-filter: blur(16px);">
+        <div class="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8">
+            <div class="flex items-center justify-between h-16 gap-3">
+                <div class="flex items-center gap-2 sm:gap-3">
+                    <img src="[LOGO_URL]" alt="MTR" class="w-7 h-7 sm:w-9 sm:h-9 rounded-full ring-2 ring-cyan-500/30 flex-shrink-0">
+                    <span class="text-base sm:text-xl lg:text-2xl font-extrabold text-cyan-400 neon-text-cyan tracking-tight">MusicToken Ring</span>
+                </div>
+
+                <div class="flex items-center gap-1.5 sm:gap-2 lg:gap-4 text-sm flex-shrink-0">
+                    <span id="onchainBalanceDisplay" class="hidden sm:inline px-2 py-1 rounded-md bg-cyan-500/10 text-cyan-400 text-xs font-semibold">On-chain: --</span>
+                    <span id="creditsCombinedDisplay" class="hidden sm:inline px-2 py-1 rounded-md bg-fuchsia-500/10 text-fuchsia-400 text-xs font-semibold flex items-center gap-2">
+                        <span id="creditsDisplay">0 créditos</span>
+                        <span id="usdcValueDisplay" class="text-gray-400">≈ $0 USDC</span>
+                    </span>
+                    <span id="appBalanceDisplay" class="hidden sm:inline px-2 py-1 rounded-md bg-fuchsia-500/10 text-fuchsia-400 text-xs font-semibold">Jugable: --</span>
+                    <span id="walletAddress" class="hidden text-cyan-300 font-mono text-xs bg-cyan-500/10 px-2 py-1 rounded-md"></span>
+                    <button type="button" id="walletConnectBtn" class="px-2.5 sm:px-4 py-2 rounded-lg text-xs sm:text-sm font-semibold bg-cyan-500/10 border border-cyan-500/30 text-cyan-400 hover:bg-cyan-500/20 transition-all duration-200 cursor-pointer whitespace-nowrap">
+                        <span class="hidden sm:inline">Conectar Wallet</span>
+                        <span class="sm:hidden">Wallet</span>
+                    </button>
+                    <div id="authButton">
+                        <button type="button" onclick="openAuthModal()" class="px-2.5 sm:px-4 py-2 rounded-lg text-xs sm:text-sm font-semibold bg-fuchsia-500/10 border border-fuchsia-500/30 text-fuchsia-400 hover:bg-fuchsia-500/20 transition-all duration-200 cursor-pointer whitespace-nowrap">
+                            <span class="hidden sm:inline">Iniciar Sesión</span>
+                            <span class="sm:hidden">Login</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- [CONTINUACIÓN DEL CÓDIGO EN ARCHIVO COMPLETO...] -->
+    <!-- El archivo completo contiene: -->
+    <!-- - Sección principal de batallas -->
+    <!-- - Modos de juego (Rápido, Social, Privado, Torneo, Práctica) -->
+    <!-- - Sistema de selección de canciones -->
+    <!-- - Modales de autenticación -->
+    <!-- - Integración de scripts JavaScript -->
+    <!-- - Y más... -->
+
+</body>
+</html>

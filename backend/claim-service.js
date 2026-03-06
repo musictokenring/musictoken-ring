@@ -9,6 +9,7 @@ const { privateKeyToAccount } = require('viem/accounts');
 const { base } = require('viem/chains');
 const { createClient } = require('@supabase/supabase-js');
 const { VaultService } = require('./vault-service');
+const { LiquidityManager } = require('./liquidity-manager');
 
 const SUPABASE_URL = process.env.SUPABASE_URL || 'https://bscmgcnynbxalcuwdqlm.supabase.co';
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -56,6 +57,14 @@ class ClaimService {
             transport: http(process.env.BASE_RPC_URL || 'https://mainnet.base.org')
         });
         this.vaultService = new VaultService();
+        
+        // Initialize liquidity manager (optional - for auto-selling MTR if needed)
+        try {
+            this.liquidityManager = new LiquidityManager();
+        } catch (error) {
+            console.warn('[claim-service] Liquidity manager not available:', error.message);
+            this.liquidityManager = null;
+        }
     }
 
     /**
@@ -106,8 +115,26 @@ class ClaimService {
             // NUEVO: Verificar balance del vault antes de pagar
             const canWithdraw = await this.vaultService.canWithdraw(usdcAmountRounded);
             if (!canWithdraw) {
-                const vaultBalance = await this.vaultService.getVaultBalance();
-                throw new Error(`Insufficient vault balance. Available: ${vaultBalance} USDC, Required: ${usdcAmountRounded} USDC. Vault en recarga, espera unos minutos.`);
+                // Try to ensure USDC by selling MTR if needed
+                if (this.liquidityManager) {
+                    console.log('[claim-service] Vault balance low, checking if we can sell MTR...');
+                    const liquidityResult = await this.liquidityManager.ensureUSDCForPayout(usdcAmountRounded);
+                    
+                    if (!liquidityResult.success) {
+                        const vaultBalance = await this.vaultService.getVaultBalance();
+                        throw new Error(`Insufficient vault balance. Available: ${vaultBalance} USDC, Required: ${usdcAmountRounded} USDC. ${liquidityResult.reason}`);
+                    }
+                    
+                    // Re-check vault balance after potential MTR sale
+                    const canWithdrawAfter = await this.vaultService.canWithdraw(usdcAmountRounded);
+                    if (!canWithdrawAfter) {
+                        const vaultBalance = await this.vaultService.getVaultBalance();
+                        throw new Error(`Insufficient vault balance after MTR sale. Available: ${vaultBalance} USDC, Required: ${usdcAmountRounded} USDC.`);
+                    }
+                } else {
+                    const vaultBalance = await this.vaultService.getVaultBalance();
+                    throw new Error(`Insufficient vault balance. Available: ${vaultBalance} USDC, Required: ${usdcAmountRounded} USDC. Vault en recarga, espera unos minutos.`);
+                }
             }
 
             // También verificar admin wallet como fallback

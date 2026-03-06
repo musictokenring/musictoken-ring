@@ -378,49 +378,62 @@ async function verifyWithSQL() {
 
     // 3. Verificar funciones RPC
     const functionsToCheck = [
-        'increment_user_credits',
-        'decrement_user_credits',
-        'update_vault_balance',
-        'get_vault_balance'
+        { name: 'increment_user_credits', params: { user_id_param: '00000000-0000-0000-0000-000000000000', credits_to_add: 0 } },
+        { name: 'decrement_user_credits', params: { user_id_param: '00000000-0000-0000-0000-000000000000', credits_to_subtract: 0 } },
+        { name: 'update_vault_balance', params: { amount_to_add: 0 } },
+        { name: 'get_vault_balance', params: {} }
     ];
 
-    for (const funcName of functionsToCheck) {
+    for (const func of functionsToCheck) {
         try {
-            // Intentar llamar con parámetros mínimos
-            let testParams = {};
-            if (funcName === 'increment_user_credits' || funcName === 'decrement_user_credits') {
-                testParams = { user_id_param: '00000000-0000-0000-0000-000000000000', credits_to_add: 0 };
-            } else if (funcName === 'update_vault_balance') {
-                testParams = { amount_to_add: 0 };
-            }
-
-            const { error } = await supabase.rpc(funcName, testParams);
+            const { error } = await supabase.rpc(func.name, func.params);
             
-            // Si el error es sobre parámetros o datos, la función existe
+            // La función existe si:
+            // 1. No hay error
+            // 2. El error es sobre datos/parámetros pero NO sobre "function does not exist"
+            // 3. El error es sobre permisos o validación (lo que significa que la función existe)
+            const functionNotFoundErrors = [
+                'does not exist',
+                'function',
+                'not found',
+                'undefined function',
+                'could not find function'
+            ];
+            
             const exists = !error || (
-                !error.message.includes('does not exist') &&
-                !error.message.includes('function') &&
-                !error.message.includes('not found')
+                !functionNotFoundErrors.some(err => error.message?.toLowerCase().includes(err.toLowerCase()))
             );
 
             checks.push({
                 type: 'function',
-                name: funcName,
+                name: func.name,
                 status: exists ? '✅' : '❌',
-                migration: getMigrationForFunction(funcName)
+                migration: getMigrationForFunction(func.name),
+                error: error ? error.message : null
             });
-            if (exists) results.passed.push(`Función ${funcName}`);
-            else results.failed.push(`Función ${funcName}`);
+            if (exists) results.passed.push(`Función ${func.name}`);
+            else {
+                results.failed.push(`Función ${func.name}`);
+                console.log(`[DEBUG] Error verificando ${func.name}:`, error?.message || 'Unknown error');
+            }
         } catch (e) {
-            const exists = !e.message.includes('does not exist');
+            const functionNotFound = e.message?.toLowerCase().includes('does not exist') ||
+                                   e.message?.toLowerCase().includes('function') ||
+                                   e.message?.toLowerCase().includes('not found');
+            const exists = !functionNotFound;
+            
             checks.push({
                 type: 'function',
-                name: funcName,
+                name: func.name,
                 status: exists ? '✅' : '❌',
-                migration: getMigrationForFunction(funcName)
+                migration: getMigrationForFunction(func.name),
+                error: e.message
             });
-            if (exists) results.passed.push(`Función ${funcName}`);
-            else results.failed.push(`Función ${funcName}`);
+            if (exists) results.passed.push(`Función ${func.name}`);
+            else {
+                results.failed.push(`Función ${func.name}`);
+                console.log(`[DEBUG] Exception verificando ${func.name}:`, e.message);
+            }
         }
     }
 
