@@ -203,8 +203,15 @@ class MultiChainDepositListener {
         // Start periodic scans for missed deposits
         this.startPeriodicScan();
         
+        // Initial vault sync to detect any existing missing deposits
+        this.syncVaultWithDeposits()
+            .catch(error => {
+                console.error('[multi-chain] Error in initial vault sync:', error);
+            });
+        
         console.log('[multi-chain] ==========================================');
         console.log('[multi-chain] ✅ Multi-chain listener initialization complete');
+        console.log('[multi-chain] ✅ Enhanced detection: Direct + Indirect deposits');
         console.log('[multi-chain] ==========================================');
     }
 
@@ -242,6 +249,12 @@ class MultiChainDepositListener {
                 .catch(error => {
                     console.error(`[multi-chain] Error in initial scan for ${networkName}:`, error);
                 });
+            
+            // Also search for missing deposits (broader search)
+            this.findMissingDepositsChunked(networkName)
+                .catch(error => {
+                    console.error(`[multi-chain] Error in missing deposits search for ${networkName}:`, error);
+                });
 
             // Start watching for new blocks (with error handling)
             try {
@@ -269,6 +282,7 @@ class MultiChainDepositListener {
 
     /**
      * Scan historical blocks for missed deposits
+     * Enhanced to detect both direct and indirect deposits
      */
     async scanHistoricalBlocks(networkName, fromBlock, toBlock) {
         try {
@@ -277,15 +291,47 @@ class MultiChainDepositListener {
             const client = this.clients[networkName];
             const usdcAddress = USDC_ADDRESSES[networkName];
             
-            const logs = await client.getLogs({
-                address: usdcAddress,
-                event: ERC20_TRANSFER_ABI[0],
-                args: {
-                    to: PLATFORM_WALLET
-                },
-                fromBlock: fromBlock,
-                toBlock: toBlock
-            });
+            // Try to get all transfers to platform wallet
+            let logs = [];
+            try {
+                logs = await client.getLogs({
+                    address: usdcAddress,
+                    event: ERC20_TRANSFER_ABI[0],
+                    args: {
+                        to: PLATFORM_WALLET
+                    },
+                    fromBlock: fromBlock,
+                    toBlock: toBlock
+                });
+            } catch (rangeError) {
+                // If range is too large, split into chunks
+                if (rangeError.message?.includes('range is too large') || rangeError.message?.includes('max is')) {
+                    console.log(`[multi-chain] Range too large, splitting into chunks...`);
+                    const chunkSize = BigInt(1000);
+                    let startBlock = fromBlock;
+                    
+                    while (startBlock < toBlock) {
+                        const endBlock = startBlock + chunkSize > toBlock ? toBlock : startBlock + chunkSize;
+                        try {
+                            const chunkLogs = await client.getLogs({
+                                address: usdcAddress,
+                                event: ERC20_TRANSFER_ABI[0],
+                                args: {
+                                    to: PLATFORM_WALLET
+                                },
+                                fromBlock: startBlock,
+                                toBlock: endBlock
+                            });
+                            logs.push(...chunkLogs);
+                        } catch (chunkError) {
+                            console.error(`[multi-chain] Error in chunk ${startBlock}-${endBlock}:`, chunkError.message);
+                        }
+                        startBlock = endBlock + BigInt(1);
+                    }
+                } else {
+                    throw rangeError;
+                }
+            }
 
             console.log(`[multi-chain] Found ${logs.length} USDC transfers to platform on ${networkName}`);
 
@@ -515,6 +561,181 @@ class MultiChainDepositListener {
     /**
      * Start periodic scan for missed deposits
      */
+    /**
+     * Sync vault balance with deposits - detects missing indirect deposits
+     */
+    async syncVaultWithDeposits() {
+        try {
+            console.log('[multi-chain] 🔄 Syncing vault balance with deposits...');
+            
+            // Get current vault balance
+            const { data: vaultBalance } = await supabase
+                .from('vault_balance')
+                .select('balance_usdc, last_updated')
+                .order('last_updated', { ascending: false })
+                .limit(1)
+                .single();
+            
+            if (!vaultBalance) {
+                console.log('[multi-chain] No vault balance found, skipping sync');
+                return;
+            }
+            
+            // Calculate expected vault balance from fees
+            const { data: fees } = await supabase
+                .from('vault_fees')
+                .select('amount')
+                .eq('status', 'sent_to_vault');
+            
+            const expectedBalance = fees?.reduce((sum, fee) => sum + parseFloat(fee.amount || 0), 0) || 0;
+            const actualBalance = parseFloat(vaultBalance.balance_usdc || 0);
+            
+            console.log(`[multi-chain] Vault balance: ${actualBalance} USDC, Expected from fees: ${expectedBalance} USDC`);
+            
+            // If there's a significant difference, there might be missing deposits
+            const difference = actualBalance - expectedBalance;
+            if (difference > 0.1) { // More than 0.1 USDC difference
+                console.log(`[multi-chain] ⚠️ Vault balance difference detected: ${difference} USDC`);
+                console.log(`[multi-chain] This might indicate missing deposits. Searching for unprocessed transfers...`);
+                
+                // Search for recent transfers to platform wallet that aren't in deposits
+                await this.findMissingDeposits();
+            }
+        } catch (error) {
+            console.error('[multi-chain] Error syncing vault:', error);
+        }
+    }
+
+    /**
+     * Find missing deposits by searching for transfers to platform wallet
+     * that don't have corresponding deposit records
+     */
+    async findMissingDeposits() {
+        try {
+            console.log('[multi-chain] 🔍 Searching for missing deposits...');
+            
+            const availableNetworks = Object.keys(this.clients).filter(name => this.clients[name]);
+            
+            for (const networkName of availableNetworks) {
+                try {
+                    const client = this.clients[networkName];
+                    if (!client) continue;
+                    
+                    const currentBlock = await client.getBlockNumber();
+                    // Search last 10000 blocks (approximately last day)
+                    const fromBlock = currentBlock > BigInt(10000) ? currentBlock - BigInt(10000) : BigInt(0);
+                    
+                    console.log(`[multi-chain] Searching ${networkName} for missing deposits (blocks ${fromBlock} to ${currentBlock})...`);
+                    
+                    const usdcAddress = USDC_ADDRESSES[networkName];
+                    if (!usdcAddress) continue;
+                    
+                    // Get all transfers TO platform wallet (not filtering by from)
+                    const logs = await client.getLogs({
+                        address: usdcAddress,
+                        event: ERC20_TRANSFER_ABI[0],
+                        args: {
+                            to: PLATFORM_WALLET
+                        },
+                        fromBlock: fromBlock,
+                        toBlock: currentBlock
+                    });
+                    
+                    console.log(`[multi-chain] Found ${logs.length} transfers to platform on ${networkName}`);
+                    
+                    // Check each transfer to see if it's already processed
+                    for (const log of logs) {
+                        const txHash = log.transactionHash;
+                        
+                        // Check if already in database
+                        const { data: existing } = await supabase
+                            .from('deposits')
+                            .select('id')
+                            .eq('tx_hash', txHash)
+                            .single();
+                        
+                        if (!existing) {
+                            console.log(`[multi-chain] ⚠️ Found unprocessed transfer: ${txHash} on ${networkName}`);
+                            // Process this deposit
+                            await this.processDeposit(networkName, log);
+                        }
+                    }
+                } catch (error) {
+                    // Handle range too large error by splitting into smaller chunks
+                    if (error.message?.includes('range is too large') || error.message?.includes('max is')) {
+                        console.log(`[multi-chain] Range too large for ${networkName}, splitting into chunks...`);
+                        await this.findMissingDepositsChunked(networkName);
+                    } else {
+                        console.error(`[multi-chain] Error finding missing deposits on ${networkName}:`, error.message);
+                    }
+                }
+            }
+        } catch (error) {
+            console.error('[multi-chain] Error finding missing deposits:', error);
+        }
+    }
+
+    /**
+     * Find missing deposits by scanning in smaller chunks
+     */
+    async findMissingDepositsChunked(networkName) {
+        try {
+            const client = this.clients[networkName];
+            if (!client) return;
+            
+            const currentBlock = await client.getBlockNumber();
+            const chunkSize = BigInt(1000); // 1000 blocks per chunk
+            const fromBlock = currentBlock > BigInt(10000) ? currentBlock - BigInt(10000) : BigInt(0);
+            
+            const usdcAddress = USDC_ADDRESSES[networkName];
+            if (!usdcAddress) return;
+            
+            let processed = 0;
+            let startBlock = fromBlock;
+            
+            while (startBlock < currentBlock) {
+                const endBlock = startBlock + chunkSize > currentBlock ? currentBlock : startBlock + chunkSize;
+                
+                try {
+                    const logs = await client.getLogs({
+                        address: usdcAddress,
+                        event: ERC20_TRANSFER_ABI[0],
+                        args: {
+                            to: PLATFORM_WALLET
+                        },
+                        fromBlock: startBlock,
+                        toBlock: endBlock
+                    });
+                    
+                    for (const log of logs) {
+                        const txHash = log.transactionHash;
+                        const { data: existing } = await supabase
+                            .from('deposits')
+                            .select('id')
+                            .eq('tx_hash', txHash)
+                            .single();
+                        
+                        if (!existing) {
+                            console.log(`[multi-chain] ⚠️ Found unprocessed transfer: ${txHash} on ${networkName}`);
+                            await this.processDeposit(networkName, log);
+                            processed++;
+                        }
+                    }
+                } catch (chunkError) {
+                    console.error(`[multi-chain] Error in chunk ${startBlock}-${endBlock}:`, chunkError.message);
+                }
+                
+                startBlock = endBlock + BigInt(1);
+            }
+            
+            if (processed > 0) {
+                console.log(`[multi-chain] ✅ Processed ${processed} missing deposits on ${networkName}`);
+            }
+        } catch (error) {
+            console.error(`[multi-chain] Error in chunked search for ${networkName}:`, error);
+        }
+    }
+
     startPeriodicScan() {
         // Scan all networks every 2 minutes
         const scanInterval = setInterval(async () => {
@@ -545,6 +766,9 @@ class MultiChainDepositListener {
                         // Continue with other networks even if one fails
                     }
                 }
+                
+                // Also sync vault balance to detect missing deposits
+                await this.syncVaultWithDeposits();
             } catch (error) {
                 console.error('[multi-chain] ❌ Error in periodic scan scheduler:', error);
             }
