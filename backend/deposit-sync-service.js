@@ -187,15 +187,31 @@ class DepositSyncService {
                 return false;
             }
 
-            // Check if already processed
-            const { data: existing } = await supabase
+            // PROTECCIÓN CRÍTICA: Verificar si ya está procesado en base de datos
+            // Esta verificación previene procesar depósitos duplicados
+            const { data: existing, error: checkError } = await supabase
                 .from('deposits')
-                .select('id')
+                .select('id, user_id, credits_awarded, status, processed_at')
                 .eq('tx_hash', deposit.txHash)
                 .single();
 
             if (existing) {
-                return false; // Already processed
+                console.log(`[deposit-sync] ⚠️ DEPÓSITO DUPLICADO DETECTADO Y RECHAZADO:`, {
+                    txHash: deposit.txHash,
+                    existingId: existing.id,
+                    userId: existing.user_id,
+                    creditsAlreadyAwarded: existing.credits_awarded,
+                    status: existing.status,
+                    processedAt: existing.processed_at
+                });
+                return false; // CRÍTICO: Ya procesado, no intentar de nuevo
+            }
+
+            // Si hay error de consulta (no es "no encontrado"), registrar pero no procesar por seguridad
+            if (checkError && checkError.code !== 'PGRST116') {
+                console.error('[deposit-sync] Error checking for existing deposit:', checkError);
+                // Por seguridad, no procesar si no podemos verificar
+                return false;
             }
 
             // Verify transaction receipt
@@ -308,20 +324,45 @@ class DepositSyncService {
                 return { success: false, message: 'No deposits found in this transaction' };
             }
 
-            // Process each deposit
+            // Process each deposit (con protección contra duplicados)
             let processedCount = 0;
+            let skippedCount = 0;
+            let errorCount = 0;
+
             for (const deposit of deposits) {
-                const processed = await this.processDepositIfNeeded(deposit);
-                if (processed) {
-                    processedCount++;
+                try {
+                    // Verificar ANTES de procesar (protección adicional)
+                    const { data: preCheck } = await supabase
+                        .from('deposits')
+                        .select('id')
+                        .eq('tx_hash', deposit.txHash)
+                        .single();
+
+                    if (preCheck) {
+                        skippedCount++;
+                        console.log(`[deposit-sync] Skipping already processed deposit: ${deposit.txHash}`);
+                        continue;
+                    }
+
+                    const processed = await this.processDepositIfNeeded(deposit);
+                    if (processed) {
+                        processedCount++;
+                    } else {
+                        skippedCount++;
+                    }
+                } catch (error) {
+                    errorCount++;
+                    console.error(`[deposit-sync] Error processing deposit ${deposit.txHash}:`, error.message);
                 }
             }
 
             return {
                 success: true,
-                message: `Processed ${processedCount} deposit(s)`,
+                message: `Sync completed: ${processedCount} processed, ${skippedCount} skipped, ${errorCount} errors`,
                 depositsFound: deposits.length,
-                depositsProcessed: processedCount
+                depositsProcessed: processedCount,
+                depositsSkipped: skippedCount,
+                depositsErrors: errorCount
             };
 
         } catch (error) {

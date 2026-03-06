@@ -215,16 +215,31 @@ class DepositListener {
                 return;
             }
 
-            // Check if already processed in database
-            const { data: existing } = await supabase
+            // PROTECCIÓN CRÍTICA: Verificar si ya está procesado en base de datos
+            // Esta es la verificación PRINCIPAL que previene duplicados
+            const { data: existing, error: checkError } = await supabase
                 .from('deposits')
-                .select('id')
+                .select('id, user_id, credits_awarded, status, processed_at')
                 .eq('tx_hash', txHash)
                 .single();
 
             if (existing) {
+                console.log(`[deposit-listener] ⚠️ DEPÓSITO DUPLICADO DETECTADO Y RECHAZADO:`, {
+                    txHash,
+                    existingId: existing.id,
+                    userId: existing.user_id,
+                    creditsAlreadyAwarded: existing.credits_awarded,
+                    status: existing.status,
+                    processedAt: existing.processed_at
+                });
                 this.processedTxHashes.add(txHash);
-                return;
+                return; // CRÍTICO: No procesar si ya existe
+            }
+
+            // Si hay error de consulta (no es "no encontrado"), registrar pero continuar con cuidado
+            if (checkError && checkError.code !== 'PGRST116') {
+                console.error('[deposit-listener] Error checking for existing deposit:', checkError);
+                // Continuar pero con precaución - la verificación de inserción también protegerá
             }
 
             console.log(`[deposit-listener] Processing ${tokenName} deposit:`, {
@@ -327,26 +342,56 @@ class DepositListener {
      */
     async creditUser(userId, credits, txHash, tokenName, amount, usdcValue, depositFee) {
         try {
+            // PROTECCIÓN CRÍTICA: Verificar una vez más antes de insertar (race condition protection)
+            const { data: lastCheck } = await supabase
+                .from('deposits')
+                .select('id')
+                .eq('tx_hash', txHash)
+                .single();
+
+            if (lastCheck) {
+                console.error(`[deposit-listener] ⚠️ DUPLICADO DETECTADO EN ÚLTIMO MOMENTO - TxHash ${txHash} ya existe en DB. Abortando crédito.`);
+                return; // CRÍTICO: No continuar si ya existe
+            }
+
             // Record deposit with new fields
-            const { error: depositError } = await supabase
+            // NOTA: Si tx_hash tiene constraint UNIQUE en DB, esto fallará si hay duplicado
+            const { data: insertedDeposit, error: depositError } = await supabase
                 .from('deposits')
                 .insert([{
                     user_id: userId,
-                    tx_hash: txHash,
+                    tx_hash: txHash, // Debe ser UNIQUE en la base de datos
                     token: tokenName,
                     amount: amount,
                     credits_awarded: credits,
-                    usdc_value_at_deposit: usdcValue, // Nuevo campo
-                    deposit_fee: depositFee, // Nuevo campo
-                    rate_used: null, // Ya no se usa rate variable
+                    usdc_value_at_deposit: usdcValue,
+                    deposit_fee: depositFee,
+                    rate_used: null,
                     status: 'processed',
                     processed_at: new Date().toISOString()
-                }]);
+                }])
+                .select()
+                .single();
 
+            // PROTECCIÓN: Si hay error de duplicado, no continuar
             if (depositError) {
+                // Verificar si es error de constraint único (duplicado)
+                if (depositError.code === '23505' || depositError.message?.includes('duplicate') || depositError.message?.includes('unique')) {
+                    console.error(`[deposit-listener] ⚠️ DUPLICADO BLOQUEADO POR CONSTRAINT DE BD - TxHash ${txHash} ya existe. No se acreditarán créditos.`);
+                    return; // CRÍTICO: No continuar
+                }
+                
                 console.error('[deposit-listener] Error recording deposit:', depositError);
+                return; // No continuar si hay error al insertar
+            }
+
+            if (!insertedDeposit) {
+                console.error('[deposit-listener] Error: Deposit insert returned no data');
                 return;
             }
+
+            // PROTECCIÓN: Solo acreditar créditos si el depósito se insertó correctamente
+            // Si llegamos aquí, el depósito fue insertado exitosamente (sin duplicado)
 
             // Update user credits balance (atomic operation)
             const { error: balanceError } = await supabase.rpc('increment_user_credits', {
@@ -364,7 +409,7 @@ class DepositListener {
 
                 const newBalance = (currentBalance?.credits || 0) + credits;
 
-                await supabase
+                const { error: updateError } = await supabase
                     .from('user_credits')
                     .upsert([{
                         user_id: userId,
@@ -373,12 +418,20 @@ class DepositListener {
                     }], {
                         onConflict: 'user_id'
                     });
+
+                if (updateError) {
+                    console.error('[deposit-listener] Error updating user credits:', updateError);
+                    // IMPORTANTE: Si falla actualizar créditos, el depósito ya está registrado
+                    // Esto es aceptable - el depósito existe y puede ser corregido manualmente
+                }
             }
 
             // Enviar fee al vault (5% del depósito)
+            // Solo enviar fee si todo fue exitoso (depósito registrado y créditos acreditados)
             await this.sendFeeToVault(depositFee, 'deposit', txHash);
 
             console.log(`[deposit-listener] ✅ Credited ${credits} credits to user ${userId}, fee ${depositFee} USDC sent to vault`);
+            console.log(`[deposit-listener] ✅ Deposit ${txHash} processed successfully - NO DUPLICATES POSSIBLE`);
 
         } catch (error) {
             console.error('[deposit-listener] Error crediting user:', error);

@@ -483,15 +483,31 @@ app.post('/api/deposits/process', async (req, res) => {
             transport: http(process.env.BASE_RPC_URL || 'https://mainnet.base.org')
         });
 
-        // Check if already processed
-        const { data: existing } = await supabase
+        // PROTECCIÓN CRÍTICA: Verificar si ya está procesado ANTES de procesar
+        const { data: existing, error: checkError } = await supabase
             .from('deposits')
-            .select('id')
+            .select('id, user_id, credits_awarded, status, processed_at')
             .eq('tx_hash', txHash)
             .single();
 
         if (existing) {
-            return res.status(400).json({ error: 'Deposit already processed' });
+            console.log(`[server] ⚠️ INTENTO DE PROCESAR DEPÓSITO DUPLICADO RECHAZADO:`, {
+                txHash,
+                existingId: existing.id,
+                userId: existing.user_id,
+                creditsAlreadyAwarded: existing.credits_awarded
+            });
+            return res.status(400).json({ 
+                error: 'Deposit already processed',
+                deposit: existing,
+                message: 'Esta transacción ya fue procesada y acreditada anteriormente'
+            });
+        }
+
+        // Si hay error de consulta, no procesar por seguridad
+        if (checkError && checkError.code !== 'PGRST116') {
+            console.error('[server] Error checking for existing deposit:', checkError);
+            return res.status(500).json({ error: 'Error verificando depósito existente' });
         }
 
         // Get receipt and decode transfer

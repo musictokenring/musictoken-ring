@@ -90,15 +90,29 @@ async function fixDeposit(txHash, userWalletAddress) {
             console.log(`   Continuando con wallet de la transacción...\n`);
         }
 
-        // 3. Verificar si ya está procesado
-        const { data: existing } = await supabase
+        // PROTECCIÓN CRÍTICA: Verificar si ya está procesado ANTES de procesar
+        const { data: existing, error: checkError } = await supabase
             .from('deposits')
-            .select('id')
+            .select('id, user_id, credits_awarded, status, processed_at')
             .eq('tx_hash', txHash)
             .single();
 
         if (existing) {
-            throw new Error('Este depósito ya fue procesado');
+            console.log(`[fix-deposit] ⚠️ DEPÓSITO DUPLICADO DETECTADO:`, {
+                txHash,
+                existingId: existing.id,
+                userId: existing.user_id,
+                creditsAlreadyAwarded: existing.credits_awarded,
+                status: existing.status,
+                processedAt: existing.processed_at
+            });
+            throw new Error(`Este depósito ya fue procesado anteriormente. ID: ${existing.id}, Créditos acreditados: ${existing.credits_awarded}, Fecha: ${existing.processed_at}`);
+        }
+
+        // Si hay error de consulta, no procesar por seguridad
+        if (checkError && checkError.code !== 'PGRST116') {
+            console.error('[fix-deposit] Error checking for existing deposit:', checkError);
+            throw new Error('Error verificando depósito existente. No se procesará por seguridad.');
         }
 
         // 4. Crear evento simulado para procesar
