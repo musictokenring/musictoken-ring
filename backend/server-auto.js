@@ -65,8 +65,16 @@ async function initializeServices() {
         await depositListener.init();
 
         // Initialize multi-chain deposit listener (all networks)
-        multiChainDepositListener = new MultiChainDepositListener();
-        await multiChainDepositListener.init();
+        // Wrap in try-catch to prevent server crash if initialization fails
+        try {
+            multiChainDepositListener = new MultiChainDepositListener();
+            await multiChainDepositListener.init();
+        } catch (multiChainError) {
+            console.error('[server] ⚠️ Error initializing multi-chain listener:', multiChainError);
+            console.error('[server] Stack:', multiChainError.stack);
+            console.log('[server] Continuing with Base-only listener...');
+            // Server continues with Base listener only
+        }
 
         // Initialize claim service
         claimService = new ClaimService();

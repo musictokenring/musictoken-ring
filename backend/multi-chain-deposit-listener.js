@@ -10,10 +10,13 @@
  * Automatically credits user accounts regardless of which network was used
  */
 
-const { createPublicClient, http } = require('viem');
-const { base, mainnet, polygon, optimism, arbitrum } = require('viem/chains');
+const { createPublicClient, http, formatUnits } = require('viem');
+const { base } = require('viem/chains');
+const { mainnet } = require('viem/chains');
+const { polygon } = require('viem/chains');
+const { optimism } = require('viem/chains');
+const { arbitrum } = require('viem/chains');
 const { createClient } = require('@supabase/supabase-js');
-const { formatUnits } = require('viem');
 
 // Configuration
 const PLATFORM_WALLET = process.env.PLATFORM_WALLET_ADDRESS || '0x75376BC58830f27415402875D26B73A6BE8E2253';
@@ -69,30 +72,61 @@ class MultiChainDepositListener {
      * Initialize public clients for each network
      */
     initClients() {
-        this.clients = {
-            base: createPublicClient({
+        this.clients = {};
+        
+        // Initialize Base (always available)
+        try {
+            this.clients.base = createPublicClient({
                 chain: base,
                 transport: http(RPC_URLS.base)
-            }),
-            ethereum: createPublicClient({
+            });
+            console.log('[multi-chain] ✅ Base client initialized');
+        } catch (error) {
+            console.error('[multi-chain] ❌ Error initializing Base client:', error);
+        }
+        
+        // Initialize other networks (optional, fail gracefully)
+        try {
+            this.clients.ethereum = createPublicClient({
                 chain: mainnet,
                 transport: http(RPC_URLS.ethereum)
-            }),
-            polygon: createPublicClient({
+            });
+            console.log('[multi-chain] ✅ Ethereum client initialized');
+        } catch (error) {
+            console.warn('[multi-chain] ⚠️ Ethereum client not available:', error.message);
+        }
+        
+        try {
+            this.clients.polygon = createPublicClient({
                 chain: polygon,
                 transport: http(RPC_URLS.polygon)
-            }),
-            optimism: createPublicClient({
+            });
+            console.log('[multi-chain] ✅ Polygon client initialized');
+        } catch (error) {
+            console.warn('[multi-chain] ⚠️ Polygon client not available:', error.message);
+        }
+        
+        try {
+            this.clients.optimism = createPublicClient({
                 chain: optimism,
                 transport: http(RPC_URLS.optimism)
-            }),
-            arbitrum: createPublicClient({
+            });
+            console.log('[multi-chain] ✅ Optimism client initialized');
+        } catch (error) {
+            console.warn('[multi-chain] ⚠️ Optimism client not available:', error.message);
+        }
+        
+        try {
+            this.clients.arbitrum = createPublicClient({
                 chain: arbitrum,
                 transport: http(RPC_URLS.arbitrum)
-            })
-        };
+            });
+            console.log('[multi-chain] ✅ Arbitrum client initialized');
+        } catch (error) {
+            console.warn('[multi-chain] ⚠️ Arbitrum client not available:', error.message);
+        }
         
-        console.log('[multi-chain] ✅ Initialized clients for all networks');
+        console.log(`[multi-chain] ✅ Initialized ${Object.keys(this.clients).length} network client(s)`);
     }
 
     /**
@@ -103,8 +137,10 @@ class MultiChainDepositListener {
         console.log('[multi-chain] 🚀 Initializing multi-chain deposit listener...');
         console.log('[multi-chain] ==========================================');
         
-        // Start listening on all networks (don't fail if one network fails)
-        const networks = ['base', 'ethereum', 'polygon', 'optimism', 'arbitrum'];
+        // Start listening on all available networks (don't fail if one network fails)
+        const networks = Object.keys(this.clients); // Only networks that have clients initialized
+        console.log(`[multi-chain] Attempting to start listeners for: ${networks.join(', ')}`);
+        
         const results = await Promise.allSettled(
             networks.map(network => this.startListening(network))
         );
@@ -116,6 +152,10 @@ class MultiChainDepositListener {
         console.log(`[multi-chain] ✅ ${successful} network(s) initialized successfully`);
         if (failed > 0) {
             console.log(`[multi-chain] ⚠️ ${failed} network(s) failed to initialize (will retry periodically)`);
+        }
+        
+        if (successful === 0) {
+            console.error('[multi-chain] ❌ CRITICAL: No networks initialized! Check RPC configuration.');
         }
         
         // Start periodic scans for missed deposits
@@ -435,27 +475,41 @@ class MultiChainDepositListener {
      */
     startPeriodicScan() {
         // Scan all networks every 2 minutes
-        setInterval(async () => {
-            console.log('[multi-chain] 🔄 Running periodic scan on all networks...');
-            
-            for (const networkName of Object.keys(this.clients)) {
-                try {
-                    const client = this.clients[networkName];
-                    if (!client) continue;
-                    
-                    const currentBlock = await client.getBlockNumber();
-                    const lastBlock = this.lastBlockProcessed[networkName] || (currentBlock - BigInt(2000));
-                    
-                    if (currentBlock > lastBlock) {
-                        console.log(`[multi-chain] 📡 Scanning ${networkName} blocks ${lastBlock.toString()} to ${currentBlock.toString()}`);
-                        await this.scanHistoricalBlocks(networkName, lastBlock, currentBlock);
-                    }
-                } catch (error) {
-                    console.error(`[multi-chain] ❌ Error in periodic scan for ${networkName}:`, error.message);
-                    // Continue with other networks even if one fails
+        const scanInterval = setInterval(async () => {
+            try {
+                console.log('[multi-chain] 🔄 Running periodic scan on all networks...');
+                
+                const availableNetworks = Object.keys(this.clients).filter(name => this.clients[name]);
+                
+                if (availableNetworks.length === 0) {
+                    console.warn('[multi-chain] ⚠️ No networks available for periodic scan');
+                    return;
                 }
+                
+                for (const networkName of availableNetworks) {
+                    try {
+                        const client = this.clients[networkName];
+                        if (!client) continue;
+                        
+                        const currentBlock = await client.getBlockNumber();
+                        const lastBlock = this.lastBlockProcessed[networkName] || (currentBlock - BigInt(2000));
+                        
+                        if (currentBlock > lastBlock) {
+                            console.log(`[multi-chain] 📡 Scanning ${networkName} blocks ${lastBlock.toString()} to ${currentBlock.toString()}`);
+                            await this.scanHistoricalBlocks(networkName, lastBlock, currentBlock);
+                        }
+                    } catch (error) {
+                        console.error(`[multi-chain] ❌ Error in periodic scan for ${networkName}:`, error.message);
+                        // Continue with other networks even if one fails
+                    }
+                }
+            } catch (error) {
+                console.error('[multi-chain] ❌ Error in periodic scan scheduler:', error);
             }
         }, 2 * 60 * 1000); // Every 2 minutes
+        
+        // Store interval ID for potential cleanup
+        this.scanIntervalId = scanInterval;
         
         console.log('[multi-chain] ✅ Periodic scan started (every 2 minutes)');
     }
