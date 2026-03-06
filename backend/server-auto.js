@@ -346,6 +346,80 @@ app.get('/api/deposits/diagnose/:txHash', async (req, res) => {
         const PLATFORM_WALLET = process.env.PLATFORM_WALLET_ADDRESS || '0x75376BC58830f27415402875D26B73A6BE8E2253';
         const USDC_ADDRESS = process.env.USDC_ADDRESS || '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913';
 
+        // ANTES de consultar blockchain, buscar depósitos recientes si hay wallet address
+        const walletAddress = req.query.walletAddress || req.headers['x-wallet-address'];
+        console.log('[diagnose] Checking for wallet address BEFORE blockchain query:', walletAddress);
+        
+        if (walletAddress) {
+            console.log('[diagnose] Searching recent deposits for wallet BEFORE blockchain query:', walletAddress);
+            
+            try {
+                // Buscar el usuario por wallet address
+                const { data: user, error: userError } = await supabase
+                    .from('users')
+                    .select('id, wallet_address')
+                    .eq('wallet_address', walletAddress.toLowerCase())
+                    .single();
+                
+                if (user) {
+                    console.log('[diagnose] User found:', user.id);
+                    
+                    // Buscar depósitos del usuario
+                    const { data: recentDeposits, error: recentError } = await supabase
+                        .from('deposits')
+                        .select('*')
+                        .eq('user_id', user.id)
+                        .order('created_at', { ascending: false })
+                        .limit(10);
+                    
+                    if (!recentError && recentDeposits && recentDeposits.length > 0) {
+                        console.log('[diagnose] Found', recentDeposits.length, 'recent deposits for wallet');
+                        
+                        // Verificar si alguno de estos depósitos coincide con el hash (con variaciones)
+                        const normalizedTxHash = txHash.toLowerCase();
+                        const matchingDeposit = recentDeposits.find(d => 
+                            d.tx_hash.toLowerCase() === normalizedTxHash ||
+                            d.tx_hash.toLowerCase().includes(normalizedTxHash.substring(2, 20)) ||
+                            normalizedTxHash.includes(d.tx_hash.toLowerCase().substring(2, 20))
+                        );
+                        
+                        if (matchingDeposit) {
+                            console.log('[diagnose] ✅ Found matching deposit by partial hash match');
+                            return res.json({
+                                processed: true,
+                                deposit: matchingDeposit,
+                                message: 'Deposit already processed (found by partial hash match)'
+                            });
+                        }
+                        
+                        // Si no hay coincidencia exacta, devolver los depósitos recientes
+                        console.log('[diagnose] Returning recent deposits list (hash not found but deposits exist)');
+                        return res.json({
+                            processed: false,
+                            hashNotFound: true,
+                            recentDeposits: recentDeposits.map(d => ({
+                                tx_hash: d.tx_hash,
+                                amount: d.amount,
+                                token: d.token,
+                                credits_awarded: d.credits_awarded,
+                                created_at: d.created_at,
+                                processed_at: d.processed_at,
+                                status: d.status
+                            })),
+                            message: 'Hash no encontrado, pero se encontraron depósitos recientes para esta wallet. Verifica si alguno de estos es el que buscas.'
+                        });
+                    } else {
+                        console.log('[diagnose] No recent deposits found for wallet');
+                    }
+                } else {
+                    console.log('[diagnose] User not found for wallet:', walletAddress);
+                }
+            } catch (walletSearchError) {
+                console.error('[diagnose] Error searching wallet deposits:', walletSearchError);
+                // Continuar con la búsqueda en blockchain
+            }
+        }
+
         // Configurar RPC con múltiples fallbacks
         const RPC_URLS = [
             process.env.BASE_RPC_URL,
