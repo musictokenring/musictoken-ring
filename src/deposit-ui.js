@@ -381,8 +381,7 @@
                 const diagnoseResponse = await fetch(diagnoseUrl, {
                     method: 'GET',
                     headers: {
-                        'Content-Type': 'application/json',
-                        'X-Wallet-Address': walletAddress
+                        'Content-Type': 'application/json'
                     }
                 });
                 
