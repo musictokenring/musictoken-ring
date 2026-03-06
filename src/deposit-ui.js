@@ -84,6 +84,21 @@
                         </p>
                     </div>
                     
+                    <!-- Verificar Depósito No Procesado -->
+                    <div id="verifyDepositSection" class="mb-6 p-4 rounded-lg bg-yellow-500/10 border border-yellow-500/20">
+                        <h4 class="text-lg font-bold text-yellow-400 mb-2">⚠️ ¿Tu depósito no se acreditó?</h4>
+                        <p class="text-sm text-gray-400 mb-3">Si enviaste USDC pero no aparece en tu balance, verifica aquí:</p>
+                        <div class="flex flex-col sm:flex-row gap-2">
+                            <input type="text" id="verifyTxHash" placeholder="Hash de transacción (0x...)" 
+                                class="flex-1 px-4 py-2 rounded-lg bg-black/40 border border-white/10 text-white text-sm font-mono placeholder-gray-500">
+                            <button onclick="DepositUI.verifyDeposit()" 
+                                class="px-4 py-2 rounded-lg bg-yellow-500/20 border border-yellow-500/30 text-yellow-400 hover:bg-yellow-500/30 transition cursor-pointer whitespace-nowrap">
+                                Verificar
+                            </button>
+                        </div>
+                        <div id="verifyDepositResult" class="mt-3 hidden"></div>
+                    </div>
+
                     <div class="space-y-4">
                         <div>
                             <label class="text-sm text-gray-400 mb-2 block">Dirección de la Plataforma:</label>
@@ -137,6 +152,7 @@
 
         /**
          * Start checking for new deposits
+         * Mejorado: también intenta sincronizar depósitos no detectados
          */
         startDepositCheck() {
             const walletAddress = window.connectedAddress || localStorage.getItem('mtr_wallet');
@@ -147,8 +163,56 @@
                 await this.checkRecentDeposits(walletAddress);
             }, 30000);
 
+            // Trigger backend sync every 2 minutes (para detectar depósitos perdidos)
+            setInterval(async () => {
+                await this.triggerBackendSync();
+            }, 2 * 60 * 1000);
+
             // Initial check
             this.checkRecentDeposits(walletAddress);
+            
+            // Initial sync after 10 seconds
+            setTimeout(() => {
+                this.triggerBackendSync();
+            }, 10000);
+        },
+
+        /**
+         * Trigger backend deposit sync
+         */
+        async triggerBackendSync() {
+            try {
+                const walletAddress = window.connectedAddress || localStorage.getItem('mtr_wallet');
+                if (!walletAddress) return;
+
+                const backendUrl = window.CONFIG?.BACKEND_API || 'https://musictoken-ring.onrender.com';
+                
+                // Llamar al endpoint de auto-sync específico para el usuario
+                const response = await fetch(`${backendUrl}/api/deposits/auto-sync/${walletAddress}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' }
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+                    // Si hay depósitos recientes, recargar balance
+                    if (data.recentDeposits && data.recentDeposits.length > 0) {
+                        const newestDeposit = data.recentDeposits[0];
+                        const depositTime = new Date(newestDeposit.created_at);
+                        const twoMinutesAgo = new Date(Date.now() - 2 * 60 * 1000);
+                        
+                        if (depositTime > twoMinutesAgo) {
+                            // Nuevo depósito detectado, recargar balance
+                            if (window.CreditsSystem) {
+                                await window.CreditsSystem.loadBalance(walletAddress);
+                            }
+                        }
+                    }
+                }
+            } catch (error) {
+                // Silently fail - no es crítico
+                console.debug('[deposit-ui] Error triggering sync:', error);
+            }
         },
 
         /**
@@ -201,6 +265,153 @@
                 setTimeout(() => {
                     statusEl.classList.add('hidden');
                 }, 10000);
+            }
+        },
+
+        /**
+         * Verify and process a deposit that wasn't credited
+         */
+        async verifyDeposit() {
+            const txHashInput = document.getElementById('verifyTxHash');
+            const resultDiv = document.getElementById('verifyDepositResult');
+            
+            if (!txHashInput || !resultDiv) return;
+
+            const txHash = txHashInput.value.trim();
+            
+            if (!txHash || !txHash.startsWith('0x')) {
+                resultDiv.className = 'mt-3 p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-sm';
+                resultDiv.innerHTML = '❌ Hash de transacción inválido';
+                resultDiv.classList.remove('hidden');
+                return;
+            }
+
+            // Get wallet address
+            const walletAddress = window.connectedAddress;
+            if (!walletAddress) {
+                resultDiv.className = 'mt-3 p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-sm';
+                resultDiv.innerHTML = '❌ Conecta tu wallet primero';
+                resultDiv.classList.remove('hidden');
+                return;
+            }
+
+            resultDiv.className = 'mt-3 p-3 rounded-lg bg-blue-500/10 border border-blue-500/20 text-blue-400 text-sm';
+            resultDiv.innerHTML = '🔍 Verificando transacción...';
+            resultDiv.classList.remove('hidden');
+
+            try {
+                const backendUrl = window.CONFIG?.BACKEND_API || 'https://musictoken-ring.onrender.com';
+                
+                // Diagnose transaction
+                const diagnoseResponse = await fetch(`${backendUrl}/api/deposits/diagnose/${txHash}`);
+                
+                if (!diagnoseResponse.ok) {
+                    throw new Error('Error al verificar transacción');
+                }
+
+                const diagnoseData = await diagnoseResponse.json();
+
+                if (diagnoseData.processed) {
+                    // Already processed
+                    resultDiv.className = 'mt-3 p-3 rounded-lg bg-green-500/10 border border-green-500/20 text-green-400 text-sm';
+                    resultDiv.innerHTML = `
+                        ✅ <strong>Depósito ya procesado</strong><br>
+                        Créditos otorgados: ${diagnoseData.deposit.credits_awarded}<br>
+                        Fecha: ${new Date(diagnoseData.deposit.processed_at).toLocaleString('es-CO')}
+                    `;
+                } else {
+                    // Not processed - show details and offer to process
+                    if (diagnoseData.transfer.from.toLowerCase() !== walletAddress.toLowerCase()) {
+                        resultDiv.className = 'mt-3 p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-sm';
+                        resultDiv.innerHTML = `
+                            ❌ <strong>Wallet no coincide</strong><br>
+                            Tu wallet: ${walletAddress}<br>
+                            Wallet de la transacción: ${diagnoseData.transfer.from}
+                        `;
+                    } else {
+                        resultDiv.className = 'mt-3 p-3 rounded-lg bg-yellow-500/10 border border-yellow-500/20 text-yellow-400 text-sm';
+                        resultDiv.innerHTML = `
+                            ⚠️ <strong>Depósito NO procesado</strong><br>
+                            Monto: ${diagnoseData.transfer.amount} USDC<br>
+                            Créditos a otorgar: ${diagnoseData.transfer.credits}<br>
+                            Fee: ${diagnoseData.transfer.fee} USDC<br><br>
+                            <button onclick="DepositUI.processDeposit('${txHash}', '${walletAddress}')" 
+                                class="mt-2 px-4 py-2 rounded-lg bg-yellow-500/20 border border-yellow-500/30 text-yellow-300 hover:bg-yellow-500/30 transition cursor-pointer">
+                                🔧 Procesar Depósito Ahora
+                            </button>
+                        `;
+                    }
+                }
+
+            } catch (error) {
+                console.error('[deposit-ui] Error verifying deposit:', error);
+                resultDiv.className = 'mt-3 p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-sm';
+                resultDiv.innerHTML = `❌ Error: ${error.message}`;
+            }
+        },
+
+        /**
+         * Process a deposit manually
+         */
+        async processDeposit(txHash, walletAddress) {
+            const resultDiv = document.getElementById('verifyDepositResult');
+            
+            if (resultDiv) {
+                resultDiv.className = 'mt-3 p-3 rounded-lg bg-blue-500/10 border border-blue-500/20 text-blue-400 text-sm';
+                resultDiv.innerHTML = '⏳ Procesando depósito...';
+            }
+
+            if (typeof showToast === 'function') {
+                showToast('Procesando depósito...', 'info');
+            }
+
+            try {
+                const backendUrl = window.CONFIG?.BACKEND_API || 'https://musictoken-ring.onrender.com';
+                
+                const response = await fetch(`${backendUrl}/api/deposits/process`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ txHash, walletAddress })
+                });
+
+                if (!response.ok) {
+                    const error = await response.json();
+                    throw new Error(error.error || 'Error al procesar depósito');
+                }
+
+                const result = await response.json();
+
+                if (resultDiv) {
+                    resultDiv.className = 'mt-3 p-3 rounded-lg bg-green-500/10 border border-green-500/20 text-green-400 text-sm';
+                    resultDiv.innerHTML = `
+                        ✅ <strong>Depósito procesado exitosamente</strong><br>
+                        Créditos acreditados: ${result.deposit.credits_awarded}<br>
+                        Recarga la página para ver tu balance actualizado
+                    `;
+                }
+
+                if (typeof showToast === 'function') {
+                    showToast(`✅ ${result.deposit.credits_awarded} créditos acreditados!`, 'success');
+                }
+
+                // Reload balance
+                if (typeof CreditsSystem !== 'undefined' && walletAddress) {
+                    setTimeout(() => {
+                        CreditsSystem.loadBalance(walletAddress);
+                    }, 2000);
+                }
+
+            } catch (error) {
+                console.error('[deposit-ui] Error processing deposit:', error);
+                
+                if (resultDiv) {
+                    resultDiv.className = 'mt-3 p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-sm';
+                    resultDiv.innerHTML = `❌ Error: ${error.message}`;
+                }
+
+                if (typeof showToast === 'function') {
+                    showToast(`Error: ${error.message}`, 'error');
+                }
             }
         }
     };

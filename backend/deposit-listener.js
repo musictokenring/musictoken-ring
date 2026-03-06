@@ -66,10 +66,13 @@ class DepositListener {
         // Start listening for transfers
         await this.startListening();
         
-        // Start periodic scan for missed deposits
+        // Start periodic scan for missed deposits (mejorado: más frecuente y más bloques)
         this.startPeriodicScan();
         
-        console.log('[deposit-listener] Initialized and listening');
+        console.log('[deposit-listener] ✅ Initialized and listening');
+        console.log(`[deposit-listener] Platform wallet: ${PLATFORM_WALLET}`);
+        console.log(`[deposit-listener] Monitoring MTR: ${MTR_TOKEN_ADDRESS}`);
+        console.log(`[deposit-listener] Monitoring USDC: ${USDC_ADDRESS}`);
     }
 
     /**
@@ -116,10 +119,13 @@ class DepositListener {
             
             // Get latest block
             const latestBlock = await this.publicClient.getBlockNumber();
-            const fromBlock = this.lastBlockProcessed || latestBlock - 1000n; // Check last 1000 blocks initially
+            // Escanear más bloques históricos al iniciar (últimos 5000 bloques)
+            const fromBlock = this.lastBlockProcessed || latestBlock - 5000n;
             
             // Process existing events first (scan blocks directly, don't use filters)
             try {
+                console.log(`[deposit-listener] Scanning ${tokenName} transfers from block ${fromBlock} to ${latestBlock}...`);
+                
                 const events = await this.publicClient.getLogs({
                     address: tokenAddress,
                     event: {
@@ -140,9 +146,18 @@ class DepositListener {
                 
                 console.log(`[deposit-listener] Found ${events.length} ${tokenName} transfer events in historical blocks`);
                 
+                let processedCount = 0;
                 for (const event of events) {
-                    await this.processDeposit(event, tokenName, tokenAddress);
+                    try {
+                        await this.processDeposit(event, tokenName, tokenAddress);
+                        processedCount++;
+                    } catch (processError) {
+                        console.error(`[deposit-listener] Error processing event ${event.transactionHash}:`, processError.message);
+                        // Continue with next event
+                    }
                 }
+                
+                console.log(`[deposit-listener] Processed ${processedCount}/${events.length} ${tokenName} deposits`);
             } catch (scanError) {
                 console.warn(`[deposit-listener] Error scanning historical ${tokenName} events:`, scanError.message);
                 // Continue with watchEvent even if scan fails
@@ -295,6 +310,15 @@ class DepositListener {
 
         } catch (error) {
             console.error('[deposit-listener] Error processing deposit:', error);
+            // Log más detalles para debugging
+            console.error('[deposit-listener] Deposit details:', {
+                txHash: event?.transactionHash,
+                from: event?.args?.from,
+                tokenName,
+                error: error.message,
+                stack: error.stack
+            });
+            // No re-throw para que otros depósitos puedan procesarse
         }
     }
 
@@ -428,12 +452,14 @@ class DepositListener {
 
     /**
      * Periodic scan for missed deposits
+     * Mejorado: escanea más bloques y con mayor frecuencia
      */
     startPeriodicScan() {
-        setInterval(async () => {
-            console.log('[deposit-listener] Running periodic scan...');
+        // Escanear inmediatamente al iniciar
+        setTimeout(async () => {
+            console.log('[deposit-listener] Running initial scan...');
             const latestBlock = await this.publicClient.getBlockNumber();
-            const fromBlock = this.lastBlockProcessed || latestBlock - 5000n;
+            const fromBlock = this.lastBlockProcessed || latestBlock - 5000n; // Últimos 5000 bloques
             
             // Scan MTR
             await this.scanBlockRange(MTR_TOKEN_ADDRESS, 'MTR', fromBlock, latestBlock);
@@ -442,11 +468,27 @@ class DepositListener {
             await this.scanBlockRange(USDC_ADDRESS, 'USDC', fromBlock, latestBlock);
             
             this.lastBlockProcessed = latestBlock;
-        }, 5 * 60 * 1000); // Every 5 minutes
+        }, 10000); // Esperar 10 segundos después de iniciar
+
+        // Escanear periódicamente cada 2 minutos (más frecuente)
+        setInterval(async () => {
+            console.log('[deposit-listener] Running periodic scan...');
+            const latestBlock = await this.publicClient.getBlockNumber();
+            const fromBlock = this.lastBlockProcessed || latestBlock - 2000n; // Últimos 2000 bloques
+            
+            // Scan MTR
+            await this.scanBlockRange(MTR_TOKEN_ADDRESS, 'MTR', fromBlock, latestBlock);
+            
+            // Scan USDC
+            await this.scanBlockRange(USDC_ADDRESS, 'USDC', fromBlock, latestBlock);
+            
+            this.lastBlockProcessed = latestBlock;
+        }, 2 * 60 * 1000); // Every 2 minutes (más frecuente que antes)
     }
 
     /**
      * Scan block range for deposits
+     * Mejorado: mejor manejo de errores y logging
      */
     async scanBlockRange(tokenAddress, tokenName, fromBlock, toBlock) {
         try {
@@ -472,11 +514,38 @@ class DepositListener {
             
             console.log(`[deposit-listener] Scanned ${tokenName} blocks ${fromBlock}-${toBlock}: found ${events.length} events`);
             
+            let processedCount = 0;
+            let skippedCount = 0;
+            let errorCount = 0;
+
             for (const event of events) {
-                await this.processDeposit(event, tokenName, tokenAddress);
+                try {
+                    // Verificar si ya está procesado antes de intentar procesar
+                    const { data: existing } = await supabase
+                        .from('deposits')
+                        .select('id')
+                        .eq('tx_hash', event.transactionHash)
+                        .single();
+
+                    if (existing) {
+                        skippedCount++;
+                        continue;
+                    }
+
+                    await this.processDeposit(event, tokenName, tokenAddress);
+                    processedCount++;
+                } catch (processError) {
+                    errorCount++;
+                    console.error(`[deposit-listener] Error processing ${tokenName} deposit ${event.transactionHash}:`, processError.message);
+                    // Continuar con el siguiente evento
+                }
+            }
+
+            if (processedCount > 0 || errorCount > 0) {
+                console.log(`[deposit-listener] ${tokenName} scan results: ${processedCount} processed, ${skippedCount} skipped, ${errorCount} errors`);
             }
         } catch (error) {
-            console.error(`[deposit-listener] Error scanning ${tokenName}:`, error.message);
+            console.error(`[deposit-listener] Error scanning ${tokenName} blocks ${fromBlock}-${toBlock}:`, error.message);
             // Don't throw - allow periodic scan to continue
         }
     }

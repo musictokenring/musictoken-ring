@@ -10,6 +10,7 @@ const { DepositListener } = require('./deposit-listener');
 const { PriceUpdater } = require('./price-updater');
 const { ClaimService } = require('./claim-service');
 const { VaultService } = require('./vault-service');
+const { DepositSyncService } = require('./deposit-sync-service');
 const { createClient } = require('@supabase/supabase-js');
 
 const app = express();
@@ -46,6 +47,7 @@ let depositListener;
 let priceUpdater;
 let claimService;
 let vaultService;
+let depositSyncService;
 
 // Initialize all services
 async function initializeServices() {
@@ -65,6 +67,10 @@ async function initializeServices() {
 
         // Initialize vault service
         vaultService = new VaultService();
+
+        // Initialize deposit sync service (backup mechanism)
+        depositSyncService = new DepositSyncService();
+        await depositSyncService.init();
 
         console.log('[server] ✅ All services initialized');
     } catch (error) {
@@ -214,6 +220,49 @@ app.get('/api/price', async (req, res) => {
 });
 
 /**
+ * Auto-sync deposits for a wallet (called by frontend periodically)
+ */
+app.post('/api/deposits/auto-sync/:walletAddress', async (req, res) => {
+    try {
+        const walletAddress = req.params.walletAddress.toLowerCase();
+
+        if (!depositSyncService) {
+            return res.status(503).json({ error: 'Deposit sync service not available' });
+        }
+
+        // Trigger sync
+        await depositSyncService.manualSync();
+
+        // Check user's recent deposits
+        const { data: user } = await supabase
+            .from('users')
+            .select('id')
+            .eq('wallet_address', walletAddress)
+            .single();
+
+        if (user) {
+            const { data: recentDeposits } = await supabase
+                .from('deposits')
+                .select('*')
+                .eq('user_id', user.id)
+                .order('created_at', { ascending: false })
+                .limit(5);
+
+            return res.json({
+                success: true,
+                syncCompleted: true,
+                recentDeposits: recentDeposits || []
+            });
+        }
+
+        res.json({ success: true, syncCompleted: true });
+    } catch (error) {
+        console.error('[server] Error in auto-sync:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+/**
  * Get deposit history
  */
 app.get('/api/deposits/:walletAddress', async (req, res) => {
@@ -239,6 +288,299 @@ app.get('/api/deposits/:walletAddress', async (req, res) => {
 
         res.json({ deposits: deposits || [] });
     } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+/**
+ * Diagnose a deposit transaction
+ */
+app.get('/api/deposits/diagnose/:txHash', async (req, res) => {
+    try {
+        const txHash = req.params.txHash;
+        const { createPublicClient, http, formatUnits } = require('viem');
+        const { base } = require('viem/chains');
+        
+        const PLATFORM_WALLET = process.env.PLATFORM_WALLET_ADDRESS || '0x75376BC58830f27415402875D26B73A6BE8E2253';
+        const USDC_ADDRESS = process.env.USDC_ADDRESS || '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913';
+        
+        const publicClient = createPublicClient({
+            chain: base,
+            transport: http(process.env.BASE_RPC_URL || 'https://mainnet.base.org')
+        });
+
+        // Get transaction receipt
+        const receipt = await publicClient.getTransactionReceipt({ hash: txHash });
+        
+        if (receipt.status !== 'success') {
+            return res.status(400).json({ error: 'Transaction failed', status: receipt.status });
+        }
+
+        // Check if already processed
+        const { data: existingDeposit } = await supabase
+            .from('deposits')
+            .select('*')
+            .eq('tx_hash', txHash)
+            .single();
+
+        if (existingDeposit) {
+            return res.json({
+                processed: true,
+                deposit: existingDeposit,
+                message: 'Deposit already processed'
+            });
+        }
+
+        // Decode Transfer events
+        const ERC20_TRANSFER_ABI = [
+            {
+                type: 'event',
+                name: 'Transfer',
+                inputs: [
+                    { name: 'from', type: 'address', indexed: true },
+                    { name: 'to', type: 'address', indexed: true },
+                    { name: 'value', type: 'uint256', indexed: false }
+                ]
+            }
+        ];
+
+        const transferLogs = receipt.logs.filter(log => 
+            log.address.toLowerCase() === USDC_ADDRESS.toLowerCase()
+        );
+
+        const transfers = [];
+        for (const log of transferLogs) {
+            try {
+                const decoded = await publicClient.decodeEventLog({
+                    abi: ERC20_TRANSFER_ABI,
+                    data: log.data,
+                    topics: log.topics
+                });
+
+                const from = decoded.args.from;
+                const to = decoded.args.to;
+                const value = decoded.args.value;
+                const amount = parseFloat(formatUnits(value, 6));
+
+                if (to.toLowerCase() === PLATFORM_WALLET.toLowerCase()) {
+                    transfers.push({
+                        from,
+                        to,
+                        amount,
+                        isPlatformDeposit: true
+                    });
+                }
+            } catch (e) {
+                // Skip invalid logs
+            }
+        }
+
+        if (transfers.length === 0) {
+            return res.status(400).json({ 
+                error: 'No USDC transfer to platform wallet found in this transaction' 
+            });
+        }
+
+        const depositTransfer = transfers[0];
+        const DEPOSIT_FEE_RATE = 0.05;
+        const depositFee = depositTransfer.amount * DEPOSIT_FEE_RATE;
+        const credits = depositTransfer.amount - depositFee;
+
+        // Check user
+        const { data: user } = await supabase
+            .from('users')
+            .select('id, wallet_address')
+            .eq('wallet_address', depositTransfer.from.toLowerCase())
+            .single();
+
+        res.json({
+            processed: false,
+            transaction: {
+                hash: txHash,
+                status: receipt.status,
+                blockNumber: receipt.blockNumber.toString()
+            },
+            transfer: {
+                from: depositTransfer.from,
+                to: depositTransfer.to,
+                amount: depositTransfer.amount,
+                credits: Math.round(credits * 10000) / 10000,
+                fee: depositFee
+            },
+            user: user ? {
+                id: user.id,
+                wallet_address: user.wallet_address
+            } : null,
+            canProcess: true
+        });
+
+    } catch (error) {
+        console.error('[server] Error diagnosing deposit:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+/**
+ * Trigger manual deposit sync
+ */
+app.post('/api/deposits/sync', async (req, res) => {
+    try {
+        if (!depositSyncService) {
+            return res.status(503).json({ error: 'Deposit sync service not initialized' });
+        }
+
+        const result = await depositSyncService.manualSync();
+        res.json(result);
+    } catch (error) {
+        console.error('[server] Error in manual sync:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+/**
+ * Sync specific transaction
+ */
+app.post('/api/deposits/sync-transaction', async (req, res) => {
+    try {
+        const { txHash } = req.body;
+
+        if (!txHash) {
+            return res.status(400).json({ error: 'txHash required' });
+        }
+
+        if (!depositSyncService) {
+            return res.status(503).json({ error: 'Deposit sync service not initialized' });
+        }
+
+        const result = await depositSyncService.syncTransaction(txHash);
+        res.json(result);
+    } catch (error) {
+        console.error('[server] Error syncing transaction:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+/**
+ * Manually process a deposit
+ */
+app.post('/api/deposits/process', async (req, res) => {
+    try {
+        const { txHash, walletAddress } = req.body;
+
+        if (!txHash || !walletAddress) {
+            return res.status(400).json({ error: 'txHash and walletAddress required' });
+        }
+
+        // Verify transaction first
+        const { createPublicClient, http, formatUnits } = require('viem');
+        const { base } = require('viem/chains');
+        
+        const PLATFORM_WALLET = process.env.PLATFORM_WALLET_ADDRESS || '0x75376BC58830f27415402875D26B73A6BE8E2253';
+        const USDC_ADDRESS = process.env.USDC_ADDRESS || '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913';
+        
+        const publicClient = createPublicClient({
+            chain: base,
+            transport: http(process.env.BASE_RPC_URL || 'https://mainnet.base.org')
+        });
+
+        // Check if already processed
+        const { data: existing } = await supabase
+            .from('deposits')
+            .select('id')
+            .eq('tx_hash', txHash)
+            .single();
+
+        if (existing) {
+            return res.status(400).json({ error: 'Deposit already processed' });
+        }
+
+        // Get receipt and decode transfer
+        const receipt = await publicClient.getTransactionReceipt({ hash: txHash });
+        
+        if (receipt.status !== 'success') {
+            return res.status(400).json({ error: 'Transaction failed' });
+        }
+
+        const ERC20_TRANSFER_ABI = [
+            {
+                type: 'event',
+                name: 'Transfer',
+                inputs: [
+                    { name: 'from', type: 'address', indexed: true },
+                    { name: 'to', type: 'address', indexed: true },
+                    { name: 'value', type: 'uint256', indexed: false }
+                ]
+            }
+        ];
+
+        let transferEvent = null;
+        for (const log of receipt.logs) {
+            if (log.address.toLowerCase() === USDC_ADDRESS.toLowerCase()) {
+                try {
+                    const decoded = await publicClient.decodeEventLog({
+                        abi: ERC20_TRANSFER_ABI,
+                        data: log.data,
+                        topics: log.topics
+                    });
+
+                    if (decoded.args.to.toLowerCase() === PLATFORM_WALLET.toLowerCase()) {
+                        transferEvent = decoded;
+                        break;
+                    }
+                } catch (e) {
+                    // Continue
+                }
+            }
+        }
+
+        if (!transferEvent) {
+            return res.status(400).json({ error: 'No USDC transfer to platform wallet found' });
+        }
+
+        // Verify wallet matches
+        if (transferEvent.args.from.toLowerCase() !== walletAddress.toLowerCase()) {
+            return res.status(400).json({ 
+                error: 'Wallet address mismatch',
+                expected: walletAddress,
+                found: transferEvent.args.from
+            });
+        }
+
+        // Process using DepositListener
+        const { DepositListener } = require('./deposit-listener');
+        const depositListener = new DepositListener();
+        await depositListener.init();
+
+        const mockEvent = {
+            transactionHash: txHash,
+            args: {
+                from: transferEvent.args.from,
+                to: transferEvent.args.to,
+                value: transferEvent.args.value
+            }
+        };
+
+        await depositListener.processDeposit(mockEvent, 'USDC', USDC_ADDRESS);
+
+        // Get result
+        const { data: newDeposit } = await supabase
+            .from('deposits')
+            .select('*')
+            .eq('tx_hash', txHash)
+            .single();
+
+        if (!newDeposit) {
+            return res.status(500).json({ error: 'Deposit processing failed' });
+        }
+
+        res.json({
+            success: true,
+            deposit: newDeposit,
+            message: 'Deposit processed successfully'
+        });
+
+    } catch (error) {
+        console.error('[server] Error processing deposit:', error);
         res.status(500).json({ error: error.message });
     }
 });
