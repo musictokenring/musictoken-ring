@@ -363,8 +363,11 @@ app.get('/api/deposits/diagnose/:txHash', async (req, res) => {
             transport: http(rpcUrl)
         });
 
-        // Get transaction receipt
-        let receipt;
+        // Intentar obtener el receipt de la transacción
+        // Si no se encuentra, intentar buscar por logs directamente (puede ser que el receipt aún no esté disponible)
+        let receipt = null;
+        let transferLogs = [];
+        
         try {
             console.log('[diagnose] Fetching transaction receipt...');
             receipt = await publicClient.getTransactionReceipt({ hash: txHash });
@@ -372,48 +375,102 @@ app.get('/api/deposits/diagnose/:txHash', async (req, res) => {
             if (receipt) {
                 console.log('[diagnose] Receipt status:', receipt.status);
                 console.log('[diagnose] Block number:', receipt.blockNumber?.toString());
+                console.log('[diagnose] Total logs:', receipt.logs?.length || 0);
             }
         } catch (rpcError) {
             console.error('[diagnose] Error fetching receipt:', rpcError);
             console.error('[diagnose] Error name:', rpcError.name);
             console.error('[diagnose] Error message:', rpcError.message);
-            console.error('[diagnose] Error code:', rpcError.code);
-            console.error('[diagnose] Error stack:', rpcError.stack);
             
-            // Errores específicos de viem/RPC
+            // Si el receipt no se encuentra, intentar buscar los logs directamente
             if (rpcError.name === 'TransactionReceiptNotFoundError' || 
                 rpcError.name === 'TransactionNotFoundError' || 
                 (rpcError.message && (rpcError.message.includes('not found') || rpcError.message.includes('could not be found')))) {
-                console.log('[diagnose] Transaction not found - returning 404');
-                return res.status(404).json({ 
-                    error: 'Transaction not found',
-                    message: 'La transacción no se encontró en la red Base. Verifica que el hash sea correcto y pertenezca a la red Base. La transacción puede no existir o aún no haber sido procesada en un bloque.'
-                });
-            }
-            
-            if (rpcError.name === 'TimeoutError' || rpcError.message?.includes('timeout')) {
+                
+                console.log('[diagnose] Receipt not found, trying to find transaction by scanning recent blocks...');
+                
+                // Intentar buscar la transacción escaneando bloques recientes
+                try {
+                    const latestBlock = await publicClient.getBlockNumber();
+                    console.log('[diagnose] Latest block:', latestBlock.toString());
+                    
+                    // Escanear los últimos 1000 bloques buscando la transacción
+                    const fromBlock = latestBlock - BigInt(1000);
+                    const toBlock = latestBlock;
+                    
+                    console.log('[diagnose] Scanning blocks', fromBlock.toString(), 'to', toBlock.toString());
+                    
+                    // Buscar logs de USDC Transfer a la plataforma
+                    const logs = await publicClient.getLogs({
+                        address: USDC_ADDRESS,
+                        event: {
+                            type: 'event',
+                            name: 'Transfer',
+                            inputs: [
+                                { name: 'from', type: 'address', indexed: true },
+                                { name: 'to', type: 'address', indexed: true },
+                                { name: 'value', type: 'uint256', indexed: false }
+                            ]
+                        },
+                        args: {
+                            to: PLATFORM_WALLET
+                        },
+                        fromBlock: fromBlock,
+                        toBlock: toBlock
+                    });
+                    
+                    console.log('[diagnose] Found', logs.length, 'USDC transfer logs to platform');
+                    
+                    // Buscar si alguna de estas transacciones coincide con nuestro hash
+                    for (const log of logs) {
+                        if (log.transactionHash.toLowerCase() === txHash.toLowerCase()) {
+                            console.log('[diagnose] ✅ Found transaction in logs!');
+                            // Reconstruir un receipt básico desde el log
+                            receipt = {
+                                status: 'success', // Asumimos éxito si está en los logs
+                                blockNumber: log.blockNumber,
+                                transactionHash: log.transactionHash,
+                                logs: [log]
+                            };
+                            break;
+                        }
+                    }
+                    
+                    if (!receipt) {
+                        console.log('[diagnose] Transaction not found in recent blocks');
+                        return res.status(404).json({ 
+                            error: 'Transaction not found',
+                            message: 'La transacción no se encontró en la red Base. Verifica que el hash sea correcto y pertenezca a la red Base. Si la transacción fue reciente, espera unos momentos e intenta nuevamente.'
+                        });
+                    }
+                } catch (scanError) {
+                    console.error('[diagnose] Error scanning blocks:', scanError);
+                    return res.status(404).json({ 
+                        error: 'Transaction not found',
+                        message: 'La transacción no se encontró en la red Base. Verifica que el hash sea correcto y pertenezca a la red Base.'
+                    });
+                }
+            } else if (rpcError.name === 'TimeoutError' || rpcError.message?.includes('timeout')) {
                 return res.status(504).json({ 
                     error: 'RPC Timeout',
                     message: 'El servidor RPC tardó demasiado en responder. Intenta nuevamente en unos momentos.'
                 });
-            }
-            
-            if (rpcError.message && rpcError.message.includes('invalid transaction hash')) {
+            } else if (rpcError.message && rpcError.message.includes('invalid transaction hash')) {
                 return res.status(400).json({ 
                     error: 'Invalid transaction hash',
                     message: 'El hash de transacción proporcionado no es válido.'
                 });
+            } else {
+                return res.status(500).json({ 
+                    error: 'RPC Error',
+                    message: 'Error al consultar la blockchain: ' + (rpcError.message || 'Error desconocido'),
+                    details: process.env.NODE_ENV === 'development' ? {
+                        name: rpcError.name,
+                        code: rpcError.code,
+                        message: rpcError.message
+                    } : undefined
+                });
             }
-            
-            return res.status(500).json({ 
-                error: 'RPC Error',
-                message: 'Error al consultar la blockchain: ' + (rpcError.message || 'Error desconocido'),
-                details: process.env.NODE_ENV === 'development' ? {
-                    name: rpcError.name,
-                    code: rpcError.code,
-                    message: rpcError.message
-                } : undefined
-            });
         }
 
         if (!receipt) {
@@ -431,7 +488,7 @@ app.get('/api/deposits/diagnose/:txHash', async (req, res) => {
             });
         }
 
-        // Check if already processed
+        // PRIMERO: Verificar si ya está procesado en la BD (más rápido y confiable)
         let existingDeposit;
         try {
             const { data, error } = await supabase
@@ -446,6 +503,20 @@ app.get('/api/deposits/diagnose/:txHash', async (req, res) => {
             }
             
             existingDeposit = data;
+            
+            if (existingDeposit) {
+                console.log('[diagnose] Deposit found in database:', {
+                    id: existingDeposit.id,
+                    status: existingDeposit.status,
+                    credits: existingDeposit.credits_awarded,
+                    processedAt: existingDeposit.processed_at
+                });
+                return res.json({
+                    processed: true,
+                    deposit: existingDeposit,
+                    message: 'Deposit already processed'
+                });
+            }
         } catch (dbError) {
             console.error('[diagnose] Database error:', dbError);
             return res.status(500).json({ 
@@ -453,14 +524,8 @@ app.get('/api/deposits/diagnose/:txHash', async (req, res) => {
                 message: 'Error al consultar la base de datos: ' + (dbError.message || 'Error desconocido')
             });
         }
-
-        if (existingDeposit) {
-            return res.json({
-                processed: true,
-                deposit: existingDeposit,
-                message: 'Deposit already processed'
-            });
-        }
+        
+        console.log('[diagnose] Deposit not found in database, checking blockchain...');
 
         // Decode Transfer events
         const ERC20_TRANSFER_ABI = [
@@ -477,15 +542,28 @@ app.get('/api/deposits/diagnose/:txHash', async (req, res) => {
 
         console.log('[diagnose] Total logs in receipt:', receipt.logs?.length || 0);
         
-        const transferLogs = receipt.logs.filter(log => 
+        // Filtrar logs de USDC Transfer
+        const allTransferLogs = receipt.logs.filter(log => 
             log.address.toLowerCase() === USDC_ADDRESS.toLowerCase()
         );
         
-        console.log('[diagnose] USDC transfer logs found:', transferLogs.length);
+        console.log('[diagnose] USDC transfer logs found:', allTransferLogs.length);
         console.log('[diagnose] USDC address:', USDC_ADDRESS);
         console.log('[diagnose] Platform wallet:', PLATFORM_WALLET);
+        
+        // Si no hay logs de USDC, también buscar en MTR
+        let transferLogs = allTransferLogs;
+        if (transferLogs.length === 0) {
+            const mtrLogs = receipt.logs.filter(log => 
+                log.address.toLowerCase() === MTR_TOKEN_ADDRESS.toLowerCase()
+            );
+            console.log('[diagnose] MTR transfer logs found:', mtrLogs.length);
+            transferLogs = mtrLogs;
+        }
 
         const transfers = [];
+        const tokenDecimals = transferLogs.length > 0 && transferLogs[0].address.toLowerCase() === MTR_TOKEN_ADDRESS.toLowerCase() ? 18 : 6;
+        
         for (const log of transferLogs) {
             try {
                 const decoded = await publicClient.decodeEventLog({
@@ -497,21 +575,28 @@ app.get('/api/deposits/diagnose/:txHash', async (req, res) => {
                 const from = decoded.args.from;
                 const to = decoded.args.to;
                 const value = decoded.args.value;
-                const amount = parseFloat(formatUnits(value, 6));
+                const amount = parseFloat(formatUnits(value, tokenDecimals));
                 
-                console.log('[diagnose] Transfer decoded:', { from, to, amount });
+                console.log('[diagnose] Transfer decoded:', { 
+                    from, 
+                    to, 
+                    amount, 
+                    token: log.address.toLowerCase() === USDC_ADDRESS.toLowerCase() ? 'USDC' : 'MTR'
+                });
 
                 if (to.toLowerCase() === PLATFORM_WALLET.toLowerCase()) {
                     transfers.push({
                         from,
                         to,
                         amount,
+                        token: log.address.toLowerCase() === USDC_ADDRESS.toLowerCase() ? 'USDC' : 'MTR',
                         isPlatformDeposit: true
                     });
-                    console.log('[diagnose] Platform deposit found:', { from, amount });
+                    console.log('[diagnose] ✅ Platform deposit found:', { from, amount, token: transfers[transfers.length - 1].token });
                 }
             } catch (e) {
                 console.warn('[diagnose] Error decoding log:', e.message);
+                console.warn('[diagnose] Log data:', { address: log.address, topics: log.topics?.length, data: log.data?.substring(0, 20) });
                 // Skip invalid logs
             }
         }
@@ -519,16 +604,38 @@ app.get('/api/deposits/diagnose/:txHash', async (req, res) => {
         if (transfers.length === 0) {
             console.log('[diagnose] No platform deposits found in transaction');
             console.log('[diagnose] Transaction may not be a deposit to platform wallet');
+            console.log('[diagnose] All logs in receipt:', receipt.logs.map(l => ({
+                address: l.address,
+                topics: l.topics?.length
+            })));
             return res.status(400).json({ 
-                error: 'No USDC transfer to platform wallet found',
-                message: 'Esta transacción no contiene una transferencia de USDC a la dirección de la plataforma. Verifica que el hash sea correcto y que la transacción sea un depósito a la plataforma.'
+                error: 'No transfer to platform wallet found',
+                message: 'Esta transacción no contiene una transferencia de USDC o MTR a la dirección de la plataforma. Verifica que el hash sea correcto y que la transacción sea un depósito a la plataforma.'
             });
         }
 
         const depositTransfer = transfers[0];
         const DEPOSIT_FEE_RATE = 0.05;
         const depositFee = depositTransfer.amount * DEPOSIT_FEE_RATE;
-        const credits = depositTransfer.amount - depositFee;
+        
+        // Calcular créditos según el token
+        let credits;
+        if (depositTransfer.token === 'USDC') {
+            // USDC: 1 USDC = 1 crédito (después del fee)
+            credits = depositTransfer.amount - depositFee;
+        } else {
+            // MTR: usar el rate actual desde la BD
+            // Por ahora usar un rate por defecto, pero idealmente debería venir de la BD
+            const MTR_RATE = 778; // 778 MTR = 1 crédito (debería venir de platform_settings)
+            credits = (depositTransfer.amount - depositFee) / MTR_RATE;
+        }
+        
+        console.log('[diagnose] Deposit calculation:', {
+            token: depositTransfer.token,
+            amount: depositTransfer.amount,
+            fee: depositFee,
+            credits: credits
+        });
 
         console.log('[diagnose] Calculating deposit details:', {
             amount: depositTransfer.amount,
