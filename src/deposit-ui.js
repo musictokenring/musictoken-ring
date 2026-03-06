@@ -361,20 +361,40 @@
             try {
                 const backendUrl = window.CONFIG?.BACKEND_API || 'https://musictoken-ring.onrender.com';
                 
+                console.log('[deposit-ui] Verificando transacción:', txHash);
+                console.log('[deposit-ui] Backend URL:', backendUrl);
+                
                 // Diagnose transaction
-                const diagnoseResponse = await fetch(`${backendUrl}/api/deposits/diagnose/${txHash}`);
+                const diagnoseResponse = await fetch(`${backendUrl}/api/deposits/diagnose/${txHash}`, {
+                    method: 'GET',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    }
+                });
+                
+                console.log('[deposit-ui] Response status:', diagnoseResponse.status);
+                console.log('[deposit-ui] Response ok:', diagnoseResponse.ok);
                 
                 if (!diagnoseResponse.ok) {
                     // Intentar obtener detalles del error del backend
                     let errorMessage = 'Error al verificar transacción';
+                    let errorDetails = null;
+                    
                     try {
                         const errorData = await diagnoseResponse.json();
-                        errorMessage = errorData.error || errorData.message || errorMessage;
+                        console.log('[deposit-ui] Error data from backend:', errorData);
+                        errorMessage = errorData.message || errorData.error || errorMessage;
+                        errorDetails = errorData.details;
                     } catch (e) {
+                        console.error('[deposit-ui] Error parsing error response:', e);
                         // Si no se puede parsear el JSON, usar el status text
                         errorMessage = `Error ${diagnoseResponse.status}: ${diagnoseResponse.statusText || 'Error al conectar con el servidor'}`;
                     }
-                    throw new Error(errorMessage);
+                    
+                    const error = new Error(errorMessage);
+                    error.status = diagnoseResponse.status;
+                    error.details = errorDetails;
+                    throw error;
                 }
 
                 const diagnoseData = await diagnoseResponse.json();
@@ -431,8 +451,17 @@
                     errorMsg = '❌ <strong>Error de conexión</strong><br>No se pudo conectar con el servidor. Verifica tu conexión a internet.';
                 } else if (error.message.includes('404')) {
                     errorMsg = '❌ <strong>Endpoint no encontrado</strong><br>El servidor no responde. Intenta más tarde.';
-                } else if (error.message.includes('500')) {
-                    errorMsg = '❌ <strong>Error del servidor</strong><br>El servidor encontró un problema. Intenta más tarde o contacta soporte.';
+                } else if (error.message.includes('500') || error.status === 500) {
+                    errorMsg = '❌ <strong>Error del servidor</strong><br>El servidor encontró un problema al procesar la transacción.<br><br>';
+                    errorMsg += '<small class="text-gray-400">Posibles causas:</small><br>';
+                    errorMsg += '<small class="text-gray-400">• La transacción no existe en la red Base</small><br>';
+                    errorMsg += '<small class="text-gray-400">• Problemas temporales con el RPC de Base</small><br>';
+                    errorMsg += '<small class="text-gray-400">• El hash de transacción pertenece a otra red</small><br><br>';
+                    errorMsg += '<small class="text-yellow-400">Verifica que el hash sea correcto y pertenezca a la red Base.</small>';
+                    
+                    if (error.details && process.env.NODE_ENV === 'development') {
+                        errorMsg += '<br><br><small class="text-gray-500">Detalles técnicos: ' + JSON.stringify(error.details) + '</small>';
+                    }
                 } else if (error.message.includes('Transaction failed')) {
                     errorMsg = '❌ <strong>Transacción fallida</strong><br>Esta transacción no fue exitosa en la blockchain.';
                 } else if (error.message.includes('not found') || error.message.includes('Invalid transaction')) {
