@@ -277,14 +277,40 @@
             
             if (!txHashInput || !resultDiv) return;
 
-            const txHash = txHashInput.value.trim();
+            let txHash = txHashInput.value.trim();
             
+            // Limpiar el hash: remover espacios, saltos de línea, y barras diagonales comunes
+            txHash = txHash.replace(/\s+/g, ''); // Remover espacios
+            txHash = txHash.replace(/\//g, ''); // Remover barras diagonales
+            txHash = txHash.replace(/\n/g, ''); // Remover saltos de línea
+            txHash = txHash.replace(/-/g, ''); // Remover guiones (por si acaso)
+            
+            // Validar formato básico
             if (!txHash || !txHash.startsWith('0x')) {
                 resultDiv.className = 'mt-3 p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-sm';
-                resultDiv.innerHTML = '❌ Hash de transacción inválido';
+                resultDiv.innerHTML = '❌ <strong>Hash inválido</strong><br>El hash debe comenzar con "0x"';
                 resultDiv.classList.remove('hidden');
                 return;
             }
+            
+            // Validar longitud (debe ser 66 caracteres: 0x + 64 hex)
+            if (txHash.length !== 66) {
+                resultDiv.className = 'mt-3 p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-sm';
+                resultDiv.innerHTML = `❌ <strong>Hash inválido</strong><br>El hash debe tener 66 caracteres (tiene ${txHash.length}).<br>Verifica que copiaste el hash completo sin espacios ni caracteres especiales.`;
+                resultDiv.classList.remove('hidden');
+                return;
+            }
+            
+            // Validar que solo contenga caracteres hexadecimales
+            if (!/^0x[0-9a-fA-F]{64}$/.test(txHash)) {
+                resultDiv.className = 'mt-3 p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-sm';
+                resultDiv.innerHTML = '❌ <strong>Hash inválido</strong><br>El hash contiene caracteres no válidos. Solo debe contener números y letras de la A a la F.';
+                resultDiv.classList.remove('hidden');
+                return;
+            }
+            
+            // Actualizar el input con el hash limpio
+            txHashInput.value = txHash;
 
             // Get wallet address - Múltiples fuentes para asegurar detección
             let walletAddress = null;

@@ -299,11 +299,27 @@ app.get('/api/deposits/diagnose/:txHash', async (req, res) => {
     try {
         const txHash = req.params.txHash;
         
-        // Validar formato del hash
-        if (!txHash || !txHash.startsWith('0x') || txHash.length !== 66) {
+        // Limpiar y validar formato del hash
+        txHash = txHash.trim().replace(/\s+/g, '').replace(/\//g, '').replace(/\n/g, '').replace(/-/g, '');
+        
+        if (!txHash || !txHash.startsWith('0x')) {
             return res.status(400).json({ 
                 error: 'Invalid transaction hash format',
-                message: 'El hash de transacción debe tener 66 caracteres y comenzar con 0x'
+                message: 'El hash de transacción debe comenzar con "0x"'
+            });
+        }
+        
+        if (txHash.length !== 66) {
+            return res.status(400).json({ 
+                error: 'Invalid transaction hash length',
+                message: `El hash de transacción debe tener 66 caracteres (tiene ${txHash.length}). Verifica que copiaste el hash completo.`
+            });
+        }
+        
+        if (!/^0x[0-9a-fA-F]{64}$/.test(txHash)) {
+            return res.status(400).json({ 
+                error: 'Invalid transaction hash characters',
+                message: 'El hash contiene caracteres no válidos. Solo debe contener números y letras hexadecimales (0-9, a-f, A-F).'
             });
         }
         
