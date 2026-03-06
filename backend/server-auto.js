@@ -511,14 +511,34 @@ app.get('/api/deposits/diagnose/:txHash', async (req, res) => {
         const depositFee = depositTransfer.amount * DEPOSIT_FEE_RATE;
         const credits = depositTransfer.amount - depositFee;
 
-        // Check user
-        const { data: user } = await supabase
-            .from('users')
-            .select('id, wallet_address')
-            .eq('wallet_address', depositTransfer.from.toLowerCase())
-            .single();
+        console.log('[diagnose] Calculating deposit details:', {
+            amount: depositTransfer.amount,
+            fee: depositFee,
+            credits: credits
+        });
 
-        res.json({
+        // Check user
+        let user = null;
+        try {
+            const { data, error } = await supabase
+                .from('users')
+                .select('id, wallet_address')
+                .eq('wallet_address', depositTransfer.from.toLowerCase())
+                .single();
+            
+            if (error && error.code !== 'PGRST116') { // PGRST116 = no rows returned
+                console.error('[diagnose] Error checking user:', error);
+                throw error;
+            }
+            
+            user = data;
+            console.log('[diagnose] User found:', user ? 'YES' : 'NO');
+        } catch (dbError) {
+            console.error('[diagnose] Database error checking user:', dbError);
+            // No lanzar error aquí, solo loguear - el depósito puede procesarse sin usuario registrado
+        }
+
+        const responseData = {
             processed: false,
             transaction: {
                 hash: txHash,
@@ -537,7 +557,16 @@ app.get('/api/deposits/diagnose/:txHash', async (req, res) => {
                 wallet_address: user.wallet_address
             } : null,
             canProcess: true
+        };
+        
+        console.log('[diagnose] Sending response:', {
+            processed: responseData.processed,
+            transferAmount: responseData.transfer.amount,
+            credits: responseData.transfer.credits,
+            userFound: !!responseData.user
         });
+
+        res.json(responseData);
 
     } catch (error) {
         console.error('[diagnose] Unexpected error:', error);
