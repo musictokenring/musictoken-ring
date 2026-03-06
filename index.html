@@ -2510,6 +2510,9 @@
                 btnEl.innerHTML = '<span class="hidden sm:inline">' + desktopText + '</span><span class="sm:hidden">' + mobileText + '</span>';
                 if (warningEl) warningEl.classList.toggle('hidden', connectedChainId === 8453);
                 localStorage.setItem('mtr_wallet', connectedAddress);
+                // EXPONER GLOBALMENTE para que otros scripts puedan acceder
+                window.connectedAddress = connectedAddress;
+                window.connectedChainId = connectedChainId;
                 
                 // Initialize credits system when wallet is connected
                 if (window.CreditsSystem && typeof window.CreditsSystem.init === 'function') {
@@ -3087,6 +3090,9 @@
             if (walletConnectProvider && walletConnectProvider.accounts && walletConnectProvider.accounts.length > 0) {
                 connectedAddress = walletConnectProvider.accounts[0];
                 connectedChainId = walletConnectProvider.chainId || 8453;
+                // EXPONER GLOBALMENTE
+                window.connectedAddress = connectedAddress;
+                window.connectedChainId = connectedChainId;
                 
                 console.log('[wallet] Connected via WalletConnect:', connectedAddress);
                 
@@ -3597,6 +3603,7 @@
                     
                     // Actualizar dirección
                     connectedAddress = accounts[0];
+                    window.connectedAddress = connectedAddress; // EXPONER GLOBALMENTE
                     console.log('[wallet] 📱 Dirección establecida:', connectedAddress);
                     
                     // Obtener chain ID

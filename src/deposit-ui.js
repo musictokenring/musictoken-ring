@@ -286,14 +286,47 @@
                 return;
             }
 
-            // Get wallet address
-            const walletAddress = window.connectedAddress;
+            // Get wallet address - Múltiples fuentes para asegurar detección
+            let walletAddress = null;
+            
+            // Intentar desde window.connectedAddress (si está expuesta globalmente)
+            if (typeof window !== 'undefined' && window.connectedAddress) {
+                walletAddress = window.connectedAddress;
+            }
+            
+            // Si no, intentar desde localStorage
+            if (!walletAddress) {
+                walletAddress = localStorage.getItem('mtr_wallet');
+            }
+            
+            // Si no, intentar leer del DOM (elemento walletAddress)
+            if (!walletAddress) {
+                const walletEl = document.getElementById('walletAddress');
+                if (walletEl && walletEl.textContent) {
+                    // Extraer dirección completa si está truncada (ej: "0x1234...5678")
+                    const walletText = walletEl.textContent.trim();
+                    // Si está en formato truncado, necesitamos la dirección completa
+                    // Buscar en el scope global donde se almacena
+                }
+            }
+            
+            // Si aún no tenemos la dirección, buscar en el scope del script principal
+            // (connectedAddress puede estar en el scope de index.html)
+            if (!walletAddress && typeof connectedAddress !== 'undefined') {
+                walletAddress = connectedAddress;
+            }
+            
             if (!walletAddress) {
                 resultDiv.className = 'mt-3 p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-sm';
-                resultDiv.innerHTML = '❌ Conecta tu wallet primero';
+                resultDiv.innerHTML = '❌ No se pudo detectar la wallet conectada. Por favor reconecta tu wallet.';
                 resultDiv.classList.remove('hidden');
                 return;
             }
+            
+            // Normalizar dirección (lowercase, sin espacios)
+            walletAddress = walletAddress.toLowerCase().trim();
+            
+            console.log('[deposit-ui] Wallet detectada para verificación:', walletAddress);
 
             resultDiv.className = 'mt-3 p-3 rounded-lg bg-blue-500/10 border border-blue-500/20 text-blue-400 text-sm';
             resultDiv.innerHTML = '🔍 Verificando transacción...';
