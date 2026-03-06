@@ -99,21 +99,31 @@ class MultiChainDepositListener {
      * Initialize multi-chain deposit listener
      */
     async init() {
-        console.log('[multi-chain] Initializing multi-chain deposit listener...');
+        console.log('[multi-chain] ==========================================');
+        console.log('[multi-chain] 🚀 Initializing multi-chain deposit listener...');
+        console.log('[multi-chain] ==========================================');
         
-        // Start listening on all networks
-        await Promise.all([
-            this.startListening('base'),
-            this.startListening('ethereum'),
-            this.startListening('polygon'),
-            this.startListening('optimism'),
-            this.startListening('arbitrum')
-        ]);
+        // Start listening on all networks (don't fail if one network fails)
+        const networks = ['base', 'ethereum', 'polygon', 'optimism', 'arbitrum'];
+        const results = await Promise.allSettled(
+            networks.map(network => this.startListening(network))
+        );
+        
+        // Log results
+        const successful = results.filter(r => r.status === 'fulfilled').length;
+        const failed = results.filter(r => r.status === 'rejected').length;
+        
+        console.log(`[multi-chain] ✅ ${successful} network(s) initialized successfully`);
+        if (failed > 0) {
+            console.log(`[multi-chain] ⚠️ ${failed} network(s) failed to initialize (will retry periodically)`);
+        }
         
         // Start periodic scans for missed deposits
         this.startPeriodicScan();
         
-        console.log('[multi-chain] ✅ Multi-chain listener active on all networks');
+        console.log('[multi-chain] ==========================================');
+        console.log('[multi-chain] ✅ Multi-chain listener initialization complete');
+        console.log('[multi-chain] ==========================================');
     }
 
     /**
@@ -125,22 +135,31 @@ class MultiChainDepositListener {
             const usdcAddress = USDC_ADDRESSES[networkName];
             
             if (!client || !usdcAddress) {
-                console.warn(`[multi-chain] Skipping ${networkName}: client or USDC address not configured`);
+                console.warn(`[multi-chain] ⚠️ Skipping ${networkName}: client or USDC address not configured`);
                 return;
             }
 
-            console.log(`[multi-chain] Starting listener for ${networkName}...`);
-            console.log(`[multi-chain] Monitoring USDC: ${usdcAddress}`);
-            console.log(`[multi-chain] Platform wallet: ${PLATFORM_WALLET}`);
+            console.log(`[multi-chain] 🌐 Starting listener for ${networkName}...`);
+            console.log(`[multi-chain] 📍 Monitoring USDC: ${usdcAddress}`);
+            console.log(`[multi-chain] 💼 Platform wallet: ${PLATFORM_WALLET}`);
 
             // Get current block
-            const currentBlock = await client.getBlockNumber();
-            this.lastBlockProcessed[networkName] = currentBlock;
-            
-            console.log(`[multi-chain] ${networkName} current block: ${currentBlock.toString()}`);
+            let currentBlock;
+            try {
+                currentBlock = await client.getBlockNumber();
+                this.lastBlockProcessed[networkName] = currentBlock;
+                console.log(`[multi-chain] ✅ ${networkName} connected - Current block: ${currentBlock.toString()}`);
+            } catch (rpcError) {
+                console.error(`[multi-chain] ❌ Error connecting to ${networkName} RPC:`, rpcError.message);
+                console.log(`[multi-chain] ⚠️ ${networkName} listener disabled - RPC unavailable`);
+                return; // Skip this network if RPC is not available
+            }
 
-            // Initial historical scan (last 5000 blocks)
-            await this.scanHistoricalBlocks(networkName, currentBlock - BigInt(5000), currentBlock);
+            // Initial historical scan (last 5000 blocks) - run in background
+            this.scanHistoricalBlocks(networkName, currentBlock - BigInt(5000), currentBlock)
+                .catch(error => {
+                    console.error(`[multi-chain] Error in initial scan for ${networkName}:`, error);
+                });
 
             // Start watching for new blocks
             client.watchBlocks({
@@ -406,22 +425,28 @@ class MultiChainDepositListener {
     startPeriodicScan() {
         // Scan all networks every 2 minutes
         setInterval(async () => {
-            console.log('[multi-chain] Running periodic scan...');
+            console.log('[multi-chain] 🔄 Running periodic scan on all networks...');
             
             for (const networkName of Object.keys(this.clients)) {
                 try {
                     const client = this.clients[networkName];
+                    if (!client) continue;
+                    
                     const currentBlock = await client.getBlockNumber();
                     const lastBlock = this.lastBlockProcessed[networkName] || (currentBlock - BigInt(2000));
                     
                     if (currentBlock > lastBlock) {
+                        console.log(`[multi-chain] 📡 Scanning ${networkName} blocks ${lastBlock.toString()} to ${currentBlock.toString()}`);
                         await this.scanHistoricalBlocks(networkName, lastBlock, currentBlock);
                     }
                 } catch (error) {
-                    console.error(`[multi-chain] Error in periodic scan for ${networkName}:`, error);
+                    console.error(`[multi-chain] ❌ Error in periodic scan for ${networkName}:`, error.message);
+                    // Continue with other networks even if one fails
                 }
             }
         }, 2 * 60 * 1000); // Every 2 minutes
+        
+        console.log('[multi-chain] ✅ Periodic scan started (every 2 minutes)');
     }
 }
 
