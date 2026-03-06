@@ -11,12 +11,31 @@
  */
 
 const { createPublicClient, http, formatUnits } = require('viem');
-const { base } = require('viem/chains');
-const { mainnet } = require('viem/chains');
-const { polygon } = require('viem/chains');
-const { optimism } = require('viem/chains');
-const { arbitrum } = require('viem/chains');
 const { createClient } = require('@supabase/supabase-js');
+
+// Import chains individually to avoid issues
+let base, mainnet, polygon, optimism, arbitrum;
+try {
+    const chains = require('viem/chains');
+    base = chains.base;
+    mainnet = chains.mainnet;
+    polygon = chains.polygon;
+    optimism = chains.optimism;
+    arbitrum = chains.arbitrum;
+} catch (error) {
+    console.error('[multi-chain] Error loading chains:', error);
+    // Fallback: try individual imports
+    try {
+        base = require('viem/chains').base;
+        mainnet = require('viem/chains').mainnet;
+        polygon = require('viem/chains').polygon;
+        optimism = require('viem/chains').optimism;
+        arbitrum = require('viem/chains').arbitrum;
+    } catch (e) {
+        console.error('[multi-chain] Failed to load chains:', e);
+        throw new Error('Cannot load viem chains. Please check viem installation.');
+    }
+}
 
 // Configuration
 const PLATFORM_WALLET = process.env.PLATFORM_WALLET_ADDRESS || '0x75376BC58830f27415402875D26B73A6BE8E2253';
@@ -74,6 +93,12 @@ class MultiChainDepositListener {
     initClients() {
         this.clients = {};
         
+        // Verify chains are loaded
+        if (!base) {
+            console.error('[multi-chain] ❌ Base chain not loaded. Cannot initialize clients.');
+            return;
+        }
+        
         // Initialize Base (always available)
         try {
             this.clients.base = createPublicClient({
@@ -83,47 +108,64 @@ class MultiChainDepositListener {
             console.log('[multi-chain] ✅ Base client initialized');
         } catch (error) {
             console.error('[multi-chain] ❌ Error initializing Base client:', error);
+            console.error('[multi-chain] Error details:', error.message);
         }
         
         // Initialize other networks (optional, fail gracefully)
-        try {
-            this.clients.ethereum = createPublicClient({
-                chain: mainnet,
-                transport: http(RPC_URLS.ethereum)
-            });
-            console.log('[multi-chain] ✅ Ethereum client initialized');
-        } catch (error) {
-            console.warn('[multi-chain] ⚠️ Ethereum client not available:', error.message);
+        if (mainnet) {
+            try {
+                this.clients.ethereum = createPublicClient({
+                    chain: mainnet,
+                    transport: http(RPC_URLS.ethereum)
+                });
+                console.log('[multi-chain] ✅ Ethereum client initialized');
+            } catch (error) {
+                console.warn('[multi-chain] ⚠️ Ethereum client not available:', error.message);
+            }
+        } else {
+            console.warn('[multi-chain] ⚠️ Mainnet chain not loaded, skipping Ethereum');
         }
         
-        try {
-            this.clients.polygon = createPublicClient({
-                chain: polygon,
-                transport: http(RPC_URLS.polygon)
-            });
-            console.log('[multi-chain] ✅ Polygon client initialized');
-        } catch (error) {
-            console.warn('[multi-chain] ⚠️ Polygon client not available:', error.message);
+        if (polygon) {
+            try {
+                this.clients.polygon = createPublicClient({
+                    chain: polygon,
+                    transport: http(RPC_URLS.polygon)
+                });
+                console.log('[multi-chain] ✅ Polygon client initialized');
+            } catch (error) {
+                console.warn('[multi-chain] ⚠️ Polygon client not available:', error.message);
+            }
+        } else {
+            console.warn('[multi-chain] ⚠️ Polygon chain not loaded, skipping Polygon');
         }
         
-        try {
-            this.clients.optimism = createPublicClient({
-                chain: optimism,
-                transport: http(RPC_URLS.optimism)
-            });
-            console.log('[multi-chain] ✅ Optimism client initialized');
-        } catch (error) {
-            console.warn('[multi-chain] ⚠️ Optimism client not available:', error.message);
+        if (optimism) {
+            try {
+                this.clients.optimism = createPublicClient({
+                    chain: optimism,
+                    transport: http(RPC_URLS.optimism)
+                });
+                console.log('[multi-chain] ✅ Optimism client initialized');
+            } catch (error) {
+                console.warn('[multi-chain] ⚠️ Optimism client not available:', error.message);
+            }
+        } else {
+            console.warn('[multi-chain] ⚠️ Optimism chain not loaded, skipping Optimism');
         }
         
-        try {
-            this.clients.arbitrum = createPublicClient({
-                chain: arbitrum,
-                transport: http(RPC_URLS.arbitrum)
-            });
-            console.log('[multi-chain] ✅ Arbitrum client initialized');
-        } catch (error) {
-            console.warn('[multi-chain] ⚠️ Arbitrum client not available:', error.message);
+        if (arbitrum) {
+            try {
+                this.clients.arbitrum = createPublicClient({
+                    chain: arbitrum,
+                    transport: http(RPC_URLS.arbitrum)
+                });
+                console.log('[multi-chain] ✅ Arbitrum client initialized');
+            } catch (error) {
+                console.warn('[multi-chain] ⚠️ Arbitrum client not available:', error.message);
+            }
+        } else {
+            console.warn('[multi-chain] ⚠️ Arbitrum chain not loaded, skipping Arbitrum');
         }
         
         console.log(`[multi-chain] ✅ Initialized ${Object.keys(this.clients).length} network client(s)`);
