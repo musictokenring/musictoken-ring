@@ -52,14 +52,20 @@
                 this.currentRate = null; // Ya no se usa rate variable
                 this.currentMtrPrice = null; // Ya no relevante para créditos
 
-                // Update UI
-                this.updateCreditsDisplay();
-
                 console.log('[credits-system] Balance loaded (créditos estables):', {
                     credits: this.currentCredits,
                     usdcValue: this.currentUsdcValue,
                     note: '1 crédito = 1 USDC fijo'
                 });
+
+                // Update UI - Asegurar que se actualice después de cargar
+                this.updateCreditsDisplay();
+                
+                // Forzar actualización adicional después de un pequeño delay para asegurar que el DOM esté listo
+                setTimeout(() => {
+                    this.updateCreditsDisplay();
+                    console.log('[credits-system] UI actualizada forzadamente después de cargar balance');
+                }, 100);
 
             } catch (error) {
                 console.error('[credits-system] Error loading balance:', error);
@@ -73,10 +79,15 @@
          * Update credits display in UI
          */
         updateCreditsDisplay() {
+            console.log('[credits-system] updateCreditsDisplay called, currentCredits:', this.currentCredits);
+            
             // Update credits badge
             const creditsBadge = document.getElementById('creditsDisplay');
             if (creditsBadge) {
                 creditsBadge.textContent = `${this.currentCredits.toFixed(2)} créditos`;
+                console.log('[credits-system] Updated creditsDisplay:', creditsBadge.textContent);
+            } else {
+                console.warn('[credits-system] creditsDisplay element not found');
             }
 
             // Update USDC equivalent (1:1 fijo)
@@ -84,6 +95,9 @@
             if (usdcDisplay) {
                 // Mostrar como igual (no aproximado) porque es 1:1 fijo
                 usdcDisplay.textContent = `= $${this.currentUsdcValue.toFixed(2)} USDC`;
+                console.log('[credits-system] Updated usdcValueDisplay:', usdcDisplay.textContent);
+            } else {
+                console.warn('[credits-system] usdcValueDisplay element not found');
             }
 
             // Update combined display
@@ -94,6 +108,14 @@
                     <span class="text-gray-400 text-sm">= $${this.currentUsdcValue.toFixed(2)} USDC</span>
                     <span class="text-xs text-green-400 ml-1" title="Créditos estables: 1 crédito = 1 USDC fijo">✓</span>
                 `;
+                // Asegurar que el elemento esté visible si hay créditos
+                if (this.currentCredits > 0) {
+                    combinedDisplay.classList.remove('hidden');
+                    combinedDisplay.classList.add('sm:inline');
+                }
+                console.log('[credits-system] Updated creditsCombinedDisplay, visible:', !combinedDisplay.classList.contains('hidden'));
+            } else {
+                console.warn('[credits-system] creditsCombinedDisplay element not found');
             }
 
             // Update bet eligibility
