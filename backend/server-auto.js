@@ -518,14 +518,23 @@ app.get('/api/deposits/diagnose/:txHash', async (req, res) => {
                 });
             }
             
-            // Si no se encuentra por hash, buscar depósitos recientes de la wallet del usuario
-            // (útil si el hash está mal copiado pero el depósito existe)
-            const walletAddress = req.query.walletAddress || req.headers['x-wallet-address'];
-            console.log('[diagnose] Checking for wallet address:', walletAddress);
+        } catch (dbError) {
+            console.error('[diagnose] Database error:', dbError);
+            return res.status(500).json({ 
+                error: 'Database error',
+                message: 'Error al consultar la base de datos: ' + (dbError.message || 'Error desconocido')
+            });
+        }
+        
+        // Si no se encuentra por hash, buscar depósitos recientes de la wallet ANTES de consultar blockchain
+        // (útil si el hash está mal copiado pero el depósito existe)
+        const walletAddress = req.query.walletAddress || req.headers['x-wallet-address'];
+        console.log('[diagnose] Hash not found in DB, checking for wallet address:', walletAddress);
+        
+        if (walletAddress) {
+            console.log('[diagnose] Searching recent deposits for wallet:', walletAddress);
             
-            if (walletAddress) {
-                console.log('[diagnose] Hash not found in DB, searching recent deposits for wallet:', walletAddress);
-                
+            try {
                 // Primero buscar el usuario por wallet address
                 const { data: user, error: userError } = await supabase
                     .from('users')
@@ -571,7 +580,7 @@ app.get('/api/deposits/diagnose/:txHash', async (req, res) => {
                         }
                         
                         // Si no hay coincidencia exacta, devolver los depósitos recientes para que el usuario pueda verificar
-                        console.log('[diagnose] Returning recent deposits list');
+                        console.log('[diagnose] Returning recent deposits list (hash not found but deposits exist)');
                         return res.json({
                             processed: false,
                             hashNotFound: true,
@@ -592,16 +601,12 @@ app.get('/api/deposits/diagnose/:txHash', async (req, res) => {
                 } else {
                     console.log('[diagnose] User not found for wallet:', walletAddress);
                 }
-            } else {
-                console.log('[diagnose] No wallet address provided for alternative search');
+            } catch (walletSearchError) {
+                console.error('[diagnose] Error searching wallet deposits:', walletSearchError);
+                // Continuar con la búsqueda en blockchain
             }
-            
-        } catch (dbError) {
-            console.error('[diagnose] Database error:', dbError);
-            return res.status(500).json({ 
-                error: 'Database error',
-                message: 'Error al consultar la base de datos: ' + (dbError.message || 'Error desconocido')
-            });
+        } else {
+            console.log('[diagnose] No wallet address provided for alternative search');
         }
         
         console.log('[diagnose] Deposit not found in database, checking blockchain...');
