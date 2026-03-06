@@ -1,26 +1,33 @@
 -- ==========================================
--- MIGRATION: Add UNIQUE constraint to deposits.tx_hash
+-- MIGRATION: Verificar y asegurar UNIQUE constraint en deposits.tx_hash
 -- Prevents duplicate deposit processing
+-- NOTA: La tabla deposits ya tiene tx_hash UNIQUE en la migración 001
+-- Esta migración verifica y asegura que existe
 -- ==========================================
 
--- Verificar si la constraint ya existe
+-- Verificar si la constraint ya existe (debería existir desde migración 001)
 DO $$
 BEGIN
-    -- Intentar agregar constraint único si no existe
+    -- Verificar si existe constraint único en tx_hash
     IF NOT EXISTS (
         SELECT 1 
         FROM pg_constraint 
-        WHERE conname = 'deposits_tx_hash_unique' 
-        AND conrelid = 'deposits'::regclass
+        WHERE conrelid = 'deposits'::regclass
+        AND contype = 'u'
+        AND (
+            -- Buscar constraint que incluya tx_hash
+            conkey::int[] = ARRAY[(SELECT attnum FROM pg_attribute WHERE attrelid = 'deposits'::regclass AND attname = 'tx_hash')]
+            OR conname LIKE '%tx_hash%'
+        )
     ) THEN
-        -- Agregar constraint único
+        -- Si no existe, agregar constraint único
         ALTER TABLE deposits 
         ADD CONSTRAINT deposits_tx_hash_unique 
         UNIQUE (tx_hash);
         
-        RAISE NOTICE 'Constraint UNIQUE agregado a deposits.tx_hash';
+        RAISE NOTICE '✅ Constraint UNIQUE agregado a deposits.tx_hash';
     ELSE
-        RAISE NOTICE 'Constraint UNIQUE ya existe en deposits.tx_hash';
+        RAISE NOTICE '✅ Constraint UNIQUE ya existe en deposits.tx_hash (verificado)';
     END IF;
 END $$;
 
