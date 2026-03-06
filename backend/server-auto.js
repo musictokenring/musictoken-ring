@@ -298,30 +298,81 @@ app.get('/api/deposits/:walletAddress', async (req, res) => {
 app.get('/api/deposits/diagnose/:txHash', async (req, res) => {
     try {
         const txHash = req.params.txHash;
+        
+        // Validar formato del hash
+        if (!txHash || !txHash.startsWith('0x') || txHash.length !== 66) {
+            return res.status(400).json({ 
+                error: 'Invalid transaction hash format',
+                message: 'El hash de transacción debe tener 66 caracteres y comenzar con 0x'
+            });
+        }
+        
         const { createPublicClient, http, formatUnits } = require('viem');
         const { base } = require('viem/chains');
-        
+
         const PLATFORM_WALLET = process.env.PLATFORM_WALLET_ADDRESS || '0x75376BC58830f27415402875D26B73A6BE8E2253';
         const USDC_ADDRESS = process.env.USDC_ADDRESS || '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913';
-        
+
         const publicClient = createPublicClient({
             chain: base,
             transport: http(process.env.BASE_RPC_URL || 'https://mainnet.base.org')
         });
 
         // Get transaction receipt
-        const receipt = await publicClient.getTransactionReceipt({ hash: txHash });
-        
+        let receipt;
+        try {
+            receipt = await publicClient.getTransactionReceipt({ hash: txHash });
+        } catch (rpcError) {
+            console.error('[diagnose] Error fetching receipt:', rpcError);
+            if (rpcError.message && rpcError.message.includes('not found')) {
+                return res.status(404).json({ 
+                    error: 'Transaction not found',
+                    message: 'La transacción no se encontró en la red Base. Verifica el hash.'
+                });
+            }
+            return res.status(500).json({ 
+                error: 'RPC Error',
+                message: 'Error al consultar la blockchain: ' + (rpcError.message || 'Error desconocido')
+            });
+        }
+
+        if (!receipt) {
+            return res.status(404).json({ 
+                error: 'Transaction not found',
+                message: 'La transacción no existe o aún no ha sido confirmada.'
+            });
+        }
+
         if (receipt.status !== 'success') {
-            return res.status(400).json({ error: 'Transaction failed', status: receipt.status });
+            return res.status(400).json({ 
+                error: 'Transaction failed', 
+                status: receipt.status,
+                message: 'Esta transacción falló en la blockchain y no puede ser procesada como depósito.'
+            });
         }
 
         // Check if already processed
-        const { data: existingDeposit } = await supabase
-            .from('deposits')
-            .select('*')
-            .eq('tx_hash', txHash)
-            .single();
+        let existingDeposit;
+        try {
+            const { data, error } = await supabase
+                .from('deposits')
+                .select('*')
+                .eq('tx_hash', txHash)
+                .single();
+            
+            if (error && error.code !== 'PGRST116') { // PGRST116 = no rows returned
+                console.error('[diagnose] Error checking existing deposit:', error);
+                throw error;
+            }
+            
+            existingDeposit = data;
+        } catch (dbError) {
+            console.error('[diagnose] Database error:', dbError);
+            return res.status(500).json({ 
+                error: 'Database error',
+                message: 'Error al consultar la base de datos: ' + (dbError.message || 'Error desconocido')
+            });
+        }
 
         if (existingDeposit) {
             return res.json({

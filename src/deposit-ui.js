@@ -339,7 +339,16 @@
                 const diagnoseResponse = await fetch(`${backendUrl}/api/deposits/diagnose/${txHash}`);
                 
                 if (!diagnoseResponse.ok) {
-                    throw new Error('Error al verificar transacción');
+                    // Intentar obtener detalles del error del backend
+                    let errorMessage = 'Error al verificar transacción';
+                    try {
+                        const errorData = await diagnoseResponse.json();
+                        errorMessage = errorData.error || errorData.message || errorMessage;
+                    } catch (e) {
+                        // Si no se puede parsear el JSON, usar el status text
+                        errorMessage = `Error ${diagnoseResponse.status}: ${diagnoseResponse.statusText || 'Error al conectar con el servidor'}`;
+                    }
+                    throw new Error(errorMessage);
                 }
 
                 const diagnoseData = await diagnoseResponse.json();
