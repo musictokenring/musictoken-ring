@@ -491,32 +491,83 @@ app.get('/api/deposits/diagnose/:txHash', async (req, res) => {
         // PRIMERO: Verificar si ya está procesado en la BD (más rápido y confiable)
         let existingDeposit;
         try {
-            const { data, error } = await supabase
+            // Buscar por hash exacto
+            const { data: depositByHash, error: hashError } = await supabase
                 .from('deposits')
-                .select('*')
+                .select('*, users!inner(wallet_address)')
                 .eq('tx_hash', txHash)
                 .single();
             
-            if (error && error.code !== 'PGRST116') { // PGRST116 = no rows returned
-                console.error('[diagnose] Error checking existing deposit:', error);
-                throw error;
+            if (hashError && hashError.code !== 'PGRST116') {
+                console.error('[diagnose] Error checking existing deposit by hash:', hashError);
+                throw hashError;
             }
             
-            existingDeposit = data;
-            
-            if (existingDeposit) {
-                console.log('[diagnose] Deposit found in database:', {
-                    id: existingDeposit.id,
-                    status: existingDeposit.status,
-                    credits: existingDeposit.credits_awarded,
-                    processedAt: existingDeposit.processed_at
+            if (depositByHash) {
+                console.log('[diagnose] ✅ Deposit found in database by hash:', {
+                    id: depositByHash.id,
+                    status: depositByHash.status,
+                    credits: depositByHash.credits_awarded,
+                    processedAt: depositByHash.processed_at,
+                    wallet: depositByHash.users?.wallet_address
                 });
                 return res.json({
                     processed: true,
-                    deposit: existingDeposit,
+                    deposit: depositByHash,
                     message: 'Deposit already processed'
                 });
             }
+            
+            // Si no se encuentra por hash, buscar depósitos recientes de la wallet del usuario
+            // (útil si el hash está mal copiado pero el depósito existe)
+            const walletAddress = req.query.walletAddress || req.headers['x-wallet-address'];
+            if (walletAddress) {
+                console.log('[diagnose] Hash not found, searching recent deposits for wallet:', walletAddress);
+                
+                const { data: recentDeposits, error: recentError } = await supabase
+                    .from('deposits')
+                    .select('*, users!inner(wallet_address)')
+                    .eq('users.wallet_address', walletAddress.toLowerCase())
+                    .order('created_at', { ascending: false })
+                    .limit(10);
+                
+                if (!recentError && recentDeposits && recentDeposits.length > 0) {
+                    console.log('[diagnose] Found', recentDeposits.length, 'recent deposits for wallet');
+                    
+                    // Verificar si alguno de estos depósitos coincide con el hash (con variaciones)
+                    const normalizedTxHash = txHash.toLowerCase();
+                    const matchingDeposit = recentDeposits.find(d => 
+                        d.tx_hash.toLowerCase() === normalizedTxHash ||
+                        d.tx_hash.toLowerCase().includes(normalizedTxHash.substring(2, 20)) ||
+                        normalizedTxHash.includes(d.tx_hash.toLowerCase().substring(2, 20))
+                    );
+                    
+                    if (matchingDeposit) {
+                        console.log('[diagnose] ✅ Found matching deposit by partial hash match');
+                        return res.json({
+                            processed: true,
+                            deposit: matchingDeposit,
+                            message: 'Deposit already processed (found by partial hash match)'
+                        });
+                    }
+                    
+                    // Si no hay coincidencia exacta, devolver los depósitos recientes para que el usuario pueda verificar
+                    return res.json({
+                        processed: false,
+                        hashNotFound: true,
+                        recentDeposits: recentDeposits.map(d => ({
+                            tx_hash: d.tx_hash,
+                            amount: d.amount,
+                            token: d.token,
+                            credits_awarded: d.credits_awarded,
+                            created_at: d.created_at,
+                            status: d.status
+                        })),
+                        message: 'Hash no encontrado, pero se encontraron depósitos recientes para esta wallet. Verifica si alguno de estos es el que buscas.'
+                    });
+                }
+            }
+            
         } catch (dbError) {
             console.error('[diagnose] Database error:', dbError);
             return res.status(500).json({ 

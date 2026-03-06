@@ -269,6 +269,17 @@
         },
 
         /**
+         * Verify deposit by hash (helper function)
+         */
+        async verifyDepositByHash(txHash) {
+            const txHashInput = document.getElementById('verifyTxHash');
+            if (txHashInput) {
+                txHashInput.value = txHash;
+            }
+            await this.verifyDeposit();
+        },
+
+        /**
          * Verify and process a deposit that wasn't credited
          */
         async verifyDeposit() {
@@ -363,12 +374,15 @@
                 
                 console.log('[deposit-ui] Verificando transacción:', txHash);
                 console.log('[deposit-ui] Backend URL:', backendUrl);
+                console.log('[deposit-ui] Wallet address:', walletAddress);
                 
-                // Diagnose transaction
-                const diagnoseResponse = await fetch(`${backendUrl}/api/deposits/diagnose/${txHash}`, {
+                // Diagnose transaction - incluir wallet address como query param para búsqueda alternativa
+                const diagnoseUrl = `${backendUrl}/api/deposits/diagnose/${txHash}?walletAddress=${encodeURIComponent(walletAddress)}`;
+                const diagnoseResponse = await fetch(diagnoseUrl, {
                     method: 'GET',
                     headers: {
-                        'Content-Type': 'application/json'
+                        'Content-Type': 'application/json',
+                        'X-Wallet-Address': walletAddress
                     }
                 });
                 
@@ -404,9 +418,37 @@
                     resultDiv.className = 'mt-3 p-3 rounded-lg bg-green-500/10 border border-green-500/20 text-green-400 text-sm';
                     resultDiv.innerHTML = `
                         ✅ <strong>Depósito ya procesado</strong><br>
+                        Hash: ${diagnoseData.deposit.tx_hash}<br>
                         Créditos otorgados: ${diagnoseData.deposit.credits_awarded}<br>
+                        Monto: ${diagnoseData.deposit.amount} ${diagnoseData.deposit.token}<br>
                         Fecha: ${new Date(diagnoseData.deposit.processed_at).toLocaleString('es-CO')}
                     `;
+                } else if (diagnoseData.hashNotFound && diagnoseData.recentDeposits && diagnoseData.recentDeposits.length > 0) {
+                    // Hash no encontrado pero hay depósitos recientes
+                    resultDiv.className = 'mt-3 p-3 rounded-lg bg-yellow-500/10 border border-yellow-500/20 text-yellow-400 text-sm';
+                    let html = `
+                        ⚠️ <strong>Hash no encontrado</strong><br>
+                        El hash proporcionado no se encontró, pero se encontraron ${diagnoseData.recentDeposits.length} depósito(s) reciente(s) para tu wallet:<br><br>
+                    `;
+                    
+                    diagnoseData.recentDeposits.forEach((dep, idx) => {
+                        html += `
+                            <div class="mt-2 p-2 bg-black/20 rounded text-xs">
+                                <strong>Depósito ${idx + 1}:</strong><br>
+                                Hash: <code class="text-cyan-400">${dep.tx_hash}</code><br>
+                                Monto: ${dep.amount} ${dep.token}<br>
+                                Créditos: ${dep.credits_awarded}<br>
+                                Estado: ${dep.status === 'processed' ? '✅ Procesado' : '⏳ Pendiente'}<br>
+                                Fecha: ${new Date(dep.created_at).toLocaleString('es-CO')}<br>
+                                <button onclick="DepositUI.verifyDepositByHash('${dep.tx_hash}')" 
+                                    class="mt-1 px-3 py-1 rounded bg-yellow-500/20 border border-yellow-500/30 text-yellow-300 hover:bg-yellow-500/30 transition cursor-pointer text-xs">
+                                    Verificar este depósito
+                                </button>
+                            </div>
+                        `;
+                    });
+                    
+                    resultDiv.innerHTML = html;
                 } else {
                     // Not processed - show details and offer to process
                     if (diagnoseData.transfer.from.toLowerCase() !== walletAddress.toLowerCase()) {
