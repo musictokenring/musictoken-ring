@@ -387,8 +387,36 @@
 
             } catch (error) {
                 console.error('[deposit-ui] Error verifying deposit:', error);
+                console.error('[deposit-ui] Error details:', {
+                    message: error.message,
+                    stack: error.stack,
+                    txHash: txHash,
+                    walletAddress: walletAddress,
+                    backendUrl: window.CONFIG?.BACKEND_API || 'https://musictoken-ring.onrender.com'
+                });
+                
                 resultDiv.className = 'mt-3 p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-sm';
-                resultDiv.innerHTML = `❌ Error: ${error.message}`;
+                
+                // Mensaje de error más detallado
+                let errorMsg = error.message || 'Error desconocido al verificar transacción';
+                
+                // Mensajes específicos según el tipo de error
+                if (error.message.includes('Failed to fetch') || error.message.includes('NetworkError')) {
+                    errorMsg = '❌ <strong>Error de conexión</strong><br>No se pudo conectar con el servidor. Verifica tu conexión a internet.';
+                } else if (error.message.includes('404')) {
+                    errorMsg = '❌ <strong>Endpoint no encontrado</strong><br>El servidor no responde. Intenta más tarde.';
+                } else if (error.message.includes('500')) {
+                    errorMsg = '❌ <strong>Error del servidor</strong><br>El servidor encontró un problema. Intenta más tarde o contacta soporte.';
+                } else if (error.message.includes('Transaction failed')) {
+                    errorMsg = '❌ <strong>Transacción fallida</strong><br>Esta transacción no fue exitosa en la blockchain.';
+                } else if (error.message.includes('not found') || error.message.includes('Invalid transaction')) {
+                    errorMsg = '❌ <strong>Transacción no encontrada</strong><br>Verifica que el hash de transacción sea correcto y pertenezca a la red Base.';
+                } else {
+                    errorMsg = `❌ <strong>Error:</strong> ${errorMsg}`;
+                }
+                
+                resultDiv.innerHTML = errorMsg;
+                resultDiv.classList.remove('hidden');
             }
         },
 
