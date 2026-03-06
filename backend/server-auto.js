@@ -466,8 +466,13 @@ app.get('/api/deposits/diagnose/:txHash', async (req, res) => {
         });
 
     } catch (error) {
-        console.error('[server] Error diagnosing deposit:', error);
-        res.status(500).json({ error: error.message });
+        console.error('[diagnose] Unexpected error:', error);
+        console.error('[diagnose] Error stack:', error.stack);
+        res.status(500).json({ 
+            error: 'Internal server error', 
+            message: error.message || 'Error inesperado al procesar la solicitud',
+            details: process.env.NODE_ENV === 'development' ? error.stack : undefined
+        });
     }
 });
 
