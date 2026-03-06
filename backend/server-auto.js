@@ -569,12 +569,37 @@ app.get('/api/deposits/diagnose/:txHash', async (req, res) => {
         res.json(responseData);
 
     } catch (error) {
-        console.error('[diagnose] Unexpected error:', error);
+        console.error('[diagnose] ========== UNEXPECTED ERROR ==========');
+        console.error('[diagnose] Error name:', error.name);
+        console.error('[diagnose] Error message:', error.message);
+        console.error('[diagnose] Error code:', error.code);
         console.error('[diagnose] Error stack:', error.stack);
-        res.status(500).json({ 
+        console.error('[diagnose] Error details:', JSON.stringify(error, Object.getOwnPropertyNames(error)));
+        console.error('[diagnose] ======================================');
+        
+        // Determinar tipo de error y responder apropiadamente
+        let statusCode = 500;
+        let errorMessage = 'Error inesperado al procesar la solicitud';
+        
+        if (error.name === 'TransactionNotFoundError' || error.message?.includes('not found')) {
+            statusCode = 404;
+            errorMessage = 'La transacción no se encontró en la red Base. Verifica el hash.';
+        } else if (error.name === 'TimeoutError' || error.message?.includes('timeout')) {
+            statusCode = 504;
+            errorMessage = 'El servidor tardó demasiado en responder. Intenta nuevamente.';
+        } else if (error.message) {
+            errorMessage = error.message;
+        }
+        
+        res.status(statusCode).json({ 
             error: 'Internal server error', 
-            message: error.message || 'Error inesperado al procesar la solicitud',
-            details: process.env.NODE_ENV === 'development' ? error.stack : undefined
+            message: errorMessage,
+            details: process.env.NODE_ENV === 'development' ? {
+                name: error.name,
+                message: error.message,
+                code: error.code,
+                stack: error.stack
+            } : undefined
         });
     }
 });
