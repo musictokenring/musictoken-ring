@@ -505,8 +505,15 @@
                     }
                 } else if (error.message.includes('Transaction failed')) {
                     errorMsg = '❌ <strong>Transacción fallida</strong><br>Esta transacción no fue exitosa en la blockchain.';
-                } else if (error.message.includes('not found') || error.message.includes('Invalid transaction')) {
-                    errorMsg = '❌ <strong>Transacción no encontrada</strong><br>Verifica que el hash de transacción sea correcto y pertenezca a la red Base.';
+                } else if (error.message.includes('not found') || error.message.includes('Invalid transaction') || error.status === 404) {
+                    errorMsg = '❌ <strong>Transacción no encontrada en Base</strong><br>';
+                    errorMsg += 'El hash proporcionado no existe en la red Base.<br><br>';
+                    errorMsg += '<strong>⚠️ Posibles causas:</strong><br>';
+                    errorMsg += '• La transacción está en otra red (Ethereum, Polygon, etc.)<br>';
+                    errorMsg += '• El hash está incompleto o incorrecto<br>';
+                    errorMsg += '• La transacción aún no ha sido confirmada<br><br>';
+                    errorMsg += '<strong>💡 Solución:</strong><br>';
+                    errorMsg += 'Si realizaste un depósito, busca tus depósitos recientes abajo o verifica que el hash pertenezca a la red Base.';
                 } else {
                     errorMsg = `❌ <strong>Error:</strong> ${errorMsg}`;
                 }

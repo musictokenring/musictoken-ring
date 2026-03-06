@@ -512,9 +512,19 @@ app.get('/api/deposits/diagnose/:txHash', async (req, res) => {
                     
                     if (!receipt) {
                         console.log('[diagnose] Transaction not found in recent blocks');
+                        const walletAddress = req.query.walletAddress || req.headers['x-wallet-address'];
+                        let message = 'La transacción no se encontró en la red Base. ';
+                        message += 'Verifica que el hash sea correcto y pertenezca a la red Base. ';
+                        message += 'Si la transacción fue reciente, espera unos momentos e intenta nuevamente.';
+                        
+                        if (walletAddress) {
+                            message += ' También es posible que la transacción esté en otra red (Ethereum, Polygon, etc.).';
+                        }
+                        
                         return res.status(404).json({ 
                             error: 'Transaction not found',
-                            message: 'La transacción no se encontró en la red Base. Verifica que el hash sea correcto y pertenezca a la red Base. Si la transacción fue reciente, espera unos momentos e intenta nuevamente.'
+                            message: message,
+                            suggestion: walletAddress ? 'Busca tus depósitos recientes para encontrar la transacción correcta en Base.' : null
                         });
                     }
                 } catch (scanError) {
@@ -548,9 +558,14 @@ app.get('/api/deposits/diagnose/:txHash', async (req, res) => {
         }
 
         if (!receipt) {
+            const walletAddress = req.query.walletAddress || req.headers['x-wallet-address'];
+            let message = 'La transacción no existe en la red Base o aún no ha sido confirmada. ';
+            message += 'Verifica que el hash pertenezca a la red Base y no a otra red como Ethereum.';
+            
             return res.status(404).json({ 
                 error: 'Transaction not found',
-                message: 'La transacción no existe o aún no ha sido confirmada.'
+                message: message,
+                suggestion: walletAddress ? 'Busca tus depósitos recientes para encontrar la transacción correcta.' : null
             });
         }
 
