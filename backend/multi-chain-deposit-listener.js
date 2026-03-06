@@ -161,14 +161,25 @@ class MultiChainDepositListener {
                     console.error(`[multi-chain] Error in initial scan for ${networkName}:`, error);
                 });
 
-            // Start watching for new blocks
-            client.watchBlocks({
-                onBlock: async (block) => {
-                    await this.scanBlock(networkName, block.number);
-                }
-            });
-
-            console.log(`[multi-chain] ✅ ${networkName} listener active`);
+            // Start watching for new blocks (with error handling)
+            try {
+                client.watchBlocks({
+                    onBlock: async (block) => {
+                        try {
+                            await this.scanBlock(networkName, block.number);
+                        } catch (error) {
+                            console.error(`[multi-chain] Error processing block on ${networkName}:`, error.message);
+                        }
+                    },
+                    onError: (error) => {
+                        console.error(`[multi-chain] Error watching blocks on ${networkName}:`, error.message);
+                    }
+                });
+                console.log(`[multi-chain] ✅ ${networkName} listener active`);
+            } catch (watchError) {
+                console.error(`[multi-chain] Error setting up block watcher for ${networkName}:`, watchError.message);
+                console.log(`[multi-chain] ⚠️ ${networkName} will use periodic scan only`);
+            }
         } catch (error) {
             console.error(`[multi-chain] Error starting listener for ${networkName}:`, error);
         }
