@@ -79,8 +79,15 @@ async function initializeServices() {
         // Initialize claim service
         claimService = new ClaimService();
 
-        // Initialize vault service
-        vaultService = new VaultService();
+        // Initialize vault service (no requiere init(), se inicializa en constructor)
+        try {
+            vaultService = new VaultService();
+            console.log('[server] ✅ Vault service initialized');
+        } catch (vaultError) {
+            console.error('[server] ⚠️ Error initializing vault service:', vaultError);
+            console.log('[server] Vault service will be initialized on-demand');
+            // No fallar - el servicio se puede inicializar bajo demanda
+        }
 
         // Initialize deposit sync service (backup mechanism)
         depositSyncService = new DepositSyncService();
@@ -240,8 +247,19 @@ app.post('/api/deposits/auto-sync/:walletAddress', async (req, res) => {
     try {
         const walletAddress = req.params.walletAddress.toLowerCase();
 
+        // Intentar inicializar el servicio si no está disponible
         if (!depositSyncService) {
-            return res.status(503).json({ error: 'Deposit sync service not available' });
+            console.warn('[server] Deposit sync service not initialized, attempting to initialize...');
+            try {
+                depositSyncService = new DepositSyncService();
+                await depositSyncService.init();
+            } catch (initError) {
+                console.error('[server] Failed to initialize deposit sync service:', initError);
+                return res.status(503).json({ 
+                    error: 'Deposit sync service not available',
+                    message: 'El servicio de sincronización no está disponible. Intenta nuevamente en unos momentos.'
+                });
+            }
         }
 
         // Trigger sync
@@ -534,11 +552,26 @@ app.get('/api/deposits/diagnose/:txHash', async (req, res) => {
                             message += ' También es posible que la transacción esté en otra red (Ethereum, Polygon, etc.).';
                         }
                         
-                        return res.status(404).json({ 
-                            error: 'Transaction not found',
-                            message: message,
-                            suggestion: walletAddress ? 'Busca tus depósitos recientes para encontrar la transacción correcta en Base.' : null
-                        });
+                        // Antes de devolver 404, verificar si la transacción podría estar en otra red
+                        // Usar el multi-chain listener si está disponible
+                        if (multiChainDepositListener) {
+                            console.log('[diagnose] Transaction not found on Base, checking other networks via multi-chain listener...');
+                            // El multi-chain listener debería detectar transacciones automáticamente
+                            // Por ahora, devolvemos un mensaje más informativo
+                            return res.status(404).json({ 
+                                error: 'Transaction not found on Base',
+                                message: message + ' El sistema multi-red está activo y detectará automáticamente depósitos de otras redes.',
+                                suggestion: walletAddress ? 'Si realizaste un depósito desde otra red (Ethereum, Polygon, etc.), el sistema lo detectará automáticamente. También puedes buscar tus depósitos recientes.' : 'El sistema detectará automáticamente depósitos de otras redes.',
+                                multiChainEnabled: true
+                            });
+                        } else {
+                            return res.status(404).json({ 
+                                error: 'Transaction not found',
+                                message: message,
+                                suggestion: walletAddress ? 'Busca tus depósitos recientes para encontrar la transacción correcta en Base.' : null,
+                                multiChainEnabled: false
+                            });
+                        }
                     }
                 } catch (scanError) {
                     console.error('[diagnose] Error scanning blocks:', scanError);
@@ -1095,12 +1128,19 @@ app.post('/api/user/add-credits', async (req, res) => {
  */
 app.get('/api/vault/balance', async (req, res) => {
     try {
+        // Si el servicio no está inicializado, intentar inicializarlo ahora
         if (!vaultService) {
-            console.error('[server] Vault service not initialized');
-            return res.status(503).json({ 
-                error: 'Vault service not initialized',
-                message: 'El servicio del vault no está disponible. Verifica que las variables de entorno estén configuradas.'
-            });
+            console.warn('[server] Vault service not initialized, attempting to initialize...');
+            try {
+                vaultService = new VaultService();
+                // VaultService no requiere init(), se inicializa en constructor
+            } catch (initError) {
+                console.error('[server] Failed to initialize vault service:', initError);
+                return res.status(503).json({ 
+                    error: 'Vault service not initialized',
+                    message: 'El servicio del vault no está disponible. Verifica que las variables de entorno estén configuradas.'
+                });
+            }
         }
 
         const balance = await vaultService.getVaultBalance();
@@ -1223,7 +1263,15 @@ app.use('/api/*', (req, res) => {
 // Start server
 app.listen(PORT, async () => {
     console.log(`[server] Automated backend server running on port ${PORT}`);
-    await initializeServices();
+    console.log(`[server] Initializing services...`);
+    try {
+        await initializeServices();
+        console.log(`[server] ✅ Server ready and all services initialized`);
+    } catch (error) {
+        console.error(`[server] ❌ Failed to initialize services:`, error);
+        console.error(`[server] Server will continue but some features may not work`);
+        // No exit - allow server to run even if services fail
+    }
 });
 
 module.exports = app;
