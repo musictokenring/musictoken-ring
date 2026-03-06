@@ -381,11 +381,13 @@ app.get('/api/deposits/diagnose/:txHash', async (req, res) => {
             console.error('[diagnose] Error stack:', rpcError.stack);
             
             // Errores específicos de viem/RPC
-            if (rpcError.name === 'TransactionNotFoundError' || 
-                (rpcError.message && rpcError.message.includes('not found'))) {
+            if (rpcError.name === 'TransactionReceiptNotFoundError' || 
+                rpcError.name === 'TransactionNotFoundError' || 
+                (rpcError.message && (rpcError.message.includes('not found') || rpcError.message.includes('could not be found')))) {
+                console.log('[diagnose] Transaction not found - returning 404');
                 return res.status(404).json({ 
                     error: 'Transaction not found',
-                    message: 'La transacción no se encontró en la red Base. Verifica que el hash sea correcto y pertenezca a la red Base.'
+                    message: 'La transacción no se encontró en la red Base. Verifica que el hash sea correcto y pertenezca a la red Base. La transacción puede no existir o aún no haber sido procesada en un bloque.'
                 });
             }
             

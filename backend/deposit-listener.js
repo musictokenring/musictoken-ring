@@ -354,6 +354,15 @@ class DepositListener {
                 return; // CRÍTICO: No continuar si ya existe
             }
 
+            // Obtener el rate actual para USDC (siempre 1:1) o MTR (desde price updater)
+            let rateUsed = 1.0; // Default para USDC (1 USDC = 1 crédito)
+            
+            if (tokenName === 'MTR') {
+                // Para MTR, obtener el rate desde el price updater si está disponible
+                // El rate se carga en init() y se almacena en this.rate
+                rateUsed = this.rate || 1.0; // Fallback a 1.0 si no hay rate disponible
+            }
+            
             // Record deposit with new fields
             // NOTA: Si tx_hash tiene constraint UNIQUE en DB, esto fallará si hay duplicado
             const { data: insertedDeposit, error: depositError } = await supabase
@@ -366,7 +375,7 @@ class DepositListener {
                     credits_awarded: credits,
                     usdc_value_at_deposit: usdcValue,
                     deposit_fee: depositFee,
-                    rate_used: null,
+                    rate_used: rateUsed, // Usar el rate actual en lugar de null
                     status: 'processed',
                     processed_at: new Date().toISOString()
                 }])
