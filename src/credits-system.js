@@ -46,6 +46,8 @@
 
                 const data = await response.json();
                 
+                console.log('[credits-system] Raw response from backend:', data);
+                
                 this.currentCredits = data.credits || 0;
                 // NUEVO: 1 crédito = 1 USDC fijo siempre
                 this.currentUsdcValue = this.currentCredits; // 1:1 fijo
@@ -55,6 +57,7 @@
                 console.log('[credits-system] Balance loaded (créditos estables):', {
                     credits: this.currentCredits,
                     usdcValue: this.currentUsdcValue,
+                    rawData: data,
                     note: '1 crédito = 1 USDC fijo'
                 });
 
@@ -81,41 +84,49 @@
         updateCreditsDisplay() {
             console.log('[credits-system] updateCreditsDisplay called, currentCredits:', this.currentCredits);
             
-            // Update credits badge
-            const creditsBadge = document.getElementById('creditsDisplay');
-            if (creditsBadge) {
-                creditsBadge.textContent = `${this.currentCredits.toFixed(2)} créditos`;
-                console.log('[credits-system] Updated creditsDisplay:', creditsBadge.textContent);
-            } else {
-                console.warn('[credits-system] creditsDisplay element not found');
-            }
-
-            // Update USDC equivalent (1:1 fijo)
-            const usdcDisplay = document.getElementById('usdcValueDisplay');
-            if (usdcDisplay) {
-                // Mostrar como igual (no aproximado) porque es 1:1 fijo
-                usdcDisplay.textContent = `= $${this.currentUsdcValue.toFixed(2)} USDC`;
-                console.log('[credits-system] Updated usdcValueDisplay:', usdcDisplay.textContent);
-            } else {
-                console.warn('[credits-system] usdcValueDisplay element not found');
-            }
-
-            // Update combined display
+            // Update combined display FIRST (this contains the child elements)
             const combinedDisplay = document.getElementById('creditsCombinedDisplay');
             if (combinedDisplay) {
+                // Actualizar el contenido completo del combined display
                 combinedDisplay.innerHTML = `
-                    <span class="text-cyan-400 font-bold">${this.currentCredits.toFixed(2)} créditos</span>
-                    <span class="text-gray-400 text-sm">= $${this.currentUsdcValue.toFixed(2)} USDC</span>
+                    <span id="creditsDisplay" class="text-cyan-400 font-bold">${this.currentCredits.toFixed(2)} créditos</span>
+                    <span id="usdcValueDisplay" class="text-gray-400 text-sm">= $${this.currentUsdcValue.toFixed(2)} USDC</span>
                     <span class="text-xs text-green-400 ml-1" title="Créditos estables: 1 crédito = 1 USDC fijo">✓</span>
                 `;
+                
                 // Asegurar que el elemento esté visible si hay créditos
                 if (this.currentCredits > 0) {
                     combinedDisplay.classList.remove('hidden');
                     combinedDisplay.classList.add('sm:inline');
                 }
-                console.log('[credits-system] Updated creditsCombinedDisplay, visible:', !combinedDisplay.classList.contains('hidden'));
+                
+                console.log('[credits-system] Updated creditsCombinedDisplay, visible:', !combinedDisplay.classList.contains('hidden'), 'credits:', this.currentCredits);
+                
+                // Ahora actualizar los elementos individuales si existen (pueden estar en otros lugares)
+                const creditsBadge = document.getElementById('creditsDisplay');
+                if (creditsBadge && creditsBadge !== combinedDisplay.querySelector('#creditsDisplay')) {
+                    creditsBadge.textContent = `${this.currentCredits.toFixed(2)} créditos`;
+                    console.log('[credits-system] Updated standalone creditsDisplay:', creditsBadge.textContent);
+                }
+
+                const usdcDisplay = document.getElementById('usdcValueDisplay');
+                if (usdcDisplay && usdcDisplay !== combinedDisplay.querySelector('#usdcValueDisplay')) {
+                    usdcDisplay.textContent = `= $${this.currentUsdcValue.toFixed(2)} USDC`;
+                    console.log('[credits-system] Updated standalone usdcValueDisplay:', usdcDisplay.textContent);
+                }
             } else {
                 console.warn('[credits-system] creditsCombinedDisplay element not found');
+                
+                // Fallback: intentar actualizar elementos individuales si existen
+                const creditsBadge = document.getElementById('creditsDisplay');
+                if (creditsBadge) {
+                    creditsBadge.textContent = `${this.currentCredits.toFixed(2)} créditos`;
+                }
+
+                const usdcDisplay = document.getElementById('usdcValueDisplay');
+                if (usdcDisplay) {
+                    usdcDisplay.textContent = `= $${this.currentUsdcValue.toFixed(2)} USDC`;
+                }
             }
 
             // Update bet eligibility
