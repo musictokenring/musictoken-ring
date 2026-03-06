@@ -302,11 +302,22 @@ app.get('/api/deposits/diagnose/:txHash', async (req, res) => {
         
         console.log('[diagnose] ========== NEW REQUEST ==========');
         console.log('[diagnose] Raw txHash from params:', txHash);
+        console.log('[diagnose] Request headers:', JSON.stringify(req.headers));
+        
+        if (!txHash) {
+            return res.status(400).json({
+                error: 'Missing transaction hash',
+                message: 'No se proporcionó un hash de transacción'
+            });
+        }
         
         // Limpiar y validar formato del hash
+        const originalTxHash = txHash;
         txHash = txHash.trim().replace(/\s+/g, '').replace(/\//g, '').replace(/\n/g, '').replace(/-/g, '');
         
+        console.log('[diagnose] Original txHash:', originalTxHash);
         console.log('[diagnose] Cleaned txHash:', txHash);
+        console.log('[diagnose] TxHash length:', txHash.length);
         
         if (!txHash || !txHash.startsWith('0x')) {
             return res.status(400).json({ 
