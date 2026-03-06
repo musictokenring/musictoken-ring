@@ -7,6 +7,7 @@
 const express = require('express');
 const cors = require('cors');
 const { DepositListener } = require('./deposit-listener');
+const { MultiChainDepositListener } = require('./multi-chain-deposit-listener');
 const { PriceUpdater } = require('./price-updater');
 const { ClaimService } = require('./claim-service');
 const { VaultService } = require('./vault-service');
@@ -44,6 +45,7 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
 
 // Initialize services
 let depositListener;
+let multiChainDepositListener;
 let priceUpdater;
 let claimService;
 let vaultService;
@@ -58,9 +60,13 @@ async function initializeServices() {
         priceUpdater = new PriceUpdater();
         await priceUpdater.init();
 
-        // Initialize deposit listener
+        // Initialize deposit listener (Base network - legacy, keep for compatibility)
         depositListener = new DepositListener();
         await depositListener.init();
+
+        // Initialize multi-chain deposit listener (all networks)
+        multiChainDepositListener = new MultiChainDepositListener();
+        await multiChainDepositListener.init();
 
         // Initialize claim service
         claimService = new ClaimService();
