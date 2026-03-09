@@ -470,40 +470,72 @@ function setDashboardRegion(region) {
 // =========================================
 
 function handleTrackSelect(track) {
-    // Log para debugging
-    console.log('[handleTrackSelect] ✅ Función llamada con:', track);
-    console.log('[handleTrackSelect] currentMode:', window.currentMode);
+    // Usar originalLog directamente para evitar limitador
+    var logFn = window.__originalLog || console.log;
+    var errorFn = console.error;
+    
+    logFn('[handleTrackSelect] ✅✅✅ FUNCIÓN LLAMADA CON:', track);
+    logFn('[handleTrackSelect] currentMode:', window.currentMode);
     
     // Stop any playing preview - FORZADO
-    stopAllPreviews();
+    if (typeof stopAllPreviews === 'function') {
+        stopAllPreviews();
+    }
+    if (typeof window.stopAllPreviews === 'function') {
+        window.stopAllPreviews();
+    }
     
     // También detener audio directamente como fallback
     if (currentAudio) {
         currentAudio.pause();
         currentAudio.currentTime = 0;
         currentAudio = null;
+        logFn('[handleTrackSelect] Audio detenido (currentAudio)');
     }
     
     // Detener todos los elementos audio del DOM
-    document.querySelectorAll('audio').forEach(function(audio) {
+    var audioElements = document.querySelectorAll('audio');
+    logFn('[handleTrackSelect] Elementos audio encontrados:', audioElements.length);
+    audioElements.forEach(function(audio, index) {
         try {
-            audio.pause();
+            if (!audio.paused) {
+                audio.pause();
+                logFn('[handleTrackSelect] Audio', index, 'pausado');
+            }
             audio.currentTime = 0;
-        } catch(e) {}
+        } catch(e) {
+            errorFn('[handleTrackSelect] Error al detener audio', index, ':', e);
+        }
     });
     
     // Call the selection function if it exists
+    logFn('[handleTrackSelect] Verificando selectSongForBattle...');
+    logFn('[handleTrackSelect] window.selectSongForBattle:', typeof window.selectSongForBattle);
+    logFn('[handleTrackSelect] selectSongForBattle:', typeof selectSongForBattle);
+    
     if (typeof window.selectSongForBattle === 'function') {
-        console.log('[handleTrackSelect] Llamando window.selectSongForBattle...');
-        window.selectSongForBattle(track);
+        logFn('[handleTrackSelect] ✅ Llamando window.selectSongForBattle...');
+        try {
+            window.selectSongForBattle(track);
+            logFn('[handleTrackSelect] ✅ window.selectSongForBattle ejecutado sin errores');
+        } catch(e) {
+            errorFn('[handleTrackSelect] ❌ ERROR al ejecutar window.selectSongForBattle:', e);
+        }
     } else if (typeof selectSongForBattle === 'function') {
-        console.log('[handleTrackSelect] Llamando selectSongForBattle...');
-        selectSongForBattle(track);
+        logFn('[handleTrackSelect] ✅ Llamando selectSongForBattle...');
+        try {
+            selectSongForBattle(track);
+            logFn('[handleTrackSelect] ✅ selectSongForBattle ejecutado sin errores');
+        } catch(e) {
+            errorFn('[handleTrackSelect] ❌ ERROR al ejecutar selectSongForBattle:', e);
+        }
     } else if (typeof selectTrack === 'function') {
+        logFn('[handleTrackSelect] Llamando selectTrack...');
         selectTrack(track);
     } else {
-        console.error('[handleTrackSelect] ❌ No track selection handler found');
-        console.error('[handleTrackSelect] window.selectSongForBattle:', typeof window.selectSongForBattle);
+        errorFn('[handleTrackSelect] ❌❌❌ NO HAY HANDLER DISPONIBLE');
+        errorFn('[handleTrackSelect] window.selectSongForBattle:', typeof window.selectSongForBattle);
+        errorFn('[handleTrackSelect] selectSongForBattle:', typeof selectSongForBattle);
     }
 }
 
