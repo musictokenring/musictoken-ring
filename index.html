@@ -57,6 +57,61 @@
             console.log(logPrefix, 'Tipo:', typeof window.updateBetEligibility);
             console.log(logPrefix, 'Verificación:', typeof window.updateBetEligibility === 'function');
             
+            // INTERCEPTAR setAttribute y title para eliminar "100 créditos" inmediatamente
+            (function() {
+                var btn = document.getElementById('createSocialBtn');
+                if (!btn) {
+                    // Esperar a que el botón exista
+                    var checkInterval = setInterval(function() {
+                        btn = document.getElementById('createSocialBtn');
+                        if (btn) {
+                            clearInterval(checkInterval);
+                            setupInterceptor();
+                        }
+                    }, 100);
+                } else {
+                    setupInterceptor();
+                }
+                
+                function setupInterceptor() {
+                    var btn = document.getElementById('createSocialBtn');
+                    if (!btn) return;
+                    
+                    // Interceptar setAttribute
+                    var originalSetAttribute = btn.setAttribute;
+                    btn.setAttribute = function(name, value) {
+                        if (name === 'title' && value && (String(value).includes('100') || String(value).includes('cien'))) {
+                            console.log(logPrefix, '⚠️ INTERCEPTADO setAttribute con "100", bloqueando:', value);
+                            return; // No establecer el atributo
+                        }
+                        return originalSetAttribute.call(this, name, value);
+                    };
+                    
+                    // Interceptar propiedad title directamente
+                    var titleDescriptor = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'title');
+                    if (titleDescriptor) {
+                        Object.defineProperty(btn, 'title', {
+                            get: function() {
+                                var val = titleDescriptor.get.call(this);
+                                if (val && (val.includes('100') || val.includes('cien'))) {
+                                    console.log(logPrefix, '⚠️ INTERCEPTADO get title con "100", retornando vacío');
+                                    return '';
+                                }
+                                return val || '';
+                            },
+                            set: function(value) {
+                                if (value && (String(value).includes('100') || String(value).includes('cien'))) {
+                                    console.log(logPrefix, '⚠️ INTERCEPTADO set title con "100", bloqueando:', value);
+                                    return; // No establecer el valor
+                                }
+                                return titleDescriptor.set.call(this, value);
+                            },
+                            configurable: true
+                        });
+                    }
+                }
+            })();
+            
             // MONITOR CONTINUO para eliminar tooltip de "100 créditos"
             setInterval(function() {
                 var btn = document.getElementById('createSocialBtn');
@@ -72,7 +127,7 @@
                         }
                     }
                 }
-            }, 500); // Verificar cada 500ms
+            }, 200); // Verificar cada 200ms (más frecuente)
             
             // Verificación adicional después de un pequeño delay
             setTimeout(function() {
