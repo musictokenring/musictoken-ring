@@ -240,38 +240,33 @@
 <body class="min-h-screen text-white font-sans antialiased">
     <!-- Script de respaldo TEMPRANO - Se ejecuta inmediatamente al cargar body -->
     <script>
-        try {
-            console.log('[BACKUP-EARLY] ⚡ Script de respaldo temprano iniciado');
-            if (typeof window.updateBetEligibility !== 'function') {
-                window.updateBetEligibility = function() {
-                    try {
-                        var btn = document.getElementById('createSocialBtn');
-                        if (btn && window.currentMode === 'social') {
-                            var betInput = document.getElementById('betAmount');
-                            var bet = betInput ? parseFloat(betInput.value || '0') : 0;
-                            var onchainBalance = Number(window.__mtrOnChainBalance || 0);
-                            var credits = window.CreditsSystem ? (window.CreditsSystem.currentCredits || 0) : 0;
-                            var canCover = bet >= 5 && (credits >= bet || onchainBalance >= bet);
-                            var hasSong = !!window.selectedSong;
-                            btn.disabled = !canCover || !hasSong;
-                            var title = btn.getAttribute('title') || btn.title || '';
-                            if (title && title.includes('100')) {
-                                btn.title = '';
-                                btn.removeAttribute('title');
-                            }
-                            if (!canCover && bet > 0) {
-                                btn.title = bet < 5 ? 'Apuesta mínima: 5 créditos' : 'Créditos y saldo MTR insuficientes';
-                            } else {
-                                btn.title = '';
-                            }
-                        }
-                    } catch(e) {}
-                };
-                console.log('[BACKUP-EARLY] ✅ Función creada tempranamente');
-            }
-        } catch(e) {
-            console.error('[BACKUP-EARLY] ❌ Error:', e);
-            window.updateBetEligibility = window.updateBetEligibility || function() {};
+        console.log('[BACKUP-EARLY] ⚡ Script de respaldo temprano iniciado');
+        if (typeof window.updateBetEligibility !== 'function') {
+            window.updateBetEligibility = function() {
+                var btn = document.getElementById('createSocialBtn');
+                if (btn && window.currentMode === 'social') {
+                    var betInput = document.getElementById('betAmount');
+                    var bet = betInput ? parseFloat(betInput.value || '0') : 0;
+                    var onchainBalance = Number(window.__mtrOnChainBalance || 0);
+                    var credits = window.CreditsSystem ? (window.CreditsSystem.currentCredits || 0) : 0;
+                    var canCover = bet >= 5 && (credits >= bet || onchainBalance >= bet);
+                    var hasSong = !!window.selectedSong;
+                    btn.disabled = !canCover || !hasSong;
+                    var title = btn.getAttribute('title') || btn.title || '';
+                    if (title && title.includes('100')) {
+                        btn.title = '';
+                        btn.removeAttribute('title');
+                    }
+                    if (!canCover && bet > 0) {
+                        btn.title = bet < 5 ? 'Apuesta mínima: 5 créditos' : 'Créditos y saldo MTR insuficientes';
+                    } else {
+                        btn.title = '';
+                    }
+                }
+            };
+            console.log('[BACKUP-EARLY] ✅ Función creada tempranamente');
+        } else {
+            console.log('[BACKUP-EARLY] ✅ updateBetEligibility ya existe');
         }
     </script>
 
