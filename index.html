@@ -1103,6 +1103,66 @@
                         console.warn('[selectSong] ⚠️ selectedSongCard no encontrado');
                     }
                     
+                    // DETENER TODOS LOS PREVIEWS DE AUDIO
+                    if (typeof window.stopAllPreviews === 'function') {
+                        console.log('[selectSong] 🛑 Deteniendo todos los previews...');
+                        window.stopAllPreviews();
+                    } else if (typeof stopAllPreviews === 'function') {
+                        console.log('[selectSong] 🛑 Deteniendo todos los previews (fallback)...');
+                        stopAllPreviews();
+                    } else {
+                        // Fallback manual: detener todos los elementos de audio
+                        try {
+                            var audioElements = document.querySelectorAll('audio');
+                            audioElements.forEach(function(audio) {
+                                audio.pause();
+                                audio.currentTime = 0;
+                            });
+                            console.log('[selectSong] 🛑 Previews detenidos manualmente');
+                        } catch(e) {
+                            console.warn('[selectSong] ⚠️ Error al detener previews:', e);
+                        }
+                    }
+                    
+                    // MOSTRAR BANNER VERDE para modo Social Challenge
+                    if (currentMode === 'social' || window.currentMode === 'social') {
+                        console.log('[selectSong] 🟢 Mostrando banner verde para modo Social...');
+                        // Eliminar banner anterior si existe
+                        var existingBanner = document.getElementById('songSelectedBanner');
+                        if (existingBanner) {
+                            existingBanner.remove();
+                        }
+                        
+                        // Crear banner verde prominente
+                        var banner = document.createElement('div');
+                        banner.id = 'songSelectedBanner';
+                        banner.style.cssText = 'position: fixed; top: 80px; left: 50%; transform: translateX(-50%); z-index: 9999; background: linear-gradient(135deg, #10b981 0%, #059669 100%); color: white; padding: 16px 32px; border-radius: 12px; box-shadow: 0 8px 32px rgba(16, 185, 129, 0.4); font-weight: 700; font-size: 16px; text-align: center; animation: slideDown 0.3s ease-out;';
+                        banner.innerHTML = '✅ Canción Seleccionada: ' + (song.name || 'Sin nombre') + ' - ' + (song.artist || 'Artista desconocido');
+                        
+                        // Agregar animación CSS si no existe
+                        if (!document.getElementById('bannerAnimationStyle')) {
+                            var style = document.createElement('style');
+                            style.id = 'bannerAnimationStyle';
+                            style.textContent = '@keyframes slideDown { from { opacity: 0; transform: translateX(-50%) translateY(-20px); } to { opacity: 1; transform: translateX(-50%) translateY(0); } }';
+                            document.head.appendChild(style);
+                        }
+                        
+                        document.body.appendChild(banner);
+                        
+                        // Remover banner después de 5 segundos
+                        setTimeout(function() {
+                            if (banner && banner.parentNode) {
+                                banner.style.transition = 'opacity 0.3s ease-out';
+                                banner.style.opacity = '0';
+                                setTimeout(function() {
+                                    if (banner && banner.parentNode) {
+                                        banner.remove();
+                                    }
+                                }, 300);
+                            }
+                        }, 5000);
+                    }
+                    
                     // Actualizar estado de botones según el modo
                     if (typeof updateBetEligibility === 'function') {
                         updateBetEligibility();
@@ -2421,15 +2481,69 @@
         console.log('[INIT] ✅ window.startPractice definida globalmente');
 
         async function createSocialChallenge() {
-            if (!selectedSong) { showToast('Selecciona una canción primero', 'error'); return; }
+            console.log('[createSocialChallenge] ✅ Función llamada');
+            console.log('[createSocialChallenge] Estado:', {
+                selectedSong: !!selectedSong,
+                selectedSongData: selectedSong,
+                GameEngine: typeof GameEngine !== 'undefined',
+                betAmount: document.getElementById('betAmount')?.value
+            });
+            
+            if (!selectedSong) { 
+                console.error('[createSocialChallenge] ❌ No hay canción seleccionada');
+                showToast('Selecciona una canción primero', 'error'); 
+                return; 
+            }
+            
             const minBetAmount = (typeof GameEngine !== 'undefined' && GameEngine.minBet) ? GameEngine.minBet : 5;
-            var bet = parseFloat(document.getElementById('betAmount').value) || minBetAmount;
+            var betInput = document.getElementById('betAmount');
+            if (!betInput) {
+                console.error('[createSocialChallenge] ❌ Campo betAmount no encontrado');
+                showToast('Error: Campo de apuesta no encontrado', 'error');
+                return;
+            }
+            
+            var bet = parseFloat(betInput.value) || minBetAmount;
+            console.log('[createSocialChallenge] Apuesta:', bet, 'Mínimo:', minBetAmount);
+            
             if (bet < minBetAmount) {
+                console.error('[createSocialChallenge] ❌ Apuesta menor al mínimo');
                 showToast(`La apuesta mínima para desafíos sociales es ${minBetAmount} créditos`, 'error');
                 return;
             }
-            if (typeof GameEngine !== 'undefined') await GameEngine.createSocialChallenge(selectedSong, bet);
-            else showToast('GameEngine no está cargado', 'error');
+            
+            // Verificar créditos y balance on-chain
+            var credits = window.CreditsSystem ? (window.CreditsSystem.currentCredits || 0) : 0;
+            var onchainBalance = Number(window.__mtrOnChainBalance || 0);
+            var canCover = credits >= bet || onchainBalance >= bet;
+            
+            console.log('[createSocialChallenge] Verificación de saldo:', {
+                credits: credits,
+                onchainBalance: onchainBalance,
+                bet: bet,
+                canCover: canCover
+            });
+            
+            if (!canCover) {
+                console.error('[createSocialChallenge] ❌ Saldo insuficiente');
+                showToast(`Créditos insuficientes. Disponibles: ${credits.toFixed(2)} créditos, ${onchainBalance.toLocaleString('es-ES')} MTR on-chain`, 'error');
+                return;
+            }
+            
+            if (typeof GameEngine === 'undefined') {
+                console.error('[createSocialChallenge] ❌ GameEngine no está cargado');
+                showToast('GameEngine no está cargado', 'error');
+                return;
+            }
+            
+            console.log('[createSocialChallenge] ✅ Llamando a GameEngine.createSocialChallenge...');
+            try {
+                await GameEngine.createSocialChallenge(selectedSong, bet);
+                console.log('[createSocialChallenge] ✅ Desafío creado exitosamente');
+            } catch(error) {
+                console.error('[createSocialChallenge] ❌ Error al crear desafío:', error);
+                showToast('Error al crear desafío: ' + (error.message || 'Error desconocido'), 'error');
+            }
         }
 
         function copyChallengeLink() {
