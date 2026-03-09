@@ -1117,64 +1117,109 @@
                         console.warn('[selectSong] ⚠️ selectedSongCard no encontrado');
                     }
                     
-                    // DETENER TODOS LOS PREVIEWS DE AUDIO
-                    if (typeof window.stopAllPreviews === 'function') {
-                        console.log('[selectSong] 🛑 Deteniendo todos los previews...');
-                        window.stopAllPreviews();
-                    } else if (typeof stopAllPreviews === 'function') {
-                        console.log('[selectSong] 🛑 Deteniendo todos los previews (fallback)...');
-                        stopAllPreviews();
-                    } else {
-                        // Fallback manual: detener todos los elementos de audio
-                        try {
-                            var audioElements = document.querySelectorAll('audio');
-                            audioElements.forEach(function(audio) {
+                    // DETENER TODOS LOS PREVIEWS DE AUDIO - FORZADO
+                    console.log('[selectSong] 🛑 Iniciando detención de previews...');
+                    try {
+                        // Método 1: Función global
+                        if (typeof window.stopAllPreviews === 'function') {
+                            console.log('[selectSong] 🛑 Usando window.stopAllPreviews...');
+                            window.stopAllPreviews();
+                        } else if (typeof stopAllPreviews === 'function') {
+                            console.log('[selectSong] 🛑 Usando stopAllPreviews...');
+                            stopAllPreviews();
+                        }
+                        
+                        // Método 2: Detener todos los elementos audio directamente
+                        var audioElements = document.querySelectorAll('audio');
+                        console.log('[selectSong] 🛑 Encontrados', audioElements.length, 'elementos de audio');
+                        audioElements.forEach(function(audio, index) {
+                            try {
                                 audio.pause();
                                 audio.currentTime = 0;
-                            });
-                            console.log('[selectSong] 🛑 Previews detenidos manualmente');
-                        } catch(e) {
-                            console.warn('[selectSong] ⚠️ Error al detener previews:', e);
-                        }
+                                console.log('[selectSong] 🛑 Audio', index, 'detenido');
+                            } catch(e) {
+                                console.warn('[selectSong] ⚠️ Error al detener audio', index, ':', e);
+                            }
+                        });
+                        
+                        // Método 3: Detener cualquier source de audio
+                        var sources = document.querySelectorAll('source');
+                        sources.forEach(function(source) {
+                            try {
+                                var parent = source.parentElement;
+                                if (parent && parent.tagName === 'AUDIO') {
+                                    parent.pause();
+                                    parent.currentTime = 0;
+                                }
+                            } catch(e) {}
+                        });
+                        
+                        console.log('[selectSong] ✅ Previews detenidos completamente');
+                    } catch(e) {
+                        console.error('[selectSong] ❌ Error al detener previews:', e);
                     }
                     
-                    // MOSTRAR BANNER VERDE para modo Social Challenge
-                    if (currentMode === 'social' || window.currentMode === 'social') {
+                    // MOSTRAR BANNER VERDE para modo Social Challenge - FORZADO
+                    var isSocialMode = currentMode === 'social' || window.currentMode === 'social';
+                    console.log('[selectSong] 🟢 Verificando modo Social. currentMode:', currentMode, 'window.currentMode:', window.currentMode, 'isSocialMode:', isSocialMode);
+                    
+                    if (isSocialMode) {
                         console.log('[selectSong] 🟢 Mostrando banner verde para modo Social...');
-                        // Eliminar banner anterior si existe
-                        var existingBanner = document.getElementById('songSelectedBanner');
-                        if (existingBanner) {
-                            existingBanner.remove();
-                        }
-                        
-                        // Crear banner verde prominente
-                        var banner = document.createElement('div');
-                        banner.id = 'songSelectedBanner';
-                        banner.style.cssText = 'position: fixed; top: 80px; left: 50%; transform: translateX(-50%); z-index: 9999; background: linear-gradient(135deg, #10b981 0%, #059669 100%); color: white; padding: 16px 32px; border-radius: 12px; box-shadow: 0 8px 32px rgba(16, 185, 129, 0.4); font-weight: 700; font-size: 16px; text-align: center; animation: slideDown 0.3s ease-out;';
-                        banner.innerHTML = '✅ Canción Seleccionada: ' + (song.name || 'Sin nombre') + ' - ' + (song.artist || 'Artista desconocido');
-                        
-                        // Agregar animación CSS si no existe
-                        if (!document.getElementById('bannerAnimationStyle')) {
-                            var style = document.createElement('style');
-                            style.id = 'bannerAnimationStyle';
-                            style.textContent = '@keyframes slideDown { from { opacity: 0; transform: translateX(-50%) translateY(-20px); } to { opacity: 1; transform: translateX(-50%) translateY(0); } }';
-                            document.head.appendChild(style);
-                        }
-                        
-                        document.body.appendChild(banner);
-                        
-                        // Remover banner después de 5 segundos
-                        setTimeout(function() {
-                            if (banner && banner.parentNode) {
-                                banner.style.transition = 'opacity 0.3s ease-out';
-                                banner.style.opacity = '0';
-                                setTimeout(function() {
-                                    if (banner && banner.parentNode) {
-                                        banner.remove();
-                                    }
-                                }, 300);
+                        try {
+                            // Eliminar banner anterior si existe
+                            var existingBanner = document.getElementById('songSelectedBanner');
+                            if (existingBanner) {
+                                console.log('[selectSong] 🟢 Eliminando banner anterior');
+                                existingBanner.remove();
                             }
-                        }, 5000);
+                            
+                            // Crear banner verde prominente
+                            var banner = document.createElement('div');
+                            banner.id = 'songSelectedBanner';
+                            banner.style.cssText = 'position: fixed !important; top: 80px !important; left: 50% !important; transform: translateX(-50%) !important; z-index: 99999 !important; background: linear-gradient(135deg, #10b981 0%, #059669 100%) !important; color: white !important; padding: 16px 32px !important; border-radius: 12px !important; box-shadow: 0 8px 32px rgba(16, 185, 129, 0.4) !important; font-weight: 700 !important; font-size: 16px !important; text-align: center !important; animation: slideDown 0.3s ease-out !important; pointer-events: none !important;';
+                            banner.innerHTML = '✅ Canción Seleccionada: ' + (song.name || 'Sin nombre') + ' - ' + (song.artist || 'Artista desconocido');
+                            
+                            // Agregar animación CSS si no existe
+                            if (!document.getElementById('bannerAnimationStyle')) {
+                                var style = document.createElement('style');
+                                style.id = 'bannerAnimationStyle';
+                                style.textContent = '@keyframes slideDown { from { opacity: 0; transform: translateX(-50%) translateY(-20px); } to { opacity: 1; transform: translateX(-50%) translateY(0); } }';
+                                document.head.appendChild(style);
+                                console.log('[selectSong] 🟢 Estilo de animación agregado');
+                            }
+                            
+                            document.body.appendChild(banner);
+                            console.log('[selectSong] ✅ Banner verde agregado al DOM');
+                            
+                            // Verificar que el banner esté visible
+                            setTimeout(function() {
+                                var checkBanner = document.getElementById('songSelectedBanner');
+                                if (checkBanner) {
+                                    console.log('[selectSong] ✅ Banner verificado después de 100ms:', checkBanner.offsetHeight > 0 ? 'VISIBLE' : 'OCULTO');
+                                } else {
+                                    console.error('[selectSong] ❌ Banner no encontrado después de 100ms');
+                                }
+                            }, 100);
+                            
+                            // Remover banner después de 5 segundos
+                            setTimeout(function() {
+                                var bannerToRemove = document.getElementById('songSelectedBanner');
+                                if (bannerToRemove && bannerToRemove.parentNode) {
+                                    console.log('[selectSong] 🟢 Removiendo banner después de 5 segundos');
+                                    bannerToRemove.style.transition = 'opacity 0.3s ease-out';
+                                    bannerToRemove.style.opacity = '0';
+                                    setTimeout(function() {
+                                        if (bannerToRemove && bannerToRemove.parentNode) {
+                                            bannerToRemove.remove();
+                                        }
+                                    }, 300);
+                                }
+                            }, 5000);
+                        } catch(e) {
+                            console.error('[selectSong] ❌ Error al crear banner verde:', e);
+                        }
+                    } else {
+                        console.log('[selectSong] ⚠️ No es modo Social, no se mostrará banner');
                     }
                     
                     // Actualizar estado de botones según el modo
