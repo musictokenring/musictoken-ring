@@ -1239,6 +1239,14 @@
                     // MOSTRAR BANNER VERDE para modo Social Challenge - FORZADO
                     var isSocialMode = currentMode === 'social' || window.currentMode === 'social';
                     
+                    // Log para debugging
+                    var logFn = window.__originalLog || console.log;
+                    logFn('[selectSongForBattle] Verificando modo social:', {
+                        currentMode: currentMode,
+                        windowCurrentMode: window.currentMode,
+                        isSocialMode: isSocialMode
+                    });
+                    
                     if (isSocialMode) {
                         (function showGreenBanner() {
                             try {
@@ -2682,10 +2690,17 @@
         // console.log('[INIT] ✅ window.startPractice definida globalmente');
 
         async function createSocialChallenge() {
-            // Logs comentados para reducir ruido - solo mantener errores críticos
-            // console.log('[createSocialChallenge] ✅ Función llamada');
+            // Logs importantes para debugging
+            var logFn = window.__originalLog || console.log;
+            logFn('[createSocialChallenge] ✅ FUNCIÓN LLAMADA');
             
-            if (!selectedSong) { 
+            // Verificar selectedSong en múltiples lugares
+            var song = selectedSong || window.selectedSong;
+            logFn('[createSocialChallenge] selectedSong local:', selectedSong);
+            logFn('[createSocialChallenge] window.selectedSong:', window.selectedSong);
+            logFn('[createSocialChallenge] song final:', song);
+            
+            if (!song) { 
                 console.error('[createSocialChallenge] ❌ No hay canción seleccionada');
                 showToast('Selecciona una canción primero', 'error'); 
                 return; 
@@ -2726,8 +2741,13 @@
                 return;
             }
             
+            logFn('[createSocialChallenge] Llamando GameEngine.createSocialChallenge con:', {
+                song: song,
+                bet: bet
+            });
+            
             try {
-                await GameEngine.createSocialChallenge(selectedSong, bet);
+                await GameEngine.createSocialChallenge(song, bet);
             } catch(error) {
                 console.error('[createSocialChallenge] ❌ Error crítico:', error);
                 showToast('Error al crear desafío: ' + (error.message || 'Error desconocido'), 'error');

@@ -470,16 +470,40 @@ function setDashboardRegion(region) {
 // =========================================
 
 function handleTrackSelect(track) {
-    // Stop any playing preview
+    // Log para debugging
+    console.log('[handleTrackSelect] ✅ Función llamada con:', track);
+    console.log('[handleTrackSelect] currentMode:', window.currentMode);
+    
+    // Stop any playing preview - FORZADO
     stopAllPreviews();
     
+    // También detener audio directamente como fallback
+    if (currentAudio) {
+        currentAudio.pause();
+        currentAudio.currentTime = 0;
+        currentAudio = null;
+    }
+    
+    // Detener todos los elementos audio del DOM
+    document.querySelectorAll('audio').forEach(function(audio) {
+        try {
+            audio.pause();
+            audio.currentTime = 0;
+        } catch(e) {}
+    });
+    
     // Call the selection function if it exists
-    if (typeof selectSongForBattle === 'function') {
+    if (typeof window.selectSongForBattle === 'function') {
+        console.log('[handleTrackSelect] Llamando window.selectSongForBattle...');
+        window.selectSongForBattle(track);
+    } else if (typeof selectSongForBattle === 'function') {
+        console.log('[handleTrackSelect] Llamando selectSongForBattle...');
         selectSongForBattle(track);
     } else if (typeof selectTrack === 'function') {
         selectTrack(track);
     } else {
-        console.warn('No track selection handler found');
+        console.error('[handleTrackSelect] ❌ No track selection handler found');
+        console.error('[handleTrackSelect] window.selectSongForBattle:', typeof window.selectSongForBattle);
     }
 }
 
