@@ -100,7 +100,8 @@ const GameEngine = {
             // Si no hay valor válido en localStorage, establecer el inicial
             this.practiceDemoBalance = this.practiceDemoInitialBalance;
             localStorage.setItem('mtr_practice_demo_balance', String(this.practiceDemoBalance));
-            console.log('[practice] Demo balance inicializado a', this.practiceDemoBalance);
+            // Log comentado para reducir ruido
+            // console.log('[practice] Demo balance inicializado a', this.practiceDemoBalance);
         } catch (e) {
             console.error('[practice] Error cargando demo balance:', e);
             this.practiceDemoBalance = this.practiceDemoInitialBalance;
@@ -123,8 +124,9 @@ const GameEngine = {
         // como Desafío Social, Torneo, etc., incluso si la URL tiene ?mode=practice
         const isInPracticeSection = typeof window !== 'undefined' && window.currentMode === 'practice';
         
-        console.log('[updatePracticeBetDisplay] En sección práctica:', isInPracticeSection, 'currentMode:', window.currentMode, 'Balance demo:', this.practiceDemoBalance);
-        console.log('[updatePracticeBetDisplay] Elementos encontrados:', {
+        // Logs comentados para reducir ruido - esta función se ejecuta frecuentemente
+        // console.log('[updatePracticeBetDisplay] En sección práctica:', isInPracticeSection, 'currentMode:', window.currentMode, 'Balance demo:', this.practiceDemoBalance);
+        // console.log('[updatePracticeBetDisplay] Elementos encontrados:', {
             labelEl: !!labelEl,
             valueEl: !!valueEl,
             onchainEl: !!onchainEl,
