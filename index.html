@@ -6,7 +6,7 @@
     <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
     <meta http-equiv="Pragma" content="no-cache">
     <meta http-equiv="Expires" content="0">
-    <meta name="mtr-build" content="v3.9-start-battle-fix">
+    <meta name="mtr-build" content="v3.17-try-catch-ultra-early">
     <title>MusicToken Ring - Music Battle Arena</title>
 
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -49,6 +49,433 @@
     <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js" defer></script>
     <!-- Polyfills necesarios para WalletConnect v2 -->
     <script>
+        // ========================================
+        // DEFINICIÓN ULTRA-TEMPRANA DE updateBetEligibility
+        // Versión SIMPLIFICADA que se ejecuta INMEDIATAMENTE
+        // ========================================
+        (function() {
+            'use strict';
+            try {
+                // CRÍTICO: Definir función básica SIN dependencias externas
+                window.updateBetEligibility = function() {
+                    var btn = document.getElementById('createSocialBtn');
+                    if (btn && window.currentMode === 'social') {
+                        var betInput = document.getElementById('betAmount');
+                        var bet = betInput ? parseFloat(betInput.value || '0') : 0;
+                        var onchainBalance = Number(window.__mtrOnChainBalance || 0);
+                        var credits = window.CreditsSystem ? (window.CreditsSystem.currentCredits || 0) : 0;
+                        var canCover = bet >= 5 && (credits >= bet || onchainBalance >= bet);
+                        var hasSong = !!window.selectedSong;
+                        btn.disabled = !canCover || !hasSong;
+                        var title = btn.getAttribute('title') || btn.title || '';
+                        if (title && title.includes('100')) {
+                            btn.title = '';
+                            btn.removeAttribute('title');
+                        }
+                        if (!canCover && bet > 0) {
+                            if (bet < 5) {
+                                btn.title = 'Apuesta mínima: 5 créditos';
+                            } else {
+                                btn.title = 'Créditos y saldo MTR insuficientes';
+                            }
+                        } else {
+                            btn.title = '';
+                        }
+                    }
+                };
+                
+                // Función de restauración simple
+                window._restoreUpdateBetEligibility = function() {
+                    if (typeof window.updateBetEligibility !== 'function') {
+                        window.updateBetEligibility = function() {
+                            var btn = document.getElementById('createSocialBtn');
+                            if (btn && window.currentMode === 'social') {
+                                var betInput = document.getElementById('betAmount');
+                                var bet = betInput ? parseFloat(betInput.value || '0') : 0;
+                                var onchainBalance = Number(window.__mtrOnChainBalance || 0);
+                                var credits = window.CreditsSystem ? (window.CreditsSystem.currentCredits || 0) : 0;
+                                var canCover = bet >= 5 && (credits >= bet || onchainBalance >= bet);
+                                var hasSong = !!window.selectedSong;
+                                btn.disabled = !canCover || !hasSong;
+                            }
+                        };
+                    }
+                };
+                
+                console.log('[ULTRA-EARLY] ✅ Funciones definidas:', {
+                    updateBetEligibility: typeof window.updateBetEligibility,
+                    _restoreUpdateBetEligibility: typeof window._restoreUpdateBetEligibility
+                });
+            } catch (e) {
+                console.error('[ULTRA-EARLY] ❌ Error:', e);
+                // Versión de emergencia absoluta
+                window.updateBetEligibility = window.updateBetEligibility || function() {};
+                window._restoreUpdateBetEligibility = window._restoreUpdateBetEligibility || function() {};
+            }
+        })();
+    </script>
+    
+    <script>
+        // ========================================
+        // SCRIPT CRÍTICO DE CORRECCIÓN GLOBAL
+        // Se ejecuta ANTES de cualquier otro script
+        // ========================================
+        (function() {
+            console.log('========================================');
+            console.log('🔧 SCRIPT DE CORRECCIÓN INMEDIATA v2.0');
+            console.log('========================================');
+            console.log('[INIT-IMMEDIATE] ✅ Script de corrección inmediata ejecutándose...');
+            console.log('[INIT-IMMEDIATE] Timestamp:', new Date().toISOString());
+            console.log('[INIT-IMMEDIATE] URL:', window.location.href);
+            console.log('[INIT-IMMEDIATE] updateBetEligibility ya definida:', typeof window.updateBetEligibility);
+            
+            // CRÍTICO: Asegurar que stopAllPreviews esté disponible ANTES de que se necesite
+            window.stopAllPreviews = window.stopAllPreviews || function() {
+                console.log('[stopAllPreviews-FALLBACK] ⚡ Ejecutando fallback...');
+                try {
+                    // Pausar todos los audios
+                    var audios = document.querySelectorAll('audio');
+                    var pausedCount = 0;
+                    audios.forEach(function(audio) {
+                        if (!audio.paused) {
+                            audio.pause();
+                            audio.currentTime = 0;
+                            pausedCount++;
+                        }
+                    });
+                    
+                    // Resetear botones de preview
+                    document.querySelectorAll('.btn-preview, [class*="preview"], button[data-preview]').forEach(function(btn) {
+                        if (btn.textContent && (btn.textContent.includes('⏸') || btn.textContent.includes('Pause'))) {
+                            btn.textContent = btn.textContent.replace(/⏸|Pause/g, '▶');
+                        }
+                    });
+                    
+                    console.log('[stopAllPreviews-FALLBACK] ✅ Detenidos', pausedCount, 'audios');
+                } catch (e) {
+                    console.error('[stopAllPreviews-FALLBACK] ❌ Error:', e);
+                }
+            };
+            
+            // CRÍTICO: NO usar Object.defineProperty - causa problemas
+            // En su lugar, simplemente asegurar que las funciones se asignen correctamente después de definirse
+            // Esto se hará mediante un MutationObserver que verifica cuando se definen
+            
+            // CRÍTICO: Script que se ejecuta INMEDIATAMENTE al cargar para corregir tooltip y botón
+            
+            // Función para corregir tooltip del botón y asegurar que funcione
+            function fixCreateSocialBtn() {
+                var btn = document.getElementById('createSocialBtn');
+                if (btn) {
+                    // CRÍTICO: Limpiar title si contiene "100" - MÁS AGRESIVO
+                    var currentTitle = btn.getAttribute('title') || btn.title || '';
+                    if (currentTitle && currentTitle.includes('100')) {
+                        console.log('[fixCreateSocialBtn] ⚠️ Title con "100" detectado:', currentTitle);
+                        btn.removeAttribute('title');
+                        btn.title = '';
+                        // Forzar eliminación múltiples veces
+                        setTimeout(function() {
+                            btn.removeAttribute('title');
+                            btn.title = '';
+                        }, 10);
+                        setTimeout(function() {
+                            btn.removeAttribute('title');
+                            btn.title = '';
+                        }, 50);
+                        console.log('[fixCreateSocialBtn] ✅ Title con "100" eliminado');
+                    }
+                    
+                    // CRÍTICO: Interceptar setAttribute para prevenir "100" en el futuro
+                    if (!btn._setAttributeIntercepted) {
+                        btn._setAttributeIntercepted = true;
+                        var originalSetAttribute = btn.setAttribute.bind(btn);
+                        btn.setAttribute = function(name, value) {
+                            if (name === 'title' && value && typeof value === 'string' && value.includes('100')) {
+                                console.log('[fixCreateSocialBtn] ⚠️ setAttribute intentando establecer title con "100":', value);
+                                value = value.replace(/100/g, '5');
+                                console.log('[fixCreateSocialBtn] ✅ Corregido a:', value);
+                            }
+                            return originalSetAttribute(name, value);
+                        };
+                    }
+                    
+                    // CRÍTICO: Asegurar que el botón tenga un handler funcional
+                    // Clonar el botón para eliminar listeners anteriores
+                    if (!btn._fixedClickHandler) {
+                        btn._fixedClickHandler = true;
+                        
+                        // Remover todos los listeners anteriores clonando el botón
+                        var newBtn = btn.cloneNode(true);
+                        btn.parentNode.replaceChild(newBtn, btn);
+                        btn = newBtn;
+                        
+                        // Agregar handler simple y directo
+                        btn.addEventListener('click', function(e) {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            e.stopImmediatePropagation();
+                            
+                            console.log('========================================');
+                            console.log('[createSocialBtn-CLICK] ✅✅✅ CLIC DETECTADO ✅✅✅');
+                            console.log('[createSocialBtn-CLICK] Timestamp:', new Date().toISOString());
+                            console.log('[createSocialBtn-CLICK] Disabled:', btn.disabled);
+                            console.log('[createSocialBtn-CLICK] createSocialChallenge type:', typeof window.createSocialChallenge);
+                            console.log('========================================');
+                            
+                            if (btn.disabled) {
+                                console.warn('[createSocialBtn-CLICK] ⚠️ Botón deshabilitado, ignorando clic');
+                                return;
+                            }
+                            
+                            // Intentar llamar la función de múltiples formas
+                            if (typeof window.createSocialChallenge === 'function') {
+                                console.log('[createSocialBtn-CLICK] 🚀 Llamando window.createSocialChallenge...');
+                                window.createSocialChallenge();
+                            } else if (typeof createSocialChallenge === 'function') {
+                                console.log('[createSocialBtn-CLICK] 🚀 Llamando createSocialChallenge...');
+                                createSocialChallenge();
+                            } else {
+                                console.error('[createSocialBtn-CLICK] ❌ createSocialChallenge no está disponible');
+                                alert('Error: La función de crear desafío no está disponible. Recarga la página.');
+                            }
+                        }, true); // Usar capture phase para ejecutar primero
+                        
+                        console.log('[fixCreateSocialBtn] ✅ Botón clonado y handler agregado');
+                    }
+                }
+            }
+            
+            // CRÍTICO: Función para asegurar banner verde en modo social
+            function ensureGreenBanner() {
+                try {
+                    var card = document.getElementById('selectedSongCard');
+                    if (!card || window.currentMode !== 'social') return;
+                    
+                    var banner = card.querySelector('[id="selectedSongBanner"], [class*="green"]');
+                    if (!banner && window.selectedSong) {
+                        var bannerDiv = document.createElement('div');
+                        bannerDiv.id = 'selectedSongBanner';
+                        bannerDiv.className = 'ml-4 px-3 py-1.5 rounded-full bg-green-500/25 border border-green-500/40 text-green-300 text-xs font-bold shadow-lg shadow-green-500/20 flex-shrink-0';
+                        bannerDiv.textContent = '✓ Canción Seleccionada';
+                        bannerDiv.style.cssText = 'display: block !important; visibility: visible !important; opacity: 1 !important;';
+                        card.appendChild(bannerDiv);
+                        console.log('[ensureGreenBanner] ✅ Banner verde agregado');
+                    } else if (banner) {
+                        banner.style.cssText = 'display: block !important; visibility: visible !important; opacity: 1 !important;';
+                    }
+                } catch (e) {
+                    console.error('[ensureGreenBanner] ❌ Error:', e);
+                }
+            }
+            
+            // Ejecutar inmediatamente
+            fixCreateSocialBtn();
+            ensureGreenBanner();
+            
+            // Ejecutar cuando el DOM esté listo
+            if (document.readyState === 'loading') {
+                document.addEventListener('DOMContentLoaded', function() {
+                    fixCreateSocialBtn();
+                    ensureGreenBanner();
+                });
+            } else {
+                // Si ya está cargado, ejecutar después de un pequeño delay
+                setTimeout(function() {
+                    fixCreateSocialBtn();
+                    ensureGreenBanner();
+                }, 100);
+            }
+            
+            // Ejecutar continuamente cada 50ms para corregir el botón (más agresivo)
+            setInterval(function() {
+                fixCreateSocialBtn();
+                if (window.currentMode === 'social') {
+                    ensureGreenBanner();
+                    
+                    // CRÍTICO: Eliminar tooltip "100 créditos" de forma más agresiva
+                    var btn = document.getElementById('createSocialBtn');
+                    if (btn) {
+                        var title = btn.getAttribute('title') || btn.title || '';
+                        if (title.includes('100')) {
+                            console.log('[FIX-INTERVAL] ⚠️ Tooltip con "100" detectado, eliminando...');
+                            btn.title = '';
+                            btn.removeAttribute('title');
+                            
+                            // También interceptar el atributo directamente
+                            try {
+                                Object.defineProperty(btn, 'title', {
+                                    get: function() {
+                                        return '';
+                                    },
+                                    set: function(value) {
+                                        if (value && value.includes('100')) {
+                                            console.log('[FIX-INTERVAL] ⚠️ Intentando establecer title con "100", bloqueando...');
+                                            return;
+                                        }
+                                        HTMLElement.prototype.title = value;
+                                    },
+                                    configurable: true
+                                });
+                            } catch(e) {
+                                // Si falla, continuar
+                            }
+                        }
+                    }
+                }
+            }, 50); // Cada 50ms para ser más agresivo
+            
+            // Observar cuando se agrega el botón al DOM
+            var observer = new MutationObserver(function(mutations) {
+                mutations.forEach(function(mutation) {
+                    mutation.addedNodes.forEach(function(node) {
+                        if (node.nodeType === 1 && (node.id === 'createSocialBtn' || node.querySelector && node.querySelector('#createSocialBtn'))) {
+                            console.log('[INIT-IMMEDIATE] ✅ Botón createSocialBtn detectado, corrigiendo...');
+                            setTimeout(fixCreateSocialBtn, 10);
+                        }
+                        if (node.nodeType === 1 && (node.id === 'selectedSongCard' || node.querySelector && node.querySelector('#selectedSongCard'))) {
+                            setTimeout(ensureGreenBanner, 10);
+                        }
+                    });
+                });
+            });
+            
+            observer.observe(document.body, {
+                childList: true,
+                subtree: true,
+                attributes: true,
+                attributeFilter: ['title', 'disabled']
+            });
+            
+            console.log('[INIT-IMMEDIATE] ✅ Sistema de corrección inmediata activado');
+            
+            // CRÍTICO: Crear una versión de updateBetEligibility que funcione inmediatamente
+            // Esta versión se reemplazará cuando se defina la función completa
+            var tempUpdateBetEligibility = function() {
+                console.log('========================================');
+                console.log('[updateBetEligibility-TEMP] ⚡ FUNCIÓN TEMPORAL EJECUTÁNDOSE');
+                console.log('========================================');
+                
+                // Verificar balance y habilitar botón si tiene suficiente
+                var btn = document.getElementById('createSocialBtn');
+                if (btn && window.currentMode === 'social') {
+                    var betInput = document.getElementById('betAmount');
+                    var bet = betInput ? parseFloat(betInput.value || '0') : 0;
+                    var onchainBalance = Number(window.__mtrOnChainBalance || 0);
+                    var credits = window.CreditsSystem ? (window.CreditsSystem.currentCredits || 0) : 0;
+                    var hasEnoughCredits = credits >= bet;
+                    var hasEnoughOnChain = onchainBalance >= bet;
+                    var canCover = bet >= 5 && (hasEnoughCredits || hasEnoughOnChain);
+                    var hasSong = !!window.selectedSong || !!selectedSong;
+                    
+                    console.log('[updateBetEligibility-TEMP] 📊 VALORES:');
+                    console.log('[updateBetEligibility-TEMP]   Bet:', bet);
+                    console.log('[updateBetEligibility-TEMP]   OnChain:', onchainBalance);
+                    console.log('[updateBetEligibility-TEMP]   Credits:', credits);
+                    console.log('[updateBetEligibility-TEMP]   HasEnoughCredits:', hasEnoughCredits);
+                    console.log('[updateBetEligibility-TEMP]   HasEnoughOnChain:', hasEnoughOnChain);
+                    console.log('[updateBetEligibility-TEMP]   CanCover:', canCover);
+                    console.log('[updateBetEligibility-TEMP]   HasSong:', hasSong);
+                    
+                    if (canCover && hasSong) {
+                        btn.disabled = false;
+                        btn.title = '';
+                        btn.removeAttribute('title');
+                        console.log('[updateBetEligibility-TEMP] ✅ Botón habilitado');
+                    } else {
+                        if (bet < 5) {
+                            btn.title = 'Apuesta mínima: 5 créditos';
+                        } else if (!hasEnoughCredits && !hasEnoughOnChain) {
+                            btn.title = 'Créditos y saldo MTR insuficientes';
+                        } else {
+                            btn.title = '';
+                        }
+                        btn.disabled = true;
+                    }
+                    
+                    // CRÍTICO: Limpiar cualquier "100" que pueda aparecer
+                    var finalTitle = btn.getAttribute('title') || btn.title || '';
+                    if (finalTitle.includes('100')) {
+                        btn.title = '';
+                        btn.removeAttribute('title');
+                        console.log('[updateBetEligibility-TEMP] ⚠️ Title con "100" eliminado');
+                    }
+                }
+                console.log('========================================');
+            };
+            
+            // CRÍTICO: Asignar directamente la versión temporal
+            window.updateBetEligibility = tempUpdateBetEligibility;
+            
+            // CRÍTICO: Verificar periódicamente que las funciones estén disponibles y reasignarlas si es necesario
+            setInterval(function() {
+                // Verificar updateBetEligibility
+                if (typeof window.updateBetEligibility === 'undefined') {
+                    console.warn('[INIT-IMMEDIATE] ⚠️ updateBetEligibility es undefined, restaurando temporal...');
+                    window.updateBetEligibility = tempUpdateBetEligibility;
+                }
+                
+                // Verificar createSocialChallenge - buscar función local
+                if (typeof window.createSocialChallenge === 'undefined') {
+                    try {
+                        // Intentar encontrar la función en el scope local usando eval (último recurso)
+                        if (typeof createSocialChallenge === 'function') {
+                            window.createSocialChallenge = createSocialChallenge;
+                            console.log('[INIT-IMMEDIATE] ✅ createSocialChallenge restaurada desde scope local');
+                        }
+                    } catch (e) {
+                        // Ignorar errores de scope
+                    }
+                }
+                
+                // Verificar selectSongForBattle
+                if (typeof window.selectSongForBattle === 'undefined') {
+                    try {
+                        if (typeof selectSongForBattle === 'function') {
+                            window.selectSongForBattle = selectSongForBattle;
+                            console.log('[INIT-IMMEDIATE] ✅ selectSongForBattle restaurada desde scope local');
+                        }
+                    } catch (e) {
+                        // Ignorar errores de scope
+                    }
+                }
+            }, 1000); // Verificar cada segundo
+            
+            console.log('[INIT-IMMEDIATE] ✅ updateBetEligibility temporal creada:', typeof window.updateBetEligibility);
+            
+            // CRÍTICO: Verificar que todas las funciones estén disponibles después de delays
+            setTimeout(function() {
+                console.log('========================================');
+                console.log('[INIT-IMMEDIATE] 🔍 VERIFICACIÓN DE FUNCIONES');
+                console.log('========================================');
+                console.log('[INIT-IMMEDIATE] updateBetEligibility:', typeof window.updateBetEligibility);
+                console.log('[INIT-IMMEDIATE] createSocialChallenge:', typeof window.createSocialChallenge);
+                console.log('[INIT-IMMEDIATE] selectSongForBattle:', typeof window.selectSongForBattle);
+                console.log('[INIT-IMMEDIATE] stopAllPreviews:', typeof window.stopAllPreviews);
+                console.log('========================================');
+                
+                if (typeof window.updateBetEligibility === 'undefined') {
+                    console.error('[INIT-IMMEDIATE] ❌ updateBetEligibility NO está definida');
+                } else {
+                    console.log('[INIT-IMMEDIATE] ✅ updateBetEligibility disponible');
+                }
+            }, 2000);
+            
+            setTimeout(function() {
+                console.log('[INIT-IMMEDIATE] 🔍 Verificación final después de 5 segundos...');
+                var btn = document.getElementById('createSocialBtn');
+                if (btn) {
+                    console.log('[INIT-IMMEDIATE] Botón encontrado:', {
+                        id: btn.id,
+                        disabled: btn.disabled,
+                        title: btn.title,
+                        onclick: typeof btn.onclick
+                    });
+                } else {
+                    console.warn('[INIT-IMMEDIATE] ⚠️ Botón createSocialBtn no encontrado aún');
+                }
+            }, 5000);
+        })();
+        
         // Polyfill para 'process' que WalletConnect necesita
         if (typeof process === 'undefined') {
             window.process = { env: {} };
@@ -128,11 +555,27 @@
                 var modeSelector = document.getElementById('modeSelector');
                 var songSelection = document.getElementById('songSelection');
                 var modeTitle = document.getElementById('modeTitle');
-                var titles = { quick: 'Modo Rápido', private: 'Sala Privada', practice: 'Modo Práctica', tournament: 'Modo Torneo' };
+                var titles = { quick: 'Modo Rápido', private: 'Sala Privada', practice: 'Modo Práctica', tournament: 'Modo Torneo', social: 'Desafío Social' };
                 window.currentMode = mode || null;
                 if (modeSelector) modeSelector.classList.add('hidden');
                 if (songSelection) songSelection.classList.remove('hidden');
                 if (modeTitle) modeTitle.textContent = titles[mode] || 'Modo de Juego';
+                
+                // CRÍTICO: Si es modo social, eliminar cualquier banner con 100 créditos inmediatamente
+                if (mode === 'social') {
+                    setTimeout(function() {
+                        var allElements = document.querySelectorAll('*');
+                        allElements.forEach(function(el) {
+                            var text = (el.textContent || el.innerText || '').trim();
+                            // CRÍTICO: Solo eliminar si contiene el mensaje EXACTO del error
+                            if ((text === 'La apuesta mínima para desafíos sociales es 100 créditos') || 
+                                (text.includes('apuesta mínima') && text.includes('desafíos sociales') && text.includes('100') && text.includes('créditos'))) {
+                                console.log('[selectMode-INLINE] ⚠️ Eliminando banner con 100 créditos:', text);
+                                el.remove();
+                            }
+                        });
+                    }, 50);
+                }
                 
                 // En móvil, hacer scroll automático al selector de canciones
                 if (typeof isMobileDevice === 'function' && isMobileDevice()) {
@@ -209,7 +652,7 @@
         .user-profile:hover { background-color: rgba(255, 255, 255, 0.1); }
         .user-avatar { width: 36px; height: 36px; border-radius: 50%; object-fit: cover; border: 2px solid rgba(255, 255, 255, 0.2); flex-shrink: 0; display: inline-block; margin: 0; padding: 0; vertical-align: middle; align-self: center; }
         .user-info { display: inline-flex; flex-direction: column; align-items: flex-start; justify-content: center; min-width: 0; margin: 0; padding: 0; vertical-align: middle; }
-        .user-name { font-size: 14px; font-weight: 600; color: #fff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 150px; line-height: 1.2; margin: 0; padding: 0; display: block; vertical-align: middle; }
+        .user-name { font-size: 14px; font-weight: 600; color: #fff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 150px; line-height: 1.2; margin: 0; padding: 0; display: block; }
         .btn-logout { background: rgba(239, 68, 68, 0.9); color: white; border: none; padding: 8px 16px; border-radius: 8px; font-weight: 600; font-size: 13px; cursor: pointer; transition: all 0.2s ease; white-space: nowrap; flex-shrink: 0; margin: 0; height: auto; align-self: center; line-height: 1.2; }
         .btn-logout:hover { background: rgba(239, 68, 68, 1); transform: translateY(-1px); box-shadow: 0 4px 12px rgba(239, 68, 68, 0.4); }
         .btn-login { padding: 8px 16px; border-radius: 8px; font-size: 14px; font-weight: 600; color: #c084fc; background: rgba(192,132,252,0.1); border: 1px solid rgba(192,132,252,0.25); cursor: pointer; transition: all 0.2s; }
@@ -460,6 +903,123 @@
                 </div>
 
                 <div class="space-y-6">
+                    <!-- CRÍTICO: Script para eliminar banner rojo automáticamente -->
+                    <script>
+                        (function() {
+                            function removeRedBanner() {
+                                var allElements = document.querySelectorAll('*');
+                                var removed = 0;
+                                
+                                allElements.forEach(function(el) {
+                                    var text = (el.textContent || '').trim();
+                                    var innerHTML = el.innerHTML || '';
+                                    var hasRedClass = el.className && typeof el.className === 'string' && 
+                                        (el.className.includes('red') || el.className.includes('bg-red') || 
+                                         el.className.includes('text-red') || el.className.includes('border-red'));
+                                    var hasRedStyle = el.style && (
+                                        (el.style.backgroundColor && el.style.backgroundColor.includes('red')) ||
+                                        (el.style.color && el.style.color.includes('red'))
+                                    );
+                                    
+                                    // Buscar por texto exacto
+                                    var hasExactText = text === 'La apuesta mínima para desafíos sociales es 100 créditos';
+                                    
+                                    // Buscar por variaciones
+                                    var hasVariation = text.includes('apuesta mínima') && 
+                                                      text.includes('desafíos sociales') && 
+                                                      text.includes('100') && 
+                                                      text.includes('créditos');
+                                    
+                                    // Buscar en innerHTML también
+                                    var hasInHTML = innerHTML.includes('100') && 
+                                                   innerHTML.includes('créditos') && 
+                                                   innerHTML.includes('desafíos');
+                                    
+                                    if (hasExactText || hasVariation || hasInHTML || 
+                                        (hasRedClass && text.includes('100') && text.includes('créditos')) ||
+                                        (hasRedStyle && text.includes('100') && text.includes('créditos'))) {
+                                        console.log('[removeRedBanner-AUTO] ⚠️ Eliminando banner:', text.substring(0, 60));
+                                        el.remove();
+                                        removed++;
+                                    }
+                                });
+                                
+                                return removed;
+                            }
+                            
+                            // Interceptar creación de elementos antes de que aparezcan
+                            var originalAppendChild = Element.prototype.appendChild;
+                            var originalInsertBefore = Element.prototype.insertBefore;
+                            var originalInsertAdjacentHTML = Element.prototype.insertAdjacentHTML;
+                            
+                            Element.prototype.appendChild = function(child) {
+                                var result = originalAppendChild.call(this, child);
+                                if (child && child.nodeType === 1) {
+                                    var text = (child.textContent || '').trim();
+                                    if (text.includes('100') && text.includes('créditos') && text.includes('desafíos')) {
+                                        console.log('[INTERCEPT] ⚠️ Banner detectado en appendChild, eliminando...');
+                                        child.remove();
+                                        return child; // Retornar el elemento aunque esté eliminado
+                                    }
+                                }
+                                setTimeout(removeRedBanner, 10);
+                                return result;
+                            };
+                            
+                            Element.prototype.insertBefore = function(newNode, referenceNode) {
+                                var result = originalInsertBefore.call(this, newNode, referenceNode);
+                                if (newNode && newNode.nodeType === 1) {
+                                    var text = (newNode.textContent || '').trim();
+                                    if (text.includes('100') && text.includes('créditos') && text.includes('desafíos')) {
+                                        console.log('[INTERCEPT] ⚠️ Banner detectado en insertBefore, eliminando...');
+                                        newNode.remove();
+                                    }
+                                }
+                                setTimeout(removeRedBanner, 10);
+                                return result;
+                            };
+                            
+                            Element.prototype.insertAdjacentHTML = function(position, html) {
+                                if (html && html.includes('100') && html.includes('créditos') && html.includes('desafíos')) {
+                                    console.log('[INTERCEPT] ⚠️ Banner detectado en insertAdjacentHTML, bloqueando...');
+                                    return; // No insertar el HTML con el banner
+                                }
+                                return originalInsertAdjacentHTML.call(this, position, html);
+                            };
+                            
+                            // Ejecutar inmediatamente
+                            removeRedBanner();
+                            
+                            // Ejecutar cada 50ms para ser más agresivo
+                            setInterval(function() {
+                                var removed = removeRedBanner();
+                                if (removed > 0) {
+                                    console.log('[removeRedBanner-AUTO] ✅ Eliminados', removed, 'banner(es)');
+                                }
+                            }, 50);
+                            
+                            // También ejecutar después de que el DOM esté completamente cargado
+                            if (document.readyState === 'loading') {
+                                document.addEventListener('DOMContentLoaded', removeRedBanner);
+                            }
+                            
+                            // Ejecutar cuando se agregan elementos dinámicamente
+                            var observer = new MutationObserver(function(mutations) {
+                                var removed = removeRedBanner();
+                                if (removed > 0) {
+                                    console.log('[MutationObserver] ✅ Eliminados', removed, 'banner(es)');
+                                }
+                            });
+                            observer.observe(document.body, {
+                                childList: true,
+                                subtree: true,
+                                attributes: false
+                            });
+                            
+                            console.log('[removeRedBanner-AUTO] ✅ Sistema de eliminación activado con interceptores');
+                        })();
+                    </script>
+                    
                     <div id="selectedSongCard" class="p-6 rounded-2xl border border-white/5 bg-white/[0.02] min-h-[120px] flex items-center justify-center">
                         <div class="text-center text-gray-500">
                             <div class="text-3xl mb-2">🎵</div>
@@ -470,7 +1030,7 @@
                         <h3 class="text-lg font-bold text-white mb-4">💰 Tu Apuesta</h3>
                         <div class="grid grid-cols-2 gap-3 text-sm text-gray-400 mb-4">
                             <span><span id="balanceLabel">Tu MTR (on-chain)</span>: <strong id="onchainMtrBalance" class="text-white">--</strong></span>
-                            <span>Jugable: <strong id="userBalance" class="text-white">0</strong> MTR</span>
+                            <span><span id="playableLabel">Jugable</span>: <strong id="userBalance" class="text-white">0</strong> <span id="balanceUnit">MTR</span></span>
                             <span>Mínimo: <strong id="minBet" class="text-white">5</strong> créditos</span>
                         </div>
                         <input type="number" id="betAmount" placeholder="5" min="5"
@@ -812,8 +1372,41 @@
                 setTimeout(function() {
                     // Actualizar display del mínimo dinámicamente
                     const minBetEl = document.getElementById('minBet');
-                    if (minBetEl && typeof GameEngine !== 'undefined' && GameEngine.minBet) {
-                        minBetEl.textContent = GameEngine.minBet;
+                    // CRÍTICO: Para desafíos sociales, siempre mostrar 5 créditos como mínimo
+                    // No usar GameEngine.minBet que puede venir de la base de datos con valor 100
+                    if (minBetEl) {
+                        const currentMode = window.currentMode || currentMode;
+                        // CRÍTICO: Para desafíos sociales, SIEMPRE mostrar 5, nunca GameEngine.minBet
+                        if (currentMode === 'social') {
+                            minBetEl.textContent = '5'; // Desafíos sociales siempre tienen mínimo de 5
+                            console.log('[quickBet] ✅ minBet actualizado a 5 para modo social');
+                        } else if (typeof GameEngine !== 'undefined' && GameEngine.minBet) {
+                            // Solo usar GameEngine.minBet si NO es modo social
+                            minBetEl.textContent = String(GameEngine.minBet);
+                        } else {
+                            minBetEl.textContent = '5'; // Fallback a 5
+                        }
+                    }
+                    
+                    // CRÍTICO: También asegurar que el campo betAmount tenga el mínimo correcto
+                    const betAmountInput = document.getElementById('betAmount');
+                    const currentModeCheck = window.currentMode || currentMode;
+                    if (betAmountInput) {
+                        // Para desafíos sociales, SIEMPRE usar min="5"
+                        if (currentModeCheck === 'social') {
+                            betAmountInput.setAttribute('min', '5');
+                            if (!betAmountInput.value || parseFloat(betAmountInput.value) < 5) {
+                                betAmountInput.value = '5';
+                            }
+                            console.log('[quickBet] ✅ betAmount actualizado - min: 5, value:', betAmountInput.value);
+                        } else {
+                            // Para otros modos, usar GameEngine.minBet si está disponible
+                            if (typeof GameEngine !== 'undefined' && GameEngine.minBet) {
+                                betAmountInput.setAttribute('min', String(GameEngine.minBet));
+                            } else {
+                                betAmountInput.setAttribute('min', '5');
+                            }
+                        }
                     }
                     
                     if (typeof window.updateBetEligibility === 'function') {
@@ -905,12 +1498,209 @@
                     
                     console.log('[selectSong] ✅ Canción seleccionada:', song.name, 'ID:', song.id);
                     
+                    // CRÍTICO: Detener cualquier preview que esté reproduciéndose INMEDIATAMENTE
+                    try {
+                        console.log('[selectSong] Deteniendo previews...');
+                        if (typeof stopAllPreviews === 'function') {
+                            stopAllPreviews();
+                            console.log('[selectSong] ✅ stopAllPreviews() ejecutado');
+                        } else if (typeof window.stopAllPreviews === 'function') {
+                            window.stopAllPreviews();
+                            console.log('[selectSong] ✅ window.stopAllPreviews() ejecutado');
+                        } else {
+                            // Fallback manual: pausar todos los audios
+                            var audios = document.querySelectorAll('audio');
+                            console.log('[selectSong] Fallback: pausando', audios.length, 'elementos audio');
+                            audios.forEach(function(audio) {
+                                audio.pause();
+                                audio.currentTime = 0;
+                            });
+                            // También resetear botones de preview
+                            document.querySelectorAll('[class*="preview"], [onclick*="preview"], button[data-preview]').forEach(function(btn) {
+                                if (btn.textContent && btn.textContent.includes('⏸')) {
+                                    btn.textContent = btn.textContent.replace('⏸', '▶');
+                                }
+                            });
+                            console.log('[selectSong] ✅ Preview detenido (fallback manual)');
+                        }
+                    } catch (previewError) {
+                        console.error('[selectSong] ❌ Error al detener preview:', previewError);
+                    }
+                    try {
+                        if (typeof stopAllPreviews === 'function') {
+                            stopAllPreviews();
+                            console.log('[selectSong] ✅ Todos los previews detenidos (función local)');
+                        } else if (typeof window.stopAllPreviews === 'function') {
+                            window.stopAllPreviews();
+                            console.log('[selectSong] ✅ Todos los previews detenidos (window.stopAllPreviews)');
+                        } else {
+                            // Detener audio manualmente si la función no existe
+                            var allAudios = document.querySelectorAll('audio');
+                            var pausedCount = 0;
+                            allAudios.forEach(function(audio) {
+                                if (!audio.paused) {
+                                    audio.pause();
+                                    audio.currentTime = 0;
+                                    pausedCount++;
+                                }
+                            });
+                            
+                            // También detener botones de preview
+                            var previewButtons = document.querySelectorAll('.btn-preview');
+                            previewButtons.forEach(function(btn) {
+                                if (btn.textContent && btn.textContent.includes('Pause')) {
+                                    btn.textContent = '▶ Preview';
+                                }
+                            });
+                            
+                            console.log('[selectSong] ✅ Audios detenidos manualmente (' + pausedCount + ' pausados)');
+                        }
+                    } catch (previewError) {
+                        console.warn('[selectSong] Error al detener previews:', previewError);
+                        // Intentar detener manualmente como fallback
+                        var allAudios = document.querySelectorAll('audio');
+                        allAudios.forEach(function(audio) {
+                            try {
+                                audio.pause();
+                                audio.currentTime = 0;
+                            } catch (e) {}
+                        });
+                    }
+                    
                     var cardDiv = document.getElementById('selectedSongCard');
                     if (cardDiv) {
-                        cardDiv.innerHTML = '<img src="' + (song.image || '') + '" alt="' + (song.name || '') + '" class="w-16 h-16 rounded-lg object-cover">' +
-                            '<div class="ml-4"><h4 class="text-white font-bold">' + (song.name || 'Sin nombre') + '</h4><p class="text-gray-400 text-sm">' + (song.artist || 'Artista desconocido') + '</p></div>';
-                        cardDiv.className = 'p-6 rounded-2xl border border-cyan-500/20 bg-cyan-500/5 flex items-center';
-                        console.log('[selectSong] ✅ Tarjeta de canción actualizada');
+                        console.log('[selectSong] ✅ Card encontrado, actualizando...');
+                        
+                        // Determinar color del banner según el modo
+                        var currentMode = typeof window.currentMode !== 'undefined' ? window.currentMode : null;
+                        console.log('[selectSong] Modo actual:', currentMode);
+                        
+                        var borderColor = 'border-cyan-500/20';
+                        var bgColor = 'bg-cyan-500/5';
+                        
+                        // Para modo social, usar verde
+                        if (currentMode === 'social') {
+                            borderColor = 'border-green-500/30';
+                            bgColor = 'bg-green-500/10';
+                            console.log('[selectSong] ✅ Modo social detectado, usando verde');
+                        }
+                        
+                        // CRÍTICO: Banner verde SIEMPRE visible en modo social
+                        var bannerClass = currentMode === 'social' 
+                            ? 'ml-4 px-3 py-1.5 rounded-full bg-green-500/25 border border-green-500/40 text-green-300 text-xs font-bold shadow-lg shadow-green-500/20 flex-shrink-0'
+                            : 'ml-4 px-3 py-1.5 rounded-full bg-cyan-500/25 border border-cyan-500/40 text-cyan-300 text-xs font-bold shadow-lg shadow-cyan-500/20 flex-shrink-0';
+                        
+                        var bannerHTML = '<div id="selectedSongBanner" class="' + bannerClass + '" style="display: block !important; visibility: visible !important; opacity: 1 !important;">✓ Canción Seleccionada</div>';
+                        
+                        // CRÍTICO: Actualizar el card con el banner INMEDIATAMENTE
+                        cardDiv.innerHTML = '<img src="' + (song.image || song.cover || '') + '" alt="' + (song.name || song.title || '') + '" class="w-16 h-16 rounded-lg object-cover flex-shrink-0">' +
+                            '<div class="ml-4 flex-1 min-w-0"><h4 class="text-white font-bold truncate">' + (song.name || song.title || 'Sin nombre') + '</h4><p class="text-gray-400 text-sm truncate">' + (song.artist || 'Artista desconocido') + '</p></div>' +
+                            bannerHTML;
+                        
+                        console.log('[selectSong] ✅ Card HTML actualizado con banner');
+                        
+                        // Aplicar clases según el modo - SIEMPRE mostrar verde para modo social
+                        if (currentMode === 'social') {
+                            cardDiv.className = 'p-6 rounded-2xl border-2 border-green-500/50 bg-green-500/20 flex items-center gap-4 shadow-xl shadow-green-500/30';
+                            // Forzar que sea visible
+                            cardDiv.style.display = 'flex';
+                            cardDiv.style.visibility = 'visible';
+                            cardDiv.style.opacity = '1';
+                            console.log('[selectSong] ✅ Card configurado con estilo verde para modo social');
+                        } else {
+                            cardDiv.className = 'p-6 rounded-2xl border ' + borderColor + ' ' + bgColor + ' flex items-center gap-4';
+                            cardDiv.style.display = 'flex';
+                            cardDiv.style.visibility = 'visible';
+                            cardDiv.style.opacity = '1';
+                        }
+                        
+                        // CRÍTICO: Verificar que el banner esté presente después de actualizar
+                        setTimeout(function() {
+                            var banner = cardDiv.querySelector('#selectedSongBanner, [class*="green"], [class*="cyan"]');
+                            if (banner) {
+                                console.log('[selectSong] ✅ Banner verificado y presente');
+                                banner.style.display = 'block';
+                                banner.style.visibility = 'visible';
+                                banner.style.opacity = '1';
+                            } else {
+                                console.error('[selectSong] ❌ Banner NO encontrado después de actualizar, recreando...');
+                                var newBanner = document.createElement('div');
+                                newBanner.id = 'selectedSongBanner';
+                                newBanner.className = currentMode === 'social' 
+                                    ? 'ml-4 px-3 py-1.5 rounded-full bg-green-500/25 border border-green-500/40 text-green-300 text-xs font-bold shadow-lg shadow-green-500/20'
+                                    : 'ml-4 px-3 py-1.5 rounded-full bg-cyan-500/25 border border-cyan-500/40 text-cyan-300 text-xs font-bold shadow-lg shadow-cyan-500/20';
+                                newBanner.textContent = '✓ Canción Seleccionada';
+                                newBanner.style.display = 'block';
+                                newBanner.style.visibility = 'visible';
+                                newBanner.style.opacity = '1';
+                                cardDiv.appendChild(newBanner);
+                                console.log('[selectSong] ✅ Banner recreado manualmente');
+                            }
+                        }, 50);
+                        
+                    // CRÍTICO: Verificar y forzar que el banner verde esté presente múltiples veces
+                    function ensureGreenBanner() {
+                        try {
+                            if (!cardDiv) {
+                                console.warn('[selectSong] ⚠️ cardDiv no encontrado');
+                                return;
+                            }
+                            
+                            var currentModeCheck = window.currentMode || currentMode;
+                            if (currentModeCheck !== 'social') {
+                                console.log('[selectSong] No es modo social, banner verde no necesario. Modo:', currentModeCheck);
+                                return;
+                            }
+                            
+                            // Buscar banner existente de múltiples formas
+                            var bannerExists = cardDiv.querySelector('[class*="green"], .bg-green, [class*="Canción"], [class*="Seleccionada"]');
+                            
+                            if (!bannerExists) {
+                                console.warn('[selectSong] ⚠️ Banner verde no encontrado, agregando...');
+                                
+                                // Crear banner verde prominente
+                                var bannerDiv = document.createElement('div');
+                                bannerDiv.id = 'selectedSongBanner';
+                                bannerDiv.className = 'ml-4 px-3 py-1.5 rounded-full bg-green-500/25 border border-green-500/40 text-green-300 text-xs font-bold shadow-lg shadow-green-500/20 flex-shrink-0';
+                                bannerDiv.textContent = '✓ Canción Seleccionada';
+                                bannerDiv.style.display = 'block';
+                                bannerDiv.style.visibility = 'visible';
+                                bannerDiv.style.opacity = '1';
+                                
+                                // Intentar agregar al final del cardDiv
+                                if (cardDiv.appendChild) {
+                                    cardDiv.appendChild(bannerDiv);
+                                    console.log('[selectSong] ✅ Banner verde agregado dinámicamente al final');
+                                } else {
+                                    // Si cardDiv no tiene appendChild, buscar el contenedor padre
+                                    var parent = cardDiv.parentElement;
+                                    if (parent) {
+                                        parent.appendChild(bannerDiv);
+                                        console.log('[selectSong] ✅ Banner verde agregado al contenedor padre');
+                                    } else {
+                                        console.error('[selectSong] ❌ No se pudo agregar banner verde - sin contenedor válido');
+                                    }
+                                }
+                            } else {
+                                console.log('[selectSong] ✅ Banner verde ya existe');
+                                // Asegurar que esté visible
+                                bannerExists.style.display = 'block';
+                                bannerExists.style.visibility = 'visible';
+                                bannerExists.style.opacity = '1';
+                            }
+                        } catch (bannerError) {
+                            console.error('[selectSong] ❌ Error al crear banner verde:', bannerError);
+                        }
+                    }
+                    
+                    // Verificar inmediatamente y con delays múltiples
+                    ensureGreenBanner();
+                    setTimeout(ensureGreenBanner, 50);
+                    setTimeout(ensureGreenBanner, 100);
+                    setTimeout(ensureGreenBanner, 200);
+                    setTimeout(ensureGreenBanner, 500);
+                        
+                        console.log('[selectSong] ✅ Tarjeta de canción actualizada con banner verde (modo:', currentMode, ')');
                     } else {
                         console.warn('[selectSong] ⚠️ selectedSongCard no encontrado');
                     }
@@ -939,6 +1729,13 @@
             
             // ASEGURAR QUE ESTÉ DISPONIBLE INMEDIATAMENTE
             console.log('[INIT] ✅ selectSongForBattle DEFINIDA:', typeof window.selectSongForBattle === 'function');
+            
+            // CRÍTICO: Verificar inmediatamente después de asignar
+            if (typeof window.selectSongForBattle !== 'function') {
+                console.error('[INIT] ❌❌❌ ERROR CRÍTICO: window.selectSongForBattle NO es una función después de asignar!');
+            } else {
+                console.log('[INIT] ✅✅✅ CONFIRMADO: window.selectSongForBattle es una función');
+            }
             
             console.log('[selectSongForBattle] Función DEFINIDA ANTES de app.js');
             
@@ -1220,12 +2017,99 @@
             selectedSong = song;
             window.selectedSong = song;
             console.log('[selectSong] Canción seleccionada:', song.name, 'ID:', song.id);
-            
+
+            // CRÍTICO: Detener cualquier preview que esté reproduciéndose
+            try {
+                if (typeof stopAllPreviews === 'function') {
+                    stopAllPreviews();
+                } else if (typeof window.stopAllPreviews === 'function') {
+                    window.stopAllPreviews();
+                } else {
+                    // Detener audio manualmente
+                    var allAudios = document.querySelectorAll('audio');
+                    var pausedCount = 0;
+                    allAudios.forEach(function(audio) {
+                        if (!audio.paused) {
+                            audio.pause();
+                            audio.currentTime = 0;
+                            pausedCount++;
+                        }
+                    });
+                    
+                    // También detener botones de preview
+                    var previewButtons = document.querySelectorAll('.btn-preview');
+                    previewButtons.forEach(function(btn) {
+                        if (btn.textContent && btn.textContent.includes('Pause')) {
+                            btn.textContent = '▶ Preview';
+                        }
+                    });
+                    
+                    console.log('[selectSong] ✅ Audios detenidos manualmente (' + pausedCount + ' pausados)');
+                }
+            } catch (previewError) {
+                console.warn('[selectSong] Error al detener previews:', previewError);
+                // Intentar detener manualmente como fallback
+                var allAudios = document.querySelectorAll('audio');
+                allAudios.forEach(function(audio) {
+                    try {
+                        audio.pause();
+                        audio.currentTime = 0;
+                    } catch (e) {}
+                });
+            }
+
             var cardDiv = document.getElementById('selectedSongCard');
             if (cardDiv) {
-                cardDiv.innerHTML = '<img src="' + (song.image || '') + '" alt="' + (song.name || '') + '" class="w-16 h-16 rounded-lg object-cover">' +
-                    '<div class="ml-4"><h4 class="text-white font-bold">' + (song.name || 'Sin nombre') + '</h4><p class="text-gray-400 text-sm">' + (song.artist || 'Artista desconocido') + '</p></div>';
-                cardDiv.className = 'p-6 rounded-2xl border border-cyan-500/20 bg-cyan-500/5 flex items-center';
+                // Determinar color del banner según el modo
+                var currentMode = typeof window.currentMode !== 'undefined' ? window.currentMode : null;
+                var borderColor = 'border-cyan-500/20';
+                var bgColor = 'bg-cyan-500/5';
+                
+                // Para modo social, usar verde
+                if (currentMode === 'social') {
+                    borderColor = 'border-green-500/30';
+                    bgColor = 'bg-green-500/10';
+                }
+                
+                // CRÍTICO: Mostrar banner verde siempre, especialmente en modo social
+                var currentMode = typeof window.currentMode !== 'undefined' ? window.currentMode : null;
+                var bannerHTML = '<div class="ml-4 px-3 py-1.5 rounded-full bg-green-500/25 border border-green-500/40 text-green-300 text-xs font-bold shadow-lg shadow-green-500/20">✓ Canción Seleccionada</div>';
+                
+                cardDiv.innerHTML = '<img src="' + (song.image || '') + '" alt="' + (song.name || '') + '" class="w-16 h-16 rounded-lg object-cover flex-shrink-0">' +
+                    '<div class="ml-4 flex-1 min-w-0"><h4 class="text-white font-bold truncate">' + (song.name || 'Sin nombre') + '</h4><p class="text-gray-400 text-sm truncate">' + (song.artist || 'Artista desconocido') + '</p></div>' +
+                    bannerHTML;
+                
+                // Aplicar clases según el modo - SIEMPRE mostrar verde para modo social
+                if (currentMode === 'social') {
+                    cardDiv.className = 'p-6 rounded-2xl border-2 border-green-500/50 bg-green-500/20 flex items-center gap-4 shadow-xl shadow-green-500/30';
+                    // Forzar que sea visible
+                    cardDiv.style.display = 'flex';
+                    cardDiv.style.visibility = 'visible';
+                    cardDiv.style.opacity = '1';
+                } else {
+                    cardDiv.className = 'p-6 rounded-2xl border ' + borderColor + ' ' + bgColor + ' flex items-center gap-4';
+                }
+                
+                // CRÍTICO: Verificar y forzar que el banner verde esté presente múltiples veces
+                function ensureGreenBanner() {
+                    if (!cardDiv || currentMode !== 'social') return;
+                    
+                    var bannerExists = cardDiv.querySelector('[class*="green"], .bg-green, [class*="Canción"]');
+                    if (!bannerExists) {
+                        console.warn('[selectSong] ⚠️ Banner verde no encontrado, agregando...');
+                        var bannerDiv = document.createElement('div');
+                        bannerDiv.className = 'ml-4 px-3 py-1.5 rounded-full bg-green-500/25 border border-green-500/40 text-green-300 text-xs font-bold shadow-lg shadow-green-500/20 flex-shrink-0';
+                        bannerDiv.textContent = '✓ Canción Seleccionada';
+                        cardDiv.appendChild(bannerDiv);
+                        console.log('[selectSong] ✅ Banner verde agregado dinámicamente');
+                    }
+                }
+                
+                // Verificar inmediatamente y con delays
+                ensureGreenBanner();
+                setTimeout(ensureGreenBanner, 50);
+                setTimeout(ensureGreenBanner, 100);
+                setTimeout(ensureGreenBanner, 200);
             } else {
                 console.warn('[selectSong] selectedSongCard no encontrado');
             }
@@ -1542,7 +2426,8 @@
                     method: 'GET',
                     headers: {
                         'Content-Type': 'application/json'
-                    }
+                    },
+                    cache: 'no-cache' // Evitar caché
                 });
                 
                 console.log('[vault] Response status:', response.status);
@@ -1550,8 +2435,11 @@
                 if (response.ok) {
                     const data = await response.json();
                     console.log('[vault] Vault data received:', data);
+                    console.log('[vault] Balance raw:', data.balance);
+                    console.log('[vault] Balance type:', typeof data.balance);
                     
-                    const balance = data.balance || 0;
+                    const balance = parseFloat(data.balance) || 0;
+                    console.log('[vault] Balance parsed:', balance);
                     const vaultAddress = data.vaultAddress;
                     const baseScanUrl = data.baseScanUrl;
 
@@ -1636,6 +2524,54 @@
             document.getElementById('songSelection').classList.remove('hidden');
             var titles = { quick: 'Modo Rápido', private: 'Sala Privada', practice: 'Modo Práctica', tournament: 'Modo Torneo', social: 'Desafío Social' };
             document.getElementById('modeTitle').textContent = titles[mode] || 'Modo de Juego';
+            
+            // CRÍTICO: Si es modo social, forzar mínimo de 5 inmediatamente
+            if (mode === 'social') {
+                var minBetEl = document.getElementById('minBet');
+                if (minBetEl) {
+                    minBetEl.textContent = '5'; // Usar string para evitar problemas
+                }
+                var betAmountInput = document.getElementById('betAmount');
+                if (betAmountInput) {
+                    betAmountInput.setAttribute('min', '5'); // Usar setAttribute para asegurar que se aplique
+                    if (!betAmountInput.value || parseFloat(betAmountInput.value) < 5) {
+                        betAmountInput.value = '5';
+                    }
+                    // CRÍTICO: También establecer validationMessage para evitar mensaje HTML5 con valor incorrecto
+                    betAmountInput.setCustomValidity('');
+                }
+                
+                // CRÍTICO: Eliminar cualquier banner con 100 créditos al cambiar a modo social
+                setTimeout(function() {
+                    var songSelectionSection = document.getElementById('songSelection');
+                    if (songSelectionSection) {
+                        var allElements = songSelectionSection.querySelectorAll('*');
+                        allElements.forEach(function(el) {
+                            var text = (el.textContent || el.innerText || '').trim();
+                            // CRÍTICO: Solo eliminar si contiene el mensaje EXACTO del error
+                            if ((text === 'La apuesta mínima para desafíos sociales es 100 créditos') || 
+                                (text.includes('apuesta mínima') && text.includes('desafíos sociales') && text.includes('100') && text.includes('créditos'))) {
+                                console.log('[selectMode] ⚠️ Eliminando banner con 100 créditos:', text);
+                                el.remove();
+                            }
+                        });
+                    }
+                    // También buscar en todo el documento
+                    var allBanners = document.querySelectorAll('div, p, span, strong, h1, h2, h3, h4');
+                    allBanners.forEach(function(el) {
+                        var text = (el.textContent || el.innerText || '').trim();
+                        // CRÍTICO: Solo eliminar si contiene el mensaje EXACTO del error
+                        if ((text === 'La apuesta mínima para desafíos sociales es 100 créditos') || 
+                            (text.includes('apuesta mínima') && text.includes('desafíos sociales') && text.includes('100') && text.includes('créditos'))) {
+                            console.log('[selectMode] ⚠️ Eliminando banner externo con 100 créditos:', text);
+                            el.remove();
+                        }
+                    });
+                }, 100);
+                
+                console.log('[selectMode] ✅ Modo social - mínimo forzado a 5');
+            }
+            
             updateActionButtons(mode);
             
             // Actualizar display de balance según el modo
@@ -1885,7 +2821,8 @@
                 var betAmountInput = document.getElementById('betAmount');
                 if (betAmountInput && !betAmountInput.value) {
                     // Usar mínimo dinámico desde GameEngine si está disponible, sino 5
-                    const minBet = (typeof GameEngine !== 'undefined' && GameEngine.minBet) ? GameEngine.minBet : 5;
+                    // CRÍTICO: Para desafíos sociales, siempre usar 5 créditos como mínimo
+                    const minBet = (window.currentMode === 'social') ? 5 : ((typeof GameEngine !== 'undefined' && GameEngine.minBet) ? GameEngine.minBet : 5);
                     betAmountInput.value = String(minBet);
                 }
                 
@@ -1910,6 +2847,49 @@
                 
                 // Actualizar estado del botón inmediatamente y con delays
                 updateBetEligibility();
+                
+                // CRÍTICO: Asegurar que el title del botón sea correcto para modo social
+                if (mode === 'social') {
+                    setTimeout(function() {
+                        var createSocialBtn = document.getElementById('createSocialBtn');
+                        if (createSocialBtn) {
+                            // Verificar y corregir el title si tiene "100 créditos"
+                            if (createSocialBtn.title && createSocialBtn.title.includes('100')) {
+                                console.log('[updateActionButtons] ⚠️ Title con 100 créditos detectado:', createSocialBtn.title);
+                                createSocialBtn.title = createSocialBtn.title.replace(/100/g, '5');
+                                console.log('[updateActionButtons] ✅ Title corregido:', createSocialBtn.title);
+                            }
+                            // Asegurar que el title sea correcto
+                            var bet = parseFloat(document.getElementById('betAmount')?.value || '0');
+                            var credits = window.CreditsSystem ? (window.CreditsSystem.currentCredits || 0) : 0;
+                            const SOCIAL_CHALLENGE_MIN_BET = 5;
+                            // CRÍTICO: Verificar TANTO créditos off-chain COMO balance on-chain MTR
+                            var onchainBalanceCheck = Number(window.__mtrOnChainBalance || 0);
+                            var hasEnoughCredits = credits >= bet;
+                            var hasEnoughOnChain = onchainBalanceCheck >= bet;
+                            var canCoverSocialBet = !!bet && bet >= SOCIAL_CHALLENGE_MIN_BET && (hasEnoughCredits || hasEnoughOnChain);
+                            if (!canCoverSocialBet && bet > 0) {
+                                if (bet < SOCIAL_CHALLENGE_MIN_BET) {
+                                    createSocialBtn.title = `Apuesta mínima: ${SOCIAL_CHALLENGE_MIN_BET} créditos`;
+                                } else {
+                                    createSocialBtn.title = 'Créditos insuficientes';
+                                }
+                            } else {
+                                createSocialBtn.title = '';
+                            }
+                            
+                            // Verificar nuevamente después de establecerlo
+                            setTimeout(function() {
+                                if (createSocialBtn.title && createSocialBtn.title.includes('100')) {
+                                    console.log('[updateActionButtons] ⚠️ Title aún contiene "100" después de corrección');
+                                    createSocialBtn.title = createSocialBtn.title.replace(/100/g, '5');
+                                    console.log('[updateActionButtons] ✅ Title corregido nuevamente:', createSocialBtn.title);
+                                }
+                            }, 10);
+                        }
+                    }, 50);
+                }
+                
                 setTimeout(function() {
                     updateBetEligibility();
                 }, 100);
@@ -1920,7 +2900,363 @@
                 buttonsDiv.innerHTML = '<div class="flex gap-2"><input type="text" id="tournamentId" placeholder="ID de torneo" class="flex-1 px-3 py-2.5 rounded-lg bg-black/40 border border-white/10 text-white text-sm">' +
                     '<button type="button" onclick="joinTournamentMode()" class="' + btnPrimary + ' w-auto px-4" id="joinTournamentBtn" disabled>🏆 Unirme</button></div>';
             } else if (mode === 'social') {
-                buttonsDiv.innerHTML = '<button type="button" onclick="createSocialChallenge()" class="' + btnPrimary + '" id="createSocialBtn" disabled>⚔️ Crear Desafío</button>';
+                // CRÍTICO: NO incluir ningún mensaje de error con 100 créditos en el HTML
+                // CRÍTICO: Forzar title vacío desde el inicio y agregar onclick directo
+                buttonsDiv.innerHTML = '<button type="button" id="createSocialBtn" class="' + btnPrimary + '" disabled>⚔️ Crear Desafío</button>';
+                
+                // CRÍTICO: Configurar el botón INMEDIATAMENTE después de crearlo
+                var createSocialBtn = document.getElementById('createSocialBtn');
+                if (createSocialBtn) {
+                    // Forzar title vacío INMEDIATAMENTE
+                    createSocialBtn.removeAttribute('title');
+                    createSocialBtn.title = '';
+                    
+                    // CRÍTICO: Remover cualquier listener anterior para evitar duplicados
+                    var newBtn = createSocialBtn.cloneNode(true);
+                    createSocialBtn.parentNode.replaceChild(newBtn, createSocialBtn);
+                    createSocialBtn = newBtn;
+                    
+                    // CRÍTICO: Agregar múltiples formas de capturar el clic
+                    // 1. addEventListener con capture
+                    createSocialBtn.addEventListener('click', function handleSocialClick(e) {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        e.stopImmediatePropagation();
+                        
+                        console.log('[createSocialBtn-click-1] ✅✅✅ Clic detectado (addEventListener capture)');
+                        
+                        if (this.disabled) {
+                            console.warn('[createSocialBtn-click-1] ⚠️ Botón deshabilitado');
+                            return;
+                        }
+                        
+                        // Intentar llamar a la función
+                        if (typeof createSocialChallenge === 'function') {
+                            console.log('[createSocialBtn-click-1] Llamando createSocialChallenge...');
+                            createSocialChallenge();
+                        } else if (typeof window.createSocialChallenge === 'function') {
+                            console.log('[createSocialBtn-click-1] Llamando window.createSocialChallenge...');
+                            window.createSocialChallenge();
+                        } else {
+                            console.error('[createSocialBtn-click-1] ❌ createSocialChallenge no existe');
+                        }
+                    }, true);
+                    
+                    // 2. addEventListener sin capture (fallback)
+                    createSocialBtn.addEventListener('click', function handleSocialClick2(e) {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        console.log('[createSocialBtn-click-2] ✅ Clic detectado (addEventListener normal)');
+                        if (!this.disabled) {
+                            if (typeof createSocialChallenge === 'function') {
+                                createSocialChallenge();
+                            } else if (typeof window.createSocialChallenge === 'function') {
+                                window.createSocialChallenge();
+                            }
+                        }
+                    }, false);
+                    
+                    // 3. onclick directo (tercer fallback)
+                    createSocialBtn.onclick = function(e) {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        console.log('[createSocialBtn-onclick] ✅ Clic detectado (onclick)');
+                        if (!this.disabled) {
+                            if (typeof createSocialChallenge === 'function') {
+                                createSocialChallenge();
+                            } else if (typeof window.createSocialChallenge === 'function') {
+                                window.createSocialChallenge();
+                            }
+                        }
+                    };
+                    
+                    console.log('[updateActionButtons] ✅ Botón createSocialBtn configurado con múltiples listeners');
+                } else {
+                    console.error('[updateActionButtons] ❌ createSocialBtn no encontrado');
+                }
+                
+                // También intentar después de delays
+                setTimeout(function() {
+                    var btn = document.getElementById('createSocialBtn');
+                    if (btn && !btn.hasAttribute('data-configured')) {
+                        btn.setAttribute('data-configured', 'true');
+                        btn.title = '';
+                        btn.removeAttribute('title');
+                        console.log('[updateActionButtons-delay1] ✅ Botón configurado en delay 1');
+                    }
+                }, 50);
+                
+                setTimeout(function() {
+                    var btn = document.getElementById('createSocialBtn');
+                    if (btn) {
+                        btn.title = '';
+                        btn.removeAttribute('title');
+                        console.log('[updateActionButtons-delay2] ✅ Title limpiado en delay 2');
+                    }
+                }, 100);
+                
+                // CRÍTICO: Inmediatamente después de crear el botón, interceptar su title de forma ULTRA AGRESIVA
+                setTimeout(function() {
+                    var createSocialBtn = document.getElementById('createSocialBtn');
+                    if (createSocialBtn) {
+                        // Forzar title vacío inicialmente
+                        createSocialBtn.removeAttribute('title');
+                        createSocialBtn.title = '';
+                        
+                        // Interceptar getter/setter del title de forma más agresiva
+                        if (!createSocialBtn._titleIntercepted) {
+                            createSocialBtn._titleIntercepted = true;
+                            
+                            // Interceptar tanto la propiedad como el atributo
+                            var titleValue = '';
+                            
+                            Object.defineProperty(createSocialBtn, 'title', {
+                                get: function() {
+                                    // Siempre verificar el atributo también
+                                    var attrValue = this.getAttribute('title') || '';
+                                    if (attrValue.includes('100')) {
+                                        console.log('[createSocialBtn-title-getter] ⚠️ Interceptado "100" en atributo, corrigiendo...');
+                                        var corrected = attrValue.replace(/100/g, '5');
+                                        this.removeAttribute('title');
+                                        this.setAttribute('title', corrected);
+                                        titleValue = corrected;
+                                        return corrected;
+                                    }
+                                    if (titleValue && titleValue.includes('100')) {
+                                        console.log('[createSocialBtn-title-getter] ⚠️ Interceptado "100" en propiedad, corrigiendo...');
+                                        titleValue = titleValue.replace(/100/g, '5');
+                                    }
+                                    return titleValue || attrValue;
+                                },
+                                set: function(value) {
+                                    if (value && typeof value === 'string' && value.includes('100')) {
+                                        console.log('[createSocialBtn-title-setter] ⚠️ Intentando establecer "100", corrigiendo...');
+                                        value = value.replace(/100/g, '5');
+                                    }
+                                    titleValue = value || '';
+                                    if (titleValue) {
+                                        this.setAttribute('title', titleValue);
+                                    } else {
+                                        this.removeAttribute('title');
+                                    }
+                                },
+                                configurable: true,
+                                enumerable: true
+                            });
+                            
+                            // También interceptar cambios al atributo directamente
+                            var originalSetAttribute = createSocialBtn.setAttribute.bind(createSocialBtn);
+                            createSocialBtn.setAttribute = function(name, value) {
+                                if (name === 'title' && value && typeof value === 'string' && value.includes('100')) {
+                                    console.log('[createSocialBtn-setAttribute] ⚠️ Intentando establecer atributo "title" con "100", corrigiendo...');
+                                    value = value.replace(/100/g, '5');
+                                }
+                                return originalSetAttribute(name, value);
+                            };
+                            
+                            // Interceptar removeAttribute también para asegurar que no se pueda eliminar nuestro interceptor
+                            var originalRemoveAttribute = createSocialBtn.removeAttribute.bind(createSocialBtn);
+                            createSocialBtn.removeAttribute = function(name) {
+                                if (name === 'title') {
+                                    // Permitir remover, pero luego forzar vacío
+                                    originalRemoveAttribute(name);
+                                    titleValue = '';
+                                    return;
+                                }
+                                return originalRemoveAttribute(name);
+                            };
+                            
+                            console.log('[updateActionButtons] ✅ Getter/Setter/SetAttribute/RemoveAttribute del title interceptado para createSocialBtn');
+                        }
+                        
+                        // Verificar y corregir cada 25ms (más agresivo)
+                        if (!createSocialBtn._titleCheckInterval) {
+                            createSocialBtn._titleCheckInterval = setInterval(function() {
+                                if (createSocialBtn && createSocialBtn.parentElement) {
+                                    var currentTitle = createSocialBtn.getAttribute('title') || createSocialBtn.title || '';
+                                    if (currentTitle.includes('100')) {
+                                        console.log('[titleCheckInterval] ⚠️ Detectado "100" en title, corrigiendo...');
+                                        var corrected = currentTitle.replace(/100/g, '5');
+                                        createSocialBtn.removeAttribute('title');
+                                        createSocialBtn.setAttribute('title', corrected);
+                                        createSocialBtn.title = corrected;
+                                    }
+                                } else {
+                                    clearInterval(createSocialBtn._titleCheckInterval);
+                                    createSocialBtn._titleCheckInterval = null;
+                                }
+                            }, 25); // Cada 25ms
+                        }
+                    }
+                }, 10);
+                
+                // CRÍTICO: Buscar y eliminar CUALQUIER banner/mensaje que contenga "100 créditos"
+                // Buscar en toda la sección de apuesta
+                var songSelectionSection = document.getElementById('songSelection');
+                if (songSelectionSection) {
+                    // Buscar elementos con clases rojas o estilos rojos que puedan ser el banner
+                    var redBanners = songSelectionSection.querySelectorAll('[class*="red"], [class*="bg-red"], [style*="red"], [style*="background"], div, p, span, strong');
+                    redBanners.forEach(function(el) {
+                        var text = (el.textContent || el.innerText || '').trim();
+                        // CRÍTICO: Solo eliminar si contiene el mensaje EXACTO del error
+                        if ((text === 'La apuesta mínima para desafíos sociales es 100 créditos') || 
+                            (text.includes('apuesta mínima') && text.includes('desafíos sociales') && text.includes('100') && text.includes('créditos'))) {
+                            console.log('[updateActionButtons] ⚠️ Encontrado banner rojo con mensaje de 100 créditos:', text, el);
+                            el.remove();
+                            console.log('[updateActionButtons] ✅ Banner eliminado');
+                        }
+                    });
+                    
+                    // También buscar en todos los elementos
+                    var allElements = songSelectionSection.querySelectorAll('*');
+                    allElements.forEach(function(el) {
+                        var text = (el.textContent || el.innerText || '').trim();
+                        if ((text === 'La apuesta mínima para desafíos sociales es 100 créditos') || 
+                            (text.includes('apuesta mínima') && text.includes('desafíos sociales') && text.includes('100') && text.includes('créditos'))) {
+                            console.log('[updateActionButtons] ⚠️ Encontrado elemento con mensaje de 100 créditos:', text);
+                            el.remove();
+                            console.log('[updateActionButtons] ✅ Elemento eliminado');
+                        }
+                    });
+                }
+                
+                // También buscar en todo el documento por si acaso
+                setTimeout(function() {
+                    // Buscar específicamente el mensaje exacto del banner
+                    var allBanners = document.querySelectorAll('div, p, span, strong, h1, h2, h3, h4, h5, h6');
+                    allBanners.forEach(function(el) {
+                        var text = (el.textContent || el.innerText || '').trim();
+                        // CRÍTICO: Solo eliminar si contiene el mensaje EXACTO del error
+                        if (text === 'La apuesta mínima para desafíos sociales es 100 créditos' || 
+                            (text.includes('apuesta mínima') && text.includes('desafíos sociales') && text.includes('100') && text.includes('créditos'))) {
+                            console.log('[updateActionButtons] ⚠️ Encontrado banner con 100 créditos:', text);
+                            el.remove();
+                            console.log('[updateActionButtons] ✅ Banner eliminado');
+                        }
+                    });
+                }, 100);
+                
+                // Crear MutationObserver para eliminar banners que aparezcan dinámicamente
+                if (!window.banner100Observer) {
+                    window.banner100Observer = new MutationObserver(function(mutations) {
+                        mutations.forEach(function(mutation) {
+                            mutation.addedNodes.forEach(function(node) {
+                                if (node.nodeType === 1) { // Element node
+                                    // Buscar por texto
+                                    var text = (node.textContent || node.innerText || '').trim();
+                                    // CRÍTICO: Solo eliminar si contiene el mensaje EXACTO del error
+                                    if ((text === 'La apuesta mínima para desafíos sociales es 100 créditos') || 
+                                        (text.includes('apuesta mínima') && text.includes('desafíos sociales') && text.includes('100') && text.includes('créditos'))) {
+                                        console.log('[MutationObserver] ⚠️ Banner con 100 créditos detectado:', text, node);
+                                        node.remove();
+                                        console.log('[MutationObserver] ✅ Banner eliminado');
+                                    }
+                                    
+                                    // También buscar por clases/estilos rojos
+                                    if (node.className && (node.className.includes('red') || node.className.includes('bg-red'))) {
+                                        var redText = (node.textContent || node.innerText || '').trim();
+                                        if (redText.includes('100') && redText.includes('créditos')) {
+                                            console.log('[MutationObserver] ⚠️ Banner rojo detectado:', redText, node);
+                                            node.remove();
+                                            console.log('[MutationObserver] ✅ Banner rojo eliminado');
+                                        }
+                                    }
+                                    
+                                    // También buscar en hijos
+                                    var children = node.querySelectorAll ? node.querySelectorAll('*') : [];
+                                    children.forEach(function(child) {
+                                        var childText = (child.textContent || child.innerText || '').trim();
+                                        // CRÍTICO: Solo eliminar si contiene el mensaje EXACTO del error
+                                        if ((childText === 'La apuesta mínima para desafíos sociales es 100 créditos') || 
+                                            (childText.includes('apuesta mínima') && childText.includes('desafíos sociales') && childText.includes('100') && childText.includes('créditos'))) {
+                                            console.log('[MutationObserver] ⚠️ Banner hijo con 100 créditos detectado:', childText);
+                                            child.remove();
+                                            console.log('[MutationObserver] ✅ Banner hijo eliminado');
+                                        }
+                                    });
+                                }
+                            });
+                        });
+                    });
+                    
+                    // Observar cambios en songSelection y en todo el documento
+                    var songSelectionSection = document.getElementById('songSelection');
+                    if (songSelectionSection) {
+                        window.banner100Observer.observe(songSelectionSection, {
+                            childList: true,
+                            subtree: true,
+                            attributes: true,
+                            attributeFilter: ['class', 'style']
+                        });
+                        console.log('[updateActionButtons] ✅ MutationObserver activado para eliminar banners de 100 créditos');
+                    }
+                    
+                    // También observar el body por si el banner aparece fuera de songSelection
+                    window.banner100Observer.observe(document.body, {
+                        childList: true,
+                        subtree: true
+                    });
+                }
+                
+                // CRÍTICO: Asegurar que el campo de apuesta tenga valor correcto para desafíos sociales
+                var betAmountInput = document.getElementById('betAmount');
+                if (betAmountInput) {
+                    // Desafíos sociales siempre tienen mínimo de 5 créditos
+                    const socialMinBet = 5;
+                    if (!betAmountInput.value || parseFloat(betAmountInput.value) < socialMinBet) {
+                        betAmountInput.value = String(socialMinBet);
+                    }
+                    betAmountInput.setAttribute('min', String(socialMinBet)); // Usar setAttribute para asegurar que se aplique
+                    betAmountInput.setCustomValidity(''); // Limpiar cualquier mensaje de validación HTML5
+                    
+                    // CRÍTICO: Verificar y corregir inmediatamente si alguien cambió el min
+                    setTimeout(function() {
+                        var currentMin = betAmountInput.getAttribute('min');
+                        if (currentMin !== '5') {
+                            console.log('[updateActionButtons] ⚠️ min corregido de', currentMin, 'a 5');
+                            betAmountInput.setAttribute('min', '5');
+                        }
+                    }, 10);
+                }
+                
+                // Asegurar que el elemento minBet muestre 5
+                var minBetEl = document.getElementById('minBet');
+                if (minBetEl) {
+                    minBetEl.textContent = '5'; // Usar string para evitar problemas
+                    console.log('[updateActionButtons] ✅ minBet forzado a 5 para modo social');
+                }
+                
+                // Forzar actualización múltiple para asegurar que se aplique
+                setTimeout(function() {
+                    var minBetEl2 = document.getElementById('minBet');
+                    if (minBetEl2) {
+                        minBetEl2.textContent = '5';
+                        console.log('[updateActionButtons] ✅ minBet forzado a 5 (delay 1)');
+                    }
+                    var betAmountInput2 = document.getElementById('betAmount');
+                    if (betAmountInput2) {
+                        betAmountInput2.setAttribute('min', '5');
+                        var currentVal = parseFloat(betAmountInput2.value || '0');
+                        if (!currentVal || currentVal < 5) {
+                            betAmountInput2.value = '5';
+                        }
+                    }
+                }, 50);
+                setTimeout(function() {
+                    var minBetEl3 = document.getElementById('minBet');
+                    if (minBetEl3 && minBetEl3.textContent !== '5') {
+                        minBetEl3.textContent = '5';
+                        console.log('[updateActionButtons] ✅ minBet corregido a 5 (delay 2)');
+                    }
+                    var betAmountInput3 = document.getElementById('betAmount');
+                    if (betAmountInput2) {
+                        betAmountInput2.min = '5';
+                        if (!betAmountInput2.value || parseFloat(betAmountInput2.value) < 5) {
+                            betAmountInput2.value = '5';
+                        }
+                    }
+                }, 100);
+                
                 updateBetEligibility(); // Actualizar estado del botón
             }
         }
@@ -1935,15 +3271,44 @@
         if (typeof window.selectSongForBattle === 'function') {
             var originalSelectSong = window.selectSongForBattle;
             window.selectSongForBattle = async function(song) {
+                console.log('[selectSongForBattle-WRAPPER] ✅ Función llamada con:', song);
+                
                 // Actualizar variables locales del scope
                 selectedSong = song;
                 window.selectedSong = song;
                 if (typeof currentMode !== 'undefined') {
                     window.currentMode = currentMode;
                 }
+                
+                // CRÍTICO: Detener previews ANTES de llamar a la función original
+                try {
+                    if (typeof stopAllPreviews === 'function') {
+                        stopAllPreviews();
+                    } else if (typeof window.stopAllPreviews === 'function') {
+                        window.stopAllPreviews();
+                    } else {
+                        document.querySelectorAll('audio').forEach(function(audio) {
+                            audio.pause();
+                            audio.currentTime = 0;
+                        });
+                    }
+                } catch (e) {
+                    console.warn('[selectSongForBattle-WRAPPER] Error al detener previews:', e);
+                }
+                
                 // Llamar función original
-                return await originalSelectSong(song);
+                try {
+                    var result = await originalSelectSong(song);
+                    console.log('[selectSongForBattle-WRAPPER] ✅ Función original completada');
+                    return result;
+                } catch (error) {
+                    console.error('[selectSongForBattle-WRAPPER] ❌ Error en función original:', error);
+                    throw error;
+                }
             };
+            console.log('[selectSongForBattle-WRAPPER] ✅ Wrapper configurado');
+        } else {
+            console.error('[selectSongForBattle-WRAPPER] ❌ window.selectSongForBattle no está definida');
         }
 
         function quickBet(amount) {
@@ -2032,8 +3397,15 @@
         
         console.log('[INIT] ✅ window.quickBet definida correctamente sin recursión');
 
-        function updateBetEligibility() {
-            console.log('[updateBetEligibility] ⚡ Iniciando actualización de elegibilidad...');
+        // CRÍTICO: Reemplazar la versión ultra-temprana con la versión completa
+        // La versión ultra-temprana ya está definida al inicio del HTML
+        // Aquí la reemplazamos con la versión completa que tiene toda la lógica
+        window.updateBetEligibility = function updateBetEligibility() {
+            console.log('[updateBetEligibility-REPLACE] ⚡ Reemplazando versión ultra-temprana con versión completa...');
+            console.log('========================================');
+            console.log('[updateBetEligibility-FULL] ⚡⚡⚡ INICIANDO ACTUALIZACIÓN DE ELEGIBILIDAD ⚡⚡⚡');
+            console.log('[updateBetEligibility-FULL] Timestamp:', new Date().toISOString());
+            console.log('========================================');
             var startQuickBtn = document.getElementById('startQuickBtn');
             var createSocialBtn = document.getElementById('createSocialBtn');
             var startPracticeBtn = document.getElementById('startPracticeBtn');
@@ -2041,6 +3413,23 @@
             var onchainBalance = Number(window.__mtrOnChainBalance || 0);
             var credits = window.CreditsSystem ? (window.CreditsSystem.currentCredits || 0) : 0;
             var bet = parseFloat(betAmountEl?.value || '0');
+            
+            console.log('[updateBetEligibility] 📊 VALORES INICIALES:');
+            console.log('[updateBetEligibility]   - Bet:', bet);
+            console.log('[updateBetEligibility]   - Credits (off-chain):', credits);
+            console.log('[updateBetEligibility]   - OnChain Balance (MTR):', onchainBalance);
+            console.log('[updateBetEligibility]   - Current Mode:', window.currentMode);
+            console.log('[updateBetEligibility]   - Selected Song:', !!selectedSong);
+            
+            // CRÍTICO: Limpiar title del botón ANTES de cualquier otra operación
+            if (createSocialBtn && window.currentMode === 'social') {
+                var currentTitle = createSocialBtn.getAttribute('title') || createSocialBtn.title || '';
+                if (currentTitle.includes('100')) {
+                    console.log('[updateBetEligibility] ⚠️ Title con "100" detectado al inicio, limpiando...');
+                    createSocialBtn.title = '';
+                    createSocialBtn.removeAttribute('title');
+                }
+            }
             
             console.log('[updateBetEligibility] Estado actual:', {
                 selectedSong: !!selectedSong,
@@ -2059,13 +3448,199 @@
                 console.log('[updateBetEligibility] Quick Match - Song:', !!selectedSong, 'Bet:', bet, 'Balance:', onchainBalance, 'CanCover:', canCoverBet, 'Enabled:', !startQuickBtn.disabled);
             }
             
-            // Para desafíos sociales, verificar créditos y mínimo dinámico
-            const minBetAmount = (typeof GameEngine !== 'undefined' && GameEngine.minBet) ? GameEngine.minBet : 5;
+            // Para desafíos sociales, verificar créditos Y balance on-chain
+            // CRÍTICO: Desafíos sociales SIEMPRE tienen mínimo de 5 créditos
+            // CRÍTICO: Pueden usar créditos off-chain (USDC) O balance on-chain (MTR)
+            // NO usar GameEngine.minBet que puede venir de la base de datos con valor 100
+            const SOCIAL_CHALLENGE_MIN_BET = 5;
             if (createSocialBtn) {
-                var canCoverSocialBet = !!bet && bet >= minBetAmount && credits >= bet;
+                // CRÍTICO: Verificar TANTO créditos off-chain COMO balance on-chain
+                // El usuario puede apostar con cualquiera de los dos
+                var hasEnoughCredits = credits >= bet;
+                var hasEnoughOnChain = onchainBalance >= bet;
+                var canCoverSocialBet = !!bet && bet >= SOCIAL_CHALLENGE_MIN_BET && (hasEnoughCredits || hasEnoughOnChain);
+                
+                console.log('========================================');
+                console.log('[updateBetEligibility] 🎯 DESAFÍO SOCIAL - ANÁLISIS COMPLETO');
+                console.log('========================================');
+                console.log('[updateBetEligibility]   Bet solicitado:', bet);
+                console.log('[updateBetEligibility]   Créditos off-chain:', credits);
+                console.log('[updateBetEligibility]   Balance MTR on-chain:', onchainBalance);
+                console.log('[updateBetEligibility]   HasEnoughCredits:', hasEnoughCredits, '(credits >= bet:', credits, '>=', bet, ')');
+                console.log('[updateBetEligibility]   HasEnoughOnChain:', hasEnoughOnChain, '(onchainBalance >= bet:', onchainBalance, '>=', bet, ')');
+                console.log('[updateBetEligibility]   CanCoverSocialBet:', canCoverSocialBet);
+                console.log('[updateBetEligibility]   Botón disabled:', !canCoverSocialBet || !selectedSong);
+                console.log('========================================');
+                
                 createSocialBtn.disabled = !canCoverSocialBet || !selectedSong;
-                createSocialBtn.title = (!canCoverSocialBet && bet > 0) ? 
-                    (bet < minBetAmount ? `Apuesta mínima: ${minBetAmount} créditos` : 'Créditos insuficientes') : '';
+                
+                // CRÍTICO: SIEMPRE usar SOCIAL_CHALLENGE_MIN_BET (5), nunca GameEngine.minBet (100)
+                // CRÍTICO: NUNCA establecer un title que contenga "100"
+                if (!canCoverSocialBet && bet > 0) {
+                    if (bet < SOCIAL_CHALLENGE_MIN_BET) {
+                        var newTitle = `Apuesta mínima: ${SOCIAL_CHALLENGE_MIN_BET} créditos`;
+                        // Verificar que no contenga "100" antes de establecerlo
+                        if (!newTitle.includes('100')) {
+                            createSocialBtn.title = newTitle;
+                            createSocialBtn.setAttribute('title', newTitle);
+                        } else {
+                            console.error('[updateBetEligibility] ❌ ERROR: Title contiene "100"!', newTitle);
+                            createSocialBtn.title = '';
+                            createSocialBtn.removeAttribute('title');
+                        }
+                    } else {
+                        // CRÍTICO: Mensaje más específico sobre qué falta
+                        if (!hasEnoughCredits && !hasEnoughOnChain) {
+                            createSocialBtn.title = 'Créditos y saldo MTR insuficientes';
+                        } else if (!hasEnoughCredits) {
+                            createSocialBtn.title = 'Créditos insuficientes (usa MTR on-chain)';
+                        } else {
+                            createSocialBtn.title = 'Saldo MTR insuficiente';
+                        }
+                    }
+                } else {
+                    createSocialBtn.title = ''; // Sin tooltip si el botón está habilitado
+                    createSocialBtn.removeAttribute('title');
+                }
+                
+                // CRÍTICO: Verificación final - SIEMPRE eliminar cualquier "100" que pueda haber quedado
+                var finalTitle = createSocialBtn.getAttribute('title') || createSocialBtn.title || '';
+                if (finalTitle.includes('100')) {
+                    console.error('[updateBetEligibility] ❌❌❌ ERROR CRÍTICO: Title aún contiene "100" después de establecerlo!', finalTitle);
+                    createSocialBtn.title = '';
+                    createSocialBtn.removeAttribute('title');
+                }
+                
+                // CRÍTICO: Forzar el title correcto SIEMPRE para modo social
+                if (window.currentMode === 'social') {
+                    // Establecer title correcto inmediatamente
+                    if (!canCoverSocialBet && bet > 0) {
+                        if (bet < SOCIAL_CHALLENGE_MIN_BET) {
+                            createSocialBtn.title = `Apuesta mínima: ${SOCIAL_CHALLENGE_MIN_BET} créditos`;
+                        } else {
+                            // Mensaje más específico sobre qué falta
+                            if (!hasEnoughCredits && !hasEnoughOnChain) {
+                                createSocialBtn.title = 'Créditos y saldo MTR insuficientes';
+                            } else if (!hasEnoughCredits) {
+                                createSocialBtn.title = 'Créditos insuficientes (usa MTR on-chain)';
+                            } else {
+                                createSocialBtn.title = 'Saldo MTR insuficiente';
+                            }
+                        }
+                    } else {
+                        createSocialBtn.title = '';
+                    }
+                    
+                    // Verificar y corregir múltiples veces
+                    setTimeout(function() {
+                        if (createSocialBtn.title && createSocialBtn.title.includes('100')) {
+                            console.log('[updateBetEligibility] ⚠️ Title incorrecto detectado:', createSocialBtn.title);
+                            createSocialBtn.title = createSocialBtn.title.replace(/100/g, '5');
+                            console.log('[updateBetEligibility] ✅ Title corregido:', createSocialBtn.title);
+                        }
+                    }, 10);
+                    
+                    setTimeout(function() {
+                        if (createSocialBtn.title && createSocialBtn.title.includes('100')) {
+                            createSocialBtn.title = createSocialBtn.title.replace(/100/g, '5');
+                        }
+                    }, 50);
+                    
+                    setTimeout(function() {
+                        if (createSocialBtn.title && createSocialBtn.title.includes('100')) {
+                            createSocialBtn.title = createSocialBtn.title.replace(/100/g, '5');
+                        }
+                    }, 100);
+                }
+                
+                // CRÍTICO: Crear MutationObserver para prevenir cambios futuros al title
+                if (!window.tooltipTitleObserver && createSocialBtn) {
+                    window.tooltipTitleObserver = new MutationObserver(function(mutations) {
+                        mutations.forEach(function(mutation) {
+                            if (mutation.type === 'attributes' && mutation.attributeName === 'title') {
+                                var currentTitle = createSocialBtn.title || '';
+                                if (currentTitle.includes('100')) {
+                                    console.log('[tooltipTitleObserver] ⚠️ Title con "100" detectado:', currentTitle);
+                                    createSocialBtn.title = currentTitle.replace(/100/g, '5');
+                                    console.log('[tooltipTitleObserver] ✅ Title corregido:', createSocialBtn.title);
+                                }
+                            }
+                        });
+                    });
+                    
+                    window.tooltipTitleObserver.observe(createSocialBtn, {
+                        attributes: true,
+                        attributeFilter: ['title']
+                    });
+                    
+                    console.log('[updateBetEligibility] ✅ MutationObserver activado para prevenir cambios al title');
+                }
+                
+                // CRÍTICO: También interceptar el getter del title para forzar el valor correcto
+                if (createSocialBtn && !createSocialBtn._titleIntercepted) {
+                    createSocialBtn._titleIntercepted = true;
+                    var titleDescriptor = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'title');
+                    if (titleDescriptor) {
+                        Object.defineProperty(createSocialBtn, 'title', {
+                            get: function() {
+                                var current = titleDescriptor.get.call(this);
+                                if (window.currentMode === 'social' && current && current.includes('100')) {
+                                    console.log('[title-getter] ⚠️ Interceptado getter con "100", corrigiendo...');
+                                    var corrected = current.replace(/100/g, '5');
+                                    titleDescriptor.set.call(this, corrected);
+                                    return corrected;
+                                }
+                                return current;
+                            },
+                            set: function(value) {
+                                if (window.currentMode === 'social' && value && value.includes('100')) {
+                                    console.log('[title-setter] ⚠️ Intentando establecer title con "100", corrigiendo...');
+                                    value = value.replace(/100/g, '5');
+                                }
+                                return titleDescriptor.set.call(this, value);
+                            },
+                            configurable: true
+                        });
+                        console.log('[updateBetEligibility] ✅ Getter/Setter del title interceptado');
+                    }
+                }
+                
+                // CRÍTICO: Eliminar cualquier banner/mensaje que muestre 100 créditos
+                if (window.currentMode === 'social') {
+                    var songSelectionSection = document.getElementById('songSelection');
+                    if (songSelectionSection) {
+                        // Buscar en toda la sección
+                        var errorBanners = songSelectionSection.querySelectorAll('*');
+                        errorBanners.forEach(function(el) {
+                            var text = (el.textContent || el.innerText || '').trim();
+                            // CRÍTICO: Solo eliminar si contiene el mensaje EXACTO del error
+                            if ((text === 'La apuesta mínima para desafíos sociales es 100 créditos') || 
+                                (text.includes('apuesta mínima') && text.includes('desafíos sociales') && text.includes('100') && text.includes('créditos'))) {
+                                console.log('[updateBetEligibility] ⚠️ Eliminando banner con 100 créditos:', text);
+                                el.remove();
+                            }
+                        });
+                        
+                        // También buscar en todo el documento por si el banner está fuera de songSelection
+                        setTimeout(function() {
+                            var allBanners = document.querySelectorAll('div, p, span, strong, h1, h2, h3, h4');
+                            allBanners.forEach(function(el) {
+                                var text = (el.textContent || el.innerText || '').trim();
+                                // CRÍTICO: Solo eliminar si contiene el mensaje EXACTO del error
+                                if ((text === 'La apuesta mínima para desafíos sociales es 100 créditos') || 
+                                    (text.includes('apuesta mínima') && text.includes('desafíos sociales') && text.includes('100') && text.includes('créditos'))) {
+                                    console.log('[updateBetEligibility] ⚠️ Eliminando banner externo con 100 créditos:', text);
+                                    el.remove();
+                                }
+                            });
+                        }, 50);
+                    }
+                }
+                
+                // Log para debugging
+                if (bet > 0 && bet < SOCIAL_CHALLENGE_MIN_BET) {
+                    console.log('[updateBetEligibility] ⚠️ Apuesta menor al mínimo - bet:', bet, 'mínimo:', SOCIAL_CHALLENGE_MIN_BET);
+                }
             }
             
             // Para modo práctica, habilitar cuando hay canción seleccionada
@@ -2114,7 +3689,102 @@
                     startPracticeBtn.title = '';
                 }
             }
+            
+            console.log('[updateBetEligibility] ✅ Actualización completada');
+            console.log('========================================');
+        };
+        
+        // CRÍTICO: Verificar si la función ultra-temprana está disponible
+        if (typeof window.updateBetEligibility !== 'function') {
+            console.error('[INIT] ❌❌❌ ERROR CRÍTICO: window.updateBetEligibility NO está disponible!');
+            console.error('[INIT] Esto significa que el script ultra-temprano no se ejecutó correctamente');
+            console.error('[INIT] Intentando definir versión de emergencia...');
+            
+            // Definir versión de emergencia
+            window.updateBetEligibility = function updateBetEligibility() {
+                console.log('[updateBetEligibility-EMERGENCY] ⚡ Versión de emergencia ejecutándose');
+                var btn = document.getElementById('createSocialBtn');
+                if (btn && window.currentMode === 'social') {
+                    var betInput = document.getElementById('betAmount');
+                    var bet = betInput ? parseFloat(betInput.value || '0') : 0;
+                    var onchainBalance = Number(window.__mtrOnChainBalance || 0);
+                    var credits = window.CreditsSystem ? (window.CreditsSystem.currentCredits || 0) : 0;
+                    var canCover = bet >= 5 && (credits >= bet || onchainBalance >= bet);
+                    var hasSong = !!window.selectedSong;
+                    btn.disabled = !canCover || !hasSong;
+                    var title = btn.getAttribute('title') || btn.title || '';
+                    if (title.includes('100')) {
+                        btn.title = '';
+                        btn.removeAttribute('title');
+                    }
+                }
+            };
+            console.log('[INIT] ✅ Versión de emergencia definida');
         }
+        
+        // CRÍTICO: Guardar una copia de la función completa ANTES de cualquier otra cosa
+        var updateBetEligibilityFull = window.updateBetEligibility;
+        
+        // CRÍTICO: La función ya está definida directamente en window.updateBetEligibility
+        // Solo necesitamos verificar que esté disponible
+        console.log('[INIT] ✅ window.updateBetEligibility definida DIRECTAMENTE en window:', typeof window.updateBetEligibility);
+        
+        // CRÍTICO: También crear referencia local para compatibilidad con código que la llama sin window
+        var updateBetEligibility = window.updateBetEligibility;
+        
+        // CRÍTICO: Verificar inmediatamente después de definir
+        if (typeof window.updateBetEligibility !== 'function') {
+            console.error('[INIT] ❌❌❌ ERROR CRÍTICO: window.updateBetEligibility NO es una función!');
+            console.error('[INIT] Tipo actual:', typeof window.updateBetEligibility);
+            console.error('[INIT] Valor:', window.updateBetEligibility);
+            // Intentar restaurar desde la copia guardada
+            if (typeof updateBetEligibilityFull === 'function') {
+                window.updateBetEligibility = updateBetEligibilityFull;
+                console.log('[INIT] ✅ Restaurada desde copia guardada');
+            }
+        } else {
+            console.log('[INIT] ✅✅✅ CONFIRMADO: window.updateBetEligibility es una función');
+            console.log('[INIT] ✅ Nombre de la función:', window.updateBetEligibility.name);
+        }
+        
+        // CRÍTICO: Función de restauración que se ejecutará si la función desaparece
+        // Solo definir si no existe ya (para no sobrescribir la versión ultra-temprana)
+        if (typeof window._restoreUpdateBetEligibility !== 'function') {
+            window._restoreUpdateBetEligibility = function() {
+                if (typeof window.updateBetEligibility !== 'function' && typeof updateBetEligibilityFull === 'function') {
+                    console.warn('[RESTORE] ⚠️ updateBetEligibility desapareció, restaurando...');
+                    window.updateBetEligibility = updateBetEligibilityFull;
+                    console.log('[RESTORE] ✅ Restaurada');
+                }
+            };
+        }
+        
+        // CRÍTICO: Forzar verificación múltiples veces para asegurar que se mantenga
+        setTimeout(function() {
+            if (typeof window.updateBetEligibility !== 'function') {
+                console.error('[INIT-DELAY-100] ❌ updateBetEligibility fue eliminada o sobrescrita!');
+                window._restoreUpdateBetEligibility();
+            } else {
+                console.log('[INIT-DELAY-100] ✅ updateBetEligibility sigue disponible');
+            }
+        }, 100);
+        
+        setTimeout(function() {
+            if (typeof window.updateBetEligibility !== 'function') {
+                console.error('[INIT-DELAY-500] ❌ updateBetEligibility fue eliminada o sobrescrita!');
+                window._restoreUpdateBetEligibility();
+            } else {
+                console.log('[INIT-DELAY-500] ✅ updateBetEligibility sigue disponible');
+            }
+        }, 500);
+        
+        // CRÍTICO: Verificar cada 2 segundos y restaurar si es necesario
+        setInterval(function() {
+            if (typeof window.updateBetEligibility !== 'function') {
+                console.warn('[MONITOR] ⚠️ updateBetEligibility desapareció, restaurando...');
+                window._restoreUpdateBetEligibility();
+            }
+        }, 2000);
 
         async function startQuickMatch() {
             console.log('[startQuickMatch] ✅ Función llamada');
@@ -2140,6 +3810,12 @@
         
         // Asegurar que startQuickMatch esté disponible globalmente
         window.startQuickMatch = startQuickMatch;
+        
+        // CRÍTICO: Asegurar que createSocialChallenge esté disponible globalmente ANTES de cualquier uso
+        if (typeof createSocialChallenge === 'function' && typeof window.createSocialChallenge === 'undefined') {
+            window.createSocialChallenge = createSocialChallenge;
+            console.log('[INIT] ✅ createSocialChallenge asignada a window.createSocialChallenge');
+        }
         async function createRoom() {
             if (!selectedSong) return;
             const minBetAmount = (typeof GameEngine !== 'undefined' && GameEngine.minBet) ? GameEngine.minBet : 5;
@@ -2222,16 +3898,193 @@
         window.startPractice = startPractice;
         console.log('[INIT] ✅ window.startPractice definida globalmente');
 
+        // Prevenir múltiples clics simultáneos
+        var isCreatingSocialChallenge = false;
+        
+        // CRÍTICO: Asegurar que createSocialChallenge esté disponible globalmente
+        window.createSocialChallenge = window.createSocialChallenge || function() {
+            console.error('[createSocialChallenge-GLOBAL] ⚠️ Función no definida aún, esperando...');
+            setTimeout(function() {
+                if (typeof createSocialChallenge === 'function') {
+                    console.log('[createSocialChallenge-GLOBAL] ✅ Función encontrada, llamando...');
+                    createSocialChallenge();
+                } else {
+                    console.error('[createSocialChallenge-GLOBAL] ❌ Función aún no disponible después de delay');
+                }
+            }, 500);
+        };
+        
         async function createSocialChallenge() {
-            if (!selectedSong) { showToast('Selecciona una canción primero', 'error'); return; }
-            const minBetAmount = (typeof GameEngine !== 'undefined' && GameEngine.minBet) ? GameEngine.minBet : 5;
-            var bet = parseFloat(document.getElementById('betAmount').value) || minBetAmount;
-            if (bet < minBetAmount) {
-                showToast(`La apuesta mínima para desafíos sociales es ${minBetAmount} créditos`, 'error');
+            console.log('[createSocialChallenge] ========================================');
+            console.log('[createSocialChallenge] ✅✅✅ FUNCIÓN LLAMADA ✅✅✅');
+            console.log('[createSocialChallenge] ========================================');
+            console.log('[createSocialChallenge] isCreatingSocialChallenge:', isCreatingSocialChallenge);
+            console.log('[createSocialChallenge] selectedSong (local):', selectedSong);
+            console.log('[createSocialChallenge] window.selectedSong:', window.selectedSong);
+            console.log('[createSocialChallenge] betAmount value:', document.getElementById('betAmount')?.value);
+            
+            // Prevenir múltiples ejecuciones simultáneas
+            if (isCreatingSocialChallenge) {
+                console.log('[createSocialChallenge] ⚠️ Ya hay una creación en proceso, ignorando clic');
                 return;
             }
-            if (typeof GameEngine !== 'undefined') await GameEngine.createSocialChallenge(selectedSong, bet);
-            else showToast('GameEngine no está cargado', 'error');
+            
+            // CRÍTICO: Verificar canción seleccionada de múltiples formas
+            var songToUse = selectedSong || window.selectedSong;
+            if (!songToUse) { 
+                console.error('[createSocialChallenge] ❌ No hay canción seleccionada');
+                console.error('[createSocialChallenge] selectedSong:', selectedSong);
+                console.error('[createSocialChallenge] window.selectedSong:', window.selectedSong);
+                if (typeof showToast === 'function') {
+                    showToast('Selecciona una canción primero', 'error'); 
+                }
+                return; 
+            }
+            
+            console.log('[createSocialChallenge] ✅ Canción encontrada:', songToUse.name || songToUse.title);
+            
+            // CRÍTICO: Desafíos sociales SIEMPRE tienen mínimo de 5 créditos, independientemente de game_config
+            // NO usar GameEngine.minBet que puede venir de la base de datos con valor 100
+            const SOCIAL_CHALLENGE_MIN_BET = 5;
+            var betInput = document.getElementById('betAmount');
+            var bet = betInput ? parseFloat(betInput.value || '0') : 0;
+            
+            console.log('[createSocialChallenge] Bet input encontrado:', !!betInput);
+            console.log('[createSocialChallenge] Bet value raw:', betInput?.value);
+            console.log('[createSocialChallenge] Bet parsed:', bet);
+            console.log('[createSocialChallenge] Mínimo requerido:', SOCIAL_CHALLENGE_MIN_BET);
+            
+            // Validar inmediatamente y mostrar error si es necesario
+            if (!bet || isNaN(bet) || bet < SOCIAL_CHALLENGE_MIN_BET) {
+                console.error('[createSocialChallenge] ❌ Validación fallida');
+                console.error('[createSocialChallenge] Bet:', bet, 'Mínimo:', SOCIAL_CHALLENGE_MIN_BET);
+                if (typeof showToast === 'function') {
+                    showToast(`La apuesta mínima para desafíos sociales es ${SOCIAL_CHALLENGE_MIN_BET} créditos`, 'error');
+                }
+                return;
+            }
+            
+            console.log('[createSocialChallenge] ✅ Validación pasada - bet:', bet, 'mínimo:', SOCIAL_CHALLENGE_MIN_BET);
+            
+            // CRÍTICO: Verificar TANTO créditos off-chain COMO balance on-chain MTR
+            // El usuario puede apostar con cualquiera de los dos
+            var credits = window.CreditsSystem ? (window.CreditsSystem.currentCredits || 0) : 0;
+            var onchainBalance = Number(window.__mtrOnChainBalance || 0);
+            
+            console.log('========================================');
+            console.log('[createSocialChallenge] 💰 VERIFICACIÓN DE BALANCES');
+            console.log('========================================');
+            console.log('[createSocialChallenge]   Bet solicitado:', bet);
+            console.log('[createSocialChallenge]   Créditos off-chain:', credits);
+            console.log('[createSocialChallenge]   Balance MTR on-chain:', onchainBalance);
+            console.log('[createSocialChallenge]   HasEnoughCredits:', credits >= bet, '(credits >= bet:', credits, '>=', bet, ')');
+            console.log('[createSocialChallenge]   HasEnoughOnChain:', onchainBalance >= bet, '(onchainBalance >= bet:', onchainBalance, '>=', bet, ')');
+            console.log('========================================');
+            
+            // Verificar si tiene suficientes créditos O suficiente balance on-chain
+            if (credits < bet && onchainBalance < bet) {
+                console.error('========================================');
+                console.error('[createSocialChallenge] ❌❌❌ BALANCE INSUFICIENTE EN AMBOS SISTEMAS ❌❌❌');
+                console.error('[createSocialChallenge]   Créditos:', credits, '< Bet:', bet);
+                console.error('[createSocialChallenge]   OnChain:', onchainBalance, '< Bet:', bet);
+                console.error('========================================');
+                if (typeof showToast === 'function') {
+                    showToast(`Saldo insuficiente. Créditos: ${credits.toFixed(2)}, MTR on-chain: ${onchainBalance.toLocaleString('es-ES', { maximumFractionDigits: 4 })}`, 'error');
+                }
+                return;
+            }
+            
+            console.log('========================================');
+            console.log('[createSocialChallenge] ✅✅✅ BALANCE SUFICIENTE ✅✅✅');
+            console.log('[createSocialChallenge]   Usando:', credits >= bet ? 'CRÉDITOS OFF-CHAIN' : 'MTR ON-CHAIN');
+            console.log('========================================');
+            
+            // Marcar como en proceso
+            isCreatingSocialChallenge = true;
+            
+            // Deshabilitar botón inmediatamente para feedback visual
+            const createSocialBtn = document.getElementById('createSocialBtn');
+            if (createSocialBtn) {
+                createSocialBtn.disabled = true;
+                createSocialBtn.textContent = 'Creando...';
+            }
+            
+            try {
+                console.log('[createSocialChallenge] ⚡ INICIANDO creación de desafío social');
+                console.log('[createSocialChallenge] Estado completo:', {
+                    selectedSongLocal: !!selectedSong,
+                    selectedSongWindow: !!window.selectedSong,
+                    songToUse: songToUse ? { name: songToUse.name || songToUse.title, id: songToUse.id } : null,
+                    bet: bet,
+                    credits: credits,
+                    GameEngineLoaded: typeof GameEngine !== 'undefined',
+                    GameEngineType: typeof GameEngine
+                });
+                
+                if (typeof GameEngine === 'undefined') {
+                    console.error('[createSocialChallenge] ❌ GameEngine no está cargado');
+                    console.error('[createSocialChallenge] typeof GameEngine:', typeof GameEngine);
+                    if (typeof showToast === 'function') {
+                        showToast('GameEngine no está cargado. Recarga la página.', 'error');
+                    }
+                    return;
+                }
+                
+                if (typeof GameEngine.createSocialChallenge !== 'function') {
+                    console.error('[createSocialChallenge] ❌ GameEngine.createSocialChallenge no es una función');
+                    console.error('[createSocialChallenge] typeof GameEngine.createSocialChallenge:', typeof GameEngine.createSocialChallenge);
+                    if (typeof showToast === 'function') {
+                        showToast('Error: Función de desafío social no disponible', 'error');
+                    }
+                    return;
+                }
+                
+                console.log('[createSocialChallenge] 🚀 Llamando a GameEngine.createSocialChallenge...');
+                console.log('[createSocialChallenge] Parámetros:', {
+                    song: songToUse,
+                    bet: bet
+                });
+                
+                var result = await GameEngine.createSocialChallenge(songToUse, bet);
+                console.log('[createSocialChallenge] ✅✅✅ GameEngine.createSocialChallenge completado ✅✅✅');
+                console.log('[createSocialChallenge] Resultado:', result);
+            } catch (error) {
+                console.error('[createSocialChallenge] ❌❌❌ ERROR COMPLETO:', error);
+                console.error('[createSocialChallenge] Error name:', error.name);
+                console.error('[createSocialChallenge] Error message:', error.message);
+                console.error('[createSocialChallenge] Error stack:', error.stack);
+                console.error('[createSocialChallenge] Error details:', {
+                    name: error.name,
+                    message: error.message,
+                    stack: error.stack,
+                    cause: error.cause
+                });
+                showToast('Error al crear desafío: ' + (error.message || 'Error desconocido'), 'error');
+            } finally {
+                // Restaurar estado después de un delay
+                setTimeout(() => {
+                    isCreatingSocialChallenge = false;
+                    if (createSocialBtn) {
+                        createSocialBtn.disabled = false;
+                        createSocialBtn.textContent = '⚔️ Crear Desafío';
+                        // Re-validar elegibilidad
+                        if (typeof updateBetEligibility === 'function') {
+                            updateBetEligibility();
+                        }
+                    }
+                }, 1000);
+            }
+        }
+        
+        // CRÍTICO: Asegurar que createSocialChallenge esté disponible globalmente
+        window.createSocialChallenge = createSocialChallenge;
+        console.log('[INIT] ✅ window.createSocialChallenge definida globalmente:', typeof window.createSocialChallenge);
+        
+        // CRÍTICO: Verificar inmediatamente después de asignar
+        if (typeof window.createSocialChallenge !== 'function') {
+            console.error('[INIT] ❌❌❌ ERROR CRÍTICO: window.createSocialChallenge NO es una función después de asignar!');
+        } else {
+            console.log('[INIT] ✅✅✅ CONFIRMADO: window.createSocialChallenge es una función');
         }
 
         function copyChallengeLink() {
@@ -2355,6 +4208,13 @@
         if (betAmountInput) {
             betAmountInput.addEventListener('input', function() {
                 console.log('[betAmount] Input event - valor:', betAmountInput.value);
+                
+                // CRÍTICO: Para modo social, asegurar que min siempre sea 5
+                if (window.currentMode === 'social') {
+                    betAmountInput.setAttribute('min', '5');
+                    betAmountInput.setCustomValidity('');
+                }
+                
                 if (typeof updateBetEligibility === 'function') {
                     updateBetEligibility();
                 } else if (typeof window.updateBetEligibility === 'function') {
@@ -2363,17 +4223,84 @@
             });
             betAmountInput.addEventListener('change', function() {
                 console.log('[betAmount] Change event - valor:', betAmountInput.value);
+                
+                // CRÍTICO: Para modo social, asegurar que min siempre sea 5
+                if (window.currentMode === 'social') {
+                    betAmountInput.setAttribute('min', '5');
+                    betAmountInput.setCustomValidity('');
+                }
+                
                 if (typeof updateBetEligibility === 'function') {
                     updateBetEligibility();
                 } else if (typeof window.updateBetEligibility === 'function') {
                     window.updateBetEligibility();
                 }
             });
+            
+            // CRÍTICO: Prevenir mensaje de validación HTML5 con valor incorrecto
+            betAmountInput.addEventListener('invalid', function(e) {
+                if (window.currentMode === 'social') {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    e.stopImmediatePropagation();
+                    
+                    // CRÍTICO: Asegurar que min="5" antes de mostrar el mensaje
+                    betAmountInput.setAttribute('min', '5');
+                    betAmountInput.setCustomValidity('La apuesta mínima para desafíos sociales es 5 créditos');
+                    
+                    // Usar setTimeout para evitar que el navegador muestre su mensaje nativo
+                    setTimeout(function() {
+                        betAmountInput.reportValidity();
+                        setTimeout(function() {
+                            betAmountInput.setCustomValidity(''); // Limpiar después de mostrar
+                        }, 100);
+                    }, 10);
+                    
+                    // También mostrar toast personalizado
+                    if (typeof showToast === 'function') {
+                        showToast('La apuesta mínima para desafíos sociales es 5 créditos', 'error');
+                    }
+                }
+            });
+            
+            // CRÍTICO: Interceptar cualquier cambio al atributo min para modo social
+            var minObserver = new MutationObserver(function(mutations) {
+                if (window.currentMode === 'social') {
+                    mutations.forEach(function(mutation) {
+                        if (mutation.type === 'attributes' && mutation.attributeName === 'min') {
+                            var currentMin = betAmountInput.getAttribute('min');
+                            if (currentMin !== '5') {
+                                console.log('[minObserver] ⚠️ Detectado cambio a min="' + currentMin + '", corrigiendo a 5');
+                                betAmountInput.setAttribute('min', '5');
+                            }
+                        }
+                    });
+                }
+            });
+            
+            minObserver.observe(betAmountInput, {
+                attributes: true,
+                attributeFilter: ['min']
+            });
         }
 
         window.showIncomingChallenge = showIncomingChallenge;
         window.verifyPurchasedMtrTx = verifyPurchasedMtrTx;
-        window.updateBetEligibility = updateBetEligibility;
+        
+        // CRÍTICO: Verificar que updateBetEligibility siga disponible al final del script
+        if (typeof window.updateBetEligibility === 'function') {
+            console.log('[INIT-FINAL] ✅ updateBetEligibility sigue disponible al final del script:', typeof window.updateBetEligibility);
+        } else {
+            console.error('[INIT-FINAL] ❌❌❌ ERROR CRÍTICO: updateBetEligibility NO está disponible al final del script!');
+            console.error('[INIT-FINAL] Esto significa que algo la eliminó o sobrescribió. Revisa los scripts anteriores.');
+            
+            // Intentar restaurar desde la referencia local si existe
+            if (typeof updateBetEligibility === 'function') {
+                window.updateBetEligibility = updateBetEligibility;
+                console.log('[INIT-FINAL] ✅ Restaurada desde referencia local');
+            }
+        }
+        
         // selectSongForBattle ya está asignado arriba directamente a window
     </script>
 
@@ -3960,6 +5887,411 @@
                 }
             });
             
+            // ========== SCRIPT DE CORRECCIÓN FINAL COMPLETO ==========
+            // Este script se ejecuta DESPUÉS de que todo esté cargado y corrige todos los problemas
+            (function() {
+                console.log('========================================');
+                console.log('[FIX-ALL] 🔧 INICIANDO SCRIPT DE CORRECCIÓN COMPLETA');
+                console.log('========================================');
+                console.log('[FIX-ALL] Timestamp:', new Date().toISOString());
+                console.log('[FIX-ALL] URL:', window.location.href);
+                console.log('[FIX-ALL] Build:', document.querySelector('meta[name="mtr-build"]')?.content || 'N/A');
+                console.log('========================================');
+                
+                // Función para corregir el botón de crear desafío social
+                function fixCreateSocialBtn() {
+                    var btn = document.getElementById('createSocialBtn');
+                    if (btn) {
+                        // Limpiar title
+                        btn.title = '';
+                        btn.removeAttribute('title');
+                        
+                        // Remover listeners anteriores y agregar uno nuevo limpio
+                        var newBtn = btn.cloneNode(true);
+                        btn.parentNode.replaceChild(newBtn, btn);
+                        btn = newBtn;
+                        
+                        // CRÍTICO: Agregar listener directo con logs detallados
+                        var clickHandler = function(e) {
+                            console.log('[FIX-ALL] ========================================');
+                            console.log('[FIX-ALL] ✅✅✅ CLIC EN BOTÓN DETECTADO ✅✅✅');
+                            console.log('[FIX-ALL] ========================================');
+                            console.log('[FIX-ALL] Event:', e);
+                            console.log('[FIX-ALL] Botón disabled:', this.disabled);
+                            console.log('[FIX-ALL] Botón title:', this.title);
+                            console.log('[FIX-ALL] selectedSong:', window.selectedSong);
+                            console.log('[FIX-ALL] createSocialChallenge existe:', typeof createSocialChallenge);
+                            console.log('[FIX-ALL] window.createSocialChallenge existe:', typeof window.createSocialChallenge);
+                            
+                            e.preventDefault();
+                            e.stopPropagation();
+                            e.stopImmediatePropagation();
+                            
+                            if (this.disabled) {
+                                console.warn('[FIX-ALL] ⚠️ Botón deshabilitado, abortando');
+                                return false;
+                            }
+                            
+                            // Verificar que haya canción seleccionada
+                            if (!window.selectedSong && !selectedSong) {
+                                console.error('[FIX-ALL] ❌ No hay canción seleccionada');
+                                if (typeof showToast === 'function') {
+                                    showToast('Selecciona una canción primero', 'error');
+                                }
+                                return false;
+                            }
+                            
+                            // Intentar llamar a la función de múltiples formas
+                            var funcToCall = null;
+                            if (typeof createSocialChallenge === 'function') {
+                                funcToCall = createSocialChallenge;
+                                console.log('[FIX-ALL] ✅ Usando createSocialChallenge (local)');
+                            } else if (typeof window.createSocialChallenge === 'function') {
+                                funcToCall = window.createSocialChallenge;
+                                console.log('[FIX-ALL] ✅ Usando window.createSocialChallenge');
+                            } else {
+                                console.error('[FIX-ALL] ❌ createSocialChallenge no existe en ningún lugar');
+                                console.error('[FIX-ALL] typeof createSocialChallenge:', typeof createSocialChallenge);
+                                console.error('[FIX-ALL] typeof window.createSocialChallenge:', typeof window.createSocialChallenge);
+                                if (typeof showToast === 'function') {
+                                    showToast('Error: Función no disponible. Recarga la página.', 'error');
+                                }
+                                return false;
+                            }
+                            
+                            console.log('[FIX-ALL] 🚀 Llamando función createSocialChallenge...');
+                            try {
+                                var result = funcToCall();
+                                console.log('[FIX-ALL] ✅ Función llamada, resultado:', result);
+                                
+                                // Si es una promesa, manejar el resultado
+                                if (result && typeof result.then === 'function') {
+                                    result.then(function(res) {
+                                        console.log('[FIX-ALL] ✅ Promesa resuelta:', res);
+                                    }).catch(function(err) {
+                                        console.error('[FIX-ALL] ❌ Error en promesa:', err);
+                                    });
+                                }
+                            } catch (error) {
+                                console.error('[FIX-ALL] ❌❌❌ ERROR AL LLAMAR FUNCIÓN:', error);
+                                console.error('[FIX-ALL] Error name:', error.name);
+                                console.error('[FIX-ALL] Error message:', error.message);
+                                console.error('[FIX-ALL] Error stack:', error.stack);
+                                if (typeof showToast === 'function') {
+                                    showToast('Error: ' + (error.message || 'Error desconocido'), 'error');
+                                }
+                            }
+                            
+                            return false;
+                        };
+                        
+                        // Agregar múltiples listeners para asegurar captura
+                        btn.addEventListener('click', clickHandler, true); // Capture phase
+                        btn.addEventListener('click', clickHandler, false); // Bubble phase
+                        btn.onclick = clickHandler; // Fallback directo
+                        
+                        console.log('[FIX-ALL] ✅ Múltiples listeners agregados al botón');
+                        
+                        console.log('[FIX-ALL] ✅ Botón createSocialBtn corregido');
+                    }
+                }
+                
+                // Función para asegurar banner verde
+                function ensureGreenBanner() {
+                    var card = document.getElementById('selectedSongCard');
+                    if (!card) return;
+                    
+                    var mode = window.currentMode;
+                    if (mode !== 'social') return;
+                    
+                    var banner = card.querySelector('[class*="green"], [id="selectedSongBanner"]');
+                    if (!banner) {
+                        var bannerDiv = document.createElement('div');
+                        bannerDiv.id = 'selectedSongBanner';
+                        bannerDiv.className = 'ml-4 px-3 py-1.5 rounded-full bg-green-500/25 border border-green-500/40 text-green-300 text-xs font-bold shadow-lg shadow-green-500/20';
+                        bannerDiv.textContent = '✓ Canción Seleccionada';
+                        card.appendChild(bannerDiv);
+                        console.log('[FIX-ALL] ✅ Banner verde agregado');
+                    }
+                }
+                
+                // Función para detener previews
+                function stopAllPreviewsFix() {
+                    try {
+                        if (typeof stopAllPreviews === 'function') {
+                            stopAllPreviews();
+                        } else if (typeof window.stopAllPreviews === 'function') {
+                            window.stopAllPreviews();
+                        } else {
+                            document.querySelectorAll('audio').forEach(function(audio) {
+                                audio.pause();
+                                audio.currentTime = 0;
+                            });
+                        }
+                        console.log('[FIX-ALL] ✅ Previews detenidos');
+                    } catch (e) {
+                        console.error('[FIX-ALL] Error al detener previews:', e);
+                    }
+                }
+                
+                // CRÍTICO: Interceptar TODOS los clics en elementos de canción
+                function interceptSongClicks() {
+                    // Usar delegación de eventos en document.body para capturar TODOS los clics
+                    document.body.addEventListener('click', function(e) {
+                        var target = e.target;
+                        
+                        // Buscar el elemento padre que contiene la información de la canción
+                        var songElement = target.closest('[data-song-id], [data-track-id], [onclick*="selectSong"], .song-card, .track-item, [class*="song"]');
+                        
+                        if (songElement) {
+                            console.log('[FIX-ALL] 🎵 Clic en elemento de canción detectado:', songElement);
+                            
+                            // Intentar extraer información de la canción del elemento
+                            var songId = songElement.getAttribute('data-song-id') || 
+                                        songElement.getAttribute('data-track-id') ||
+                                        songElement.getAttribute('data-id');
+                            
+                            // Si hay un onclick que llama a selectSong, ejecutarlo
+                            var onclickAttr = songElement.getAttribute('onclick');
+                            if (onclickAttr && onclickAttr.includes('selectSong')) {
+                                console.log('[FIX-ALL] ✅ onclick encontrado, ejecutando...');
+                                // No prevenir el evento, dejar que se ejecute normalmente
+                                return;
+                            }
+                            
+                            // Si no hay onclick pero hay songId, intentar encontrar la canción y seleccionarla
+                            if (songId && typeof window.selectSongForBattle === 'function') {
+                                console.log('[FIX-ALL] Intentando seleccionar canción con ID:', songId);
+                                
+                                // Buscar la canción en las listas disponibles
+                                // Esto es un fallback si el onclick no funciona
+                                e.preventDefault();
+                                e.stopPropagation();
+                                
+                                // Intentar encontrar la canción en window.songs o similar
+                                if (window.songs && Array.isArray(window.songs)) {
+                                    var song = window.songs.find(function(s) {
+                                        return s.id === songId || s.id === parseInt(songId);
+                                    });
+                                    if (song) {
+                                        console.log('[FIX-ALL] ✅ Canción encontrada, llamando selectSongForBattle...');
+                                        window.selectSongForBattle(song);
+                                    }
+                                }
+                            }
+                        }
+                    }, true); // Usar capture phase
+                    
+                    console.log('[FIX-ALL] ✅ Interceptor de clics en canciones activado');
+                }
+                
+                // Ejecutar correcciones cuando el DOM esté listo
+                if (document.readyState === 'loading') {
+                    document.addEventListener('DOMContentLoaded', function() {
+                        setTimeout(function() {
+                            fixCreateSocialBtn();
+                            ensureGreenBanner();
+                            interceptSongClicks();
+                        }, 500);
+                    });
+                } else {
+                    setTimeout(function() {
+                        fixCreateSocialBtn();
+                        ensureGreenBanner();
+                        interceptSongClicks();
+                    }, 500);
+                }
+                
+                // Observar cambios en el DOM para corregir el botón cuando se agregue
+                var observer = new MutationObserver(function(mutations) {
+                    mutations.forEach(function(mutation) {
+                        mutation.addedNodes.forEach(function(node) {
+                            if (node.nodeType === 1) {
+                                if (node.id === 'createSocialBtn' || (node.querySelector && node.querySelector('#createSocialBtn'))) {
+                                    setTimeout(fixCreateSocialBtn, 100);
+                                }
+                                if (node.id === 'selectedSongCard' || (node.querySelector && node.querySelector('#selectedSongCard'))) {
+                                    setTimeout(ensureGreenBanner, 100);
+                                }
+                            }
+                        });
+                    });
+                });
+                
+                observer.observe(document.body, {
+                    childList: true,
+                    subtree: true
+                });
+                
+                // CRÍTICO: Ejecutar correcciones periódicamente con verificación agresiva del title Y balance
+                setInterval(function() {
+                    fixCreateSocialBtn();
+                    ensureGreenBanner();
+                    
+                    // CRÍTICO: Limpiar title si tiene "100" de forma agresiva
+                    var btn = document.getElementById('createSocialBtn');
+                    if (btn) {
+                        var currentTitle = btn.getAttribute('title') || btn.title || '';
+                        
+                        // Si contiene "100" en cualquier forma, eliminarlo completamente
+                        if (currentTitle.includes('100')) {
+                            console.log('[FIX-ALL] ⚠️ Title con "100" detectado en intervalo:', currentTitle);
+                            btn.title = '';
+                            btn.removeAttribute('title');
+                            
+                            // También verificar el atributo directamente
+                            if (btn.getAttribute('title') && btn.getAttribute('title').includes('100')) {
+                                btn.removeAttribute('title');
+                            }
+                            
+                            console.log('[FIX-ALL] ✅ Title limpiado en intervalo');
+                        }
+                        
+                        // CRÍTICO: Si está en modo social, verificar balance y habilitar botón si tiene suficiente MTR on-chain
+                        if (window.currentMode === 'social') {
+                            var betInput = document.getElementById('betAmount');
+                            var bet = betInput ? parseFloat(betInput.value || '0') : 0;
+                            var onchainBalance = Number(window.__mtrOnChainBalance || 0);
+                            var credits = window.CreditsSystem ? (window.CreditsSystem.currentCredits || 0) : 0;
+                            var hasEnoughCredits = credits >= bet;
+                            var hasEnoughOnChain = onchainBalance >= bet;
+                            var canCover = bet >= 5 && (hasEnoughCredits || hasEnoughOnChain);
+                            var hasSong = !!window.selectedSong || !!selectedSong;
+                            
+                            // Forzar habilitación del botón si tiene suficiente balance
+                            if (canCover && hasSong && btn.disabled) {
+                                console.log('[FIX-ALL] 🔧 Forzando habilitación del botón - Bet:', bet, 'OnChain:', onchainBalance, 'Credits:', credits);
+                                btn.disabled = false;
+                            }
+                            
+                            // Limpiar title incorrecto
+                            var finalTitle = btn.getAttribute('title') || btn.title || '';
+                            if (finalTitle && finalTitle.includes('100')) {
+                                btn.title = '';
+                                btn.removeAttribute('title');
+                            }
+                            
+                            // Si el title dice "Créditos insuficientes" pero tiene suficiente on-chain, limpiarlo
+                            if (finalTitle && finalTitle.includes('insuficiente') && hasEnoughOnChain) {
+                                console.log('[FIX-ALL] 🔧 Limpiando title "insuficiente" porque tiene suficiente on-chain');
+                                btn.title = '';
+                                btn.removeAttribute('title');
+                            }
+                        }
+                    }
+                }, 50); // Ejecutar cada 50ms para ser más agresivo
+                
+                // CRÍTICO: Interceptar selectSongForBattle para asegurar que funcione correctamente
+                if (typeof window.selectSongForBattle === 'function') {
+                    var originalSelectSong = window.selectSongForBattle;
+                    window.selectSongForBattle = async function(song) {
+                        console.log('[FIX-ALL] 🎵 selectSongForBattle llamado con:', song);
+                        
+                        // Detener previews ANTES de seleccionar
+                        stopAllPreviewsFix();
+                        
+                        // Llamar función original
+                        try {
+                            var result = await originalSelectSong(song);
+                            
+                            // CRÍTICO: Asegurar que selectedSong y window.selectedSong estén actualizados
+                            if (song) {
+                                window.selectedSong = song;
+                                if (typeof selectedSong !== 'undefined') {
+                                    selectedSong = song;
+                                }
+                                console.log('[FIX-ALL] ✅ Canción seleccionada:', song.name || song.title);
+                            }
+                            
+                            // Asegurar banner verde después de un delay
+                            setTimeout(function() {
+                                ensureGreenBanner();
+                                
+                                // También actualizar el card si existe
+                                var card = document.getElementById('selectedSongCard');
+                                if (card && song) {
+                                    // Si el card está vacío o no tiene el banner, actualizarlo
+                                    var hasBanner = card.querySelector('[class*="green"], [id="selectedSongBanner"]');
+                                    if (!hasBanner && window.currentMode === 'social') {
+                                        ensureGreenBanner();
+                                    }
+                                }
+                                
+                                // CRÍTICO: Limpiar title del botón después de seleccionar canción
+                                var btn = document.getElementById('createSocialBtn');
+                                if (btn) {
+                                    var currentTitle = btn.getAttribute('title') || btn.title || '';
+                                    if (currentTitle.includes('100')) {
+                                        console.log('[FIX-ALL] ⚠️ Title con "100" detectado después de seleccionar canción');
+                                        btn.title = '';
+                                        btn.removeAttribute('title');
+                                    }
+                                }
+                            }, 100);
+                            
+                            return result;
+                        } catch (error) {
+                            console.error('[FIX-ALL] ❌ Error en selectSongForBattle:', error);
+                            throw error;
+                        }
+                    };
+                    console.log('[FIX-ALL] ✅ selectSongForBattle interceptado y mejorado');
+                } else {
+                    console.error('[FIX-ALL] ❌ window.selectSongForBattle no está definida');
+                }
+                
+                // CRÍTICO: Interceptar TODAS las formas de establecer el title del botón
+                function interceptTitleChanges() {
+                    var btn = document.getElementById('createSocialBtn');
+                    if (!btn) return;
+                    
+                    // Interceptar setAttribute
+                    var originalSetAttribute = btn.setAttribute.bind(btn);
+                    btn.setAttribute = function(name, value) {
+                        if (name === 'title' && value && typeof value === 'string' && value.includes('100')) {
+                            console.log('[FIX-ALL] ⚠️ setAttribute intentando establecer title con "100":', value);
+                            value = value.replace(/100/g, '5');
+                            console.log('[FIX-ALL] ✅ Corregido a:', value);
+                        }
+                        return originalSetAttribute(name, value);
+                    };
+                    
+                    // Interceptar removeAttribute también por si acaso
+                    var originalRemoveAttribute = btn.removeAttribute.bind(btn);
+                    btn.removeAttribute = function(name) {
+                        if (name === 'title') {
+                            console.log('[FIX-ALL] removeAttribute llamado en title');
+                        }
+                        return originalRemoveAttribute(name);
+                    };
+                    
+                    console.log('[FIX-ALL] ✅ Interceptores de setAttribute/removeAttribute activados');
+                }
+                
+                // Ejecutar interceptores cuando el botón esté disponible
+                setTimeout(interceptTitleChanges, 100);
+                setTimeout(interceptTitleChanges, 500);
+                setTimeout(interceptTitleChanges, 1000);
+                
+                // Observar cuando se agrega el botón al DOM
+                var btnObserver = new MutationObserver(function(mutations) {
+                    mutations.forEach(function(mutation) {
+                        mutation.addedNodes.forEach(function(node) {
+                            if (node.nodeType === 1 && (node.id === 'createSocialBtn' || (node.querySelector && node.querySelector('#createSocialBtn')))) {
+                                setTimeout(interceptTitleChanges, 50);
+                            }
+                        });
+                    });
+                });
+                
+                btnObserver.observe(document.body, {
+                    childList: true,
+                    subtree: true
+                });
+                
+                console.log('[FIX-ALL] ✅ Script de corrección completa activado');
+            })();
+            
             var mobileCheckInterval = setInterval(async function() {
                 if (window.ethereum && !connectedAddress) {
                     console.log('[wallet] 📱 Verificando conexión en móvil...');
@@ -4010,5 +6342,136 @@
         }, 500);
     </script>
 
+    <!-- SCRIPT FINAL DE VERIFICACIÓN Y CORRECCIÓN - Se ejecuta después de todo -->
+    <script>
+        // CRÍTICO: Script que se ejecuta DESPUÉS de que todos los scripts se hayan cargado
+        (function() {
+            console.log('========================================');
+            console.log('🔍 VERIFICACIÓN FINAL DE FUNCIONES');
+            console.log('========================================');
+            
+            // Función para restaurar updateBetEligibility si falta
+            function restoreUpdateBetEligibility() {
+                // Intentar usar la función de restauración global si existe
+                if (typeof window._restoreUpdateBetEligibility === 'function') {
+                    console.log('[RESTORE] Usando función de restauración global...');
+                    window._restoreUpdateBetEligibility();
+                    return;
+                }
+                
+                // Si no existe, intentar recrear una versión básica
+                if (typeof window.updateBetEligibility === 'undefined') {
+                    console.warn('[RESTORE] ⚠️ Creando versión básica de updateBetEligibility...');
+                    window.updateBetEligibility = function() {
+                        console.log('[updateBetEligibility-BASIC] ⚡ Versión básica ejecutándose');
+                        var btn = document.getElementById('createSocialBtn');
+                        if (btn && window.currentMode === 'social') {
+                            var betInput = document.getElementById('betAmount');
+                            var bet = betInput ? parseFloat(betInput.value || '0') : 0;
+                            var onchainBalance = Number(window.__mtrOnChainBalance || 0);
+                            var credits = window.CreditsSystem ? (window.CreditsSystem.currentCredits || 0) : 0;
+                            var canCover = bet >= 5 && (credits >= bet || onchainBalance >= bet);
+                            var hasSong = !!window.selectedSong;
+                            btn.disabled = !canCover || !hasSong;
+                            
+                            // Limpiar tooltip "100 créditos"
+                            var title = btn.getAttribute('title') || btn.title || '';
+                            if (title.includes('100')) {
+                                btn.title = '';
+                                btn.removeAttribute('title');
+                            }
+                        }
+                    };
+                    console.log('[RESTORE] ✅ Versión básica creada');
+                }
+            }
+            
+            // Esperar a que el DOM y todos los scripts estén listos
+            function verifyFunctions() {
+                console.log('[VERIFY-FINAL] Verificando funciones globales...');
+                
+                var allOk = true;
+                
+                // Verificar updateBetEligibility
+                if (typeof window.updateBetEligibility === 'function') {
+                    console.log('[VERIFY-FINAL] ✅ updateBetEligibility: FUNCIÓN');
+                    console.log('[VERIFY-FINAL] ✅ Nombre:', window.updateBetEligibility.name);
+                } else {
+                    console.error('[VERIFY-FINAL] ❌❌❌ updateBetEligibility: UNDEFINED ❌❌❌');
+                    console.error('[VERIFY-FINAL] Tipo:', typeof window.updateBetEligibility);
+                    console.error('[VERIFY-FINAL] Valor:', window.updateBetEligibility);
+                    allOk = false;
+                    
+                    // Intentar restaurar de múltiples formas
+                    console.log('[VERIFY-FINAL] 🔧 Intentando restaurar updateBetEligibility...');
+                    
+                    // Método 1: Usar función de restauración global si existe
+                    if (typeof window._restoreUpdateBetEligibility === 'function') {
+                        console.log('[VERIFY-FINAL] Método 1: Usando _restoreUpdateBetEligibility...');
+                        window._restoreUpdateBetEligibility();
+                    }
+                    
+                    // Método 2: Llamar función de restauración local
+                    restoreUpdateBetEligibility();
+                    
+                    // Método 3: Verificar si ahora está disponible después de restaurar
+                    setTimeout(function() {
+                        if (typeof window.updateBetEligibility === 'function') {
+                            console.log('[VERIFY-FINAL] ✅ Restauración exitosa después de delay');
+                        } else {
+                            console.error('[VERIFY-FINAL] ❌ Restauración falló, función aún no disponible');
+                        }
+                    }, 500);
+                }
+                
+                // Verificar createSocialChallenge
+                if (typeof window.createSocialChallenge === 'function') {
+                    console.log('[VERIFY-FINAL] ✅ createSocialChallenge: FUNCIÓN');
+                } else {
+                    console.error('[VERIFY-FINAL] ❌ createSocialChallenge: UNDEFINED');
+                    allOk = false;
+                }
+                
+                // Verificar selectSongForBattle
+                if (typeof window.selectSongForBattle === 'function') {
+                    console.log('[VERIFY-FINAL] ✅ selectSongForBattle: FUNCIÓN');
+                } else {
+                    console.error('[VERIFY-FINAL] ❌ selectSongForBattle: UNDEFINED');
+                    allOk = false;
+                }
+                
+                // Verificar stopAllPreviews
+                if (typeof window.stopAllPreviews === 'function') {
+                    console.log('[VERIFY-FINAL] ✅ stopAllPreviews: FUNCIÓN');
+                } else {
+                    console.warn('[VERIFY-FINAL] ⚠️ stopAllPreviews: UNDEFINED (puede estar en app.js)');
+                }
+                
+                console.log('========================================');
+                if (allOk) {
+                    console.log('[VERIFY-FINAL] ✅✅✅ TODAS LAS FUNCIONES CRÍTICAS ESTÁN DISPONIBLES ✅✅✅');
+                } else {
+                    console.error('[VERIFY-FINAL] ❌❌❌ ALGUNAS FUNCIONES CRÍTICAS FALTAN ❌❌❌');
+                    console.error('[VERIFY-FINAL] Esto puede causar problemas. Recarga la página.');
+                    console.error('[VERIFY-FINAL] Si el problema persiste, revisa la consola para errores de JavaScript.');
+                }
+                console.log('========================================');
+            }
+            
+            // Ejecutar inmediatamente si el DOM ya está listo
+            if (document.readyState === 'complete' || document.readyState === 'interactive') {
+                setTimeout(verifyFunctions, 1000);
+            } else {
+                window.addEventListener('load', function() {
+                    setTimeout(verifyFunctions, 1000);
+                });
+            }
+            
+            // También ejecutar después de delays adicionales para asegurar que todos los scripts se hayan ejecutado
+            setTimeout(verifyFunctions, 2000);
+            setTimeout(verifyFunctions, 3000);
+            setTimeout(verifyFunctions, 5000);
+        })();
+    </script>
 </body>
 </html>
