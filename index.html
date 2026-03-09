@@ -2477,6 +2477,11 @@
 
         window.showIncomingChallenge = showIncomingChallenge;
         window.verifyPurchasedMtrTx = verifyPurchasedMtrTx;
+        // Asegurar que createSocialChallenge esté disponible globalmente
+        if (typeof createSocialChallenge === 'function') {
+            window.createSocialChallenge = createSocialChallenge;
+            console.log('[ASSIGN] ✅ createSocialChallenge asignada a window');
+        }
         // Solo asignar updateBetEligibility si está definida localmente, sino mantener la función global temprana
         if (typeof updateBetEligibility === 'function') {
             window.updateBetEligibility = updateBetEligibility;
