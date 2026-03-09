@@ -20,11 +20,8 @@
          */
         async init(walletAddress) {
             if (!walletAddress) {
-                console.warn('[credits-system] No wallet address provided');
                 return;
             }
-
-            console.log('[credits-system] Initializing for wallet:', walletAddress);
             
             // Load initial balance
             await this.loadBalance(walletAddress);
@@ -46,20 +43,11 @@
 
                 const data = await response.json();
                 
-                console.log('[credits-system] Raw response from backend:', data);
-                
                 this.currentCredits = data.credits || 0;
                 // NUEVO: 1 crédito = 1 USDC fijo siempre
                 this.currentUsdcValue = this.currentCredits; // 1:1 fijo
                 this.currentRate = null; // Ya no se usa rate variable
                 this.currentMtrPrice = null; // Ya no relevante para créditos
-
-                console.log('[credits-system] Balance loaded (créditos estables):', {
-                    credits: this.currentCredits,
-                    usdcValue: this.currentUsdcValue,
-                    rawData: data,
-                    note: '1 crédito = 1 USDC fijo'
-                });
 
                 // Update UI - Asegurar que se actualice después de cargar
                 this.updateCreditsDisplay();
@@ -67,7 +55,6 @@
                 // Forzar actualización adicional después de un pequeño delay para asegurar que el DOM esté listo
                 setTimeout(() => {
                     this.updateCreditsDisplay();
-                    console.log('[credits-system] UI actualizada forzadamente después de cargar balance');
                 }, 100);
 
             } catch (error) {
@@ -82,7 +69,7 @@
          * Update credits display in UI
          */
         updateCreditsDisplay() {
-            console.log('[credits-system] updateCreditsDisplay called, currentCredits:', this.currentCredits);
+            // SIN LOGS - Esta función se ejecuta frecuentemente
             
             // Update combined display FIRST (this contains the child elements)
             const combinedDisplay = document.getElementById('creditsCombinedDisplay');
@@ -100,23 +87,17 @@
                     combinedDisplay.classList.add('sm:inline');
                 }
                 
-                console.log('[credits-system] Updated creditsCombinedDisplay, visible:', !combinedDisplay.classList.contains('hidden'), 'credits:', this.currentCredits);
-                
                 // Ahora actualizar los elementos individuales si existen (pueden estar en otros lugares)
                 const creditsBadge = document.getElementById('creditsDisplay');
                 if (creditsBadge && creditsBadge !== combinedDisplay.querySelector('#creditsDisplay')) {
                     creditsBadge.textContent = `${this.currentCredits.toFixed(2)} créditos`;
-                    console.log('[credits-system] Updated standalone creditsDisplay:', creditsBadge.textContent);
                 }
 
                 const usdcDisplay = document.getElementById('usdcValueDisplay');
                 if (usdcDisplay && usdcDisplay !== combinedDisplay.querySelector('#usdcValueDisplay')) {
                     usdcDisplay.textContent = `= $${this.currentUsdcValue.toFixed(2)} USDC`;
-                    console.log('[credits-system] Updated standalone usdcValueDisplay:', usdcDisplay.textContent);
                 }
             } else {
-                console.warn('[credits-system] creditsCombinedDisplay element not found');
-                
                 // Fallback: intentar actualizar elementos individuales si existen
                 const creditsBadge = document.getElementById('creditsDisplay');
                 if (creditsBadge) {
