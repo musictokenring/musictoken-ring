@@ -2467,7 +2467,14 @@
 
         window.showIncomingChallenge = showIncomingChallenge;
         window.verifyPurchasedMtrTx = verifyPurchasedMtrTx;
-        window.updateBetEligibility = updateBetEligibility;
+        // Solo asignar updateBetEligibility si está definida localmente, sino mantener la función global temprana
+        if (typeof updateBetEligibility === 'function') {
+            window.updateBetEligibility = updateBetEligibility;
+            console.log('[ASSIGN] ✅ updateBetEligibility local asignada a window');
+        } else {
+            console.warn('[ASSIGN] ⚠️ updateBetEligibility local no está definida, manteniendo función global temprana');
+            console.log('[ASSIGN] Tipo de window.updateBetEligibility:', typeof window.updateBetEligibility);
+        }
         // selectSongForBattle ya está asignado arriba directamente a window
     </script>
 
