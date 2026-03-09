@@ -12,30 +12,40 @@
     <!-- Script INMEDIATO - Primera línea ejecutable del documento - SIN BLOQUEOS -->
     <script>
         (function() {
-            // DESHABILITAR LOGS EXCESIVOS EN PRODUCCIÓN - MÁS AGRESIVO
+            // DESHABILITAR LOGS EXCESIVOS EN PRODUCCIÓN - PERMITIR LOGS DE INICIALIZACIÓN
             var originalLog = console.log;
             var originalInfo = console.info;
             var originalWarn = console.warn;
             var logCount = 0;
-            var maxLogs = 20; // Máximo de logs permitidos (muy restrictivo)
+            var maxLogs = 50; // Máximo de logs permitidos
             var logsEnabled = true;
+            var initializationPhase = true; // Fase de inicialización
+            var initializationTimeout = setTimeout(function() {
+                initializationPhase = false;
+            }, 5000); // Después de 5 segundos, entrar en modo restrictivo
             
             console.log = function() {
-                if (!logsEnabled) return; // Si está deshabilitado, no hacer nada
+                if (!logsEnabled) return;
                 
                 logCount++;
+                
+                // Durante la fase de inicialización, permitir más logs
+                if (initializationPhase && logCount <= 30) {
+                    originalLog.apply(console, arguments);
+                    return;
+                }
+                
                 if (logCount > maxLogs) {
-                    // Después de maxLogs, deshabilitar completamente
                     logsEnabled = false;
                     originalWarn('⚠️ Logs deshabilitados para prevenir loops infinitos. Solo se mostrarán errores críticos.');
                     return;
                 }
                 
-                // Solo permitir logs críticos (errores)
+                // Después de inicialización, solo permitir logs críticos
                 var args = Array.from(arguments);
                 var message = String(args.join(' ')).toUpperCase();
-                // Permitir solo logs de errores críticos
-                if (message.includes('❌') || message.includes('ERROR') || message.includes('CRITICAL')) {
+                if (message.includes('❌') || message.includes('ERROR') || message.includes('CRITICAL') || 
+                    message.includes('✅') || message.includes('DEFINIDO') || message.includes('INIT')) {
                     originalLog.apply(console, arguments);
                 }
             };
@@ -43,9 +53,6 @@
             console.info = function() {
                 // Silenciar console.info completamente
             };
-            
-            // Mantener console.error y console.warn para errores críticos
-            // console.error y console.warn no se modifican
             
             var logPrefix = '[INMEDIATE]';
             // Logs iniciales solo una vez - comentados para reducir ruido
@@ -163,10 +170,10 @@
                 }
             }, 500); // Verificar cada 500ms (menos frecuente para reducir carga)
             
-            // Verificación adicional comentada para reducir ruido
-            // setTimeout(function() {
-            //     console.log(logPrefix, '⏰ Verificación después de 100ms:', typeof window.updateBetEligibility);
-            // }, 100);
+            // Verificación adicional después de un pequeño delay
+            setTimeout(function() {
+                originalLog(logPrefix, '⏰ Verificación después de 100ms:', typeof window.updateBetEligibility);
+            }, 100);
         })();
     </script>
 
@@ -2856,13 +2863,20 @@
 
         window.showIncomingChallenge = showIncomingChallenge;
         window.verifyPurchasedMtrTx = verifyPurchasedMtrTx;
-        // Asegurar que createSocialChallenge esté disponible globalmente - SIN LOGS
+        // Asegurar que createSocialChallenge esté disponible globalmente
         if (typeof createSocialChallenge === 'function') {
             window.createSocialChallenge = createSocialChallenge;
+            originalLog('[ASSIGN] ✅ createSocialChallenge asignada a window');
+        } else {
+            originalWarn('[ASSIGN] ⚠️ createSocialChallenge local no está definida');
         }
         // Solo asignar updateBetEligibility si está definida localmente, sino mantener la función global temprana
         if (typeof updateBetEligibility === 'function') {
             window.updateBetEligibility = updateBetEligibility;
+            originalLog('[ASSIGN] ✅ updateBetEligibility local asignada a window');
+        } else {
+            originalWarn('[ASSIGN] ⚠️ updateBetEligibility local no está definida, manteniendo función global temprana');
+            originalLog('[ASSIGN] Tipo de window.updateBetEligibility:', typeof window.updateBetEligibility);
         }
         // selectSongForBattle ya está asignado arriba directamente a window
         
