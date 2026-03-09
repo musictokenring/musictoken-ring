@@ -15,7 +15,8 @@
             
             if (walletAddress && window.CreditsSystem) {
                 clearInterval(checkWallet);
-                console.log('[wallet-credits] Wallet connected, initializing credits system');
+                // Log comentado para reducir ruido
+                // console.log('[wallet-credits] Wallet connected, initializing credits system');
                 window.CreditsSystem.init(walletAddress);
             }
         }, 1000);
@@ -40,5 +41,6 @@
         });
     }
 
-    console.log('[wallet-credits] Integration module loaded');
+    // Log comentado para reducir ruido
+    // console.log('[wallet-credits] Integration module loaded');
 })();
