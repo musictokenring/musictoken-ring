@@ -12,29 +12,40 @@
     <!-- Script INMEDIATO - Primera línea ejecutable del documento - SIN BLOQUEOS -->
     <script>
         (function() {
-            // DESHABILITAR LOGS EXCESIVOS EN PRODUCCIÓN
+            // DESHABILITAR LOGS EXCESIVOS EN PRODUCCIÓN - MÁS AGRESIVO
             var originalLog = console.log;
             var originalInfo = console.info;
+            var originalWarn = console.warn;
             var logCount = 0;
-            var maxLogs = 50; // Máximo de logs permitidos
+            var maxLogs = 20; // Máximo de logs permitidos (muy restrictivo)
+            var logsEnabled = true;
             
             console.log = function() {
+                if (!logsEnabled) return; // Si está deshabilitado, no hacer nada
+                
                 logCount++;
-                if (logCount <= maxLogs) {
-                    // Solo permitir logs críticos (errores, warnings importantes)
-                    var args = Array.from(arguments);
-                    var message = args.join(' ');
-                    // Permitir solo logs de errores críticos
-                    if (message.includes('❌') || message.includes('ERROR') || message.includes('Error')) {
-                        originalLog.apply(console, arguments);
-                    }
+                if (logCount > maxLogs) {
+                    // Después de maxLogs, deshabilitar completamente
+                    logsEnabled = false;
+                    originalWarn('⚠️ Logs deshabilitados para prevenir loops infinitos. Solo se mostrarán errores críticos.');
+                    return;
                 }
-                // Después de maxLogs, silenciar completamente
+                
+                // Solo permitir logs críticos (errores)
+                var args = Array.from(arguments);
+                var message = String(args.join(' ')).toUpperCase();
+                // Permitir solo logs de errores críticos
+                if (message.includes('❌') || message.includes('ERROR') || message.includes('CRITICAL')) {
+                    originalLog.apply(console, arguments);
+                }
             };
             
             console.info = function() {
                 // Silenciar console.info completamente
             };
+            
+            // Mantener console.error y console.warn para errores críticos
+            // console.error y console.warn no se modifican
             
             var logPrefix = '[INMEDIATE]';
             // Logs iniciales solo una vez - comentados para reducir ruido
