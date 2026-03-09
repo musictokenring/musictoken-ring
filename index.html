@@ -13,9 +13,8 @@
     <script>
         (function() {
             var logPrefix = '[INMEDIATE]';
-            console.log(logPrefix, '🔥 Script INMEDIATO ejecutándose AHORA');
-            console.log(logPrefix, 'Timestamp:', Date.now());
-            console.log(logPrefix, 'Window object:', typeof window);
+            // Logs iniciales solo una vez - comentados para reducir ruido
+            // console.log(logPrefix, '🔥 Script INMEDIATO ejecutándose AHORA');
             
             // Definir stopAllPreviews temprano como fallback
             window.stopAllPreviews = window.stopAllPreviews || function() {
@@ -58,9 +57,8 @@
                 }
             };
             
-            console.log(logPrefix, '✅ updateBetEligibility DEFINIDO INMEDIATAMENTE');
-            console.log(logPrefix, 'Tipo:', typeof window.updateBetEligibility);
-            console.log(logPrefix, 'Verificación:', typeof window.updateBetEligibility === 'function');
+            // Logs de verificación comentados para reducir ruido
+            // console.log(logPrefix, '✅ updateBetEligibility DEFINIDO INMEDIATAMENTE');
             
             // INTERCEPTAR setAttribute y title para eliminar "100 créditos" inmediatamente
             (function() {
@@ -130,10 +128,10 @@
                 }
             }, 500); // Verificar cada 500ms (menos frecuente para reducir carga)
             
-            // Verificación adicional después de un pequeño delay
-            setTimeout(function() {
-                console.log(logPrefix, '⏰ Verificación después de 100ms:', typeof window.updateBetEligibility);
-            }, 100);
+            // Verificación adicional comentada para reducir ruido
+            // setTimeout(function() {
+            //     console.log(logPrefix, '⏰ Verificación después de 100ms:', typeof window.updateBetEligibility);
+            // }, 100);
         })();
     </script>
 
@@ -2730,20 +2728,13 @@
 
         window.showIncomingChallenge = showIncomingChallenge;
         window.verifyPurchasedMtrTx = verifyPurchasedMtrTx;
-        // Asegurar que createSocialChallenge esté disponible globalmente
+        // Asegurar que createSocialChallenge esté disponible globalmente - SIN LOGS
         if (typeof createSocialChallenge === 'function') {
             window.createSocialChallenge = createSocialChallenge;
-            console.log('[ASSIGN] ✅ createSocialChallenge asignada a window');
-        } else {
-            console.warn('[ASSIGN] ⚠️ createSocialChallenge local no está definida');
         }
         // Solo asignar updateBetEligibility si está definida localmente, sino mantener la función global temprana
         if (typeof updateBetEligibility === 'function') {
             window.updateBetEligibility = updateBetEligibility;
-            console.log('[ASSIGN] ✅ updateBetEligibility local asignada a window');
-        } else {
-            console.warn('[ASSIGN] ⚠️ updateBetEligibility local no está definida, manteniendo función global temprana');
-            console.log('[ASSIGN] Tipo de window.updateBetEligibility:', typeof window.updateBetEligibility);
         }
         // selectSongForBattle ya está asignado arriba directamente a window
         
