@@ -26,7 +26,8 @@
 // (La lógica de juego está en game-engine.js)
 // =========================================
 
-console.log('🥊 MusicToken Ring ready!');
+// Log comentado para reducir ruido
+// console.log('🥊 MusicToken Ring ready!');
 
 // =========================================
 // TOAST NOTIFICATION SYSTEM

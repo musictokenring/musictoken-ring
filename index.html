@@ -1801,7 +1801,8 @@
         async function loadPublicVaultBalance() {
             try {
                 const backendUrl = window.CONFIG?.BACKEND_API || 'https://musictoken-ring.onrender.com';
-                console.log('[vault] Loading vault balance from:', backendUrl);
+                // Logs comentados para reducir ruido - esta función se ejecuta cada 60 segundos
+                // console.log('[vault] Loading vault balance from:', backendUrl);
                 
                 const response = await fetch(`${backendUrl}/api/vault/balance`, {
                     method: 'GET',
@@ -1810,11 +1811,11 @@
                     }
                 });
                 
-                console.log('[vault] Response status:', response.status);
+                // console.log('[vault] Response status:', response.status);
                 
                 if (response.ok) {
                     const data = await response.json();
-                    console.log('[vault] Vault data received:', data);
+                    // console.log('[vault] Vault data received:', data);
                     
                     const balance = data.balance || 0;
                     const vaultAddress = data.vaultAddress;
