@@ -141,14 +141,16 @@ const GameEngine = {
             if (this.practiceDemoBalance <= 0) {
                 this.practiceDemoBalance = this.practiceDemoInitialBalance;
                 localStorage.setItem('mtr_practice_demo_balance', String(this.practiceDemoBalance));
-                console.log('[practice] Demo balance reset to', this.practiceDemoBalance);
+                // Log comentado para reducir ruido
+                // console.log('[practice] Demo balance reset to', this.practiceDemoBalance);
             }
             
             // Actualizar UI para modo práctica - FORZAR actualización
             if (labelEl) {
                 labelEl.textContent = 'Saldo demo (práctica)';
                 labelEl.style.color = '#8b5cf6'; // Color púrpura para práctica
-                console.log('[updatePracticeBetDisplay] Label actualizado a "Saldo demo (práctica)"');
+                // Log comentado para reducir ruido
+                // console.log('[updatePracticeBetDisplay] Label actualizado a "Saldo demo (práctica)"');
             } else {
                 console.error('[updatePracticeBetDisplay] balanceLabel no encontrado en el DOM');
             }
@@ -162,7 +164,8 @@ const GameEngine = {
                     if (playableLabelEl.textContent !== 'Saldo demo') {
                         playableLabelEl.textContent = 'Saldo demo';
                         playableLabelEl.style.color = '#8b5cf6';
-                        console.log('[updatePracticeBetDisplay] ✅ playableLabel actualizado a "Saldo demo" (era: "' + playableLabelEl.textContent + '")');
+                        // Log comentado para reducir ruido
+                        // console.log('[updatePracticeBetDisplay] ✅ playableLabel actualizado a "Saldo demo"');
                     }
                     return true;
                 }
@@ -184,7 +187,8 @@ const GameEngine = {
                     if (balanceUnitEl.textContent !== 'MTR (demo)') {
                         balanceUnitEl.textContent = 'MTR (demo)';
                         balanceUnitEl.style.color = '#8b5cf6';
-                        console.log('[updatePracticeBetDisplay] ✅ balanceUnit actualizado a "MTR (demo)"');
+                        // Log comentado para reducir ruido
+                        // console.log('[updatePracticeBetDisplay] ✅ balanceUnit actualizado a "MTR (demo)"');
                     }
                     return true;
                 }
@@ -208,12 +212,14 @@ const GameEngine = {
                             
                             if (isInPracticeSection) {
                                 if (playableLabelEl && playableLabelEl.textContent === 'Jugable') {
-                                    console.log('[MutationObserver] Detectado cambio a "Jugable", corrigiendo a "Saldo demo"');
+                                    // Log comentado para reducir ruido
+                                    // console.log('[MutationObserver] Detectado cambio a "Jugable", corrigiendo a "Saldo demo"');
                                     playableLabelEl.textContent = 'Saldo demo';
                                     playableLabelEl.style.color = '#8b5cf6';
                                 }
                                 if (balanceUnitEl && balanceUnitEl.textContent === 'MTR' && balanceUnitEl.textContent !== 'MTR (demo)') {
-                                    console.log('[MutationObserver] Detectado cambio a "MTR", corrigiendo a "MTR (demo)"');
+                                    // Log comentado para reducir ruido
+                                    // console.log('[MutationObserver] Detectado cambio a "MTR", corrigiendo a "MTR (demo)"');
                                     balanceUnitEl.textContent = 'MTR (demo)';
                                     balanceUnitEl.style.color = '#8b5cf6';
                                 }
@@ -230,7 +236,8 @@ const GameEngine = {
                         subtree: true,
                         characterData: true
                     });
-                    console.log('[updatePracticeBetDisplay] MutationObserver configurado para observar cambios');
+                    // Log comentado para reducir ruido
+                    // console.log('[updatePracticeBetDisplay] MutationObserver configurado para observar cambios');
                 }
             }
             
@@ -239,7 +246,8 @@ const GameEngine = {
             if (valueEl) {
                 valueEl.textContent = formattedBalance;
                 valueEl.style.color = '#8b5cf6';
-                console.log('[updatePracticeBetDisplay] userBalance actualizado a', formattedBalance);
+                // Log comentado para reducir ruido
+                // console.log('[updatePracticeBetDisplay] userBalance actualizado a', formattedBalance);
             } else {
                 console.error('[updatePracticeBetDisplay] userBalance no encontrado en el DOM');
             }
@@ -247,7 +255,8 @@ const GameEngine = {
             if (onchainEl) {
                 onchainEl.textContent = formattedBalance;
                 onchainEl.style.color = '#8b5cf6';
-                console.log('[updatePracticeBetDisplay] onchainMtrBalance actualizado a', formattedBalance);
+                // Log comentado para reducir ruido
+                // console.log('[updatePracticeBetDisplay] onchainMtrBalance actualizado a', formattedBalance);
             } else {
                 console.error('[updatePracticeBetDisplay] onchainMtrBalance no encontrado en el DOM');
             }
@@ -260,7 +269,8 @@ const GameEngine = {
                 const onChainBalance = Number(window.__mtrOnChainBalance || 0);
                 appBalanceDisplay.textContent = `Jugable: ${onChainBalance.toLocaleString('es-ES')} MTR`;
                 appBalanceDisplay.style.color = '';
-                console.log('[updatePracticeBetDisplay] Header actualizado con balance real:', onChainBalance, '(NO balance de práctica)');
+                // Log comentado para reducir ruido
+                // console.log('[updatePracticeBetDisplay] Header actualizado con balance real:', onChainBalance);
             }
             
         } else {
@@ -275,7 +285,8 @@ const GameEngine = {
             if (playableLabelEl && playableLabelEl.textContent !== 'Jugable') {
                 playableLabelEl.textContent = 'Jugable';
                 playableLabelEl.style.color = '';
-                console.log('[updatePracticeBetDisplay] playableLabel restaurado a "Jugable"');
+                // Log comentado para reducir ruido
+                // console.log('[updatePracticeBetDisplay] playableLabel restaurado a "Jugable"');
             }
             
             // Restaurar el texto "MTR" normal en modo normal
@@ -283,14 +294,16 @@ const GameEngine = {
             if (balanceUnitEl && balanceUnitEl.textContent !== 'MTR') {
                 balanceUnitEl.textContent = 'MTR';
                 balanceUnitEl.style.color = '';
-                console.log('[updatePracticeBetDisplay] balanceUnit restaurado a "MTR"');
+                // Log comentado para reducir ruido
+                // console.log('[updatePracticeBetDisplay] balanceUnit restaurado a "MTR"');
             }
             
             // Desconectar el observer si existe
             if (this.practiceLabelObserver) {
                 this.practiceLabelObserver.disconnect();
                 this.practiceLabelObserver = null;
-                console.log('[updatePracticeBetDisplay] MutationObserver desconectado (modo normal)');
+                // Log comentado para reducir ruido
+                // console.log('[updatePracticeBetDisplay] MutationObserver desconectado (modo normal)');
             }
             
             const onChainBalance = Number(window.__mtrOnChainBalance || 0);
