@@ -2522,16 +2522,12 @@
         
         // Asegurar que startPractice esté disponible globalmente
         window.startPractice = startPractice;
-        console.log('[INIT] ✅ window.startPractice definida globalmente');
+        // Log comentado para reducir ruido
+        // console.log('[INIT] ✅ window.startPractice definida globalmente');
 
         async function createSocialChallenge() {
-            console.log('[createSocialChallenge] ✅ Función llamada');
-            console.log('[createSocialChallenge] Estado:', {
-                selectedSong: !!selectedSong,
-                selectedSongData: selectedSong,
-                GameEngine: typeof GameEngine !== 'undefined',
-                betAmount: document.getElementById('betAmount')?.value
-            });
+            // Logs comentados para reducir ruido - solo mantener errores críticos
+            // console.log('[createSocialChallenge] ✅ Función llamada');
             
             if (!selectedSong) { 
                 console.error('[createSocialChallenge] ❌ No hay canción seleccionada');
@@ -2561,31 +2557,22 @@
             var onchainBalance = Number(window.__mtrOnChainBalance || 0);
             var canCover = credits >= bet || onchainBalance >= bet;
             
-            console.log('[createSocialChallenge] Verificación de saldo:', {
-                credits: credits,
-                onchainBalance: onchainBalance,
-                bet: bet,
-                canCover: canCover
-            });
+            // console.log('[createSocialChallenge] Verificación de saldo:', {...});
             
             if (!canCover) {
-                console.error('[createSocialChallenge] ❌ Saldo insuficiente');
                 showToast(`Créditos insuficientes. Disponibles: ${credits.toFixed(2)} créditos, ${onchainBalance.toLocaleString('es-ES')} MTR on-chain`, 'error');
                 return;
             }
             
             if (typeof GameEngine === 'undefined') {
-                console.error('[createSocialChallenge] ❌ GameEngine no está cargado');
                 showToast('GameEngine no está cargado', 'error');
                 return;
             }
             
-            console.log('[createSocialChallenge] ✅ Llamando a GameEngine.createSocialChallenge...');
             try {
                 await GameEngine.createSocialChallenge(selectedSong, bet);
-                console.log('[createSocialChallenge] ✅ Desafío creado exitosamente');
             } catch(error) {
-                console.error('[createSocialChallenge] ❌ Error al crear desafío:', error);
+                console.error('[createSocialChallenge] ❌ Error crítico:', error);
                 showToast('Error al crear desafío: ' + (error.message || 'Error desconocido'), 'error');
             }
         }
@@ -2710,7 +2697,8 @@
         var betAmountInput = document.getElementById('betAmount');
         if (betAmountInput) {
             betAmountInput.addEventListener('input', function() {
-                console.log('[betAmount] Input event - valor:', betAmountInput.value);
+                // Log comentado - este evento se dispara frecuentemente
+                // console.log('[betAmount] Input event - valor:', betAmountInput.value);
                 if (typeof updateBetEligibility === 'function') {
                     updateBetEligibility();
                 } else if (typeof window.updateBetEligibility === 'function') {
@@ -2718,7 +2706,8 @@
                 }
             });
             betAmountInput.addEventListener('change', function() {
-                console.log('[betAmount] Change event - valor:', betAmountInput.value);
+                // Log comentado - este evento se dispara frecuentemente
+                // console.log('[betAmount] Change event - valor:', betAmountInput.value);
                 if (typeof updateBetEligibility === 'function') {
                     updateBetEligibility();
                 } else if (typeof window.updateBetEligibility === 'function') {
