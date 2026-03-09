@@ -17,6 +17,20 @@
             console.log(logPrefix, 'Timestamp:', Date.now());
             console.log(logPrefix, 'Window object:', typeof window);
             
+            // Definir stopAllPreviews temprano como fallback
+            window.stopAllPreviews = window.stopAllPreviews || function() {
+                try {
+                    var audioElements = document.querySelectorAll('audio');
+                    audioElements.forEach(function(audio) {
+                        audio.pause();
+                        audio.currentTime = 0;
+                    });
+                    console.log(logPrefix, '🛑 Previews detenidos (fallback)');
+                } catch(e) {
+                    console.warn(logPrefix, '⚠️ Error al detener previews:', e);
+                }
+            };
+            
             window.updateBetEligibility = function() {
                 console.log(logPrefix, 'updateBetEligibility ejecutado');
                 var btn = document.getElementById('createSocialBtn');
