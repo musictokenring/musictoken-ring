@@ -55,8 +55,11 @@
             };
             
             var logPrefix = '[INMEDIATE]';
-            // Logs iniciales solo una vez - comentados para reducir ruido
-            // console.log(logPrefix, '🔥 Script INMEDIATO ejecutándose AHORA');
+            // Hacer originalLog disponible globalmente para otros scripts
+            window.__originalLog = originalLog;
+            window.__originalWarn = originalWarn;
+            // Logs iniciales solo una vez
+            originalLog(logPrefix, '🔥 Script INMEDIATO ejecutándose AHORA');
             
             // Definir stopAllPreviews temprano como fallback
             window.stopAllPreviews = window.stopAllPreviews || function() {
@@ -102,6 +105,8 @@
             // Logs de verificación - usar originalLog para evitar limitador
             originalLog(logPrefix, '✅ updateBetEligibility DEFINIDO INMEDIATAMENTE');
             originalLog(logPrefix, 'Tipo:', typeof window.updateBetEligibility);
+            // Hacer disponible globalmente para verificación
+            window.__updateBetEligibilityDefined = true;
             
             // INTERCEPTAR setAttribute y title para eliminar "100 créditos" inmediatamente
             (function() {
@@ -1081,11 +1086,8 @@
     <script>
         // ESTA FUNCIÓN DEBE ESTAR DISPONIBLE ANTES DE QUE app.js SE CARGUE
         // Usar originalLog para logs de inicialización importantes
-        if (typeof originalLog !== 'undefined') {
-            originalLog('[PRE-INIT] Definiendo selectSongForBattle...');
-        } else {
-            console.log('[PRE-INIT] Definiendo selectSongForBattle...');
-        }
+        var logFn = window.__originalLog || console.log;
+        logFn('[PRE-INIT] Definiendo selectSongForBattle...');
         // Definir selectSongForBattle INMEDIATAMENTE antes de que app.js se cargue
         (function() {
             var selectedSong = null;
@@ -1095,11 +1097,8 @@
             window.selectSongForBattle = async function selectSongForBattle(song) {
                 try {
                     // Log importante - usar originalLog si está disponible
-                    if (typeof originalLog !== 'undefined') {
-                        originalLog('[selectSongForBattle] ✅ FUNCIÓN LLAMADA con:', song);
-                    } else {
-                        console.log('[selectSongForBattle] ✅ FUNCIÓN LLAMADA con:', song);
-                    }
+                    var logFn = window.__originalLog || console.log;
+                    logFn('[selectSongForBattle] ✅ FUNCIÓN LLAMADA con:', song);
                     
                     // Obtener currentMode del window si está disponible
                     var currentMode = typeof window.currentMode !== 'undefined' ? window.currentMode : null;
@@ -1335,13 +1334,9 @@
             
             // VERIFICACIÓN FINAL Y LOGS
             // Logs importantes de inicialización
-            if (typeof originalLog !== 'undefined') {
-                originalLog('[INIT] ✅ selectSongForBattle DEFINIDA:', typeof window.selectSongForBattle === 'function');
-                originalLog('[INIT] Función disponible en window:', typeof window.selectSongForBattle);
-            } else {
-                console.log('[INIT] ✅ selectSongForBattle DEFINIDA:', typeof window.selectSongForBattle === 'function');
-                console.log('[INIT] Función disponible en window:', typeof window.selectSongForBattle);
-            }
+            var logFn = window.__originalLog || console.log;
+            logFn('[INIT] ✅ selectSongForBattle DEFINIDA:', typeof window.selectSongForBattle === 'function');
+            logFn('[INIT] Función disponible en window:', typeof window.selectSongForBattle);
             
             // FORZAR DISPONIBILIDAD GLOBAL
             if (typeof window.selectSongForBattle === 'function') {
@@ -2881,20 +2876,33 @@
         window.showIncomingChallenge = showIncomingChallenge;
         window.verifyPurchasedMtrTx = verifyPurchasedMtrTx;
         // Asegurar que createSocialChallenge esté disponible globalmente
+        var logFn = window.__originalLog || console.log;
+        var warnFn = window.__originalWarn || console.warn;
+        
         if (typeof createSocialChallenge === 'function') {
             window.createSocialChallenge = createSocialChallenge;
-            originalLog('[ASSIGN] ✅ createSocialChallenge asignada a window');
+            logFn('[ASSIGN] ✅ createSocialChallenge asignada a window');
+            logFn('[ASSIGN] Tipo:', typeof window.createSocialChallenge);
         } else {
-            originalWarn('[ASSIGN] ⚠️ createSocialChallenge local no está definida');
+            warnFn('[ASSIGN] ⚠️ createSocialChallenge local no está definida');
         }
         // Solo asignar updateBetEligibility si está definida localmente, sino mantener la función global temprana
         if (typeof updateBetEligibility === 'function') {
             window.updateBetEligibility = updateBetEligibility;
-            originalLog('[ASSIGN] ✅ updateBetEligibility local asignada a window');
+            logFn('[ASSIGN] ✅ updateBetEligibility local asignada a window');
         } else {
-            originalWarn('[ASSIGN] ⚠️ updateBetEligibility local no está definida, manteniendo función global temprana');
-            originalLog('[ASSIGN] Tipo de window.updateBetEligibility:', typeof window.updateBetEligibility);
+            warnFn('[ASSIGN] ⚠️ updateBetEligibility local no está definida, manteniendo función global temprana');
+            logFn('[ASSIGN] Tipo de window.updateBetEligibility:', typeof window.updateBetEligibility);
         }
+        
+        // Verificación final de funciones críticas
+        setTimeout(function() {
+            logFn('[VERIFY] Funciones críticas después de 1s:');
+            logFn('[VERIFY] - window.createSocialChallenge:', typeof window.createSocialChallenge);
+            logFn('[VERIFY] - window.updateBetEligibility:', typeof window.updateBetEligibility);
+            logFn('[VERIFY] - window.selectSongForBattle:', typeof window.selectSongForBattle);
+            logFn('[VERIFY] - window.stopAllPreviews:', typeof window.stopAllPreviews);
+        }, 1000);
         // selectSongForBattle ya está asignado arriba directamente a window
         
         // Configurar event listener para createSocialBtn después de que se cree el botón - MEJORADO
