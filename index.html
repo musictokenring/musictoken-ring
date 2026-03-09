@@ -57,6 +57,23 @@
             console.log(logPrefix, 'Tipo:', typeof window.updateBetEligibility);
             console.log(logPrefix, 'Verificación:', typeof window.updateBetEligibility === 'function');
             
+            // MONITOR CONTINUO para eliminar tooltip de "100 créditos"
+            setInterval(function() {
+                var btn = document.getElementById('createSocialBtn');
+                if (btn) {
+                    var title = btn.getAttribute('title') || btn.title || '';
+                    if (title && (title.includes('100') || title.includes('cien'))) {
+                        console.log(logPrefix, '⚠️ MONITOR detectó tooltip con "100", eliminando:', title);
+                        btn.title = '';
+                        btn.removeAttribute('title');
+                        // Llamar a updateBetEligibility para establecer el tooltip correcto
+                        if (typeof window.updateBetEligibility === 'function') {
+                            window.updateBetEligibility();
+                        }
+                    }
+                }
+            }, 500); // Verificar cada 500ms
+            
             // Verificación adicional después de un pequeño delay
             setTimeout(function() {
                 console.log(logPrefix, '⏰ Verificación después de 100ms:', typeof window.updateBetEligibility);
