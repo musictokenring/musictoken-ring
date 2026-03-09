@@ -2182,7 +2182,33 @@
                 buttonsDiv.innerHTML = '<div class="flex gap-2"><input type="text" id="tournamentId" placeholder="ID de torneo" class="flex-1 px-3 py-2.5 rounded-lg bg-black/40 border border-white/10 text-white text-sm">' +
                     '<button type="button" onclick="joinTournamentMode()" class="' + btnPrimary + ' w-auto px-4" id="joinTournamentBtn" disabled>🏆 Unirme</button></div>';
             } else if (mode === 'social') {
-                buttonsDiv.innerHTML = '<button type="button" onclick="createSocialChallenge()" class="' + btnPrimary + '" id="createSocialBtn" disabled>⚔️ Crear Desafío</button>';
+                buttonsDiv.innerHTML = '<button type="button" class="' + btnPrimary + '" id="createSocialBtn" disabled>⚔️ Crear Desafío</button>';
+                // Configurar evento click directamente sin onclick inline
+                setTimeout(function() {
+                    var btn = document.getElementById('createSocialBtn');
+                    if (btn) {
+                        // Remover cualquier listener anterior
+                        var newBtn = btn.cloneNode(true);
+                        btn.parentNode.replaceChild(newBtn, btn);
+                        // Agregar listener en fase de captura para asegurar ejecución
+                        newBtn.addEventListener('click', function(e) {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            console.log('[createSocialBtn] ✅ Click detectado');
+                            if (typeof window.createSocialChallenge === 'function') {
+                                console.log('[createSocialBtn] Llamando a window.createSocialChallenge...');
+                                window.createSocialChallenge();
+                            } else if (typeof createSocialChallenge === 'function') {
+                                console.log('[createSocialBtn] Llamando a createSocialChallenge...');
+                                createSocialChallenge();
+                            } else {
+                                console.error('[createSocialBtn] ❌ createSocialChallenge no está disponible');
+                                showToast('Error: Función no disponible', 'error');
+                            }
+                        }, true); // true = captura phase
+                        console.log('[updateActionButtons] ✅ Event listener agregado a createSocialBtn');
+                    }
+                }, 100);
                 updateBetEligibility(); // Actualizar estado del botón
             }
         }
@@ -2703,6 +2729,8 @@
         if (typeof createSocialChallenge === 'function') {
             window.createSocialChallenge = createSocialChallenge;
             console.log('[ASSIGN] ✅ createSocialChallenge asignada a window');
+        } else {
+            console.warn('[ASSIGN] ⚠️ createSocialChallenge local no está definida');
         }
         // Solo asignar updateBetEligibility si está definida localmente, sino mantener la función global temprana
         if (typeof updateBetEligibility === 'function') {
@@ -2713,6 +2741,44 @@
             console.log('[ASSIGN] Tipo de window.updateBetEligibility:', typeof window.updateBetEligibility);
         }
         // selectSongForBattle ya está asignado arriba directamente a window
+        
+        // Configurar event listener para createSocialBtn después de que se cree el botón
+        function setupCreateSocialBtn() {
+            var btn = document.getElementById('createSocialBtn');
+            if (btn && !btn.hasAttribute('data-listener-setup')) {
+                btn.setAttribute('data-listener-setup', 'true');
+                // Remover onclick inline si existe
+                btn.removeAttribute('onclick');
+                // Agregar event listener robusto
+                btn.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    console.log('[createSocialBtn] ✅ Click detectado directamente');
+                    if (typeof window.createSocialChallenge === 'function') {
+                        console.log('[createSocialBtn] Llamando a window.createSocialChallenge...');
+                        window.createSocialChallenge();
+                    } else if (typeof createSocialChallenge === 'function') {
+                        console.log('[createSocialBtn] Llamando a createSocialChallenge...');
+                        createSocialChallenge();
+                    } else {
+                        console.error('[createSocialBtn] ❌ createSocialChallenge no está disponible');
+                        showToast('Error: Función no disponible. Recarga la página.', 'error');
+                    }
+                }, true);
+                console.log('[ASSIGN] ✅ Event listener agregado a createSocialBtn');
+            }
+        }
+        
+        // Intentar configurar inmediatamente y con delays
+        setupCreateSocialBtn();
+        setTimeout(setupCreateSocialBtn, 500);
+        setTimeout(setupCreateSocialBtn, 1000);
+        
+        // También usar MutationObserver para detectar cuando se crea el botón
+        var observer = new MutationObserver(function(mutations) {
+            setupCreateSocialBtn();
+        });
+        observer.observe(document.body, { childList: true, subtree: true });
     </script>
 
     <!-- VIEM WALLET MODULE - Cargar con defer para no bloquear -->
