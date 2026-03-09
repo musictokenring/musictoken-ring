@@ -1095,10 +1095,12 @@
             
             // DEFINIR FUNCIÓN DE FORMA GLOBAL Y ROBUSTA
             window.selectSongForBattle = async function selectSongForBattle(song) {
+                // Usar originalLog directamente para evitar limitador
+                var logFn = window.__originalLog || console.log;
+                var errorFn = console.error;
+                
                 try {
-                    // Log importante - usar originalLog si está disponible
-                    var logFn = window.__originalLog || console.log;
-                    logFn('[selectSongForBattle] ✅ FUNCIÓN LLAMADA con:', song);
+                    logFn('[selectSongForBattle] ✅✅✅ FUNCIÓN LLAMADA CON:', song);
                     
                     // Obtener currentMode del window si está disponible
                     var currentMode = typeof window.currentMode !== 'undefined' ? window.currentMode : null;
@@ -2728,9 +2730,11 @@
         // console.log('[INIT] ✅ window.startPractice definida globalmente');
 
         async function createSocialChallenge() {
-            // Logs importantes para debugging
+            // Usar originalLog directamente para evitar limitador
             var logFn = window.__originalLog || console.log;
-            logFn('[createSocialChallenge] ✅ FUNCIÓN LLAMADA');
+            var errorFn = console.error;
+            
+            logFn('[createSocialChallenge] ✅✅✅ FUNCIÓN LLAMADA');
             
             // Verificar selectedSong en múltiples lugares
             var song = selectedSong || window.selectedSong;
@@ -2986,7 +2990,9 @@
                 // Agregar event listener robusto en fase de captura
                 btn.addEventListener('click', function(e) {
                     var logFn = window.__originalLog || console.log;
-                    logFn('[setupCreateSocialBtn] ✅ CLICK EN BOTÓN DETECTADO');
+                    var errorFn = console.error;
+                    
+                    logFn('[setupCreateSocialBtn] ✅✅✅ CLICK EN BOTÓN DETECTADO');
                     
                     e.preventDefault();
                     e.stopPropagation();
@@ -2995,16 +3001,27 @@
                     logFn('[setupCreateSocialBtn] Verificando funciones disponibles...');
                     logFn('[setupCreateSocialBtn] window.createSocialChallenge:', typeof window.createSocialChallenge);
                     logFn('[setupCreateSocialBtn] createSocialChallenge:', typeof createSocialChallenge);
+                    logFn('[setupCreateSocialBtn] window.selectedSong:', window.selectedSong);
                     
                     // Múltiples intentos de llamar a la función
                     if (typeof window.createSocialChallenge === 'function') {
-                        logFn('[setupCreateSocialBtn] Llamando window.createSocialChallenge()...');
-                        window.createSocialChallenge();
+                        logFn('[setupCreateSocialBtn] ✅ Llamando window.createSocialChallenge()...');
+                        try {
+                            window.createSocialChallenge();
+                            logFn('[setupCreateSocialBtn] ✅ window.createSocialChallenge ejecutado sin errores');
+                        } catch(err) {
+                            errorFn('[setupCreateSocialBtn] ❌ ERROR al ejecutar window.createSocialChallenge:', err);
+                        }
                     } else if (typeof createSocialChallenge === 'function') {
-                        logFn('[setupCreateSocialBtn] Llamando createSocialChallenge()...');
-                        createSocialChallenge();
+                        logFn('[setupCreateSocialBtn] ✅ Llamando createSocialChallenge()...');
+                        try {
+                            createSocialChallenge();
+                            logFn('[setupCreateSocialBtn] ✅ createSocialChallenge ejecutado sin errores');
+                        } catch(err) {
+                            errorFn('[setupCreateSocialBtn] ❌ ERROR al ejecutar createSocialChallenge:', err);
+                        }
                     } else {
-                        logFn('[setupCreateSocialBtn] ⚠️ Funciones no disponibles, intentando eval...');
+                        errorFn('[setupCreateSocialBtn] ❌❌❌ FUNCIONES NO DISPONIBLES');
                         // Último recurso: usar eval
                         try {
                             eval('if(typeof createSocialChallenge==="function")createSocialChallenge()');
@@ -3012,7 +3029,7 @@
                             if (typeof showToast === 'function') {
                                 showToast('Error: Función no disponible. Recarga la página.', 'error');
                             }
-                            console.error('[setupCreateSocialBtn] ❌ Error crítico:', err);
+                            errorFn('[setupCreateSocialBtn] ❌ Error crítico:', err);
                         }
                     }
                 }, true); // Fase de captura
