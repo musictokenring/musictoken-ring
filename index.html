@@ -12,6 +12,30 @@
     <!-- Script INMEDIATO - Primera línea ejecutable del documento - SIN BLOQUEOS -->
     <script>
         (function() {
+            // DESHABILITAR LOGS EXCESIVOS EN PRODUCCIÓN
+            var originalLog = console.log;
+            var originalInfo = console.info;
+            var logCount = 0;
+            var maxLogs = 50; // Máximo de logs permitidos
+            
+            console.log = function() {
+                logCount++;
+                if (logCount <= maxLogs) {
+                    // Solo permitir logs críticos (errores, warnings importantes)
+                    var args = Array.from(arguments);
+                    var message = args.join(' ');
+                    // Permitir solo logs de errores críticos
+                    if (message.includes('❌') || message.includes('ERROR') || message.includes('Error')) {
+                        originalLog.apply(console, arguments);
+                    }
+                }
+                // Después de maxLogs, silenciar completamente
+            };
+            
+            console.info = function() {
+                // Silenciar console.info completamente
+            };
+            
             var logPrefix = '[INMEDIATE]';
             // Logs iniciales solo una vez - comentados para reducir ruido
             // console.log(logPrefix, '🔥 Script INMEDIATO ejecutándose AHORA');
