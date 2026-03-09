@@ -25,19 +25,31 @@
                     var bet = betInput ? parseFloat(betInput.value || '0') : 0;
                     var onchainBalance = Number(window.__mtrOnChainBalance || 0);
                     var credits = window.CreditsSystem ? (window.CreditsSystem.currentCredits || 0) : 0;
-                    var canCover = bet >= 5 && (credits >= bet || onchainBalance >= bet);
+                    var minBet = 5;
+                    var canCover = bet >= minBet && (credits >= bet || onchainBalance >= bet);
                     var hasSong = !!window.selectedSong;
                     btn.disabled = !canCover || !hasSong;
-                    var title = btn.getAttribute('title') || btn.title || '';
-                    if (title && title.includes('100')) {
+                    // ELIMINAR CUALQUIER REFERENCIA A "100" en el tooltip - FORZADO
+                    var currentTitle = btn.getAttribute('title') || btn.title || '';
+                    if (currentTitle && (currentTitle.includes('100') || currentTitle.includes('cien'))) {
+                        console.log(logPrefix, '⚠️ Eliminando tooltip con "100":', currentTitle);
                         btn.title = '';
                         btn.removeAttribute('title');
+                        // Forzar eliminación múltiple veces
+                        setTimeout(function() {
+                            if (btn.getAttribute('title') && btn.getAttribute('title').includes('100')) {
+                                btn.title = '';
+                                btn.removeAttribute('title');
+                            }
+                        }, 10);
                     }
+                    // Establecer tooltip correcto
                     if (!canCover && bet > 0) {
-                        btn.title = bet < 5 ? 'Apuesta mínima: 5 créditos' : 'Créditos y saldo MTR insuficientes';
+                        btn.title = bet < minBet ? 'Apuesta mínima: ' + minBet + ' créditos' : 'Créditos y saldo MTR insuficientes';
                     } else {
                         btn.title = '';
                     }
+                    console.log(logPrefix, 'Tooltip final:', btn.title || '(vacío)');
                 }
             };
             
@@ -2166,10 +2178,20 @@
             // Para desafíos sociales, verificar créditos y mínimo dinámico
             const minBetAmount = (typeof GameEngine !== 'undefined' && GameEngine.minBet) ? GameEngine.minBet : 5;
             if (createSocialBtn) {
-                var canCoverSocialBet = !!bet && bet >= minBetAmount && credits >= bet;
+                var canCoverSocialBet = !!bet && bet >= minBetAmount && (credits >= bet || onchainBalance >= bet);
                 createSocialBtn.disabled = !canCoverSocialBet || !selectedSong;
-                createSocialBtn.title = (!canCoverSocialBet && bet > 0) ? 
-                    (bet < minBetAmount ? `Apuesta mínima: ${minBetAmount} créditos` : 'Créditos insuficientes') : '';
+                // ELIMINAR CUALQUIER REFERENCIA A "100" en el tooltip
+                var currentTitle = createSocialBtn.getAttribute('title') || createSocialBtn.title || '';
+                if (currentTitle.includes('100')) {
+                    createSocialBtn.title = '';
+                    createSocialBtn.removeAttribute('title');
+                }
+                // Establecer tooltip correcto
+                if (!canCoverSocialBet && bet > 0) {
+                    createSocialBtn.title = bet < minBetAmount ? `Apuesta mínima: ${minBetAmount} créditos` : 'Créditos y saldo MTR insuficientes';
+                } else {
+                    createSocialBtn.title = '';
+                }
             }
             
             // Para modo práctica, habilitar cuando hay canción seleccionada
