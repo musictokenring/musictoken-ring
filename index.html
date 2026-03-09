@@ -99,8 +99,9 @@
                 }
             };
             
-            // Logs de verificación comentados para reducir ruido
-            // console.log(logPrefix, '✅ updateBetEligibility DEFINIDO INMEDIATAMENTE');
+            // Logs de verificación - usar originalLog para evitar limitador
+            originalLog(logPrefix, '✅ updateBetEligibility DEFINIDO INMEDIATAMENTE');
+            originalLog(logPrefix, 'Tipo:', typeof window.updateBetEligibility);
             
             // INTERCEPTAR setAttribute y title para eliminar "100 créditos" inmediatamente
             (function() {
@@ -1079,7 +1080,12 @@
     <!-- DEFINIR selectSongForBattle INMEDIATAMENTE - ANTES DE CUALQUIER OTRO SCRIPT -->
     <script>
         // ESTA FUNCIÓN DEBE ESTAR DISPONIBLE ANTES DE QUE app.js SE CARGUE
-        console.log('[PRE-INIT] Definiendo selectSongForBattle...');
+        // Usar originalLog para logs de inicialización importantes
+        if (typeof originalLog !== 'undefined') {
+            originalLog('[PRE-INIT] Definiendo selectSongForBattle...');
+        } else {
+            console.log('[PRE-INIT] Definiendo selectSongForBattle...');
+        }
         // Definir selectSongForBattle INMEDIATAMENTE antes de que app.js se cargue
         (function() {
             var selectedSong = null;
@@ -1088,7 +1094,12 @@
             // DEFINIR FUNCIÓN DE FORMA GLOBAL Y ROBUSTA
             window.selectSongForBattle = async function selectSongForBattle(song) {
                 try {
-                    console.log('[selectSongForBattle] ✅ FUNCIÓN LLAMADA con:', song);
+                    // Log importante - usar originalLog si está disponible
+                    if (typeof originalLog !== 'undefined') {
+                        originalLog('[selectSongForBattle] ✅ FUNCIÓN LLAMADA con:', song);
+                    } else {
+                        console.log('[selectSongForBattle] ✅ FUNCIÓN LLAMADA con:', song);
+                    }
                     
                     // Obtener currentMode del window si está disponible
                     var currentMode = typeof window.currentMode !== 'undefined' ? window.currentMode : null;
@@ -1323,8 +1334,14 @@
             console.log('[selectSongForBattle] Función DEFINIDA ANTES de app.js');
             
             // VERIFICACIÓN FINAL Y LOGS
-            console.log('[INIT] ✅ selectSongForBattle DEFINIDA:', typeof window.selectSongForBattle === 'function');
-            console.log('[INIT] Función disponible en window:', typeof window.selectSongForBattle);
+            // Logs importantes de inicialización
+            if (typeof originalLog !== 'undefined') {
+                originalLog('[INIT] ✅ selectSongForBattle DEFINIDA:', typeof window.selectSongForBattle === 'function');
+                originalLog('[INIT] Función disponible en window:', typeof window.selectSongForBattle);
+            } else {
+                console.log('[INIT] ✅ selectSongForBattle DEFINIDA:', typeof window.selectSongForBattle === 'function');
+                console.log('[INIT] Función disponible en window:', typeof window.selectSongForBattle);
+            }
             
             // FORZAR DISPONIBILIDAD GLOBAL
             if (typeof window.selectSongForBattle === 'function') {
