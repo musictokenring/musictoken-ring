@@ -51,13 +51,11 @@
     <script>
         // ========================================
         // DEFINICIÓN ULTRA-TEMPRANA DE updateBetEligibility
-        // Versión SIMPLIFICADA que se ejecuta INMEDIATAMENTE
+        // Versión MÍNIMA que se ejecuta INMEDIATAMENTE sin dependencias
         // ========================================
-        (function() {
-            'use strict';
-            try {
-                // CRÍTICO: Definir función básica SIN dependencias externas
-                window.updateBetEligibility = function() {
+        try {
+            window.updateBetEligibility = window.updateBetEligibility || function() {
+                try {
                     var btn = document.getElementById('createSocialBtn');
                     if (btn && window.currentMode === 'social') {
                         var betInput = document.getElementById('betAmount');
@@ -73,46 +71,23 @@
                             btn.removeAttribute('title');
                         }
                         if (!canCover && bet > 0) {
-                            if (bet < 5) {
-                                btn.title = 'Apuesta mínima: 5 créditos';
-                            } else {
-                                btn.title = 'Créditos y saldo MTR insuficientes';
-                            }
+                            btn.title = bet < 5 ? 'Apuesta mínima: 5 créditos' : 'Créditos y saldo MTR insuficientes';
                         } else {
                             btn.title = '';
                         }
                     }
-                };
-                
-                // Función de restauración simple
-                window._restoreUpdateBetEligibility = function() {
-                    if (typeof window.updateBetEligibility !== 'function') {
-                        window.updateBetEligibility = function() {
-                            var btn = document.getElementById('createSocialBtn');
-                            if (btn && window.currentMode === 'social') {
-                                var betInput = document.getElementById('betAmount');
-                                var bet = betInput ? parseFloat(betInput.value || '0') : 0;
-                                var onchainBalance = Number(window.__mtrOnChainBalance || 0);
-                                var credits = window.CreditsSystem ? (window.CreditsSystem.currentCredits || 0) : 0;
-                                var canCover = bet >= 5 && (credits >= bet || onchainBalance >= bet);
-                                var hasSong = !!window.selectedSong;
-                                btn.disabled = !canCover || !hasSong;
-                            }
-                        };
-                    }
-                };
-                
-                console.log('[ULTRA-EARLY] ✅ Funciones definidas:', {
-                    updateBetEligibility: typeof window.updateBetEligibility,
-                    _restoreUpdateBetEligibility: typeof window._restoreUpdateBetEligibility
-                });
-            } catch (e) {
-                console.error('[ULTRA-EARLY] ❌ Error:', e);
-                // Versión de emergencia absoluta
-                window.updateBetEligibility = window.updateBetEligibility || function() {};
-                window._restoreUpdateBetEligibility = window._restoreUpdateBetEligibility || function() {};
-            }
-        })();
+                } catch(e) {}
+            };
+            
+            window._restoreUpdateBetEligibility = window._restoreUpdateBetEligibility || function() {
+                if (typeof window.updateBetEligibility !== 'function') {
+                    window.updateBetEligibility = function() {};
+                }
+            };
+        } catch(e) {
+            window.updateBetEligibility = window.updateBetEligibility || function() {};
+            window._restoreUpdateBetEligibility = window._restoreUpdateBetEligibility || function() {};
+        }
     </script>
     
     <script>
