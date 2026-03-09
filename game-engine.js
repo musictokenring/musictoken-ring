@@ -45,7 +45,8 @@ const GameEngine = {
         if (this.initPromise) return this.initPromise;
 
         this.initPromise = (async () => {
-            console.log('🎮 Game Engine initializing...');
+            // Logs de inicialización comentados para reducir ruido
+            // console.log('🎮 Game Engine initializing...');
             try {
                 this.loadSongsEloAvailability();
                 this.loadPracticeDemoBalance();
@@ -62,7 +63,7 @@ const GameEngine = {
             }
             
             this.initialized = true;
-            console.log('✅ Game Engine ready!');
+            // console.log('✅ Game Engine ready!');
         })().finally(() => {
             this.initPromise = null;
         });
@@ -93,7 +94,6 @@ const GameEngine = {
                 const parsed = parseInt(stored, 10);
                 if (Number.isFinite(parsed) && parsed > 0) {
                     this.practiceDemoBalance = parsed;
-                    console.log('[practice] Demo balance cargado desde localStorage:', this.practiceDemoBalance);
                     return;
                 }
             }
@@ -118,18 +118,23 @@ const GameEngine = {
         const valueEl = document.getElementById('userBalance');
         const onchainEl = document.getElementById('onchainMtrBalance');
         
-        // Verificar si estamos en modo práctica
-        const isPracticeMode = typeof window !== 'undefined' && window.currentMode === 'practice';
+        // CRÍTICO: El balance demo SOLO debe mostrarse cuando el usuario está específicamente
+        // en la sección de Práctica (window.currentMode === 'practice'), NO en otras secciones
+        // como Desafío Social, Torneo, etc., incluso si la URL tiene ?mode=practice
+        const isInPracticeSection = typeof window !== 'undefined' && window.currentMode === 'practice';
         
-        console.log('[updatePracticeBetDisplay] Modo práctica:', isPracticeMode, 'Balance demo:', this.practiceDemoBalance);
+        console.log('[updatePracticeBetDisplay] En sección práctica:', isInPracticeSection, 'currentMode:', window.currentMode, 'Balance demo:', this.practiceDemoBalance);
         console.log('[updatePracticeBetDisplay] Elementos encontrados:', {
             labelEl: !!labelEl,
             valueEl: !!valueEl,
             onchainEl: !!onchainEl,
-            windowCurrentMode: window.currentMode
+            playableLabel: !!document.getElementById('playableLabel'),
+            balanceUnit: !!document.getElementById('balanceUnit'),
+            windowCurrentMode: window.currentMode,
+            modeTitle: document.getElementById('modeTitle')?.textContent
         });
         
-        if (isPracticeMode) {
+        if (isInPracticeSection) {
             // Asegurar que el balance demo esté inicializado
             if (this.practiceDemoBalance <= 0) {
                 this.practiceDemoBalance = this.practiceDemoInitialBalance;
@@ -144,6 +149,87 @@ const GameEngine = {
                 console.log('[updatePracticeBetDisplay] Label actualizado a "Saldo demo (práctica)"');
             } else {
                 console.error('[updatePracticeBetDisplay] balanceLabel no encontrado en el DOM');
+            }
+            
+            // Actualizar el label "Jugable" a "Saldo demo" en modo práctica
+            // Usar función robusta que intenta múltiples veces
+            const updatePlayableLabel = () => {
+                const playableLabelEl = document.getElementById('playableLabel');
+                if (playableLabelEl) {
+                    // Verificar si ya está actualizado para evitar loops
+                    if (playableLabelEl.textContent !== 'Saldo demo') {
+                        playableLabelEl.textContent = 'Saldo demo';
+                        playableLabelEl.style.color = '#8b5cf6';
+                        console.log('[updatePracticeBetDisplay] ✅ playableLabel actualizado a "Saldo demo" (era: "' + playableLabelEl.textContent + '")');
+                    }
+                    return true;
+                }
+                return false;
+            };
+            
+            // Intentar actualizar inmediatamente y con delays
+            updatePlayableLabel();
+            setTimeout(() => { updatePlayableLabel(); }, 50);
+            setTimeout(() => { updatePlayableLabel(); }, 100);
+            setTimeout(() => { updatePlayableLabel(); }, 200);
+            setTimeout(() => { updatePlayableLabel(); }, 500);
+            
+            // Ocultar o cambiar el texto "MTR" en modo práctica para evitar confusión
+            const updateBalanceUnit = () => {
+                const balanceUnitEl = document.getElementById('balanceUnit');
+                if (balanceUnitEl) {
+                    // Verificar si ya está actualizado para evitar loops
+                    if (balanceUnitEl.textContent !== 'MTR (demo)') {
+                        balanceUnitEl.textContent = 'MTR (demo)';
+                        balanceUnitEl.style.color = '#8b5cf6';
+                        console.log('[updatePracticeBetDisplay] ✅ balanceUnit actualizado a "MTR (demo)"');
+                    }
+                    return true;
+                }
+                return false;
+            };
+            
+            // Intentar actualizar inmediatamente y con delays
+            updateBalanceUnit();
+            setTimeout(() => { updateBalanceUnit(); }, 50);
+            setTimeout(() => { updateBalanceUnit(); }, 100);
+            setTimeout(() => { updateBalanceUnit(); }, 200);
+            setTimeout(() => { updateBalanceUnit(); }, 500);
+            
+            // Usar MutationObserver para detectar cambios y corregirlos automáticamente
+            if (!this.practiceLabelObserver) {
+                this.practiceLabelObserver = new MutationObserver((mutations) => {
+                    mutations.forEach((mutation) => {
+                        if (mutation.type === 'childList' || mutation.type === 'characterData') {
+                            const playableLabelEl = document.getElementById('playableLabel');
+                            const balanceUnitEl = document.getElementById('balanceUnit');
+                            
+                            if (isInPracticeSection) {
+                                if (playableLabelEl && playableLabelEl.textContent === 'Jugable') {
+                                    console.log('[MutationObserver] Detectado cambio a "Jugable", corrigiendo a "Saldo demo"');
+                                    playableLabelEl.textContent = 'Saldo demo';
+                                    playableLabelEl.style.color = '#8b5cf6';
+                                }
+                                if (balanceUnitEl && balanceUnitEl.textContent === 'MTR' && balanceUnitEl.textContent !== 'MTR (demo)') {
+                                    console.log('[MutationObserver] Detectado cambio a "MTR", corrigiendo a "MTR (demo)"');
+                                    balanceUnitEl.textContent = 'MTR (demo)';
+                                    balanceUnitEl.style.color = '#8b5cf6';
+                                }
+                            }
+                        }
+                    });
+                });
+                
+                // Observar cambios en el contenedor de balance
+                const balanceContainer = document.querySelector('#songSelection');
+                if (balanceContainer) {
+                    this.practiceLabelObserver.observe(balanceContainer, {
+                        childList: true,
+                        subtree: true,
+                        characterData: true
+                    });
+                    console.log('[updatePracticeBetDisplay] MutationObserver configurado para observar cambios');
+                }
             }
             
             const formattedBalance = this.practiceDemoBalance.toLocaleString('es-ES');
@@ -181,6 +267,30 @@ const GameEngine = {
                 labelEl.textContent = 'Tu MTR (on-chain)';
                 labelEl.style.color = '';
             }
+            
+            // Restaurar el label "Jugable" en modo normal
+            const playableLabelEl = document.getElementById('playableLabel');
+            if (playableLabelEl && playableLabelEl.textContent !== 'Jugable') {
+                playableLabelEl.textContent = 'Jugable';
+                playableLabelEl.style.color = '';
+                console.log('[updatePracticeBetDisplay] playableLabel restaurado a "Jugable"');
+            }
+            
+            // Restaurar el texto "MTR" normal en modo normal
+            const balanceUnitEl = document.getElementById('balanceUnit');
+            if (balanceUnitEl && balanceUnitEl.textContent !== 'MTR') {
+                balanceUnitEl.textContent = 'MTR';
+                balanceUnitEl.style.color = '';
+                console.log('[updatePracticeBetDisplay] balanceUnit restaurado a "MTR"');
+            }
+            
+            // Desconectar el observer si existe
+            if (this.practiceLabelObserver) {
+                this.practiceLabelObserver.disconnect();
+                this.practiceLabelObserver = null;
+                console.log('[updatePracticeBetDisplay] MutationObserver desconectado (modo normal)');
+            }
+            
             const onChainBalance = Number(window.__mtrOnChainBalance || 0);
             const playableBalance = onChainBalance > 0 ? onChainBalance : this.userBalance;
             if (valueEl) {
@@ -237,13 +347,20 @@ const GameEngine = {
                 .single();
             
             if (data) {
-                // Mantener minBet desde config si existe, sino usar constante global
-                this.minBet = data.min_bet || MIN_BET_AMOUNT;
+                // CRÍTICO: Para desafíos sociales, SIEMPRE usar 5 créditos como mínimo
+                // No usar min_bet de la base de datos que puede ser 100
+                // Solo usar min_bet de la base de datos para otros modos (Quick Match, Sala Privada, Torneo)
+                const dbMinBet = data.min_bet || MIN_BET_AMOUNT;
+                // Si el valor de la BD es mayor a 5, usar 5 como mínimo para evitar problemas
+                // Los desafíos sociales siempre usarán SOCIAL_CHALLENGE_MIN_BET = 5 directamente
+                this.minBet = dbMinBet;
                 this.battleDuration = data.battle_duration;
                 this.victoryAudioDuration = data.victory_audio_duration;
                 if (data.platform_fee_rate) this.platformFeeRate = data.platform_fee_rate;
                 if (data.jackpot_rate) this.jackpotRate = data.jackpot_rate;
                 if (data.platform_revenue_target) this.platformRevenueTarget = data.platform_revenue_target;
+                
+                console.log('[loadGameConfig] minBet cargado desde BD:', this.minBet, '(Nota: Desafíos sociales siempre usan 5)');
             }
         } catch (error) {
             console.error('Error loading config:', error);
@@ -251,8 +368,8 @@ const GameEngine = {
     },
     
     updateBalanceDisplay() {
-        // Verificar si estamos en modo práctica
-        const isPracticeMode = typeof window !== 'undefined' && window.currentMode === 'practice';
+        // Verificar si estamos específicamente en la sección de Práctica
+        const isInPracticeSection = typeof window !== 'undefined' && window.currentMode === 'practice';
         
         // SIEMPRE actualizar appBalanceDisplay con balance REAL (on-chain), incluso en modo práctica
         // El header siempre debe mostrar el balance real de la wallet, nunca el balance de práctica
@@ -262,11 +379,11 @@ const GameEngine = {
             // SIEMPRE mostrar balance real, incluso si es 0
             balanceEl.textContent = `Jugable: ${onChainBalance.toLocaleString('es-ES')} MTR`;
             balanceEl.style.color = '';
-            console.log('[updateBalanceDisplay] Header actualizado con balance REAL:', onChainBalance, '(modo práctica:', isPracticeMode, ')');
+            console.log('[updateBalanceDisplay] Header actualizado con balance REAL:', onChainBalance, '(en sección práctica:', isInPracticeSection, ', currentMode:', window.currentMode, ')');
         }
         
-        // NO actualizar userBalance si estamos en modo práctica (dejar que updatePracticeBetDisplay lo maneje)
-        if (!isPracticeMode) {
+        // NO actualizar userBalance si estamos específicamente en la sección de Práctica (dejar que updatePracticeBetDisplay lo maneje)
+        if (!isInPracticeSection) {
             // Para modo normal, usar saldo on-chain si está disponible, sino usar userBalance
             const playableBalance = onChainBalance > 0 ? onChainBalance : this.userBalance;
             
@@ -280,10 +397,29 @@ const GameEngine = {
             } else {
                 console.warn('[updateBalanceDisplay] userBalance no encontrado');
             }
+            
+            // Asegurar que el label "Jugable" esté restaurado en modo normal
+            const playableLabelEl = document.getElementById('playableLabel');
+            if (playableLabelEl && playableLabelEl.textContent !== 'Jugable') {
+                playableLabelEl.textContent = 'Jugable';
+                playableLabelEl.style.color = '';
+                console.log('[updateBalanceDisplay] playableLabel restaurado a "Jugable"');
+            }
+            
+            // Asegurar que el texto "MTR" esté restaurado en modo normal
+            const balanceUnitEl = document.getElementById('balanceUnit');
+            if (balanceUnitEl && balanceUnitEl.textContent !== 'MTR') {
+                balanceUnitEl.textContent = 'MTR';
+                balanceUnitEl.style.color = '';
+                console.log('[updateBalanceDisplay] balanceUnit restaurado a "MTR"');
+            }
         }
         
         // Siempre actualizar el display de práctica para que maneje el modo correcto
-        this.updatePracticeBetDisplay();
+        // Usar setTimeout para asegurar que el DOM esté listo
+        setTimeout(() => {
+            this.updatePracticeBetDisplay();
+        }, 0);
     },
 
     getAvailableWalletBalance() {
@@ -309,6 +445,7 @@ const GameEngine = {
 
     /**
      * Check if user has sufficient credits for betting
+     * CRÍTICO: Para desafíos sociales, también verifica balance on-chain MTR como alternativa
      */
     async hasSufficientCredits(betAmount) {
         if (!window.CreditsSystem) {
@@ -317,11 +454,22 @@ const GameEngine = {
         }
 
         const credits = window.CreditsSystem.currentCredits || 0;
-        if (Number(betAmount) > credits) {
-            showToast(`Créditos insuficientes. Disponible: ${credits.toFixed(2)} créditos`, 'error');
-            return false;
+        const onchainBalance = Number(window.__mtrOnChainBalance || 0);
+        
+        // CRÍTICO: Verificar TANTO créditos off-chain COMO balance on-chain MTR
+        // El usuario puede apostar con cualquiera de los dos
+        const hasEnoughCredits = Number(betAmount) <= credits;
+        const hasEnoughOnChain = Number(betAmount) <= onchainBalance;
+        
+        console.log('[game-engine] hasSufficientCredits - Bet:', betAmount, 'Credits:', credits, 'OnChain:', onchainBalance, 'HasCredits:', hasEnoughCredits, 'HasOnChain:', hasEnoughOnChain);
+        
+        if (hasEnoughCredits || hasEnoughOnChain) {
+            return true;
         }
-        return true;
+        
+        // Si no tiene suficiente en ninguno, mostrar error con ambos balances
+        showToast(`Saldo insuficiente. Créditos: ${credits.toFixed(2)}, MTR on-chain: ${onchainBalance.toLocaleString('es-ES', { maximumFractionDigits: 4 })}`, 'error');
+        return false;
     },
     
     // ==========================================
@@ -535,12 +683,21 @@ const GameEngine = {
     // ==========================================
     
     async createSocialChallenge(song, betAmount) {
-        // Validar apuesta mínima (MIN_BET_AMOUNT créditos)
-        const normalizedBet = Math.max(MIN_BET_AMOUNT, Math.round(betAmount || MIN_BET_AMOUNT));
-        if (normalizedBet < MIN_BET_AMOUNT) {
-            showToast(`Apuesta mínima: ${MIN_BET_AMOUNT} créditos`, 'error');
+        // CRÍTICO: Desafíos sociales SIEMPRE tienen mínimo de 5 créditos, independientemente de game_config
+        // NO usar this.minBet ni MIN_BET_AMOUNT que pueden venir de la base de datos con valor 100
+        const SOCIAL_CHALLENGE_MIN_BET = 5;
+        
+        console.log('[createSocialChallenge] Validando apuesta - betAmount recibido:', betAmount, 'mínimo requerido:', SOCIAL_CHALLENGE_MIN_BET);
+        
+        const normalizedBet = Math.max(SOCIAL_CHALLENGE_MIN_BET, Math.round(betAmount || SOCIAL_CHALLENGE_MIN_BET));
+        
+        if (normalizedBet < SOCIAL_CHALLENGE_MIN_BET) {
+            console.error('[createSocialChallenge] ❌ Apuesta rechazada - normalizedBet:', normalizedBet, '< mínimo:', SOCIAL_CHALLENGE_MIN_BET);
+            showToast(`La apuesta mínima para desafíos sociales es ${SOCIAL_CHALLENGE_MIN_BET} créditos`, 'error');
             return;
         }
+        
+        console.log('[createSocialChallenge] ✅ Apuesta validada - normalizedBet:', normalizedBet);
         
         // Verificar créditos suficientes
         if (!(await this.hasSufficientCredits(normalizedBet))) {
@@ -589,9 +746,17 @@ const GameEngine = {
             // Generar link único
             const challengeLink = `${window.location.origin}${window.location.pathname}?challenge=${challengeId}`;
             
+            console.log('[createSocialChallenge] ✅ Desafío creado exitosamente:', {
+                challengeId: challengeId,
+                challengeLink: challengeLink,
+                betAmount: normalizedBet
+            });
+            
             // Mostrar UI para compartir
+            console.log('[createSocialChallenge] Mostrando UI de compartir...');
             this.showSocialChallengeShareUI(challenge, challengeLink, song, normalizedBet);
             
+            console.log('[createSocialChallenge] ✅ UI de compartir mostrada');
             showToast('Desafío creado. Comparte el link con tu amigo.', 'success');
             
         } catch (error) {
@@ -822,17 +987,25 @@ const GameEngine = {
         // Validate minimum bet (MIN_BET_AMOUNT créditos)
         const normalizedBet = Math.max(this.minBet, Math.round(betAmount || this.minBet));
         if (normalizedBet < this.minBet) {
-            showToast(`Apuesta mínima: ${this.minBet} MTR`, 'error');
+            showToast(`Apuesta mínima: ${this.minBet} créditos`, 'error');
             return;
         }
 
-        if (!this.hasSufficientBalance(normalizedBet)) {
+        // Check credits balance instead of on-chain balance
+        if (!(await this.hasSufficientCredits(normalizedBet))) {
             return;
         }
 
         try {
             const { data: { session } } = await supabaseClient.auth.getSession();
             
+            // Descontar créditos ANTES de crear la sala
+            const deductionSuccess = await this.updateBalance(-normalizedBet, 'bet', null);
+            if (!deductionSuccess) {
+                showToast('Error al descontar créditos. Intenta nuevamente.', 'error');
+                return;
+            }
+
             // Generar código de sala
             const roomCode = this.generateRoomCode();
             
@@ -848,13 +1021,17 @@ const GameEngine = {
                     player1_song_artist: song.artist,
                     player1_song_image: song.image,
                     player1_song_preview: song.preview,
-                    player1_bet: betAmount,
+                    player1_bet: normalizedBet,
                     status: 'waiting'
                 }])
                 .select()
                 .single();
             
-            if (matchError) throw matchError;
+            if (matchError) {
+                // Si falla crear match después de descontar, reembolsar créditos
+                await this.updateBalance(normalizedBet, 'refund', null);
+                throw matchError;
+            }
 
             this.currentRoomCode = roomCode;
             this.currentPrivateMatchId = match.id;
@@ -866,11 +1043,16 @@ const GameEngine = {
                     room_code: roomCode,
                     creator_id: session.user.id,
                     match_id: match.id,
-                    min_bet: betAmount,
+                    min_bet: normalizedBet,
                     status: 'open'
                 }]);
             
-            if (roomError) throw roomError;
+            if (roomError) {
+                // Si falla crear sala después de crear match, reembolsar créditos y eliminar match
+                await this.updateBalance(normalizedBet, 'refund', null);
+                await supabaseClient.from('matches').delete().eq('id', match.id);
+                throw roomError;
+            }
             
             // Mostrar sala
             document.getElementById('songSelection').classList.add('hidden');
@@ -919,11 +1101,12 @@ const GameEngine = {
             }
             
             if (betAmount < match.player1_bet) {
-                showToast(`Apuesta mínima de la sala: ${match.player1_bet} MTR`, 'error');
+                showToast(`Apuesta mínima de la sala: ${match.player1_bet} créditos`, 'error');
                 return;
             }
 
-            if (!this.hasSufficientBalance(betAmount)) {
+            // Check credits balance instead of on-chain balance
+            if (!(await this.hasSufficientCredits(betAmount))) {
                 return;
             }
 
@@ -932,6 +1115,14 @@ const GameEngine = {
                 showToast(`Matchmaking ELO bloqueado: diferencia ${eloGate.diff} (>300)`, 'error');
                 return;
             }
+
+            // Descontar créditos ANTES de unirse al match
+            const deductionSuccess = await this.updateBalance(-betAmount, 'bet', null);
+            if (!deductionSuccess) {
+                showToast('Error al descontar créditos. Intenta nuevamente.', 'error');
+                return;
+            }
+
             // Unirse al match
             const { error: updateError } = await supabaseClient
                 .from('matches')
@@ -948,7 +1139,11 @@ const GameEngine = {
                 })
                 .eq('id', match.id);
             
-            if (updateError) throw updateError;
+            if (updateError) {
+                // Si falla unirse después de descontar, reembolsar créditos
+                await this.updateBalance(betAmount, 'refund', null);
+                throw updateError;
+            }
             
             // Actualizar sala
             await supabaseClient
@@ -1474,11 +1669,19 @@ const GameEngine = {
                 .single();
             
             if (betAmount < tournament.entry_fee) {
-                showToast(`Entry fee: ${tournament.entry_fee} MTR`, 'error');
+                showToast(`Entry fee: ${tournament.entry_fee} créditos`, 'error');
                 return;
             }
 
-            if (!this.hasSufficientBalance(betAmount)) {
+            // Check credits balance instead of on-chain balance
+            if (!(await this.hasSufficientCredits(betAmount))) {
+                return;
+            }
+
+            // Descontar créditos ANTES de registrar participante
+            const deductionSuccess = await this.updateBalance(-betAmount, 'bet', null);
+            if (!deductionSuccess) {
+                showToast('Error al descontar créditos. Intenta nuevamente.', 'error');
                 return;
             }
             
@@ -1490,7 +1693,11 @@ const GameEngine = {
                     user_id: session.user.id
                 }]);
             
-            if (error) throw error;
+            if (error) {
+                // Si falla registrar participante después de descontar, reembolsar créditos
+                await this.updateBalance(betAmount, 'refund', null);
+                throw error;
+            }
             
             // Actualizar torneo
             const {
@@ -1499,7 +1706,8 @@ const GameEngine = {
                 platformNet,
                 prizeContribution
             } = this.calculateTournamentEntry(betAmount);
-            await supabaseClient
+            
+            const updateError = await supabaseClient
                 .from('tournaments')
                 .update({
                     current_participants: tournament.current_participants + 1,
@@ -1507,11 +1715,18 @@ const GameEngine = {
                 })
                 .eq('id', tournamentId);
 
+            if (updateError.error) {
+                // Si falla actualizar torneo después de registrar participante, reembolsar créditos y eliminar participante
+                await this.updateBalance(betAmount, 'refund', null);
+                await supabaseClient.from('tournament_participants')
+                    .delete()
+                    .eq('tournament_id', tournamentId)
+                    .eq('user_id', session.user.id);
+                throw updateError.error;
+            }
+
             this.addToPlatformRevenue(platformNet);
             this.addToJackpotPool(jackpotContribution);
-            
-            // Descontar entrada
-            await this.updateBalance(-betAmount, 'bet', null);
             
             showToast('¡Inscrito en el torneo!', 'success');
             
