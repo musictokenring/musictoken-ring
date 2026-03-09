@@ -4013,49 +4013,62 @@
     <!-- Script de respaldo para asegurar updateBetEligibility disponible -->
     <script>
         // Script mínimo que se ejecuta al final para verificar y restaurar updateBetEligibility si falta
-        (function() {
-            // Esperar a que todos los scripts se hayan cargado
-            setTimeout(function() {
-                if (typeof window.updateBetEligibility !== 'function') {
-                    console.warn('[BACKUP] ⚠️ updateBetEligibility no está disponible, creando versión básica...');
-                    
-                    // Crear versión básica de respaldo
-                    window.updateBetEligibility = function() {
-                        try {
-                            var btn = document.getElementById('createSocialBtn');
-                            if (btn && window.currentMode === 'social') {
-                                var betInput = document.getElementById('betAmount');
-                                var bet = betInput ? parseFloat(betInput.value || '0') : 0;
-                                var onchainBalance = Number(window.__mtrOnChainBalance || 0);
-                                var credits = window.CreditsSystem ? (window.CreditsSystem.currentCredits || 0) : 0;
-                                var canCover = bet >= 5 && (credits >= bet || onchainBalance >= bet);
-                                var hasSong = !!window.selectedSong;
-                                btn.disabled = !canCover || !hasSong;
-                                
-                                // Limpiar tooltip "100 créditos"
-                                var title = btn.getAttribute('title') || btn.title || '';
-                                if (title && title.includes('100')) {
-                                    btn.title = '';
-                                    btn.removeAttribute('title');
-                                }
-                                
-                                if (!canCover && bet > 0) {
-                                    btn.title = bet < 5 ? 'Apuesta mínima: 5 créditos' : 'Créditos y saldo MTR insuficientes';
-                                } else {
-                                    btn.title = '';
-                                }
+        console.log('[BACKUP-INIT] ⚡ Script de respaldo iniciado');
+        
+        // Verificar inmediatamente
+        function checkAndRestore() {
+            console.log('[BACKUP-CHECK] Verificando updateBetEligibility...');
+            console.log('[BACKUP-CHECK] Tipo actual:', typeof window.updateBetEligibility);
+            
+            if (typeof window.updateBetEligibility !== 'function') {
+                console.warn('[BACKUP] ⚠️ updateBetEligibility no está disponible, creando versión básica...');
+                
+                // Crear versión básica de respaldo
+                window.updateBetEligibility = function() {
+                    try {
+                        var btn = document.getElementById('createSocialBtn');
+                        if (btn && window.currentMode === 'social') {
+                            var betInput = document.getElementById('betAmount');
+                            var bet = betInput ? parseFloat(betInput.value || '0') : 0;
+                            var onchainBalance = Number(window.__mtrOnChainBalance || 0);
+                            var credits = window.CreditsSystem ? (window.CreditsSystem.currentCredits || 0) : 0;
+                            var canCover = bet >= 5 && (credits >= bet || onchainBalance >= bet);
+                            var hasSong = !!window.selectedSong;
+                            btn.disabled = !canCover || !hasSong;
+                            
+                            // Limpiar tooltip "100 créditos"
+                            var title = btn.getAttribute('title') || btn.title || '';
+                            if (title && title.includes('100')) {
+                                btn.title = '';
+                                btn.removeAttribute('title');
                             }
-                        } catch(e) {
-                            console.error('[BACKUP] Error en updateBetEligibility:', e);
+                            
+                            if (!canCover && bet > 0) {
+                                btn.title = bet < 5 ? 'Apuesta mínima: 5 créditos' : 'Créditos y saldo MTR insuficientes';
+                            } else {
+                                btn.title = '';
+                            }
                         }
-                    };
-                    
-                    console.log('[BACKUP] ✅ Versión básica de updateBetEligibility creada');
-                } else {
-                    console.log('[BACKUP] ✅ updateBetEligibility ya está disponible');
-                }
-            }, 2000); // Esperar 2 segundos después de cargar
-        })();
+                    } catch(e) {
+                        console.error('[BACKUP] Error en updateBetEligibility:', e);
+                    }
+                };
+                
+                console.log('[BACKUP] ✅ Versión básica de updateBetEligibility creada');
+                console.log('[BACKUP] Verificación post-creación:', typeof window.updateBetEligibility);
+            } else {
+                console.log('[BACKUP] ✅ updateBetEligibility ya está disponible');
+            }
+        }
+        
+        // Verificar inmediatamente
+        checkAndRestore();
+        
+        // Verificar después de delays cortos también
+        setTimeout(checkAndRestore, 100);
+        setTimeout(checkAndRestore, 500);
+        setTimeout(checkAndRestore, 1000);
+        setTimeout(checkAndRestore, 2000);
     </script>
 </body>
 </html>
