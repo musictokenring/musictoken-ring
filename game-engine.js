@@ -127,14 +127,14 @@ const GameEngine = {
         // Logs comentados para reducir ruido - esta función se ejecuta frecuentemente
         // console.log('[updatePracticeBetDisplay] En sección práctica:', isInPracticeSection, 'currentMode:', window.currentMode, 'Balance demo:', this.practiceDemoBalance);
         // console.log('[updatePracticeBetDisplay] Elementos encontrados:', {
-            labelEl: !!labelEl,
-            valueEl: !!valueEl,
-            onchainEl: !!onchainEl,
-            playableLabel: !!document.getElementById('playableLabel'),
-            balanceUnit: !!document.getElementById('balanceUnit'),
-            windowCurrentMode: window.currentMode,
-            modeTitle: document.getElementById('modeTitle')?.textContent
-        });
+        //     labelEl: !!labelEl,
+        //     valueEl: !!valueEl,
+        //     onchainEl: !!onchainEl,
+        //     playableLabel: !!document.getElementById('playableLabel'),
+        //     balanceUnit: !!document.getElementById('balanceUnit'),
+        //     windowCurrentMode: window.currentMode,
+        //     modeTitle: document.getElementById('modeTitle')?.textContent
+        // });
         
         if (isInPracticeSection) {
             // Asegurar que el balance demo esté inicializado
