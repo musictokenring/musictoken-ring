@@ -2373,22 +2373,29 @@
                             e.stopPropagation();
                             e.stopImmediatePropagation();
                             
-                            // Intentar múltiples formas de llamar a la función
-                            if (typeof window.createSocialChallenge === 'function') {
-                                window.createSocialChallenge();
-                            } else if (typeof createSocialChallenge === 'function') {
-                                createSocialChallenge();
-                            } else {
-                                // Último intento: buscar en el scope global
-                                try {
-                                    eval('createSocialChallenge()');
-                                } catch(err) {
-                                    if (typeof showToast === 'function') {
-                                        showToast('Error: Función no disponible. Recarga la página.', 'error');
-                                    }
-                                    console.error('[createSocialBtn] ❌ Error crítico:', err);
+                        // Intentar múltiples formas de llamar a la función
+                        var logFn = window.__originalLog || console.log;
+                        logFn('[setupBtnClick] ✅ CLICK EN BOTÓN (setupBtnClick) DETECTADO');
+                        logFn('[setupBtnClick] window.createSocialChallenge:', typeof window.createSocialChallenge);
+                        
+                        if (typeof window.createSocialChallenge === 'function') {
+                            logFn('[setupBtnClick] Llamando window.createSocialChallenge()...');
+                            window.createSocialChallenge();
+                        } else if (typeof createSocialChallenge === 'function') {
+                            logFn('[setupBtnClick] Llamando createSocialChallenge()...');
+                            createSocialChallenge();
+                        } else {
+                            logFn('[setupBtnClick] ⚠️ Funciones no disponibles, intentando eval...');
+                            // Último intento: buscar en el scope global
+                            try {
+                                eval('createSocialChallenge()');
+                            } catch(err) {
+                                if (typeof showToast === 'function') {
+                                    showToast('Error: Función no disponible. Recarga la página.', 'error');
                                 }
+                                console.error('[createSocialBtn] ❌ Error crítico:', err);
                             }
+                        }
                         }, true); // true = captura phase
                         
                         // También agregar onclick como fallback
@@ -2978,16 +2985,26 @@
                 
                 // Agregar event listener robusto en fase de captura
                 btn.addEventListener('click', function(e) {
+                    var logFn = window.__originalLog || console.log;
+                    logFn('[setupCreateSocialBtn] ✅ CLICK EN BOTÓN DETECTADO');
+                    
                     e.preventDefault();
                     e.stopPropagation();
                     e.stopImmediatePropagation();
                     
+                    logFn('[setupCreateSocialBtn] Verificando funciones disponibles...');
+                    logFn('[setupCreateSocialBtn] window.createSocialChallenge:', typeof window.createSocialChallenge);
+                    logFn('[setupCreateSocialBtn] createSocialChallenge:', typeof createSocialChallenge);
+                    
                     // Múltiples intentos de llamar a la función
                     if (typeof window.createSocialChallenge === 'function') {
+                        logFn('[setupCreateSocialBtn] Llamando window.createSocialChallenge()...');
                         window.createSocialChallenge();
                     } else if (typeof createSocialChallenge === 'function') {
+                        logFn('[setupCreateSocialBtn] Llamando createSocialChallenge()...');
                         createSocialChallenge();
                     } else {
+                        logFn('[setupCreateSocialBtn] ⚠️ Funciones no disponibles, intentando eval...');
                         // Último recurso: usar eval
                         try {
                             eval('if(typeof createSocialChallenge==="function")createSocialChallenge()');
