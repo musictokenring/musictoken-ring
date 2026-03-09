@@ -32,7 +32,7 @@
             };
             
             window.updateBetEligibility = function() {
-                console.log(logPrefix, 'updateBetEligibility ejecutado');
+                // SIN LOGS - Esta función se ejecuta frecuentemente
                 var btn = document.getElementById('createSocialBtn');
                 if (btn && window.currentMode === 'social') {
                     var betInput = document.getElementById('betAmount');
@@ -46,16 +46,8 @@
                     // ELIMINAR CUALQUIER REFERENCIA A "100" en el tooltip - FORZADO
                     var currentTitle = btn.getAttribute('title') || btn.title || '';
                     if (currentTitle && (currentTitle.includes('100') || currentTitle.includes('cien'))) {
-                        console.log(logPrefix, '⚠️ Eliminando tooltip con "100":', currentTitle);
                         btn.title = '';
                         btn.removeAttribute('title');
-                        // Forzar eliminación múltiple veces
-                        setTimeout(function() {
-                            if (btn.getAttribute('title') && btn.getAttribute('title').includes('100')) {
-                                btn.title = '';
-                                btn.removeAttribute('title');
-                            }
-                        }, 10);
                     }
                     // Establecer tooltip correcto
                     if (!canCover && bet > 0) {
@@ -63,7 +55,6 @@
                     } else {
                         btn.title = '';
                     }
-                    console.log(logPrefix, 'Tooltip final:', btn.title || '(vacío)');
                 }
             };
             
@@ -91,11 +82,10 @@
                     var btn = document.getElementById('createSocialBtn');
                     if (!btn) return;
                     
-                    // Interceptar setAttribute
+                    // Interceptar setAttribute - SIN LOGS
                     var originalSetAttribute = btn.setAttribute;
                     btn.setAttribute = function(name, value) {
                         if (name === 'title' && value && (String(value).includes('100') || String(value).includes('cien'))) {
-                            console.log(logPrefix, '⚠️ INTERCEPTADO setAttribute con "100", bloqueando:', value);
                             return; // No establecer el atributo
                         }
                         return originalSetAttribute.call(this, name, value);
@@ -108,14 +98,12 @@
                             get: function() {
                                 var val = titleDescriptor.get.call(this);
                                 if (val && (val.includes('100') || val.includes('cien'))) {
-                                    console.log(logPrefix, '⚠️ INTERCEPTADO get title con "100", retornando vacío');
                                     return '';
                                 }
                                 return val || '';
                             },
                             set: function(value) {
                                 if (value && (String(value).includes('100') || String(value).includes('cien'))) {
-                                    console.log(logPrefix, '⚠️ INTERCEPTADO set title con "100", bloqueando:', value);
                                     return; // No establecer el valor
                                 }
                                 return titleDescriptor.set.call(this, value);
@@ -126,13 +114,12 @@
                 }
             })();
             
-            // MONITOR CONTINUO para eliminar tooltip de "100 créditos"
+            // MONITOR CONTINUO para eliminar tooltip de "100 créditos" - SIN LOGS
             setInterval(function() {
                 var btn = document.getElementById('createSocialBtn');
                 if (btn) {
                     var title = btn.getAttribute('title') || btn.title || '';
                     if (title && (title.includes('100') || title.includes('cien'))) {
-                        console.log(logPrefix, '⚠️ MONITOR detectó tooltip con "100", eliminando:', title);
                         btn.title = '';
                         btn.removeAttribute('title');
                         // Llamar a updateBetEligibility para establecer el tooltip correcto
@@ -141,7 +128,7 @@
                         }
                     }
                 }
-            }, 200); // Verificar cada 200ms (más frecuente)
+            }, 500); // Verificar cada 500ms (menos frecuente para reducir carga)
             
             // Verificación adicional después de un pequeño delay
             setTimeout(function() {
@@ -1117,29 +1104,22 @@
                         console.warn('[selectSong] ⚠️ selectedSongCard no encontrado');
                     }
                     
-                    // DETENER TODOS LOS PREVIEWS DE AUDIO - FORZADO
-                    console.log('[selectSong] 🛑 Iniciando detención de previews...');
+                    // DETENER TODOS LOS PREVIEWS DE AUDIO - SIN LOGS EXCESIVOS
                     try {
                         // Método 1: Función global
                         if (typeof window.stopAllPreviews === 'function') {
-                            console.log('[selectSong] 🛑 Usando window.stopAllPreviews...');
                             window.stopAllPreviews();
                         } else if (typeof stopAllPreviews === 'function') {
-                            console.log('[selectSong] 🛑 Usando stopAllPreviews...');
                             stopAllPreviews();
                         }
                         
                         // Método 2: Detener todos los elementos audio directamente
                         var audioElements = document.querySelectorAll('audio');
-                        console.log('[selectSong] 🛑 Encontrados', audioElements.length, 'elementos de audio');
-                        audioElements.forEach(function(audio, index) {
+                        audioElements.forEach(function(audio) {
                             try {
                                 audio.pause();
                                 audio.currentTime = 0;
-                                console.log('[selectSong] 🛑 Audio', index, 'detenido');
-                            } catch(e) {
-                                console.warn('[selectSong] ⚠️ Error al detener audio', index, ':', e);
-                            }
+                            } catch(e) {}
                         });
                         
                         // Método 3: Detener cualquier source de audio
@@ -1153,23 +1133,18 @@
                                 }
                             } catch(e) {}
                         });
-                        
-                        console.log('[selectSong] ✅ Previews detenidos completamente');
                     } catch(e) {
-                        console.error('[selectSong] ❌ Error al detener previews:', e);
+                        // Solo loggear errores críticos
                     }
                     
-                    // MOSTRAR BANNER VERDE para modo Social Challenge - FORZADO
+                    // MOSTRAR BANNER VERDE para modo Social Challenge - SIN LOGS EXCESIVOS
                     var isSocialMode = currentMode === 'social' || window.currentMode === 'social';
-                    console.log('[selectSong] 🟢 Verificando modo Social. currentMode:', currentMode, 'window.currentMode:', window.currentMode, 'isSocialMode:', isSocialMode);
                     
                     if (isSocialMode) {
-                        console.log('[selectSong] 🟢 Mostrando banner verde para modo Social...');
                         try {
                             // Eliminar banner anterior si existe
                             var existingBanner = document.getElementById('songSelectedBanner');
                             if (existingBanner) {
-                                console.log('[selectSong] 🟢 Eliminando banner anterior');
                                 existingBanner.remove();
                             }
                             
@@ -1185,27 +1160,14 @@
                                 style.id = 'bannerAnimationStyle';
                                 style.textContent = '@keyframes slideDown { from { opacity: 0; transform: translateX(-50%) translateY(-20px); } to { opacity: 1; transform: translateX(-50%) translateY(0); } }';
                                 document.head.appendChild(style);
-                                console.log('[selectSong] 🟢 Estilo de animación agregado');
                             }
                             
                             document.body.appendChild(banner);
-                            console.log('[selectSong] ✅ Banner verde agregado al DOM');
-                            
-                            // Verificar que el banner esté visible
-                            setTimeout(function() {
-                                var checkBanner = document.getElementById('songSelectedBanner');
-                                if (checkBanner) {
-                                    console.log('[selectSong] ✅ Banner verificado después de 100ms:', checkBanner.offsetHeight > 0 ? 'VISIBLE' : 'OCULTO');
-                                } else {
-                                    console.error('[selectSong] ❌ Banner no encontrado después de 100ms');
-                                }
-                            }, 100);
                             
                             // Remover banner después de 5 segundos
                             setTimeout(function() {
                                 var bannerToRemove = document.getElementById('songSelectedBanner');
                                 if (bannerToRemove && bannerToRemove.parentNode) {
-                                    console.log('[selectSong] 🟢 Removiendo banner después de 5 segundos');
                                     bannerToRemove.style.transition = 'opacity 0.3s ease-out';
                                     bannerToRemove.style.opacity = '0';
                                     setTimeout(function() {
@@ -1216,10 +1178,8 @@
                                 }
                             }, 5000);
                         } catch(e) {
-                            console.error('[selectSong] ❌ Error al crear banner verde:', e);
+                            // Solo loggear errores críticos
                         }
-                    } else {
-                        console.log('[selectSong] ⚠️ No es modo Social, no se mostrará banner');
                     }
                     
                     // Actualizar estado de botones según el modo
@@ -2792,25 +2752,22 @@
             var btn = document.getElementById('createSocialBtn');
             if (btn && !btn.hasAttribute('data-listener-setup')) {
                 btn.setAttribute('data-listener-setup', 'true');
-                // Remover onclick inline si existe
-                btn.removeAttribute('onclick');
-                // Agregar event listener robusto
-                btn.addEventListener('click', function(e) {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    console.log('[createSocialBtn] ✅ Click detectado directamente');
-                    if (typeof window.createSocialChallenge === 'function') {
-                        console.log('[createSocialBtn] Llamando a window.createSocialChallenge...');
-                        window.createSocialChallenge();
-                    } else if (typeof createSocialChallenge === 'function') {
-                        console.log('[createSocialBtn] Llamando a createSocialChallenge...');
-                        createSocialChallenge();
-                    } else {
-                        console.error('[createSocialBtn] ❌ createSocialChallenge no está disponible');
-                        showToast('Error: Función no disponible. Recarga la página.', 'error');
-                    }
-                }, true);
-                console.log('[ASSIGN] ✅ Event listener agregado a createSocialBtn');
+                        // Remover onclick inline si existe
+                        btn.removeAttribute('onclick');
+                        // Agregar event listener robusto - SIN LOGS EXCESIVOS
+                        btn.addEventListener('click', function(e) {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            if (typeof window.createSocialChallenge === 'function') {
+                                window.createSocialChallenge();
+                            } else if (typeof createSocialChallenge === 'function') {
+                                createSocialChallenge();
+                            } else {
+                                if (typeof showToast === 'function') {
+                                    showToast('Error: Función no disponible. Recarga la página.', 'error');
+                                }
+                            }
+                        }, true);
             }
         }
         
@@ -2819,9 +2776,17 @@
         setTimeout(setupCreateSocialBtn, 500);
         setTimeout(setupCreateSocialBtn, 1000);
         
-        // También usar MutationObserver para detectar cuando se crea el botón
+        // También usar MutationObserver para detectar cuando se crea el botón - SIN LOGS
         var observer = new MutationObserver(function(mutations) {
-            setupCreateSocialBtn();
+            // Solo verificar si hay cambios relevantes
+            var hasRelevantChange = mutations.some(function(mutation) {
+                return Array.from(mutation.addedNodes).some(function(node) {
+                    return node.nodeType === 1 && (node.id === 'createSocialBtn' || node.querySelector && node.querySelector('#createSocialBtn'));
+                });
+            });
+            if (hasRelevantChange) {
+                setupCreateSocialBtn();
+            }
         });
         observer.observe(document.body, { childList: true, subtree: true });
     </script>
