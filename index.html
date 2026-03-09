@@ -1248,69 +1248,100 @@
                     });
                     
                     if (isSocialMode) {
+                        logFn('[selectSongForBattle] 🟢 MODO SOCIAL DETECTADO - Creando banner verde...');
                         (function showGreenBanner() {
                             try {
+                                logFn('[showGreenBanner] Iniciando creación de banner...');
+                                
                                 // Eliminar banner anterior si existe
                                 var existingBanner = document.getElementById('songSelectedBanner');
                                 if (existingBanner) {
                                     existingBanner.remove();
+                                    logFn('[showGreenBanner] Banner anterior eliminado');
                                 }
                                 
-                                // Esperar un momento para asegurar que el DOM esté listo
-                                setTimeout(function() {
-                                    // Crear banner verde muy prominente
-                                    var banner = document.createElement('div');
-                                    banner.id = 'songSelectedBanner';
+                                // NO ESPERAR - Crear inmediatamente
+                                logFn('[showGreenBanner] Creando elemento banner...');
+                                
+                                // Crear banner verde muy prominente
+                                var banner = document.createElement('div');
+                                banner.id = 'songSelectedBanner';
+                                
+                                // Estilos inline con !important para máxima prioridad
+                                banner.style.cssText = 'position: fixed !important; top: 100px !important; left: 50% !important; transform: translateX(-50%) !important; z-index: 999999 !important; background: linear-gradient(135deg, #10b981 0%, #059669 100%) !important; color: white !important; padding: 20px 40px !important; border-radius: 16px !important; box-shadow: 0 10px 40px rgba(16, 185, 129, 0.6) !important; font-weight: 800 !important; font-size: 18px !important; text-align: center !important; pointer-events: none !important; display: block !important; visibility: visible !important; opacity: 1 !important;';
+                                banner.innerHTML = '✅ <strong>Canción Seleccionada:</strong> ' + (song.name || 'Sin nombre') + ' - ' + (song.artist || 'Artista desconocido');
+                                
+                                logFn('[showGreenBanner] Banner creado, agregando estilos de animación...');
+                                
+                                // Agregar animación CSS si no existe
+                                if (!document.getElementById('bannerAnimationStyle')) {
+                                    var style = document.createElement('style');
+                                    style.id = 'bannerAnimationStyle';
+                                    style.textContent = '@keyframes slideDown { from { opacity: 0; transform: translateX(-50%) translateY(-30px); } to { opacity: 1; transform: translateX(-50%) translateY(0); } }';
+                                    document.head.appendChild(style);
+                                    logFn('[showGreenBanner] Estilos de animación agregados');
+                                }
+                                
+                                // Aplicar animación
+                                banner.style.animation = 'slideDown 0.4s ease-out';
+                                
+                                logFn('[showGreenBanner] Agregando banner al body...');
+                                
+                                // Agregar al body INMEDIATAMENTE
+                                if (document.body) {
+                                    document.body.appendChild(banner);
+                                    logFn('[showGreenBanner] ✅ Banner agregado al DOM');
                                     
-                                    // Estilos inline con !important para máxima prioridad
-                                    banner.style.cssText = 'position: fixed !important; top: 100px !important; left: 50% !important; transform: translateX(-50%) !important; z-index: 999999 !important; background: linear-gradient(135deg, #10b981 0%, #059669 100%) !important; color: white !important; padding: 20px 40px !important; border-radius: 16px !important; box-shadow: 0 10px 40px rgba(16, 185, 129, 0.6) !important; font-weight: 800 !important; font-size: 18px !important; text-align: center !important; pointer-events: none !important; display: block !important; visibility: visible !important; opacity: 1 !important;';
-                                    banner.innerHTML = '✅ <strong>Canción Seleccionada:</strong> ' + (song.name || 'Sin nombre') + ' - ' + (song.artist || 'Artista desconocido');
-                                    
-                                    // Agregar animación CSS si no existe
-                                    if (!document.getElementById('bannerAnimationStyle')) {
-                                        var style = document.createElement('style');
-                                        style.id = 'bannerAnimationStyle';
-                                        style.textContent = '@keyframes slideDown { from { opacity: 0; transform: translateX(-50%) translateY(-30px); } to { opacity: 1; transform: translateX(-50%) translateY(0); } }';
-                                        document.head.appendChild(style);
-                                    }
-                                    
-                                    // Aplicar animación
-                                    banner.style.animation = 'slideDown 0.4s ease-out';
-                                    
-                                    // Agregar al body
-                                    if (document.body) {
-                                        document.body.appendChild(banner);
-                                        
-                                        // Verificar que se agregó correctamente
-                                        setTimeout(function() {
-                                            var checkBanner = document.getElementById('songSelectedBanner');
-                                            if (checkBanner && checkBanner.parentNode === document.body) {
-                                                // Banner está en el DOM, forzar visibilidad
-                                                checkBanner.style.display = 'block';
-                                                checkBanner.style.visibility = 'visible';
-                                                checkBanner.style.opacity = '1';
-                                            }
-                                        }, 50);
-                                    }
-                                    
-                                    // Remover banner después de 6 segundos
+                                    // Verificar inmediatamente que se agregó
                                     setTimeout(function() {
-                                        var bannerToRemove = document.getElementById('songSelectedBanner');
-                                        if (bannerToRemove && bannerToRemove.parentNode) {
-                                            bannerToRemove.style.transition = 'opacity 0.5s ease-out';
-                                            bannerToRemove.style.opacity = '0';
-                                            setTimeout(function() {
-                                                if (bannerToRemove && bannerToRemove.parentNode) {
-                                                    bannerToRemove.remove();
-                                                }
-                                            }, 500);
+                                        var checkBanner = document.getElementById('songSelectedBanner');
+                                        if (checkBanner) {
+                                            logFn('[showGreenBanner] ✅ Banner verificado en DOM');
+                                            logFn('[showGreenBanner] Banner display:', checkBanner.style.display);
+                                            logFn('[showGreenBanner] Banner visibility:', checkBanner.style.visibility);
+                                            logFn('[showGreenBanner] Banner opacity:', checkBanner.style.opacity);
+                                            logFn('[showGreenBanner] Banner offsetHeight:', checkBanner.offsetHeight);
+                                            
+                                            // Forzar visibilidad
+                                            checkBanner.style.display = 'block';
+                                            checkBanner.style.visibility = 'visible';
+                                            checkBanner.style.opacity = '1';
+                                            checkBanner.style.position = 'fixed';
+                                            checkBanner.style.top = '100px';
+                                            checkBanner.style.left = '50%';
+                                            checkBanner.style.transform = 'translateX(-50%)';
+                                            checkBanner.style.zIndex = '999999';
+                                            
+                                            logFn('[showGreenBanner] ✅ Estilos forzados aplicados');
+                                        } else {
+                                            logFn('[showGreenBanner] ❌ Banner NO encontrado en DOM después de agregar');
                                         }
-                                    }, 6000);
-                                }, 50);
+                                    }, 100);
+                                } else {
+                                    logFn('[showGreenBanner] ❌ document.body no está disponible');
+                                }
+                                
+                                // Remover banner después de 6 segundos
+                                setTimeout(function() {
+                                    var bannerToRemove = document.getElementById('songSelectedBanner');
+                                    if (bannerToRemove && bannerToRemove.parentNode) {
+                                        bannerToRemove.style.transition = 'opacity 0.5s ease-out';
+                                        bannerToRemove.style.opacity = '0';
+                                        setTimeout(function() {
+                                            if (bannerToRemove && bannerToRemove.parentNode) {
+                                                bannerToRemove.remove();
+                                                logFn('[showGreenBanner] Banner removido después de 6 segundos');
+                                            }
+                                        }, 500);
+                                    }
+                                }, 6000);
                             } catch(e) {
-                                console.error('[selectSong] Error crítico al crear banner:', e);
+                                console.error('[selectSong] ❌ Error crítico al crear banner:', e);
+                                logFn('[showGreenBanner] ❌ ERROR:', e);
                             }
                         })();
+                    } else {
+                        logFn('[selectSongForBattle] ⚠️ NO es modo social, no se mostrará banner. Modo actual:', currentMode, window.currentMode);
                     }
                     
                     // Actualizar estado de botones según el modo
