@@ -11,33 +11,45 @@
     
     <!-- Script INMEDIATO - Primera línea ejecutable del documento - SIN BLOQUEOS -->
     <script>
-        console.log('[INMEDIATE] 🔥 Script INMEDIATO ejecutándose AHORA');
-        window.updateBetEligibility = function() {
-            console.log('[INMEDIATE] updateBetEligibility ejecutado');
-            var btn = document.getElementById('createSocialBtn');
-            if (btn && window.currentMode === 'social') {
-                var betInput = document.getElementById('betAmount');
-                var bet = betInput ? parseFloat(betInput.value || '0') : 0;
-                var onchainBalance = Number(window.__mtrOnChainBalance || 0);
-                var credits = window.CreditsSystem ? (window.CreditsSystem.currentCredits || 0) : 0;
-                var canCover = bet >= 5 && (credits >= bet || onchainBalance >= bet);
-                var hasSong = !!window.selectedSong;
-                btn.disabled = !canCover || !hasSong;
-                var title = btn.getAttribute('title') || btn.title || '';
-                if (title && title.includes('100')) {
-                    btn.title = '';
-                    btn.removeAttribute('title');
+        (function() {
+            var logPrefix = '[INMEDIATE]';
+            console.log(logPrefix, '🔥 Script INMEDIATO ejecutándose AHORA');
+            console.log(logPrefix, 'Timestamp:', Date.now());
+            console.log(logPrefix, 'Window object:', typeof window);
+            
+            window.updateBetEligibility = function() {
+                console.log(logPrefix, 'updateBetEligibility ejecutado');
+                var btn = document.getElementById('createSocialBtn');
+                if (btn && window.currentMode === 'social') {
+                    var betInput = document.getElementById('betAmount');
+                    var bet = betInput ? parseFloat(betInput.value || '0') : 0;
+                    var onchainBalance = Number(window.__mtrOnChainBalance || 0);
+                    var credits = window.CreditsSystem ? (window.CreditsSystem.currentCredits || 0) : 0;
+                    var canCover = bet >= 5 && (credits >= bet || onchainBalance >= bet);
+                    var hasSong = !!window.selectedSong;
+                    btn.disabled = !canCover || !hasSong;
+                    var title = btn.getAttribute('title') || btn.title || '';
+                    if (title && title.includes('100')) {
+                        btn.title = '';
+                        btn.removeAttribute('title');
+                    }
+                    if (!canCover && bet > 0) {
+                        btn.title = bet < 5 ? 'Apuesta mínima: 5 créditos' : 'Créditos y saldo MTR insuficientes';
+                    } else {
+                        btn.title = '';
+                    }
                 }
-                if (!canCover && bet > 0) {
-                    btn.title = bet < 5 ? 'Apuesta mínima: 5 créditos' : 'Créditos y saldo MTR insuficientes';
-                } else {
-                    btn.title = '';
-                }
-            }
-        };
-        console.log('[INMEDIATE] ✅ updateBetEligibility DEFINIDO INMEDIATAMENTE');
-        console.log('[INMEDIATE] Tipo:', typeof window.updateBetEligibility);
-        console.log('[INMEDIATE] Verificación:', window.updateBetEligibility === window.updateBetEligibility);
+            };
+            
+            console.log(logPrefix, '✅ updateBetEligibility DEFINIDO INMEDIATAMENTE');
+            console.log(logPrefix, 'Tipo:', typeof window.updateBetEligibility);
+            console.log(logPrefix, 'Verificación:', typeof window.updateBetEligibility === 'function');
+            
+            // Verificación adicional después de un pequeño delay
+            setTimeout(function() {
+                console.log(logPrefix, '⏰ Verificación después de 100ms:', typeof window.updateBetEligibility);
+            }, 100);
+        })();
     </script>
 
     <link rel="preconnect" href="https://fonts.googleapis.com">
