@@ -97,11 +97,14 @@ async function initializeServices() {
 
         // Initialize liquidity manager (manages USDC buffer and MTR pool)
         try {
+            console.log('[server] 🔄 Initializing liquidity manager...');
+            console.log('[server] SWAP_WALLET_PRIVATE_KEY configured:', !!process.env.SWAP_WALLET_PRIVATE_KEY);
             liquidityManager = new LiquidityManager();
             await liquidityManager.init();
             console.log('[server] ✅ Liquidity manager initialized');
         } catch (liquidityError) {
             console.error('[server] ⚠️ Error initializing liquidity manager:', liquidityError);
+            console.error('[server] Error stack:', liquidityError.stack);
             console.log('[server] Continuing without liquidity manager...');
             // Non-critical - continue without it
         }
@@ -125,19 +128,53 @@ app.get('/api/user/credits/:walletAddress', async (req, res) => {
         const walletAddress = req.params.walletAddress.toLowerCase();
 
         // Find user
-        const { data: user } = await supabase
+        let { data: user, error: userError } = await supabase
             .from('users')
             .select('id')
             .eq('wallet_address', walletAddress)
             .single();
 
-        if (!user) {
-            return res.json({
-                credits: 0,
-                usdcValue: 0,
-                mtrPrice: priceUpdater.getCurrentPrice() || 0,
-                userId: null
-            });
+        // Si el usuario no existe, crearlo automáticamente
+        if (!user || (userError && userError.code === 'PGRST116')) {
+            console.log('[server] Usuario no encontrado, creando automáticamente para wallet:', walletAddress);
+            
+            // Crear usuario nuevo
+            const { data: newUser, error: createError } = await supabase
+                .from('users')
+                .insert({
+                    wallet_address: walletAddress,
+                    created_at: new Date().toISOString()
+                })
+                .select('id')
+                .single();
+
+            if (createError) {
+                console.error('[server] Error creando usuario:', createError);
+                // Continuar con userId null si falla la creación
+                return res.json({
+                    credits: 0,
+                    usdcValue: 0,
+                    mtrPrice: priceUpdater.getCurrentPrice() || 0,
+                    userId: null,
+                    error: 'Error al crear usuario: ' + createError.message
+                });
+            }
+
+            user = newUser;
+            console.log('[server] ✅ Usuario creado automáticamente con ID:', user.id);
+
+            // Crear registro de créditos inicial (0 créditos)
+            const { error: creditsError } = await supabase
+                .from('user_credits')
+                .insert({
+                    user_id: user.id,
+                    credits: 0
+                });
+
+            if (creditsError) {
+                console.error('[server] Error creando registro de créditos:', creditsError);
+                // Continuar aunque falle la creación del registro de créditos
+            }
         }
 
         // Get credits
