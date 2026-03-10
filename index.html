@@ -1146,13 +1146,29 @@
                         return;
                     }
                     
-                    // Actualizar variables globales
+                    // Actualizar variables globales - FORZADO
                     if (typeof window !== 'undefined') {
                         window.selectedSong = song;
+                        logFn('[selectSongForBattle] ✅ window.selectedSong establecido:', song);
+                        logFn('[selectSongForBattle] Verificación window.selectedSong:', window.selectedSong);
                     }
-                    if (typeof selectedSong !== 'undefined') {
-                        selectedSong = song;
+                    
+                    // También actualizar variable local si existe en el scope
+                    try {
+                        if (typeof selectedSong !== 'undefined') {
+                            selectedSong = song;
+                        }
+                        // Intentar establecer en el scope global también
+                        if (typeof globalThis !== 'undefined') {
+                            globalThis.selectedSong = song;
+                        }
+                    } catch(e) {
+                        logFn('[selectSongForBattle] ⚠️ No se pudo establecer selectedSong local:', e);
                     }
+                    
+                    // Verificación final
+                    logFn('[selectSongForBattle] ✅✅✅ CANCIÓN SELECCIONADA Y GUARDADA');
+                    logFn('[selectSongForBattle] window.selectedSong final:', window.selectedSong);
                     
                     // Logs comentados para reducir ruido
                     // console.log('[selectSong] ✅ Canción seleccionada:', song.name, 'ID:', song.id);
@@ -2456,10 +2472,21 @@
                 buttonsDiv.innerHTML = '';
                 buttonsDiv.appendChild(btn);
                 
+                // Guardar referencia global del botón
+                window.__createSocialBtn = btn;
+                logFn('[updateActionButtons] ✅ Botón createSocialBtn creado y guardado en window.__createSocialBtn');
+                
                 // Actualizar estado después de insertar
                 setTimeout(function() {
                     if (typeof updateBetEligibility === 'function') {
                         updateBetEligibility();
+                    }
+                    // Verificar que el botón esté disponible
+                    var checkBtn = document.getElementById('createSocialBtn');
+                    if (checkBtn) {
+                        logFn('[updateActionButtons] ✅ Botón verificado después de insertar');
+                    } else {
+                        errorFn('[updateActionButtons] ❌ Botón NO encontrado después de insertar');
                     }
                 }, 100);
                 
@@ -3201,13 +3228,30 @@
             logFn('[DIAG] window.updateBetEligibility:', typeof window.updateBetEligibility);
             logFn('[DIAG] window.stopAllPreviews:', typeof window.stopAllPreviews);
             
-            // Verificar botón createSocialBtn
+            // Verificar botón createSocialBtn - múltiples métodos
             var btn = document.getElementById('createSocialBtn');
+            if (!btn && window.__createSocialBtn) {
+                logFn('[DIAG] Botón no encontrado por ID, usando referencia guardada...');
+                btn = window.__createSocialBtn;
+            }
+            if (!btn) {
+                // Intentar buscar por texto
+                var allButtons = document.querySelectorAll('button');
+                for (var i = 0; i < allButtons.length; i++) {
+                    if (allButtons[i].textContent && allButtons[i].textContent.includes('Crear Desafío')) {
+                        btn = allButtons[i];
+                        logFn('[DIAG] Botón encontrado por texto');
+                        break;
+                    }
+                }
+            }
+            
             if (btn) {
                 logFn('[DIAG] ✅ Botón createSocialBtn encontrado');
                 logFn('[DIAG] Botón disabled:', btn.disabled);
                 logFn('[DIAG] Botón onclick:', typeof btn.onclick);
                 logFn('[DIAG] Botón title:', btn.title || btn.getAttribute('title') || 'vacío');
+                logFn('[DIAG] Botón id:', btn.id);
                 
                 // Verificar si tiene handler guardado
                 if (btn._createSocialHandler) {
@@ -3216,7 +3260,8 @@
                     logFn('[DIAG] ⚠️ Handler guardado NO encontrado');
                 }
             } else {
-                errorFn('[DIAG] ❌ Botón createSocialBtn NO encontrado');
+                errorFn('[DIAG] ❌ Botón createSocialBtn NO encontrado por ningún método');
+                errorFn('[DIAG] window.__createSocialBtn:', window.__createSocialBtn);
             }
             
             // Verificar tracks con event listeners
