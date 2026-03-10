@@ -253,10 +253,9 @@ async function displaySearchResults(tracks, resultsDiv) {
         };
         const indicator = getTrackIndicator(streamData.current, streamData.avg24h);
 
-        // Crear elemento con data attribute para evitar problemas con onclick inline
-        const trackId = 'track_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+        // Usar data attribute para almacenar trackData
         html += `
-            <div class="track-item" data-track-id="${trackId}" data-track-data='${JSON.stringify(trackData).replace(/'/g, "&#39;")}'>
+            <div class="track-item" data-track-data='${JSON.stringify(trackData).replace(/'/g, "&#39;")}'>
                 <img src="${track.album.cover_medium}" alt="${track.title}">
                 <div class="track-info">
                     <div class="track-name">${track.title}</div>
@@ -269,35 +268,55 @@ async function displaySearchResults(tracks, resultsDiv) {
                 ` : '<span style="color:#6B7280; font-size:12px; padding: 12px;">Sin preview</span>'}
             </div>
         `;
-        
-        // Agregar event listener después de insertar HTML
-        setTimeout(function() {
-            const trackElement = document.querySelector(`[data-track-id="${trackId}"]`);
-            if (trackElement) {
-                trackElement.addEventListener('click', function(e) {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    const trackDataAttr = this.getAttribute('data-track-data');
-                    if (trackDataAttr) {
-                        try {
-                            const trackData = JSON.parse(trackDataAttr);
-                            var logFn = window.__originalLog || console.log;
-                            logFn('[displaySearchResults] Click en track detectado, llamando handleTrackSelect...');
-                            if (typeof window.handleTrackSelect === 'function') {
-                                window.handleTrackSelect(trackData);
-                            } else if (typeof handleTrackSelect === 'function') {
-                                handleTrackSelect(trackData);
-                            }
-                        } catch(err) {
-                            console.error('[displaySearchResults] Error al parsear trackData:', err);
-                        }
-                    }
-                });
-            }
-        }, 100);
     });
 
+    // Insertar HTML primero
     resultsDiv.innerHTML = html;
+    
+    // DESPUÉS de insertar, agregar event listeners a todos los tracks
+    var logFn = window.__originalLog || console.log;
+    var errorFn = console.error;
+    
+    setTimeout(function() {
+        const trackItems = resultsDiv.querySelectorAll('.track-item');
+        logFn('[displaySearchResults] Tracks encontrados para agregar listeners:', trackItems.length);
+        
+        trackItems.forEach(function(trackElement, index) {
+            trackElement.addEventListener('click', function(e) {
+                logFn('[displaySearchResults] ✅✅✅ CLICK EN TRACK #' + index + ' DETECTADO');
+                e.preventDefault();
+                e.stopPropagation();
+                
+                const trackDataAttr = this.getAttribute('data-track-data');
+                logFn('[displaySearchResults] trackDataAttr:', trackDataAttr ? 'presente' : 'ausente');
+                
+                if (trackDataAttr) {
+                    try {
+                        const trackData = JSON.parse(trackDataAttr);
+                        logFn('[displaySearchResults] trackData parseado:', trackData);
+                        logFn('[displaySearchResults] window.handleTrackSelect:', typeof window.handleTrackSelect);
+                        logFn('[displaySearchResults] handleTrackSelect:', typeof handleTrackSelect);
+                        
+                        if (typeof window.handleTrackSelect === 'function') {
+                            logFn('[displaySearchResults] ✅ Llamando window.handleTrackSelect...');
+                            window.handleTrackSelect(trackData);
+                        } else if (typeof handleTrackSelect === 'function') {
+                            logFn('[displaySearchResults] ✅ Llamando handleTrackSelect...');
+                            handleTrackSelect(trackData);
+                        } else {
+                            errorFn('[displaySearchResults] ❌❌❌ handleTrackSelect NO DISPONIBLE');
+                        }
+                    } catch(err) {
+                        errorFn('[displaySearchResults] ❌ Error al parsear trackData:', err);
+                    }
+                } else {
+                    errorFn('[displaySearchResults] ❌ data-track-data no encontrado');
+                }
+            });
+        });
+        
+        logFn('[displaySearchResults] ✅ Event listeners agregados a', trackItems.length, 'tracks');
+    }, 50);
 }
 
 function formatDeltaArrow(current, avg24h) {
