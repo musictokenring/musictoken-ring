@@ -3666,7 +3666,7 @@ const GameEngine = {
                 
                 if (walletAddress) {
                     // Deduct credits via backend
-                    const backendUrl = window.CONFIG?.BACKEND_API || 'https://musictoken-backend.onrender.com';
+                    const backendUrl = window.CONFIG?.BACKEND_API || 'https://musictoken-ring.onrender.com';
                     console.log('[updateBalance] Obteniendo userId para wallet:', walletAddress);
                     
                     const userId = await window.CreditsSystem.getUserId(walletAddress);
