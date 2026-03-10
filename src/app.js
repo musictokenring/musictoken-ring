@@ -253,8 +253,10 @@ async function displaySearchResults(tracks, resultsDiv) {
         };
         const indicator = getTrackIndicator(streamData.current, streamData.avg24h);
 
+        // Crear elemento con data attribute para evitar problemas con onclick inline
+        const trackId = 'track_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
         html += `
-            <div class="track-item" onclick='handleTrackSelect(${JSON.stringify(trackData).replace(/'/g, "&#39;")})'>
+            <div class="track-item" data-track-id="${trackId}" data-track-data='${JSON.stringify(trackData).replace(/'/g, "&#39;")}'>
                 <img src="${track.album.cover_medium}" alt="${track.title}">
                 <div class="track-info">
                     <div class="track-name">${track.title}</div>
@@ -267,6 +269,32 @@ async function displaySearchResults(tracks, resultsDiv) {
                 ` : '<span style="color:#6B7280; font-size:12px; padding: 12px;">Sin preview</span>'}
             </div>
         `;
+        
+        // Agregar event listener después de insertar HTML
+        setTimeout(function() {
+            const trackElement = document.querySelector(`[data-track-id="${trackId}"]`);
+            if (trackElement) {
+                trackElement.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    const trackDataAttr = this.getAttribute('data-track-data');
+                    if (trackDataAttr) {
+                        try {
+                            const trackData = JSON.parse(trackDataAttr);
+                            var logFn = window.__originalLog || console.log;
+                            logFn('[displaySearchResults] Click en track detectado, llamando handleTrackSelect...');
+                            if (typeof window.handleTrackSelect === 'function') {
+                                window.handleTrackSelect(trackData);
+                            } else if (typeof handleTrackSelect === 'function') {
+                                handleTrackSelect(trackData);
+                            }
+                        } catch(err) {
+                            console.error('[displaySearchResults] Error al parsear trackData:', err);
+                        }
+                    }
+                });
+            }
+        }, 100);
     });
 
     resultsDiv.innerHTML = html;
