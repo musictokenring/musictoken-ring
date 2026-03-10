@@ -357,24 +357,49 @@ async function displaySearchResults(tracks, resultsDiv) {
             return;
         }
         
-        trackItems.forEach(function(trackElement, index) {
-            // Remover listeners anteriores si existen
+        // Convertir NodeList a Array para poder iterar correctamente
+        var tracksArray = Array.from(trackItems);
+        logFn('[displaySearchResults] Array de tracks creado, longitud:', tracksArray.length);
+        
+        tracksArray.forEach(function(trackElement, index) {
+            logFn('[displaySearchResults] Procesando track #' + index);
+            
+            // Verificar que el elemento existe
+            if (!trackElement || !trackElement.parentNode) {
+                errorFn('[displaySearchResults] ⚠️ Track #' + index + ' no tiene parentNode');
+                return;
+            }
+            
+            // Remover listeners anteriores si existen - clonar elemento
             var newElement = trackElement.cloneNode(true);
-            trackElement.parentNode.replaceChild(newElement, trackElement);
+            if (trackElement.parentNode) {
+                trackElement.parentNode.replaceChild(newElement, trackElement);
+            }
             trackElement = newElement;
             
-            // Agregar listener robusto
-            trackElement.addEventListener('click', function(e) {
+            // Verificar que tiene data-track-data
+            var hasData = trackElement.hasAttribute('data-track-data');
+            logFn('[displaySearchResults] Track #' + index + ' tiene data-track-data:', hasData);
+            
+            // Función handler para el click
+            function handleTrackClick(e) {
                 logFn('[displaySearchResults] ✅✅✅ CLICK EN TRACK #' + index + ' DETECTADO');
-                logFn('[displaySearchResults] Event:', e);
-                logFn('[displaySearchResults] Target:', e.target);
+                logFn('[displaySearchResults] Event type:', e.type);
+                logFn('[displaySearchResults] Target tagName:', e.target ? e.target.tagName : 'N/A');
                 logFn('[displaySearchResults] CurrentTarget:', e.currentTarget);
+                logFn('[displaySearchResults] window.currentMode:', window.currentMode);
+                
+                // NO prevenir default si es el botón de preview
+                if (e.target && (e.target.classList.contains('btn-preview') || e.target.closest('.btn-preview'))) {
+                    logFn('[displaySearchResults] Click en botón preview, permitiendo comportamiento por defecto');
+                    return;
+                }
                 
                 e.preventDefault();
                 e.stopPropagation();
                 e.stopImmediatePropagation();
                 
-                const trackDataAttr = this.getAttribute('data-track-data');
+                const trackDataAttr = trackElement.getAttribute('data-track-data');
                 logFn('[displaySearchResults] trackDataAttr:', trackDataAttr ? 'presente (' + trackDataAttr.substring(0, 50) + '...)' : 'ausente');
                 
                 if (trackDataAttr) {
@@ -388,17 +413,19 @@ async function displaySearchResults(tracks, resultsDiv) {
                             logFn('[displaySearchResults] ✅ Llamando window.handleTrackSelect...');
                             try {
                                 window.handleTrackSelect(trackData);
-                                logFn('[displaySearchResults] ✅ window.handleTrackSelect ejecutado');
+                                logFn('[displaySearchResults] ✅ window.handleTrackSelect ejecutado sin errores');
                             } catch(err) {
                                 errorFn('[displaySearchResults] ❌ ERROR al ejecutar window.handleTrackSelect:', err);
+                                errorFn('[displaySearchResults] Stack:', err.stack);
                             }
                         } else if (typeof handleTrackSelect === 'function') {
                             logFn('[displaySearchResults] ✅ Llamando handleTrackSelect...');
                             try {
                                 handleTrackSelect(trackData);
-                                logFn('[displaySearchResults] ✅ handleTrackSelect ejecutado');
+                                logFn('[displaySearchResults] ✅ handleTrackSelect ejecutado sin errores');
                             } catch(err) {
                                 errorFn('[displaySearchResults] ❌ ERROR al ejecutar handleTrackSelect:', err);
+                                errorFn('[displaySearchResults] Stack:', err.stack);
                             }
                         } else {
                             errorFn('[displaySearchResults] ❌❌❌ handleTrackSelect NO DISPONIBLE');
@@ -411,14 +438,25 @@ async function displaySearchResults(tracks, resultsDiv) {
                     }
                 } else {
                     errorFn('[displaySearchResults] ❌ data-track-data no encontrado en elemento');
-                    errorFn('[displaySearchResults] Elemento:', this);
-                    errorFn('[displaySearchResults] Atributos:', Array.from(this.attributes).map(a => a.name + '=' + a.value));
+                    errorFn('[displaySearchResults] Elemento:', trackElement);
+                    errorFn('[displaySearchResults] Atributos:', Array.from(trackElement.attributes).map(a => a.name + '=' + a.value));
                 }
-            }, true); // Fase de captura
+            }
+            
+            // Agregar listener en fase de captura
+            trackElement.addEventListener('click', handleTrackClick, true);
+            logFn('[displaySearchResults] ✅ Event listener agregado a track #' + index + ' (captura)');
+            
+            // También agregar en fase de burbuja
+            trackElement.addEventListener('click', handleTrackClick, false);
+            logFn('[displaySearchResults] ✅ Event listener agregado a track #' + index + ' (burbuja)');
             
             // También agregar onclick como fallback
             trackElement.onclick = function(e) {
                 logFn('[displaySearchResults] ✅ CLICK (onclick fallback) en track #' + index);
+                if (e.target && (e.target.classList.contains('btn-preview') || e.target.closest('.btn-preview'))) {
+                    return;
+                }
                 e.preventDefault();
                 e.stopPropagation();
                 const trackDataAttr = this.getAttribute('data-track-data');
@@ -433,6 +471,8 @@ async function displaySearchResults(tracks, resultsDiv) {
                     }
                 }
             };
+            
+            logFn('[displaySearchResults] ✅ Track #' + index + ' completamente configurado');
         });
         
         logFn('[displaySearchResults] ✅✅✅ Event listeners agregados a', trackItems.length, 'tracks');
