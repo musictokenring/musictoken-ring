@@ -2872,14 +2872,43 @@
             
             logFn('[createSocialChallenge] Llamando GameEngine.createSocialChallenge con:', {
                 song: song,
-                bet: bet
+                bet: bet,
+                'song.id': song ? song.id : 'N/A',
+                'song.name': song ? song.name : 'N/A',
+                'GameEngine': typeof GameEngine,
+                'GameEngine.createSocialChallenge': typeof GameEngine !== 'undefined' ? typeof GameEngine.createSocialChallenge : 'N/A'
             });
             
+            if (typeof GameEngine === 'undefined') {
+                errorFn('[createSocialChallenge] ❌❌❌ GameEngine NO ESTÁ DEFINIDO');
+                if (typeof showToast === 'function') {
+                    showToast('Error: GameEngine no está cargado. Recarga la página.', 'error');
+                }
+                return;
+            }
+            
+            if (typeof GameEngine.createSocialChallenge !== 'function') {
+                errorFn('[createSocialChallenge] ❌❌❌ GameEngine.createSocialChallenge NO ES UNA FUNCIÓN');
+                errorFn('[createSocialChallenge] Tipo:', typeof GameEngine.createSocialChallenge);
+                if (typeof showToast === 'function') {
+                    showToast('Error: Función createSocialChallenge no disponible. Recarga la página.', 'error');
+                }
+                return;
+            }
+            
             try {
-                await GameEngine.createSocialChallenge(song, bet);
+                logFn('[createSocialChallenge] ✅ Ejecutando GameEngine.createSocialChallenge...');
+                var result = await GameEngine.createSocialChallenge(song, bet);
+                logFn('[createSocialChallenge] ✅✅✅ GameEngine.createSocialChallenge ejecutado exitosamente');
+                logFn('[createSocialChallenge] Resultado:', result);
             } catch(error) {
-                console.error('[createSocialChallenge] ❌ Error crítico:', error);
-                showToast('Error al crear desafío: ' + (error.message || 'Error desconocido'), 'error');
+                errorFn('[createSocialChallenge] ❌❌❌ ERROR CRÍTICO AL EJECUTAR:');
+                errorFn('[createSocialChallenge] Error:', error);
+                errorFn('[createSocialChallenge] Error.message:', error.message);
+                errorFn('[createSocialChallenge] Error.stack:', error.stack);
+                if (typeof showToast === 'function') {
+                    showToast('Error al crear desafío: ' + (error.message || 'Error desconocido'), 'error');
+                }
             }
         }
 
