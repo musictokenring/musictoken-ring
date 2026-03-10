@@ -224,28 +224,67 @@
          * Get user ID from wallet address
          */
         async getUserId(walletAddress) {
+            var logFn = window.__originalLog || console.log;
+            var errorFn = console.error;
+            
             try {
-                // Try to get from Supabase client if available
-                if (window.supabaseClient) {
-                    const { data } = await window.supabaseClient
-                        .from('users')
-                        .select('id')
-                        .eq('wallet_address', walletAddress.toLowerCase())
-                        .single();
+                logFn('[getUserId] Obteniendo userId para wallet:', walletAddress);
+                
+                // PRIMERO intentar obtener del backend API (más confiable)
+                try {
+                    logFn('[getUserId] Intentando obtener userId desde backend API...');
+                    const response = await fetch(`${this.backendUrl}/api/user/credits/${walletAddress}`);
+                    logFn('[getUserId] Respuesta del backend:', {
+                        ok: response.ok,
+                        status: response.status,
+                        statusText: response.statusText
+                    });
                     
-                    return data?.id;
+                    if (response.ok) {
+                        const data = await response.json();
+                        logFn('[getUserId] Datos del backend:', data);
+                        if (data.userId) {
+                            logFn('[getUserId] ✅ userId obtenido desde backend:', data.userId);
+                            return data.userId;
+                        }
+                    } else {
+                        const errorText = await response.text();
+                        errorFn('[getUserId] ⚠️ Backend API falló:', {
+                            status: response.status,
+                            errorText: errorText
+                        });
+                    }
+                } catch (backendError) {
+                    errorFn('[getUserId] ⚠️ Error al consultar backend API:', backendError);
+                }
+                
+                // FALLBACK: Intentar desde Supabase (puede fallar por RLS)
+                if (window.supabaseClient) {
+                    try {
+                        logFn('[getUserId] Intentando obtener userId desde Supabase...');
+                        const { data, error } = await window.supabaseClient
+                            .from('users')
+                            .select('id')
+                            .eq('wallet_address', walletAddress.toLowerCase())
+                            .single();
+                        
+                        if (error) {
+                            errorFn('[getUserId] ⚠️ Error en consulta Supabase:', error);
+                            errorFn('[getUserId] Error code:', error.code);
+                            errorFn('[getUserId] Error message:', error.message);
+                        } else if (data?.id) {
+                            logFn('[getUserId] ✅ userId obtenido desde Supabase:', data.id);
+                            return data.id;
+                        }
+                    } catch (supabaseError) {
+                        errorFn('[getUserId] ⚠️ Error al consultar Supabase:', supabaseError);
+                    }
                 }
 
-                // Fallback: get from backend
-                const response = await fetch(`${this.backendUrl}/api/user/credits/${walletAddress}`);
-                if (response.ok) {
-                    const data = await response.json();
-                    return data.userId || null;
-                }
-
+                errorFn('[getUserId] ❌ No se pudo obtener userId por ningún método');
                 return null;
             } catch (error) {
-                console.error('[credits-system] Error getting user ID:', error);
+                errorFn('[getUserId] ❌ Error crítico al obtener userId:', error);
                 return null;
             }
         },
