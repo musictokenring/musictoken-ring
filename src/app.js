@@ -167,7 +167,20 @@ function searchDeezer(query, resultsElementId = 'searchResults') {
             return;
         }
         
-        displaySearchResults(data.data, resultsDiv);
+        var logFn = window.__originalLog || console.log;
+        logFn('[searchDeezer] ✅ Datos recibidos, llamando displaySearchResults...');
+        logFn('[searchDeezer] Tracks recibidos:', data.data ? data.data.length : 0);
+        logFn('[searchDeezer] resultsDiv:', resultsDiv);
+        logFn('[searchDeezer] displaySearchResults:', typeof displaySearchResults);
+        logFn('[searchDeezer] window.displaySearchResults:', typeof window.displaySearchResults);
+        
+        if (typeof displaySearchResults === 'function') {
+            displaySearchResults(data.data, resultsDiv);
+        } else if (typeof window.displaySearchResults === 'function') {
+            window.displaySearchResults(data.data, resultsDiv);
+        } else {
+            console.error('[searchDeezer] ❌ displaySearchResults NO DISPONIBLE');
+        }
     };
     
     // Create script tag for JSONP request
@@ -235,6 +248,23 @@ function getTrackIndicator(streams, avg24h) {
 }
 
 async function displaySearchResults(tracks, resultsDiv) {
+    var logFn = window.__originalLog || console.log;
+    var errorFn = console.error;
+    
+    logFn('[displaySearchResults] ✅✅✅ FUNCIÓN LLAMADA');
+    logFn('[displaySearchResults] Tracks recibidos:', tracks ? tracks.length : 0);
+    logFn('[displaySearchResults] resultsDiv:', resultsDiv);
+    logFn('[displaySearchResults] resultsDiv.id:', resultsDiv ? resultsDiv.id : 'N/A');
+    
+    if (!tracks || tracks.length === 0) {
+        errorFn('[displaySearchResults] ❌ No hay tracks para mostrar');
+        return;
+    }
+    
+    if (!resultsDiv) {
+        errorFn('[displaySearchResults] ❌ resultsDiv no está disponible');
+        return;
+    }
     const enrichedTracks = await Promise.all(tracks.map(async (track) => {
         const streamData = await fetchTrackStreams(track.id);
         return { track, streamData };
@@ -271,16 +301,35 @@ async function displaySearchResults(tracks, resultsDiv) {
     });
 
     // Insertar HTML primero
+    logFn('[displaySearchResults] Insertando HTML...');
     resultsDiv.innerHTML = html;
+    logFn('[displaySearchResults] ✅ HTML insertado');
     
     // DESPUÉS de insertar, agregar event listeners a todos los tracks
-    var logFn = window.__originalLog || console.log;
-    var errorFn = console.error;
-    
     // Función para agregar listeners
     function attachTrackListeners() {
         const trackItems = resultsDiv.querySelectorAll('.track-item');
-        logFn('[displaySearchResults] 🔍 Buscando tracks... encontrados:', trackItems.length);
+        logFn('[displaySearchResults] 🔍 Buscando tracks con selector .track-item...');
+        logFn('[displaySearchResults] Tracks encontrados:', trackItems.length);
+        
+        // Verificar también con otros selectores
+        var allDivs = resultsDiv.querySelectorAll('div');
+        logFn('[displaySearchResults] Total divs en resultsDiv:', allDivs.length);
+        
+        if (trackItems.length === 0) {
+            // Intentar encontrar tracks de otra manera
+            var trackItemsAlt = resultsDiv.querySelectorAll('[data-track-data]');
+            logFn('[displaySearchResults] Tracks con data-track-data:', trackItemsAlt.length);
+            
+            if (trackItemsAlt.length === 0) {
+                logFn('[displaySearchResults] ⚠️ No se encontraron tracks, reintentando en 100ms...');
+                setTimeout(attachTrackListeners, 100);
+                return;
+            } else {
+                // Usar los tracks encontrados con el selector alternativo
+                trackItems = trackItemsAlt;
+            }
+        }
         
         if (trackItems.length === 0) {
             logFn('[displaySearchResults] ⚠️ No se encontraron tracks, reintentando en 100ms...');
