@@ -2493,9 +2493,18 @@
                 buttonsDiv.innerHTML = '';
                 buttonsDiv.appendChild(btn);
                 
-                // Guardar referencia global del botón
+                // Guardar referencia global del botón INMEDIATAMENTE
                 window.__createSocialBtn = btn;
                 logFn('[updateActionButtons] ✅ Botón createSocialBtn creado y guardado en window.__createSocialBtn');
+                logFn('[updateActionButtons] Botón ID:', btn.id);
+                logFn('[updateActionButtons] Botón tiene listeners:', btn.onclick ? 'onclick presente' : 'sin onclick');
+                
+                // Verificar que el botón esté en el DOM
+                if (btn.parentNode === buttonsDiv) {
+                    logFn('[updateActionButtons] ✅ Botón correctamente insertado en DOM');
+                } else {
+                    errorFn('[updateActionButtons] ⚠️ Botón NO está en el DOM correctamente');
+                }
                 
                 // Actualizar estado después de insertar
                 setTimeout(function() {
@@ -2506,10 +2515,21 @@
                     var checkBtn = document.getElementById('createSocialBtn');
                     if (checkBtn) {
                         logFn('[updateActionButtons] ✅ Botón verificado después de insertar');
+                        // Asegurar que la referencia global esté actualizada
+                        window.__createSocialBtn = checkBtn;
                     } else {
                         errorFn('[updateActionButtons] ❌ Botón NO encontrado después de insertar');
                     }
                 }, 100);
+                
+                // También verificar después de más tiempo
+                setTimeout(function() {
+                    var checkBtn = document.getElementById('createSocialBtn');
+                    if (checkBtn) {
+                        logFn('[updateActionButtons] ✅ Botón verificado después de 500ms');
+                        window.__createSocialBtn = checkBtn;
+                    }
+                }, 500);
                 
                 updateBetEligibility(); // Actualizar estado del botón
             }
