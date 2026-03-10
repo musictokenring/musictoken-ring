@@ -3706,6 +3706,79 @@ const GameEngine = {
                                 statusText: response.statusText,
                                 errorText: errorText
                             });
+                            
+                            // Si el error es "Insufficient credits" pero el usuario tiene suficiente MTR on-chain,
+                            // intentar convertir MTR a créditos automáticamente
+                            if (response.status === 400 && errorText.includes('Insufficient credit')) {
+                                const credits = window.CreditsSystem?.currentCredits || 0;
+                                const onchainBalance = Number(window.__mtrOnChainBalance || 0);
+                                const creditsNeeded = creditsToDeduct - credits;
+                                
+                                console.log('[updateBalance] Créditos insuficientes, verificando MTR on-chain:', {
+                                    credits: credits,
+                                    onchainBalance: onchainBalance,
+                                    creditsNeeded: creditsNeeded,
+                                    creditsToDeduct: creditsToDeduct
+                                });
+                                
+                                // Si tiene suficiente MTR on-chain, intentar convertir automáticamente
+                                if (onchainBalance >= creditsNeeded) {
+                                    console.log('[updateBalance] Usuario tiene suficiente MTR on-chain, convirtiendo automáticamente...');
+                                    
+                                    // Obtener precio actual de MTR (1 MTR = X USDC)
+                                    // Por ahora, asumimos 1:1 para simplificar, pero deberíamos obtener el precio real
+                                    const mtrToUsdcRate = 1; // TODO: Obtener precio real de MTR/USDC
+                                    const mtrToConvert = creditsNeeded / mtrToUsdcRate;
+                                    
+                                    try {
+                                        // Intentar agregar créditos equivalentes al MTR que el usuario tiene
+                                        // NOTA: Esto es una solución temporal. Idealmente deberíamos hacer un swap real de MTR a USDC
+                                        const addCreditsResponse = await fetch(`${backendUrl}/api/user/add-credits`, {
+                                            method: 'POST',
+                                            headers: { 'Content-Type': 'application/json' },
+                                            body: JSON.stringify({
+                                                userId,
+                                                credits: creditsNeeded,
+                                                reason: 'mtr_conversion',
+                                                mtrAmount: mtrToConvert,
+                                                note: `Conversión automática de ${mtrToConvert.toFixed(4)} MTR a ${creditsNeeded} créditos USDC`
+                                            })
+                                        });
+                                        
+                                        if (addCreditsResponse.ok) {
+                                            console.log('[updateBalance] ✅ Créditos agregados automáticamente desde MTR');
+                                            
+                                            // Ahora intentar descontar nuevamente
+                                            const retryResponse = await fetch(`${backendUrl}/api/user/deduct-credits`, {
+                                                method: 'POST',
+                                                headers: { 'Content-Type': 'application/json' },
+                                                body: JSON.stringify({
+                                                    userId,
+                                                    credits: creditsToDeduct,
+                                                    reason: 'match_bet',
+                                                    matchId: matchId
+                                                })
+                                            });
+                                            
+                                            if (retryResponse.ok) {
+                                                const retryData = await retryResponse.json();
+                                                console.log('[updateBalance] ✅ Créditos descontados exitosamente después de conversión:', retryData);
+                                                await window.CreditsSystem.loadBalance(walletAddress);
+                                                return true;
+                                            } else {
+                                                const retryErrorText = await retryResponse.text();
+                                                console.error('[updateBalance] ❌ Error al descontar después de conversión:', retryErrorText);
+                                            }
+                                        } else {
+                                            const addErrorText = await addCreditsResponse.text();
+                                            console.error('[updateBalance] ❌ Error al agregar créditos desde MTR:', addErrorText);
+                                        }
+                                    } catch (conversionError) {
+                                        console.error('[updateBalance] ❌ Error en conversión automática:', conversionError);
+                                    }
+                                }
+                            }
+                            
                             throw new Error(`Failed to deduct credits: ${response.status} ${response.statusText} - ${errorText}`);
                         }
 
