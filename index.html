@@ -3123,8 +3123,8 @@
         });
         observer.observe(document.body, { childList: true, subtree: true });
         
-        // SCRIPT DE DIAGNÓSTICO AUTOMÁTICO
-        setTimeout(function() {
+        // SCRIPT DE DIAGNÓSTICO AUTOMÁTICO - Ejecutar múltiples veces
+        function runDiagnostic() {
             var logFn = window.__originalLog || console.log;
             var errorFn = console.error;
             
@@ -3146,18 +3146,13 @@
                 logFn('[DIAG] ✅ Botón createSocialBtn encontrado');
                 logFn('[DIAG] Botón disabled:', btn.disabled);
                 logFn('[DIAG] Botón onclick:', typeof btn.onclick);
+                logFn('[DIAG] Botón title:', btn.title || btn.getAttribute('title') || 'vacío');
                 
-                // Verificar event listeners
-                var listeners = getEventListeners ? getEventListeners(btn) : 'getEventListeners no disponible';
-                logFn('[DIAG] Event listeners:', listeners);
-                
-                // Simular click para verificar
-                logFn('[DIAG] Simulando click en botón...');
-                try {
-                    btn.click();
-                    logFn('[DIAG] ✅ Click simulado ejecutado');
-                } catch(e) {
-                    errorFn('[DIAG] ❌ Error al simular click:', e);
+                // Verificar si tiene handler guardado
+                if (btn._createSocialHandler) {
+                    logFn('[DIAG] ✅ Handler guardado encontrado');
+                } else {
+                    logFn('[DIAG] ⚠️ Handler guardado NO encontrado');
                 }
             } else {
                 errorFn('[DIAG] ❌ Botón createSocialBtn NO encontrado');
@@ -3166,18 +3161,11 @@
             // Verificar tracks con event listeners
             var tracks = document.querySelectorAll('.track-item');
             logFn('[DIAG] Tracks encontrados:', tracks.length);
+            logFn('[DIAG] window.__tracksWithListeners:', window.__tracksWithListeners);
             if (tracks.length > 0) {
                 var firstTrack = tracks[0];
                 logFn('[DIAG] Primer track data-track-data:', firstTrack.getAttribute('data-track-data') ? 'presente' : 'ausente');
-                
-                // Simular click en primer track
-                logFn('[DIAG] Simulando click en primer track...');
-                try {
-                    firstTrack.click();
-                    logFn('[DIAG] ✅ Click en track simulado ejecutado');
-                } catch(e) {
-                    errorFn('[DIAG] ❌ Error al simular click en track:', e);
-                }
+                logFn('[DIAG] Primer track onclick:', typeof firstTrack.onclick);
             }
             
             // Verificar modo actual
@@ -3185,7 +3173,12 @@
             logFn('[DIAG] window.selectedSong:', window.selectedSong);
             
             logFn('========================================');
-        }, 3000); // Ejecutar después de 3 segundos
+        }
+        
+        // Ejecutar diagnóstico múltiples veces
+        setTimeout(runDiagnostic, 2000);
+        setTimeout(runDiagnostic, 5000);
+        setTimeout(runDiagnostic, 10000);
     </script>
 
     <!-- VIEM WALLET MODULE - Cargar con defer para no bloquear -->

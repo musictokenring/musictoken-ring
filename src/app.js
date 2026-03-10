@@ -277,46 +277,105 @@ async function displaySearchResults(tracks, resultsDiv) {
     var logFn = window.__originalLog || console.log;
     var errorFn = console.error;
     
-    setTimeout(function() {
+    // Función para agregar listeners
+    function attachTrackListeners() {
         const trackItems = resultsDiv.querySelectorAll('.track-item');
-        logFn('[displaySearchResults] Tracks encontrados para agregar listeners:', trackItems.length);
+        logFn('[displaySearchResults] 🔍 Buscando tracks... encontrados:', trackItems.length);
+        
+        if (trackItems.length === 0) {
+            logFn('[displaySearchResults] ⚠️ No se encontraron tracks, reintentando en 100ms...');
+            setTimeout(attachTrackListeners, 100);
+            return;
+        }
         
         trackItems.forEach(function(trackElement, index) {
+            // Remover listeners anteriores si existen
+            var newElement = trackElement.cloneNode(true);
+            trackElement.parentNode.replaceChild(newElement, trackElement);
+            trackElement = newElement;
+            
+            // Agregar listener robusto
             trackElement.addEventListener('click', function(e) {
                 logFn('[displaySearchResults] ✅✅✅ CLICK EN TRACK #' + index + ' DETECTADO');
+                logFn('[displaySearchResults] Event:', e);
+                logFn('[displaySearchResults] Target:', e.target);
+                logFn('[displaySearchResults] CurrentTarget:', e.currentTarget);
+                
                 e.preventDefault();
                 e.stopPropagation();
+                e.stopImmediatePropagation();
                 
                 const trackDataAttr = this.getAttribute('data-track-data');
-                logFn('[displaySearchResults] trackDataAttr:', trackDataAttr ? 'presente' : 'ausente');
+                logFn('[displaySearchResults] trackDataAttr:', trackDataAttr ? 'presente (' + trackDataAttr.substring(0, 50) + '...)' : 'ausente');
                 
                 if (trackDataAttr) {
                     try {
                         const trackData = JSON.parse(trackDataAttr);
-                        logFn('[displaySearchResults] trackData parseado:', trackData);
+                        logFn('[displaySearchResults] ✅ trackData parseado:', trackData);
                         logFn('[displaySearchResults] window.handleTrackSelect:', typeof window.handleTrackSelect);
                         logFn('[displaySearchResults] handleTrackSelect:', typeof handleTrackSelect);
                         
                         if (typeof window.handleTrackSelect === 'function') {
                             logFn('[displaySearchResults] ✅ Llamando window.handleTrackSelect...');
-                            window.handleTrackSelect(trackData);
+                            try {
+                                window.handleTrackSelect(trackData);
+                                logFn('[displaySearchResults] ✅ window.handleTrackSelect ejecutado');
+                            } catch(err) {
+                                errorFn('[displaySearchResults] ❌ ERROR al ejecutar window.handleTrackSelect:', err);
+                            }
                         } else if (typeof handleTrackSelect === 'function') {
                             logFn('[displaySearchResults] ✅ Llamando handleTrackSelect...');
-                            handleTrackSelect(trackData);
+                            try {
+                                handleTrackSelect(trackData);
+                                logFn('[displaySearchResults] ✅ handleTrackSelect ejecutado');
+                            } catch(err) {
+                                errorFn('[displaySearchResults] ❌ ERROR al ejecutar handleTrackSelect:', err);
+                            }
                         } else {
                             errorFn('[displaySearchResults] ❌❌❌ handleTrackSelect NO DISPONIBLE');
+                            errorFn('[displaySearchResults] window.handleTrackSelect:', typeof window.handleTrackSelect);
+                            errorFn('[displaySearchResults] handleTrackSelect:', typeof handleTrackSelect);
                         }
                     } catch(err) {
                         errorFn('[displaySearchResults] ❌ Error al parsear trackData:', err);
+                        errorFn('[displaySearchResults] trackDataAttr completo:', trackDataAttr);
                     }
                 } else {
-                    errorFn('[displaySearchResults] ❌ data-track-data no encontrado');
+                    errorFn('[displaySearchResults] ❌ data-track-data no encontrado en elemento');
+                    errorFn('[displaySearchResults] Elemento:', this);
+                    errorFn('[displaySearchResults] Atributos:', Array.from(this.attributes).map(a => a.name + '=' + a.value));
                 }
-            });
+            }, true); // Fase de captura
+            
+            // También agregar onclick como fallback
+            trackElement.onclick = function(e) {
+                logFn('[displaySearchResults] ✅ CLICK (onclick fallback) en track #' + index);
+                e.preventDefault();
+                e.stopPropagation();
+                const trackDataAttr = this.getAttribute('data-track-data');
+                if (trackDataAttr) {
+                    try {
+                        const trackData = JSON.parse(trackDataAttr);
+                        if (typeof window.handleTrackSelect === 'function') {
+                            window.handleTrackSelect(trackData);
+                        }
+                    } catch(err) {
+                        errorFn('[displaySearchResults] Error en onclick fallback:', err);
+                    }
+                }
+            };
         });
         
-        logFn('[displaySearchResults] ✅ Event listeners agregados a', trackItems.length, 'tracks');
-    }, 50);
+        logFn('[displaySearchResults] ✅✅✅ Event listeners agregados a', trackItems.length, 'tracks');
+        
+        // Guardar referencia para diagnóstico
+        window.__tracksWithListeners = trackItems.length;
+    }
+    
+    // Intentar inmediatamente y con delays
+    attachTrackListeners();
+    setTimeout(attachTrackListeners, 50);
+    setTimeout(attachTrackListeners, 200);
 }
 
 function formatDeltaArrow(current, avg24h) {
