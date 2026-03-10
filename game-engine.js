@@ -3748,6 +3748,13 @@ const GameEngine = {
                                     const mtrToConvert = creditsNeeded / mtrToUsdcRate;
                                     
                                     try {
+                                        console.log('[updateBalance] 🔄 Iniciando conversión automática MTR → Créditos:', {
+                                            userId: userId,
+                                            creditsNeeded: creditsNeeded,
+                                            mtrToConvert: mtrToConvert,
+                                            endpoint: `${backendUrl}/api/user/add-credits`
+                                        });
+                                        
                                         // Intentar agregar créditos equivalentes al MTR que el usuario tiene
                                         // NOTA: Esto es una solución temporal. Idealmente deberíamos hacer un swap real de MTR a USDC
                                         const addCreditsResponse = await fetch(`${backendUrl}/api/user/add-credits`, {
@@ -3762,8 +3769,23 @@ const GameEngine = {
                                             })
                                         });
                                         
+                                        console.log('[updateBalance] Respuesta de add-credits:', {
+                                            ok: addCreditsResponse.ok,
+                                            status: addCreditsResponse.status,
+                                            statusText: addCreditsResponse.statusText
+                                        });
+                                        
                                         if (addCreditsResponse.ok) {
-                                            console.log('[updateBalance] ✅ Créditos agregados automáticamente desde MTR');
+                                            const addData = await addCreditsResponse.json();
+                                            console.log('[updateBalance] ✅ Créditos agregados automáticamente desde MTR:', addData);
+                                            
+                                            // Esperar un momento para que la base de datos se actualice
+                                            await new Promise(resolve => setTimeout(resolve, 500));
+                                            
+                                            // Recargar balance antes de intentar descontar
+                                            await window.CreditsSystem.loadBalance(walletAddress);
+                                            
+                                            console.log('[updateBalance] 🔄 Intentando descontar créditos después de conversión...');
                                             
                                             // Ahora intentar descontar nuevamente
                                             const retryResponse = await fetch(`${backendUrl}/api/user/deduct-credits`, {
@@ -3777,25 +3799,39 @@ const GameEngine = {
                                                 })
                                             });
                                             
+                                            console.log('[updateBalance] Respuesta de deduct-credits (retry):', {
+                                                ok: retryResponse.ok,
+                                                status: retryResponse.status,
+                                                statusText: retryResponse.statusText
+                                            });
+                                            
                                             if (retryResponse.ok) {
                                                 const retryData = await retryResponse.json();
-                                                console.log('[updateBalance] ✅ Créditos descontados exitosamente después de conversión:', retryData);
+                                                console.log('[updateBalance] ✅✅✅ Créditos descontados exitosamente después de conversión:', retryData);
                                                 await window.CreditsSystem.loadBalance(walletAddress);
                                                 return true;
                                             } else {
                                                 const retryErrorText = await retryResponse.text();
-                                                console.error('[updateBalance] ❌ Error al descontar después de conversión:', retryErrorText);
+                                                console.error('[updateBalance] ❌ Error al descontar después de conversión:', {
+                                                    status: retryResponse.status,
+                                                    errorText: retryErrorText
+                                                });
                                                 // Retornar false en lugar de lanzar error
                                                 return false;
                                             }
                                         } else {
                                             const addErrorText = await addCreditsResponse.text();
-                                            console.error('[updateBalance] ❌ Error al agregar créditos desde MTR:', addErrorText);
+                                            console.error('[updateBalance] ❌ Error al agregar créditos desde MTR:', {
+                                                status: addCreditsResponse.status,
+                                                statusText: addCreditsResponse.statusText,
+                                                errorText: addErrorText
+                                            });
                                             // Retornar false en lugar de lanzar error
                                             return false;
                                         }
                                     } catch (conversionError) {
-                                        console.error('[updateBalance] ❌ Error en conversión automática:', conversionError);
+                                        console.error('[updateBalance] ❌ Excepción en conversión automática:', conversionError);
+                                        console.error('[updateBalance] Stack:', conversionError.stack);
                                         // Retornar false en lugar de lanzar error
                                         return false;
                                     }
