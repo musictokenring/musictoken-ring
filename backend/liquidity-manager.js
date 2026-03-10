@@ -55,6 +55,11 @@ class LiquidityManager {
         console.log(`[liquidity-manager] Min USDC buffer: ${MIN_USDC_BUFFER} USDC`);
         console.log(`[liquidity-manager] Target USDC buffer: ${TARGET_USDC_BUFFER} USDC`);
         
+        // Initialize swap service (detects pool fee tier)
+        if (this.swapService && this.swapService.enabled) {
+            await this.swapService.init();
+        }
+        
         // Start periodic checks
         this.startPeriodicChecks();
         

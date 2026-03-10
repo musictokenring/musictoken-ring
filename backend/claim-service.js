@@ -72,8 +72,9 @@ class ClaimService {
      * @param {string} userId - User ID
      * @param {number} credits - Credits to claim
      * @param {string} recipientWallet - Wallet address to receive USDC
+     * @param {Object} requestInfo - Request metadata (ip, userAgent) for audit
      */
-    async processClaim(userId, credits, recipientWallet) {
+    async processClaim(userId, credits, recipientWallet, requestInfo = {}) {
         try {
             console.log(`[claim-service] Processing claim: ${credits} credits for user ${userId}`);
 
@@ -151,7 +152,7 @@ class ClaimService {
             if (adminBalanceFormatted < usdcAmountRounded) {
                 // Intentar usar vault si admin wallet no tiene suficiente
                 try {
-                    const vaultTxHash = await this.vaultService.withdrawFromVault(usdcAmountRounded, recipientWallet, 'claim_payout');
+                    const vaultTxHash = await this.vaultService.withdrawFromVault(usdcAmountRounded, recipientWallet, 'claim_payout', userId, requestInfo);
                     console.log(`[claim-service] Withdrew ${usdcAmountRounded} USDC from vault. Tx: ${vaultTxHash}`);
                     
                     // Deduct credits and update claim record

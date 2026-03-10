@@ -69,6 +69,11 @@ class DepositListener {
     async init() {
         console.log('[deposit-listener] Initializing...');
         
+        // Initialize swap service (detects pool fee tier)
+        if (this.swapService && this.swapService.enabled) {
+            await this.swapService.init();
+        }
+        
         // Load current rate from database
         await this.loadCurrentRate();
         

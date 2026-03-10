@@ -6,6 +6,7 @@
 
 const express = require('express');
 const cors = require('cors');
+const rateLimit = require('express-rate-limit');
 const { DepositListener } = require('./deposit-listener');
 const { MultiChainDepositListener } = require('./multi-chain-deposit-listener');
 const { PriceUpdater } = require('./price-updater');
@@ -17,6 +18,33 @@ const { createClient } = require('@supabase/supabase-js');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
+
+// 🔒 SEGURIDAD: Rate limiting para endpoints críticos
+const claimRateLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000, // 15 minutos
+    max: 5, // máximo 5 requests por ventana de tiempo
+    message: {
+        error: 'Too many claim requests',
+        message: 'Por favor espera antes de hacer otra solicitud de retiro. Máximo 5 requests cada 15 minutos.',
+        retryAfter: '15 minutes'
+    },
+    standardHeaders: true, // Return rate limit info in the `RateLimit-*` headers
+    legacyHeaders: false, // Disable the `X-RateLimit-*` headers
+    skipSuccessfulRequests: false, // Count successful requests too
+    skipFailedRequests: false, // Count failed requests
+});
+
+// Rate limiter más estricto para endpoints de depósito
+const depositRateLimiter = rateLimit({
+    windowMs: 60 * 1000, // 1 minuto
+    max: 10, // máximo 10 requests por minuto
+    message: {
+        error: 'Too many deposit requests',
+        message: 'Por favor espera antes de hacer otra solicitud. Máximo 10 requests por minuto.'
+    },
+    standardHeaders: true,
+    legacyHeaders: false,
+});
 
 // Middleware - CORS configuration
 const corsOptions = {
@@ -53,9 +81,57 @@ let vaultService;
 let depositSyncService;
 let liquidityManager;
 
+// 🔒 SEGURIDAD: Validar variables de entorno críticas
+function validateEnvironmentVariables() {
+    console.log('[server] 🔒 Validating environment variables...');
+    
+    const required = [
+        'ADMIN_WALLET_PRIVATE_KEY',
+        'PLATFORM_WALLET_ADDRESS',
+        'SUPABASE_SERVICE_ROLE_KEY'
+    ];
+    
+    const missing = required.filter(key => !process.env[key]);
+    
+    if (missing.length > 0) {
+        const error = `❌ Missing required environment variables: ${missing.join(', ')}`;
+        console.error(`[SECURITY] ${error}`);
+        throw new Error(error);
+    }
+    
+    // Validar formato de direcciones
+    const PLATFORM_WALLET = process.env.PLATFORM_WALLET_ADDRESS;
+    if (!/^0x[a-fA-F0-9]{40}$/.test(PLATFORM_WALLET)) {
+        const error = `❌ Invalid PLATFORM_WALLET_ADDRESS format: ${PLATFORM_WALLET}`;
+        console.error(`[SECURITY] ${error}`);
+        throw new Error(error);
+    }
+    
+    // Validar que las wallets no sean la misma (si están configuradas)
+    if (process.env.VAULT_WALLET_ADDRESS) {
+        if (process.env.VAULT_WALLET_ADDRESS.toLowerCase() === PLATFORM_WALLET.toLowerCase()) {
+            console.warn('[SECURITY] ⚠️ WARNING: VAULT_WALLET_ADDRESS is the same as PLATFORM_WALLET_ADDRESS');
+            console.warn('[SECURITY] ⚠️ This is not recommended for security. Consider using separate wallets.');
+        }
+    }
+    
+    // Validar formato de private keys (deben empezar con 0x y tener 66 caracteres)
+    const ADMIN_KEY = process.env.ADMIN_WALLET_PRIVATE_KEY;
+    if (ADMIN_KEY && !ADMIN_KEY.startsWith('0x') && ADMIN_KEY.length !== 64 && ADMIN_KEY.length !== 66) {
+        console.warn('[SECURITY] ⚠️ WARNING: ADMIN_WALLET_PRIVATE_KEY format may be incorrect');
+    }
+    
+    console.log('[server] ✅ Environment variables validated');
+    console.log(`[server] 🔒 Platform Wallet: ${PLATFORM_WALLET}`);
+    console.log(`[server] 🔒 Vault Wallet: ${process.env.VAULT_WALLET_ADDRESS || 'Not configured (using platform wallet)'}`);
+}
+
 // Initialize all services
 async function initializeServices() {
     try {
+        // 🔒 SEGURIDAD: Validar variables de entorno antes de inicializar servicios
+        validateEnvironmentVariables();
+        
         console.log('[server] Initializing automated services...');
 
         // Initialize price updater first (needed by other services)
@@ -250,7 +326,8 @@ app.post('/api/user/deduct-credits', async (req, res) => {
 /**
  * Claim credits (convert to USDC)
  */
-app.post('/api/claim', async (req, res) => {
+// 🔒 SEGURIDAD: Aplicar rate limiting al endpoint de claims
+app.post('/api/claim', claimRateLimiter, async (req, res) => {
     try {
         const { userId, credits, walletAddress } = req.body;
 
@@ -258,12 +335,71 @@ app.post('/api/claim', async (req, res) => {
             return res.status(400).json({ error: 'Missing required parameters' });
         }
 
+        // 🔒 SEGURIDAD: Validar formato de wallet address
+        if (!/^0x[a-fA-F0-9]{40}$/.test(walletAddress)) {
+            console.error(`[SECURITY] Invalid wallet address format: ${walletAddress}`);
+            return res.status(400).json({ error: 'Invalid wallet address format' });
+        }
+
+        // 🔒 SEGURIDAD CRÍTICA: Verificar que la wallet pertenece al usuario
+        const { data: user, error: userError } = await supabase
+            .from('users')
+            .select('id, wallet_address')
+            .eq('id', userId)
+            .single();
+
+        if (userError || !user) {
+            console.error(`[SECURITY] User not found: ${userId}`, userError);
+            return res.status(404).json({ error: 'User not found' });
+        }
+
+        // 🔒 SEGURIDAD CRÍTICA: Verificar que la wallet del claim coincide con la wallet del usuario
+        if (user.wallet_address.toLowerCase() !== walletAddress.toLowerCase()) {
+            // Registrar alerta de seguridad
+            console.error(`[SECURITY ALERT] 🔴 Wallet mismatch detected:`);
+            console.error(`  User ID: ${userId}`);
+            console.error(`  User's wallet: ${user.wallet_address}`);
+            console.error(`  Claimed wallet: ${walletAddress}`);
+            console.error(`  IP: ${req.ip || req.headers['x-forwarded-for'] || 'unknown'}`);
+            console.error(`  User-Agent: ${req.headers['user-agent'] || 'unknown'}`);
+            
+            // Registrar en base de datos para auditoría
+            try {
+                await supabase.from('security_alerts').insert([{
+                    alert_type: 'WALLET_MISMATCH',
+                    severity: 'high',
+                    details: JSON.stringify({
+                        userId: userId,
+                        userWallet: user.wallet_address,
+                        claimedWallet: walletAddress,
+                        ip: req.ip || req.headers['x-forwarded-for'] || 'unknown',
+                        userAgent: req.headers['user-agent'] || 'unknown',
+                        timestamp: new Date().toISOString()
+                    }),
+                    created_at: new Date().toISOString()
+                }]);
+            } catch (alertError) {
+                console.error('[SECURITY] Error logging security alert:', alertError);
+            }
+            
+            return res.status(403).json({ 
+                error: 'Wallet address does not match user account',
+                security_alert: true 
+            });
+        }
+
         const MIN_CLAIM_AMOUNT = 5; // Mínimo para reclamar (mismo que apuesta mínima)
         if (credits < MIN_CLAIM_AMOUNT) {
             return res.status(400).json({ error: `Minimum claim: ${MIN_CLAIM_AMOUNT} credits` });
         }
 
-        const result = await claimService.processClaim(userId, credits, walletAddress);
+        // 🔒 SEGURIDAD: Registrar intento de claim antes de procesar
+        console.log(`[SECURITY] Claim request validated: User ${userId}, Wallet ${walletAddress}, Credits ${credits}`);
+
+        const result = await claimService.processClaim(userId, credits, walletAddress, {
+            ip: req.ip || req.headers['x-forwarded-for'] || 'unknown',
+            userAgent: req.headers['user-agent'] || 'unknown'
+        });
 
         res.json({
             success: true,

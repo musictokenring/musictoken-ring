@@ -17,6 +17,31 @@ const VAULT_PRIVATE_KEY = process.env.VAULT_WALLET_PRIVATE_KEY || process.env.AD
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
 
+// 🔒 SEGURIDAD: Función helper para registrar alertas de seguridad
+async function logSecurityAlert(alertType, severity, details, userId = null, ipAddress = null, userAgent = null) {
+    try {
+        const { error } = await supabase.from('security_alerts').insert([{
+            alert_type: alertType,
+            severity: severity,
+            details: details,
+            user_id: userId,
+            ip_address: ipAddress,
+            user_agent: userAgent,
+            created_at: new Date().toISOString()
+        }]);
+        
+        if (error) {
+            // Si la tabla no existe, solo loguear en consola
+            console.error('[vault-service] Error logging security alert:', error.message);
+            console.error('[vault-service] ⚠️ Table security_alerts may not exist. Run migration 009_create_security_alerts_table.sql');
+        } else {
+            console.log(`[vault-service] 🔒 Security alert logged: ${alertType} (${severity})`);
+        }
+    } catch (err) {
+        console.error('[vault-service] Error in logSecurityAlert:', err);
+    }
+}
+
 // USDC ERC20 ABI
 const USDC_ABI = [
     {
@@ -306,18 +331,80 @@ class VaultService {
 
     /**
      * Withdraw from vault (for claim payouts)
+     * @param {number} amount - Amount to withdraw
+     * @param {string} recipientAddress - Recipient wallet address
+     * @param {string} reason - Reason for withdrawal
+     * @param {string} userId - User ID (for audit)
+     * @param {Object} requestInfo - Request metadata (ip, userAgent) for audit
      */
-    async withdrawFromVault(amount, recipientAddress, reason = 'claim_payout') {
+    async withdrawFromVault(amount, recipientAddress, reason = 'claim_payout', userId = null, requestInfo = {}) {
         if (!this.vaultEnabled || !VAULT_WALLET_ADDRESS) {
             throw new Error('Vault wallet not configured');
         }
 
         try {
+            // 🔒 SEGURIDAD: Validar formato de dirección
+            if (!/^0x[a-fA-F0-9]{40}$/.test(recipientAddress)) {
+                throw new Error('Invalid recipient address format');
+            }
+
             // Check balance
             const canWithdraw = await this.canWithdraw(amount);
             if (!canWithdraw) {
                 const balance = await this.getVaultBalance();
                 throw new Error(`Insufficient vault balance. Available: ${balance} USDC, Required: ${amount} USDC`);
+            }
+
+            // 🔒 SEGURIDAD: Validar que la dirección de destino no sea sospechosa
+            // Lista de direcciones conocidas como sospechosas (puede expandirse)
+            const SUSPICIOUS_ADDRESSES = [
+                // Agregar direcciones conocidas como maliciosas aquí si es necesario
+            ];
+            
+            const recipientLower = recipientAddress.toLowerCase();
+            if (SUSPICIOUS_ADDRESSES.includes(recipientLower)) {
+                await logSecurityAlert(
+                    'SUSPICIOUS_WITHDRAWAL_ADDRESS',
+                    'critical',
+                    { recipientAddress, amount, reason, userId },
+                    userId,
+                    requestInfo.ip,
+                    requestInfo.userAgent
+                );
+                throw new Error('Withdrawal to suspicious address blocked');
+            }
+
+            // 🔒 SEGURIDAD: Registrar transacción en auditoría ANTES de transferir
+            let auditRecordId = null;
+            try {
+                const { data: auditRecord, error: auditError } = await supabase
+                    .from('vault_transactions')
+                    .insert([{
+                        transaction_type: 'withdrawal',
+                        user_id: userId,
+                        wallet_address: recipientAddress.toLowerCase(),
+                        amount_usdc: amount,
+                        reason: reason,
+                        status: 'pending',
+                        ip_address: requestInfo.ip || null,
+                        user_agent: requestInfo.userAgent || null,
+                        created_at: new Date().toISOString()
+                    }])
+                    .select('id')
+                    .single();
+
+                if (auditError) {
+                    // Si la tabla no existe, solo loguear warning pero continuar
+                    console.warn('[vault-service] ⚠️ Could not log transaction to audit table:', auditError.message);
+                    console.warn('[vault-service] ⚠️ Table vault_transactions may not exist. Run migration 008_create_vault_transactions_table.sql');
+                    console.warn('[vault-service] ⚠️ Transaction will proceed but audit log is missing.');
+                } else {
+                    auditRecordId = auditRecord?.id;
+                    console.log(`[vault-service] 🔒 Audit log created: ${auditRecordId}`);
+                }
+            } catch (auditError) {
+                console.error('[vault-service] Error creating audit log:', auditError);
+                // No bloquear la transacción si falla el logging, pero registrar el error
             }
 
             // If vault wallet is different from admin wallet, we need to transfer from vault to admin first
@@ -349,7 +436,8 @@ class VaultService {
                 }
             }
 
-            console.log(`[vault-service] Withdrawing ${amount} USDC from vault to ${recipientAddress}`);
+            console.log(`[vault-service] 🔒 Withdrawing ${amount} USDC from vault to ${recipientAddress}`);
+            console.log(`[vault-service] 🔒 User ID: ${userId || 'N/A'}, Reason: ${reason}`);
 
             // Transfer USDC to recipient
             const txHash = await walletClient.writeContract({
@@ -360,16 +448,54 @@ class VaultService {
             });
 
             // Wait for confirmation
-            await this.publicClient.waitForTransactionReceipt({ hash: txHash });
+            const receipt = await this.publicClient.waitForTransactionReceipt({ hash: txHash });
+
+            if (receipt.status !== 'success') {
+                throw new Error('Transaction failed on blockchain');
+            }
 
             // Update vault balance (subtract)
             await this.updateVaultBalance(-amount, txHash);
+
+            // 🔒 SEGURIDAD: Actualizar registro de auditoría después de transferir
+            if (auditRecordId) {
+                try {
+                    await supabase
+                        .from('vault_transactions')
+                        .update({
+                            status: 'completed',
+                            tx_hash: txHash,
+                            completed_at: new Date().toISOString()
+                        })
+                        .eq('id', auditRecordId);
+                    
+                    console.log(`[vault-service] 🔒 Audit log updated: ${auditRecordId}`);
+                } catch (updateError) {
+                    console.error('[vault-service] Error updating audit log:', updateError);
+                }
+            }
 
             console.log(`[vault-service] ✅ Withdrew ${amount} USDC from vault. Tx: ${txHash}`);
 
             return txHash;
 
         } catch (error) {
+            // 🔒 SEGURIDAD: Registrar error en auditoría si hay registro pendiente
+            if (auditRecordId) {
+                try {
+                    await supabase
+                        .from('vault_transactions')
+                        .update({
+                            status: 'failed',
+                            error_message: error.message,
+                            completed_at: new Date().toISOString()
+                        })
+                        .eq('id', auditRecordId);
+                } catch (updateError) {
+                    console.error('[vault-service] Error updating audit log on failure:', updateError);
+                }
+            }
+
             console.error('[vault-service] Error withdrawing from vault:', error);
             throw error;
         }

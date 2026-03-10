@@ -24,6 +24,7 @@ const MTR_POOL_WALLET = process.env.MTR_POOL_WALLET || PLATFORM_WALLET; // Walle
 
 // Uniswap V3 Router on Base
 const UNISWAP_V3_ROUTER = '0x2626664c2603336E57B271c5C0b26F421741e481'; // Base Uniswap V3 Router
+const UNISWAP_V3_FACTORY = '0x33128a8fC17869897dcE68Ed026d694621f6FDfD'; // Base Uniswap V3 Factory
 const BASE_SWAP_ROUTER = '0x327Df1E6de05895d2ab08513aaDD9313Fe505d86'; // BaseSwap Router (alternative)
 
 // Swap configuration
@@ -32,6 +33,10 @@ const MIN_SWAP_AMOUNT = parseFloat(process.env.MIN_SWAP_AMOUNT || '10'); // Mini
 const MAX_DAILY_SWAP = parseFloat(process.env.MAX_DAILY_SWAP || '10000'); // Max 10k USDC per day
 const USDC_BUFFER_PERCENTAGE = parseFloat(process.env.USDC_BUFFER_PERCENTAGE || '0.20'); // Keep 20% USDC for immediate payouts
 const SLIPPAGE_TOLERANCE = parseFloat(process.env.SLIPPAGE_TOLERANCE || '0.05'); // 5% slippage tolerance
+
+// Treasury protection configuration
+const MIN_MTR_RESERVE_USDC_VALUE = parseFloat(process.env.MIN_MTR_RESERVE_USDC_VALUE || '1000000'); // Minimum reserve value in USDC (default: $1M - conservador)
+const TREASURY_PROTECTION_UPDATE_INTERVAL = parseInt(process.env.TREASURY_PROTECTION_UPDATE_INTERVAL || '1800000'); // Update every 30 minutes (1800000ms) - más frecuente para mejor protección
 
 const SUPABASE_URL = process.env.SUPABASE_URL || 'https://bscmgcnynbxalcuwdqlm.supabase.co';
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -134,10 +139,62 @@ const UNISWAP_ROUTER_ABI = [
     }
 ];
 
+// Uniswap V3 Factory ABI
+const UNISWAP_FACTORY_ABI = [
+    {
+        type: 'function',
+        name: 'getPool',
+        stateMutability: 'view',
+        inputs: [
+            { name: 'tokenA', type: 'address' },
+            { name: 'tokenB', type: 'address' },
+            { name: 'fee', type: 'uint24' }
+        ],
+        outputs: [{ name: 'pool', type: 'address' }]
+    }
+];
+
+// Uniswap V3 Pool ABI (simplified)
+const UNISWAP_POOL_ABI = [
+    {
+        type: 'function',
+        name: 'liquidity',
+        stateMutability: 'view',
+        inputs: [],
+        outputs: [{ name: '', type: 'uint128' }]
+    },
+    {
+        type: 'function',
+        name: 'token0',
+        stateMutability: 'view',
+        inputs: [],
+        outputs: [{ name: '', type: 'address' }]
+    },
+    {
+        type: 'function',
+        name: 'token1',
+        stateMutability: 'view',
+        inputs: [],
+        outputs: [{ name: '', type: 'address' }]
+    },
+    {
+        type: 'function',
+        name: 'fee',
+        stateMutability: 'view',
+        inputs: [],
+        outputs: [{ name: '', type: 'uint24' }]
+    }
+];
+
 class MTRSwapService {
     constructor() {
+        console.log('[mtr-swap] 🔄 Initializing MTR swap service...');
+        console.log('[mtr-swap] SWAP_WALLET_PRIVATE_KEY exists:', !!SWAP_WALLET_PRIVATE_KEY);
+        console.log('[mtr-swap] SWAP_WALLET_PRIVATE_KEY length:', SWAP_WALLET_PRIVATE_KEY ? SWAP_WALLET_PRIVATE_KEY.length : 0);
+        
         if (!SWAP_WALLET_PRIVATE_KEY) {
             console.warn('[mtr-swap] ⚠️ SWAP_WALLET_PRIVATE_KEY not set, auto-swap disabled');
+            console.warn('[mtr-swap] Check environment variables in Render');
             this.enabled = false;
             return;
         }
@@ -163,15 +220,200 @@ class MTRSwapService {
             this.enabled = true;
             this.dailySwapAmount = 0;
             this.lastResetDate = new Date().toDateString();
+            this.poolFeeTier = null; // Will be detected on init
+            this.minMTRReserve = null; // Will be calculated based on current price
+            this.lastTreasuryProtectionUpdate = null;
             this.loadDailySwapAmount();
+            
+            // Verificar configuración de wallets
+            if (MTR_POOL_WALLET.toLowerCase() === PLATFORM_WALLET.toLowerCase()) {
+                console.warn('[mtr-swap] ⚠️ ADVERTENCIA: MTR_POOL_WALLET es la misma que PLATFORM_WALLET');
+                console.warn('[mtr-swap] ⚠️ Esto significa que se usará la wallet de tesorería para swaps');
+                console.warn('[mtr-swap] ⚠️ Recomendación: Configurar MTR_POOL_WALLET como wallet separada');
+            } else {
+                console.log('[mtr-swap] ✅ MTR_POOL_WALLET configurada separadamente');
+            }
             
             console.log('[mtr-swap] ✅ Service initialized');
             console.log(`[mtr-swap] Swap wallet: ${this.account.address}`);
             console.log(`[mtr-swap] MTR pool wallet: ${MTR_POOL_WALLET}`);
+            console.log(`[mtr-swap] Platform wallet (tesorería): ${PLATFORM_WALLET}`);
         } catch (error) {
             console.error('[mtr-swap] ❌ Error initializing service:', error);
+            console.error('[mtr-swap] Error message:', error.message);
+            console.error('[mtr-swap] Error stack:', error.stack);
             this.enabled = false;
         }
+    }
+
+    /**
+     * Initialize pool detection (async, called after constructor)
+     */
+    async init() {
+        if (!this.enabled) {
+            return;
+        }
+
+        console.log('[mtr-swap] 🔍 Detecting MTR/USDC pool fee tier...');
+        this.poolFeeTier = await this.findPoolFeeTier();
+        
+        if (this.poolFeeTier) {
+            console.log(`[mtr-swap] ✅ Pool encontrado con fee tier: ${this.poolFeeTier} (${this.poolFeeTier === 500 ? '0.05%' : this.poolFeeTier === 3000 ? '0.3%' : '1%'})`);
+        } else {
+            console.error('[mtr-swap] ❌ No se encontró pool MTR/USDC con liquidez en Uniswap V3 Base');
+            console.error('[mtr-swap] ❌ Los swaps estarán deshabilitados hasta que exista un pool');
+            this.enabled = false;
+            return;
+        }
+
+        // Initialize treasury protection
+        await this.updateTreasuryProtectionLimit();
+        
+        // Start periodic updates of treasury protection limit
+        this.startTreasuryProtectionUpdates();
+    }
+
+    /**
+     * Update treasury protection limit based on current MTR price
+     * This ensures the minimum reserve maintains its value in USDC
+     */
+    async updateTreasuryProtectionLimit() {
+        try {
+            const mtrPrice = await this.getMTRPrice();
+            
+            if (mtrPrice > 0) {
+                // Calculate minimum MTR reserve based on USDC value
+                // Example: If MIN_MTR_RESERVE_USDC_VALUE = 500000 and MTR price = 0.001
+                // Then minMTRReserve = 500000 / 0.001 = 500,000,000 MTR
+                this.minMTRReserve = MIN_MTR_RESERVE_USDC_VALUE / mtrPrice;
+                
+                console.log(`[mtr-swap] 🛡️ Treasury protection updated:`);
+                console.log(`[mtr-swap]    MTR Price: $${mtrPrice.toFixed(6)}`);
+                console.log(`[mtr-swap]    Min Reserve Value: $${MIN_MTR_RESERVE_USDC_VALUE.toLocaleString()} USDC`);
+                console.log(`[mtr-swap]    Min MTR Reserve: ${this.minMTRReserve.toLocaleString()} MTR`);
+                console.log(`[mtr-swap]    Protection Level: ${(this.minMTRReserve / 1000000000).toFixed(2)}B MTR protected`);
+                
+                this.lastTreasuryProtectionUpdate = Date.now();
+            } else {
+                console.warn('[mtr-swap] ⚠️ Could not get MTR price for treasury protection, using fallback');
+                // Fallback: assume very low price to be conservative
+                this.minMTRReserve = MIN_MTR_RESERVE_USDC_VALUE / 0.001; // Conservative estimate
+            }
+        } catch (error) {
+            console.error('[mtr-swap] ❌ Error updating treasury protection limit:', error);
+            // Use conservative fallback
+            this.minMTRReserve = MIN_MTR_RESERVE_USDC_VALUE / 0.001;
+        }
+    }
+
+    /**
+     * Start periodic updates of treasury protection limit
+     */
+    startTreasuryProtectionUpdates() {
+        setInterval(async () => {
+            if (this.enabled) {
+                console.log(`[mtr-swap] 🔄 Updating treasury protection limit (scheduled update)...`);
+                await this.updateTreasuryProtectionLimit();
+            }
+        }, TREASURY_PROTECTION_UPDATE_INTERVAL);
+        
+        const updateIntervalMinutes = TREASURY_PROTECTION_UPDATE_INTERVAL / 1000 / 60;
+        console.log(`[mtr-swap] 🔄 Treasury protection updates scheduled every ${updateIntervalMinutes} minutes`);
+        console.log(`[mtr-swap] 🛡️ Protection will revalue automatically based on MTR price changes`);
+    }
+
+    /**
+     * Check if selling MTR would violate treasury protection
+     * @param {number} mtrToSell - Amount of MTR to sell
+     * @param {number} currentBalance - Current MTR balance in pool wallet
+     * @returns {Object} { allowed: boolean, reason?: string, availableToSell?: number }
+     */
+    checkTreasuryProtection(mtrToSell, currentBalance) {
+        // If no limit set yet, allow (will be set on first update)
+        if (!this.minMTRReserve) {
+            return { allowed: true };
+        }
+
+        // Calculate total balance including treasury wallet
+        // We need to check if selling would leave us below the reserve
+        const totalBalance = currentBalance; // Current balance in MTR_POOL_WALLET
+        
+        // Check if we're using the treasury wallet (PLATFORM_WALLET)
+        const isUsingTreasuryWallet = MTR_POOL_WALLET.toLowerCase() === PLATFORM_WALLET.toLowerCase();
+        
+            if (isUsingTreasuryWallet) {
+                // If using treasury wallet, we need to protect the reserve
+                const balanceAfterSale = totalBalance - mtrToSell;
+                
+                if (balanceAfterSale < this.minMTRReserve) {
+                    const availableToSell = Math.max(0, totalBalance - this.minMTRReserve);
+                    const protectionPercentage = ((this.minMTRReserve / totalBalance) * 100).toFixed(2);
+                    
+                    return {
+                        allowed: false,
+                        reason: `🛡️ Treasury protection activated: Cannot sell ${mtrToSell.toLocaleString()} MTR. ` +
+                               `Current balance: ${totalBalance.toLocaleString()} MTR. ` +
+                               `Minimum reserve: ${this.minMTRReserve.toLocaleString()} MTR (${protectionPercentage}% protected). ` +
+                               `Available to sell: ${availableToSell.toLocaleString()} MTR`,
+                        availableToSell: availableToSell,
+                        protectionPercentage: protectionPercentage
+                    };
+                }
+            }
+        
+        return { allowed: true };
+    }
+
+    /**
+     * Find MTR/USDC pool fee tier automatically
+     * Tries fee tiers: 500 (0.05%), 3000 (0.3%), 10000 (1%)
+     * @returns {Promise<number|null>} Fee tier found or null if no pool exists
+     */
+    async findPoolFeeTier() {
+        const feeTiers = [500, 3000, 10000];
+        
+        for (const fee of feeTiers) {
+            try {
+                // Get pool address from factory
+                const poolAddress = await this.publicClient.readContract({
+                    address: UNISWAP_V3_FACTORY,
+                    abi: UNISWAP_FACTORY_ABI,
+                    functionName: 'getPool',
+                    args: [MTR_TOKEN_ADDRESS, USDC_ADDRESS, fee]
+                });
+
+                // Check if pool exists (not zero address)
+                if (poolAddress && poolAddress !== '0x0000000000000000000000000000000000000000') {
+                    console.log(`[mtr-swap] Pool encontrado con fee tier ${fee} en: ${poolAddress}`);
+                    
+                    // Check if pool has liquidity
+                    try {
+                        const liquidity = await this.publicClient.readContract({
+                            address: poolAddress,
+                            abi: UNISWAP_POOL_ABI,
+                            functionName: 'liquidity',
+                            args: []
+                        });
+
+                        if (liquidity > 0n) {
+                            console.log(`[mtr-swap] ✅ Pool tiene liquidez: ${liquidity.toString()}`);
+                            return fee; // Found pool with liquidity
+                        } else {
+                            console.log(`[mtr-swap] ⚠️ Pool existe pero sin liquidez`);
+                        }
+                    } catch (liquidityError) {
+                        console.log(`[mtr-swap] ⚠️ Error verificando liquidez: ${liquidityError.message}`);
+                        // Pool exists, assume it might have liquidity
+                        return fee;
+                    }
+                }
+            } catch (error) {
+                console.log(`[mtr-swap] Fee tier ${fee} no disponible: ${error.message}`);
+                // Continue to next fee tier
+            }
+        }
+
+        return null; // No pool found with liquidity
     }
 
     /**
@@ -342,10 +584,14 @@ class MTRSwapService {
 
             // Execute swap using Uniswap V3
             // Path: USDC -> MTR
-            // Fee tier: 0.05% (500) - common for stablecoin pairs
+            // Fee tier: Detected automatically
+            if (!this.poolFeeTier) {
+                throw new Error('Pool fee tier not detected. Call init() first or pool does not exist.');
+            }
+
             const deadline = Math.floor(Date.now() / 1000) + 300; // 5 minutes
             
-            console.log('[mtr-swap] Executing swap on Uniswap V3...');
+            console.log(`[mtr-swap] Executing swap on Uniswap V3 with fee tier ${this.poolFeeTier}...`);
             
             const swapHash = await this.walletClient.writeContract({
                 address: UNISWAP_V3_ROUTER,
@@ -354,7 +600,7 @@ class MTRSwapService {
                 args: [{
                     tokenIn: USDC_ADDRESS,
                     tokenOut: MTR_TOKEN_ADDRESS,
-                    fee: 500, // 0.05% fee tier
+                    fee: this.poolFeeTier, // Auto-detected fee tier
                     recipient: MTR_POOL_WALLET,
                     deadline: BigInt(deadline),
                     amountIn: swapAmountWei,
@@ -455,11 +701,7 @@ class MTRSwapService {
                 return { success: false, reason: 'Sufficient USDC balance, no need to sell' };
             }
 
-            // Calculate how much MTR to sell
-            const mtrPrice = await this.getMTRPrice();
-            const mtrToSell = (requiredUSDC - usdcBalanceFormatted) / mtrPrice * 1.1; // 10% buffer
-
-            // Check MTR balance
+            // Check MTR balance FIRST (before calculating)
             const mtrBalance = await this.publicClient.readContract({
                 address: MTR_TOKEN_ADDRESS,
                 abi: ERC20_ABI,
@@ -469,10 +711,49 @@ class MTRSwapService {
             
             const mtrBalanceFormatted = parseFloat(formatUnits(mtrBalance, 18));
             
+            // Early validation: If no MTR available, return immediately
+            if (mtrBalanceFormatted === 0) {
+                return { 
+                    success: false, 
+                    reason: 'No MTR available to sell. Waiting for USDC deposits to buy MTR first.' 
+                };
+            }
+
+            // Calculate how much MTR to sell
+            const mtrPrice = await this.getMTRPrice();
+            const mtrToSell = (requiredUSDC - usdcBalanceFormatted) / mtrPrice * 1.1; // 10% buffer
+            
             if (mtrBalanceFormatted < mtrToSell) {
                 return { 
                     success: false, 
                     reason: `Insufficient MTR balance (${mtrBalanceFormatted.toFixed(2)} MTR, need ${mtrToSell.toFixed(2)})` 
+                };
+            }
+
+            // 🛡️ TREASURY PROTECTION: Check if selling would violate reserve limit
+            const protectionCheck = this.checkTreasuryProtection(mtrToSell, mtrBalanceFormatted);
+            
+            if (!protectionCheck.allowed) {
+                console.warn(`[mtr-swap] 🛡️ Treasury protection triggered: ${protectionCheck.reason}`);
+                
+                // Try to sell only what's available (if any)
+                if (protectionCheck.availableToSell && protectionCheck.availableToSell > 0) {
+                    console.log(`[mtr-swap] ⚠️ Attempting partial sale: ${protectionCheck.availableToSell.toLocaleString()} MTR`);
+                    // Recursively call with available amount (but limit recursion)
+                    const partialRequiredUSDC = protectionCheck.availableToSell * mtrPrice;
+                    if (partialRequiredUSDC >= requiredUSDC * 0.5) { // Only if we can get at least 50% of needed USDC
+                        return await this.sellMTRForUSDC(partialRequiredUSDC);
+                    } else {
+                        return {
+                            success: false,
+                            reason: protectionCheck.reason + ' Partial sale would not provide sufficient USDC.'
+                        };
+                    }
+                }
+                
+                return {
+                    success: false,
+                    reason: protectionCheck.reason
                 };
             }
 
@@ -513,7 +794,14 @@ class MTRSwapService {
                 6
             );
 
+            // Check if pool fee tier is detected
+            if (!this.poolFeeTier) {
+                throw new Error('Pool fee tier not detected. Call init() first or pool does not exist.');
+            }
+
             const deadline = Math.floor(Date.now() / 1000) + 300;
+            
+            console.log(`[mtr-swap] Executing sell swap with fee tier ${this.poolFeeTier}...`);
             
             // Execute swap: MTR -> USDC
             const swapHash = await this.walletClient.writeContract({
@@ -523,7 +811,7 @@ class MTRSwapService {
                 args: [{
                     tokenIn: MTR_TOKEN_ADDRESS,
                     tokenOut: USDC_ADDRESS,
-                    fee: 500,
+                    fee: this.poolFeeTier, // Auto-detected fee tier
                     recipient: PLATFORM_WALLET,
                     deadline: BigInt(deadline),
                     amountIn: mtrToSellWei,
