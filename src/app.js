@@ -153,6 +153,14 @@ function searchDeezer(query, resultsElementId = 'searchResults') {
 
     // Create callback function
     window[callbackName] = function(data) {
+        var logFn = window.__originalLog || console.log;
+        var errorFn = console.error;
+        
+        logFn('[searchDeezer] ✅✅✅ CALLBACK EJECUTADO');
+        logFn('[searchDeezer] Data recibida:', data);
+        logFn('[searchDeezer] data.data:', data.data);
+        logFn('[searchDeezer] data.data.length:', data.data ? data.data.length : 'N/A');
+        
         // Clean up
         if (timeoutId) {
             clearTimeout(timeoutId);
@@ -162,24 +170,36 @@ function searchDeezer(query, resultsElementId = 'searchResults') {
         const scriptEl = document.getElementById(callbackName);
         if (scriptEl) scriptEl.remove();
         
-        if (!data.data || data.data.length === 0) {
+        if (!data || !data.data || data.data.length === 0) {
+            errorFn('[searchDeezer] ⚠️ No hay datos o datos vacíos');
             resultsDiv.innerHTML = '<p style="text-align: center; padding: 20px; color: #9CA3AF;">No se encontraron resultados</p>';
             return;
         }
         
-        var logFn = window.__originalLog || console.log;
         logFn('[searchDeezer] ✅ Datos recibidos, llamando displaySearchResults...');
-        logFn('[searchDeezer] Tracks recibidos:', data.data ? data.data.length : 0);
+        logFn('[searchDeezer] Tracks recibidos:', data.data.length);
         logFn('[searchDeezer] resultsDiv:', resultsDiv);
+        logFn('[searchDeezer] resultsDiv.id:', resultsDiv ? resultsDiv.id : 'N/A');
         logFn('[searchDeezer] displaySearchResults:', typeof displaySearchResults);
         logFn('[searchDeezer] window.displaySearchResults:', typeof window.displaySearchResults);
         
-        if (typeof displaySearchResults === 'function') {
-            displaySearchResults(data.data, resultsDiv);
-        } else if (typeof window.displaySearchResults === 'function') {
-            window.displaySearchResults(data.data, resultsDiv);
-        } else {
-            console.error('[searchDeezer] ❌ displaySearchResults NO DISPONIBLE');
+        try {
+            if (typeof displaySearchResults === 'function') {
+                logFn('[searchDeezer] ✅ Llamando displaySearchResults (local)...');
+                displaySearchResults(data.data, resultsDiv);
+                logFn('[searchDeezer] ✅ displaySearchResults (local) ejecutado');
+            } else if (typeof window.displaySearchResults === 'function') {
+                logFn('[searchDeezer] ✅ Llamando window.displaySearchResults...');
+                window.displaySearchResults(data.data, resultsDiv);
+                logFn('[searchDeezer] ✅ window.displaySearchResults ejecutado');
+            } else {
+                errorFn('[searchDeezer] ❌❌❌ displaySearchResults NO DISPONIBLE');
+                errorFn('[searchDeezer] displaySearchResults:', typeof displaySearchResults);
+                errorFn('[searchDeezer] window.displaySearchResults:', typeof window.displaySearchResults);
+            }
+        } catch(err) {
+            errorFn('[searchDeezer] ❌ ERROR al ejecutar displaySearchResults:', err);
+            errorFn('[searchDeezer] Stack:', err.stack);
         }
     };
     
