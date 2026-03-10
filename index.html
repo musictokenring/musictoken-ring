@@ -3151,106 +3151,35 @@
         }, 1000);
         // selectSongForBattle ya está asignado arriba directamente a window
         
-        // Configurar event listener para createSocialBtn después de que se cree el botón - MEJORADO
-        function setupCreateSocialBtn() {
+        // NO configurar aquí - el botón ya se configura en updateActionButtons con listeners
+        // Esta función estaba clonando el botón y eliminando los listeners que se agregaron antes
+        // SOLO verificar que el botón tenga listeners, pero NO reconfigurarlo
+        function verifyCreateSocialBtn() {
             var btn = document.getElementById('createSocialBtn');
+            var logFn = window.__originalLog || console.log;
+            var errorFn = console.error;
+            
             if (btn) {
-                // Remover flag anterior si existe para permitir reconfiguración
-                btn.removeAttribute('data-listener-setup');
+                logFn('[verifyCreateSocialBtn] ✅ Botón encontrado');
+                logFn('[verifyCreateSocialBtn] Botón tiene onclick:', typeof btn.onclick);
+                logFn('[verifyCreateSocialBtn] Botón tiene _createSocialHandler:', !!btn._createSocialHandler);
                 
-                // Clonar botón para remover listeners anteriores
-                var newBtn = btn.cloneNode(true);
-                if (btn.parentNode) {
-                    btn.parentNode.replaceChild(newBtn, btn);
+                // Verificar si tiene listeners sin clonarlo
+                if (!btn.onclick && !btn._createSocialHandler) {
+                    errorFn('[verifyCreateSocialBtn] ⚠️ Botón NO tiene listeners - el botón debería tenerlos de updateActionButtons');
+                    // NO clonar ni reconfigurar - solo reportar
+                } else {
+                    logFn('[verifyCreateSocialBtn] ✅ Botón tiene listeners configurados');
                 }
-                btn = newBtn;
-                
-                // Marcar como configurado
-                btn.setAttribute('data-listener-setup', 'true');
-                
-                // Remover onclick inline si existe
-                btn.removeAttribute('onclick');
-                
-                // Agregar event listener robusto en fase de captura
-                btn.addEventListener('click', function(e) {
-                    var logFn = window.__originalLog || console.log;
-                    var errorFn = console.error;
-                    
-                    logFn('[setupCreateSocialBtn] ✅✅✅ CLICK EN BOTÓN DETECTADO');
-                    
-                    e.preventDefault();
-                    e.stopPropagation();
-                    e.stopImmediatePropagation();
-                    
-                    logFn('[setupCreateSocialBtn] Verificando funciones disponibles...');
-                    logFn('[setupCreateSocialBtn] window.createSocialChallenge:', typeof window.createSocialChallenge);
-                    logFn('[setupCreateSocialBtn] createSocialChallenge:', typeof createSocialChallenge);
-                    logFn('[setupCreateSocialBtn] window.selectedSong:', window.selectedSong);
-                    
-                    // Múltiples intentos de llamar a la función
-                    if (typeof window.createSocialChallenge === 'function') {
-                        logFn('[setupCreateSocialBtn] ✅ Llamando window.createSocialChallenge()...');
-                        try {
-                            window.createSocialChallenge();
-                            logFn('[setupCreateSocialBtn] ✅ window.createSocialChallenge ejecutado sin errores');
-                        } catch(err) {
-                            errorFn('[setupCreateSocialBtn] ❌ ERROR al ejecutar window.createSocialChallenge:', err);
-                        }
-                    } else if (typeof createSocialChallenge === 'function') {
-                        logFn('[setupCreateSocialBtn] ✅ Llamando createSocialChallenge()...');
-                        try {
-                            createSocialChallenge();
-                            logFn('[setupCreateSocialBtn] ✅ createSocialChallenge ejecutado sin errores');
-                        } catch(err) {
-                            errorFn('[setupCreateSocialBtn] ❌ ERROR al ejecutar createSocialChallenge:', err);
-                        }
-                    } else {
-                        errorFn('[setupCreateSocialBtn] ❌❌❌ FUNCIONES NO DISPONIBLES');
-                        // Último recurso: usar eval
-                        try {
-                            eval('if(typeof createSocialChallenge==="function")createSocialChallenge()');
-                        } catch(err) {
-                            if (typeof showToast === 'function') {
-                                showToast('Error: Función no disponible. Recarga la página.', 'error');
-                            }
-                            errorFn('[setupCreateSocialBtn] ❌ Error crítico:', err);
-                        }
-                    }
-                }, true); // Fase de captura
-                
-                // También agregar onclick como fallback adicional
-                btn.onclick = function(e) {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    if (typeof window.createSocialChallenge === 'function') {
-                        window.createSocialChallenge();
-                    }
-                };
+            } else {
+                logFn('[verifyCreateSocialBtn] ⚠️ Botón no encontrado aún');
             }
         }
         
-        // Intentar configurar inmediatamente y con múltiples delays
-        setupCreateSocialBtn();
-        setTimeout(setupCreateSocialBtn, 200);
-        setTimeout(setupCreateSocialBtn, 500);
-        setTimeout(setupCreateSocialBtn, 1000);
-        setTimeout(setupCreateSocialBtn, 2000);
-        
-        // También usar MutationObserver para detectar cuando se crea el botón
-        var observer = new MutationObserver(function(mutations) {
-            var hasRelevantChange = mutations.some(function(mutation) {
-                return Array.from(mutation.addedNodes).some(function(node) {
-                    return node.nodeType === 1 && (
-                        node.id === 'createSocialBtn' || 
-                        (node.querySelector && node.querySelector('#createSocialBtn'))
-                    );
-                });
-            });
-            if (hasRelevantChange) {
-                setTimeout(setupCreateSocialBtn, 100);
-            }
-        });
-        observer.observe(document.body, { childList: true, subtree: true });
+        // Solo verificar, NO reconfigurar
+        setTimeout(verifyCreateSocialBtn, 500);
+        setTimeout(verifyCreateSocialBtn, 1500);
+        setTimeout(verifyCreateSocialBtn, 3000);
         
         // SCRIPT DE DIAGNÓSTICO AUTOMÁTICO - Ejecutar múltiples veces
         function runDiagnostic() {
