@@ -160,21 +160,31 @@
                 }
             })();
             
-            // MONITOR CONTINUO para eliminar tooltip de "100 créditos" - SIN LOGS
+            // MONITOR CONTINUO para eliminar tooltip de "100 créditos" - MÁS AGRESIVO
             setInterval(function() {
                 var btn = document.getElementById('createSocialBtn');
                 if (btn) {
                     var title = btn.getAttribute('title') || btn.title || '';
-                    if (title && (title.includes('100') || title.includes('cien'))) {
+                    if (title && (title.includes('100') || title.includes('cien') || title.toLowerCase().includes('cien'))) {
+                        // FORZAR eliminación inmediata
                         btn.title = '';
                         btn.removeAttribute('title');
+                        // Establecer tooltip correcto inmediatamente
+                        var betInput = document.getElementById('betAmount');
+                        var bet = betInput ? parseFloat(betInput.value || '0') : 0;
+                        var minBet = 5;
+                        if (bet > 0 && bet < minBet) {
+                            btn.title = 'Apuesta mínima: ' + minBet + ' créditos';
+                        } else {
+                            btn.title = '';
+                        }
                         // Llamar a updateBetEligibility para establecer el tooltip correcto
                         if (typeof window.updateBetEligibility === 'function') {
                             window.updateBetEligibility();
                         }
                     }
                 }
-            }, 500); // Verificar cada 500ms (menos frecuente para reducir carga)
+            }, 100); // Verificar cada 100ms (más frecuente para capturar cambios rápidos)
             
             // Verificación adicional después de un pequeño delay
             setTimeout(function() {
@@ -2064,6 +2074,11 @@
         }
 
         function selectMode(mode) {
+            // Asegurar que window.currentMode esté establecido INMEDIATAMENTE
+            window.currentMode = mode;
+            var logFn = window.__originalLog || console.log;
+            logFn('[selectMode] ✅ Modo seleccionado:', mode);
+            logFn('[selectMode] window.currentMode establecido a:', window.currentMode);
             currentMode = mode;
             window.currentMode = mode;
             document.getElementById('modeSelector').classList.add('hidden');
@@ -2582,21 +2597,35 @@
             }
             
             // Para desafíos sociales, verificar créditos y mínimo dinámico
-            const minBetAmount = (typeof GameEngine !== 'undefined' && GameEngine.minBet) ? GameEngine.minBet : 5;
+            // FORZAR mínimo a 5 para social mode - NUNCA usar 100
+            const minBetAmount = 5; // SIEMPRE 5 para social mode
             if (createSocialBtn) {
                 var canCoverSocialBet = !!bet && bet >= minBetAmount && (credits >= bet || onchainBalance >= bet);
                 createSocialBtn.disabled = !canCoverSocialBet || !selectedSong;
-                // ELIMINAR CUALQUIER REFERENCIA A "100" en el tooltip
+                
+                // ELIMINAR CUALQUIER REFERENCIA A "100" en el tooltip - FORZADO
                 var currentTitle = createSocialBtn.getAttribute('title') || createSocialBtn.title || '';
-                if (currentTitle.includes('100')) {
+                if (currentTitle && (currentTitle.includes('100') || currentTitle.includes('cien') || currentTitle.toLowerCase().includes('cien'))) {
                     createSocialBtn.title = '';
                     createSocialBtn.removeAttribute('title');
                 }
-                // Establecer tooltip correcto
+                
+                // Establecer tooltip correcto - SIEMPRE usar minBetAmount = 5
                 if (!canCoverSocialBet && bet > 0) {
-                    createSocialBtn.title = bet < minBetAmount ? `Apuesta mínima: ${minBetAmount} créditos` : 'Créditos y saldo MTR insuficientes';
+                    if (bet < minBetAmount) {
+                        createSocialBtn.title = 'Apuesta mínima: ' + minBetAmount + ' créditos';
+                    } else {
+                        createSocialBtn.title = 'Créditos y saldo MTR insuficientes';
+                    }
                 } else {
                     createSocialBtn.title = '';
+                }
+                
+                // Verificación final - si aún tiene "100", forzar eliminación
+                var finalTitle = createSocialBtn.getAttribute('title') || createSocialBtn.title || '';
+                if (finalTitle && (finalTitle.includes('100') || finalTitle.includes('cien'))) {
+                    createSocialBtn.title = '';
+                    createSocialBtn.removeAttribute('title');
                 }
             }
             
