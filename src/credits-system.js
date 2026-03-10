@@ -227,41 +227,67 @@
             var logFn = window.__originalLog || console.log;
             var errorFn = console.error;
             
+            if (!walletAddress) {
+                errorFn('[getUserId] ❌ No se proporcionó walletAddress');
+                return null;
+            }
+            
             try {
+                logFn('[getUserId] ========================================');
                 logFn('[getUserId] Obteniendo userId para wallet:', walletAddress);
+                logFn('[getUserId] Backend URL:', this.backendUrl);
                 
                 // PRIMERO intentar obtener del backend API (más confiable)
                 try {
-                    logFn('[getUserId] Intentando obtener userId desde backend API...');
-                    const response = await fetch(`${this.backendUrl}/api/user/credits/${walletAddress}`);
-                    logFn('[getUserId] Respuesta del backend:', {
+                    logFn('[getUserId] [1/2] Intentando obtener userId desde backend API...');
+                    const backendUrl = `${this.backendUrl}/api/user/credits/${walletAddress}`;
+                    logFn('[getUserId] URL completa:', backendUrl);
+                    
+                    const response = await fetch(backendUrl, {
+                        method: 'GET',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        cache: 'no-cache'
+                    });
+                    
+                    logFn('[getUserId] Respuesta recibida:', {
                         ok: response.ok,
                         status: response.status,
-                        statusText: response.statusText
+                        statusText: response.statusText,
+                        headers: Object.fromEntries(response.headers.entries())
                     });
                     
                     if (response.ok) {
                         const data = await response.json();
                         logFn('[getUserId] Datos del backend:', data);
                         if (data.userId) {
-                            logFn('[getUserId] ✅ userId obtenido desde backend:', data.userId);
+                            logFn('[getUserId] ✅✅✅ userId obtenido desde backend:', data.userId);
+                            logFn('[getUserId] ========================================');
                             return data.userId;
+                        } else {
+                            errorFn('[getUserId] ⚠️ Backend respondió OK pero userId es null/undefined');
+                            errorFn('[getUserId] Respuesta completa:', data);
                         }
                     } else {
                         const errorText = await response.text();
                         errorFn('[getUserId] ⚠️ Backend API falló:', {
                             status: response.status,
+                            statusText: response.statusText,
                             errorText: errorText
                         });
                     }
                 } catch (backendError) {
-                    errorFn('[getUserId] ⚠️ Error al consultar backend API:', backendError);
+                    errorFn('[getUserId] ⚠️ Excepción al consultar backend API:', backendError);
+                    errorFn('[getUserId] Stack:', backendError.stack);
                 }
                 
-                // FALLBACK: Intentar desde Supabase (puede fallar por RLS)
+                // FALLBACK: Intentar desde Supabase (puede fallar por RLS - NO USAR si backend falla)
+                // COMENTADO: Supabase tiene problemas de permisos RLS, mejor no usar como fallback
+                /*
                 if (window.supabaseClient) {
                     try {
-                        logFn('[getUserId] Intentando obtener userId desde Supabase...');
+                        logFn('[getUserId] [2/2] Intentando obtener userId desde Supabase (fallback)...');
                         const { data, error } = await window.supabaseClient
                             .from('users')
                             .select('id')
@@ -280,11 +306,14 @@
                         errorFn('[getUserId] ⚠️ Error al consultar Supabase:', supabaseError);
                     }
                 }
+                */
 
-                errorFn('[getUserId] ❌ No se pudo obtener userId por ningún método');
+                errorFn('[getUserId] ❌❌❌ No se pudo obtener userId por ningún método');
+                errorFn('[getUserId] ========================================');
                 return null;
             } catch (error) {
                 errorFn('[getUserId] ❌ Error crítico al obtener userId:', error);
+                errorFn('[getUserId] Stack:', error.stack);
                 return null;
             }
         },
