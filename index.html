@@ -2903,7 +2903,8 @@
                 return; 
             }
             
-            const minBetAmount = (typeof GameEngine !== 'undefined' && GameEngine.minBet) ? GameEngine.minBet : 5;
+            // FORZAR mínimo a 5 para social mode - NUNCA usar GameEngine.minBet que puede ser 100
+            const SOCIAL_CHALLENGE_MIN_BET = 5; // SIEMPRE 5 para social challenges
             var betInput = document.getElementById('betAmount');
             if (!betInput) {
                 console.error('[createSocialChallenge] ❌ Campo betAmount no encontrado');
@@ -2911,13 +2912,13 @@
                 return;
             }
             
-            var bet = parseFloat(betInput.value) || minBetAmount;
-            // Log comentado para reducir ruido
-            // console.log('[createSocialChallenge] Apuesta:', bet, 'Mínimo:', minBetAmount);
+            var bet = parseFloat(betInput.value) || SOCIAL_CHALLENGE_MIN_BET;
+            logFn('[createSocialChallenge] Apuesta:', bet, 'Mínimo requerido:', SOCIAL_CHALLENGE_MIN_BET);
             
-            if (bet < minBetAmount) {
-                console.error('[createSocialChallenge] ❌ Apuesta menor al mínimo');
-                showToast(`La apuesta mínima para desafíos sociales es ${minBetAmount} créditos`, 'error');
+            if (bet < SOCIAL_CHALLENGE_MIN_BET) {
+                errorFn('[createSocialChallenge] ❌ Apuesta menor al mínimo');
+                errorFn('[createSocialChallenge] bet:', bet, 'SOCIAL_CHALLENGE_MIN_BET:', SOCIAL_CHALLENGE_MIN_BET);
+                showToast(`La apuesta mínima para desafíos sociales es ${SOCIAL_CHALLENGE_MIN_BET} créditos`, 'error');
                 return;
             }
             

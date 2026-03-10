@@ -3657,33 +3657,68 @@ const GameEngine = {
             // If betting, deduct credits instead of legacy balance
             if (type === 'bet' && window.CreditsSystem) {
                 const walletAddress = this.connectedWallet || localStorage.getItem('mtr_wallet');
+                console.log('[updateBalance] Intentando descontar créditos:', {
+                    walletAddress: walletAddress,
+                    amount: amount,
+                    type: type,
+                    hasCreditsSystem: !!window.CreditsSystem
+                });
+                
                 if (walletAddress) {
                     // Deduct credits via backend
                     const backendUrl = window.CONFIG?.BACKEND_API || 'https://musictoken-backend.onrender.com';
+                    console.log('[updateBalance] Obteniendo userId para wallet:', walletAddress);
+                    
                     const userId = await window.CreditsSystem.getUserId(walletAddress);
+                    console.log('[updateBalance] userId obtenido:', userId);
                     
                     if (userId) {
+                        const creditsToDeduct = Math.abs(amount);
+                        console.log('[updateBalance] Descontando créditos:', {
+                            userId: userId,
+                            credits: creditsToDeduct,
+                            backendUrl: backendUrl,
+                            endpoint: `${backendUrl}/api/user/deduct-credits`
+                        });
+                        
                         // Deduct credits
                         const response = await fetch(`${backendUrl}/api/user/deduct-credits`, {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
                             body: JSON.stringify({
                                 userId,
-                                credits: Math.abs(amount), // Ensure positive value
+                                credits: creditsToDeduct,
                                 reason: 'match_bet',
                                 matchId: matchId
                             })
                         });
 
+                        console.log('[updateBalance] Respuesta del backend:', {
+                            ok: response.ok,
+                            status: response.status,
+                            statusText: response.statusText
+                        });
+
                         if (!response.ok) {
                             const errorText = await response.text();
-                            console.error('[game-engine] Error deducting credits:', errorText);
-                            throw new Error('Failed to deduct credits');
+                            console.error('[updateBalance] ❌ Error al descontar créditos:', {
+                                status: response.status,
+                                statusText: response.statusText,
+                                errorText: errorText
+                            });
+                            throw new Error(`Failed to deduct credits: ${response.status} ${response.statusText} - ${errorText}`);
                         }
 
+                        const responseData = await response.json();
+                        console.log('[updateBalance] ✅ Créditos descontados exitosamente:', responseData);
+                        
                         await window.CreditsSystem.loadBalance(walletAddress);
                         return true; // Return early, don't update legacy balance
+                    } else {
+                        console.error('[updateBalance] ❌ No se pudo obtener userId para wallet:', walletAddress);
                     }
+                } else {
+                    console.error('[updateBalance] ❌ No hay walletAddress disponible');
                 }
                 // If CreditsSystem not available, fall through to legacy system
             }
