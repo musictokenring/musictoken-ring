@@ -2463,9 +2463,36 @@
         }
 
         function searchSong() {
+            var logFn = window.__originalLog || console.log;
+            var errorFn = console.error;
+            
             var query = document.getElementById('songSearch').value;
-            if (query.trim() && typeof searchDeezer === 'function') searchDeezer(query, 'searchResults');
+            logFn('[searchSong] ✅ Función llamada con query:', query);
+            
+            if (!query || !query.trim()) {
+                logFn('[searchSong] ⚠️ Query vacío');
+                return;
+            }
+            
+            logFn('[searchSong] Verificando funciones disponibles...');
+            logFn('[searchSong] searchDeezer:', typeof searchDeezer);
+            logFn('[searchSong] window.searchDeezer:', typeof window.searchDeezer);
+            logFn('[searchSong] displaySearchResults:', typeof displaySearchResults);
+            logFn('[searchSong] window.displaySearchResults:', typeof window.displaySearchResults);
+            
+            if (typeof window.searchDeezer === 'function') {
+                logFn('[searchSong] ✅ Llamando window.searchDeezer...');
+                window.searchDeezer(query, 'searchResults');
+            } else if (typeof searchDeezer === 'function') {
+                logFn('[searchSong] ✅ Llamando searchDeezer...');
+                searchDeezer(query, 'searchResults');
+            } else {
+                errorFn('[searchSong] ❌❌❌ searchDeezer NO DISPONIBLE');
+            }
         }
+        
+        // Asegurar que searchSong esté disponible globalmente
+        window.searchSong = searchSong;
 
         // La función selectSongForBattle ya está definida arriba antes de app.js
         // Aquí solo actualizamos las variables locales cuando se llama
