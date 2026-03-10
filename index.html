@@ -1249,17 +1249,22 @@
                     })();
                     
                     // MOSTRAR BANNER VERDE para modo Social Challenge - FORZADO
-                    var isSocialMode = currentMode === 'social' || window.currentMode === 'social';
+                    // Verificar modo de múltiples formas
+                    var isSocialMode = currentMode === 'social' || 
+                                      window.currentMode === 'social' ||
+                                      (typeof window !== 'undefined' && window.currentMode === 'social');
                     
                     // Log para debugging
-                    var logFn = window.__originalLog || console.log;
                     logFn('[selectSongForBattle] Verificando modo social:', {
                         currentMode: currentMode,
                         windowCurrentMode: window.currentMode,
-                        isSocialMode: isSocialMode
+                        isSocialMode: isSocialMode,
+                        'typeof window': typeof window,
+                        'window.currentMode': window.currentMode
                     });
                     
-                    if (isSocialMode) {
+                    // SIEMPRE mostrar banner si estamos en modo social (forzado)
+                    if (isSocialMode || window.currentMode === 'social') {
                         logFn('[selectSongForBattle] 🟢 MODO SOCIAL DETECTADO - Creando banner verde...');
                         (function showGreenBanner() {
                             try {
