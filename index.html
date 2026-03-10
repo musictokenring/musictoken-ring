@@ -2366,8 +2366,13 @@
                 var logFn = window.__originalLog || console.log;
                 var errorFn = console.error;
                 
-                btn.addEventListener('click', function(e) {
+                // Función handler
+                function handleCreateSocialClick(e) {
                     logFn('[createSocialBtn] ✅✅✅ CLICK DETECTADO (event listener directo)');
+                    logFn('[createSocialBtn] Event:', e);
+                    logFn('[createSocialBtn] Target:', e.target);
+                    logFn('[createSocialBtn] CurrentTarget:', e.currentTarget);
+                    
                     e.preventDefault();
                     e.stopPropagation();
                     e.stopImmediatePropagation();
@@ -2380,18 +2385,27 @@
                     if (typeof window.createSocialChallenge === 'function') {
                         logFn('[createSocialBtn] ✅ Llamando window.createSocialChallenge()...');
                         try {
-                            window.createSocialChallenge();
-                            logFn('[createSocialBtn] ✅ Función ejecutada sin errores');
+                            var result = window.createSocialChallenge();
+                            logFn('[createSocialBtn] ✅ Función ejecutada, resultado:', result);
+                            if (result && typeof result.then === 'function') {
+                                result.then(function(res) {
+                                    logFn('[createSocialBtn] ✅ Promise resuelta:', res);
+                                }).catch(function(err) {
+                                    errorFn('[createSocialBtn] ❌ Promise rechazada:', err);
+                                });
+                            }
                         } catch(err) {
                             errorFn('[createSocialBtn] ❌ ERROR al ejecutar:', err);
+                            errorFn('[createSocialBtn] Stack:', err.stack);
                         }
                     } else if (typeof createSocialChallenge === 'function') {
                         logFn('[createSocialBtn] ✅ Llamando createSocialChallenge()...');
                         try {
-                            createSocialChallenge();
-                            logFn('[createSocialBtn] ✅ Función ejecutada sin errores');
+                            var result = createSocialChallenge();
+                            logFn('[createSocialBtn] ✅ Función ejecutada, resultado:', result);
                         } catch(err) {
                             errorFn('[createSocialBtn] ❌ ERROR al ejecutar:', err);
+                            errorFn('[createSocialBtn] Stack:', err.stack);
                         }
                     } else {
                         errorFn('[createSocialBtn] ❌❌❌ FUNCIÓN NO DISPONIBLE');
@@ -2399,7 +2413,14 @@
                             showToast('Error: Función no disponible. Recarga la página.', 'error');
                         }
                     }
-                }, true); // Fase de captura
+                }
+                
+                // Agregar múltiples listeners para asegurar captura
+                btn.addEventListener('click', handleCreateSocialClick, true); // Fase de captura
+                btn.addEventListener('click', handleCreateSocialClick, false); // Fase de burbuja
+                
+                // Guardar referencia para diagnóstico
+                btn._createSocialHandler = handleCreateSocialClick;
                 
                 // También agregar onclick como fallback
                 btn.onclick = function(e) {
@@ -3072,6 +3093,70 @@
             }
         });
         observer.observe(document.body, { childList: true, subtree: true });
+        
+        // SCRIPT DE DIAGNÓSTICO AUTOMÁTICO
+        setTimeout(function() {
+            var logFn = window.__originalLog || console.log;
+            var errorFn = console.error;
+            
+            logFn('========================================');
+            logFn('🔍 DIAGNÓSTICO AUTOMÁTICO DEL FLUJO');
+            logFn('========================================');
+            
+            // Verificar funciones críticas
+            logFn('[DIAG] Verificando funciones críticas...');
+            logFn('[DIAG] window.createSocialChallenge:', typeof window.createSocialChallenge);
+            logFn('[DIAG] window.selectSongForBattle:', typeof window.selectSongForBattle);
+            logFn('[DIAG] window.handleTrackSelect:', typeof window.handleTrackSelect);
+            logFn('[DIAG] window.updateBetEligibility:', typeof window.updateBetEligibility);
+            logFn('[DIAG] window.stopAllPreviews:', typeof window.stopAllPreviews);
+            
+            // Verificar botón createSocialBtn
+            var btn = document.getElementById('createSocialBtn');
+            if (btn) {
+                logFn('[DIAG] ✅ Botón createSocialBtn encontrado');
+                logFn('[DIAG] Botón disabled:', btn.disabled);
+                logFn('[DIAG] Botón onclick:', typeof btn.onclick);
+                
+                // Verificar event listeners
+                var listeners = getEventListeners ? getEventListeners(btn) : 'getEventListeners no disponible';
+                logFn('[DIAG] Event listeners:', listeners);
+                
+                // Simular click para verificar
+                logFn('[DIAG] Simulando click en botón...');
+                try {
+                    btn.click();
+                    logFn('[DIAG] ✅ Click simulado ejecutado');
+                } catch(e) {
+                    errorFn('[DIAG] ❌ Error al simular click:', e);
+                }
+            } else {
+                errorFn('[DIAG] ❌ Botón createSocialBtn NO encontrado');
+            }
+            
+            // Verificar tracks con event listeners
+            var tracks = document.querySelectorAll('.track-item');
+            logFn('[DIAG] Tracks encontrados:', tracks.length);
+            if (tracks.length > 0) {
+                var firstTrack = tracks[0];
+                logFn('[DIAG] Primer track data-track-data:', firstTrack.getAttribute('data-track-data') ? 'presente' : 'ausente');
+                
+                // Simular click en primer track
+                logFn('[DIAG] Simulando click en primer track...');
+                try {
+                    firstTrack.click();
+                    logFn('[DIAG] ✅ Click en track simulado ejecutado');
+                } catch(e) {
+                    errorFn('[DIAG] ❌ Error al simular click en track:', e);
+                }
+            }
+            
+            // Verificar modo actual
+            logFn('[DIAG] window.currentMode:', window.currentMode);
+            logFn('[DIAG] window.selectedSong:', window.selectedSong);
+            
+            logFn('========================================');
+        }, 3000); // Ejecutar después de 3 segundos
     </script>
 
     <!-- VIEM WALLET MODULE - Cargar con defer para no bloquear -->
