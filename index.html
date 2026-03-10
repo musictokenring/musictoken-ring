@@ -2100,6 +2100,27 @@
             var logFn = window.__originalLog || console.log;
             logFn('[selectMode] ✅ Modo seleccionado:', mode);
             logFn('[selectMode] window.currentMode establecido a:', window.currentMode);
+            
+            // Si es modo social, ejecutar diagnóstico después de crear el botón
+            if (mode === 'social') {
+                setTimeout(function() {
+                    logFn('[selectMode] Verificando botón createSocialBtn después de cambiar a modo social...');
+                    var btn = document.getElementById('createSocialBtn');
+                    if (btn) {
+                        logFn('[selectMode] ✅ Botón encontrado después de cambiar a modo social');
+                        window.__createSocialBtn = btn;
+                    } else {
+                        logFn('[selectMode] ⚠️ Botón NO encontrado, reintentando...');
+                        setTimeout(function() {
+                            btn = document.getElementById('createSocialBtn');
+                            if (btn) {
+                                logFn('[selectMode] ✅ Botón encontrado en segundo intento');
+                                window.__createSocialBtn = btn;
+                            }
+                        }, 500);
+                    }
+                }, 200);
+            }
             currentMode = mode;
             window.currentMode = mode;
             document.getElementById('modeSelector').classList.add('hidden');
@@ -3281,10 +3302,34 @@
             logFn('========================================');
         }
         
-        // Ejecutar diagnóstico múltiples veces
-        setTimeout(runDiagnostic, 2000);
-        setTimeout(runDiagnostic, 5000);
-        setTimeout(runDiagnostic, 10000);
+        // Ejecutar diagnóstico múltiples veces - pero solo después de que el DOM esté completamente cargado
+        if (document.readyState === 'complete') {
+            setTimeout(runDiagnostic, 1000);
+            setTimeout(runDiagnostic, 3000);
+            setTimeout(runDiagnostic, 6000);
+        } else {
+            window.addEventListener('load', function() {
+                setTimeout(runDiagnostic, 1000);
+                setTimeout(runDiagnostic, 3000);
+                setTimeout(runDiagnostic, 6000);
+            });
+        }
+        
+        // También ejecutar cuando se cambia a modo social
+        var originalSelectMode = window.selectMode;
+        if (typeof originalSelectMode === 'function') {
+            window.selectMode = function(mode) {
+                var result = originalSelectMode.apply(this, arguments);
+                if (mode === 'social') {
+                    setTimeout(function() {
+                        var logFn = window.__originalLog || console.log;
+                        logFn('[selectMode] Ejecutando diagnóstico después de cambiar a modo social...');
+                        runDiagnostic();
+                    }, 500);
+                }
+                return result;
+            };
+        }
     </script>
 
     <!-- VIEM WALLET MODULE - Cargar con defer para no bloquear -->
