@@ -746,17 +746,34 @@ const GameEngine = {
             
             if (challengeError) throw challengeError;
             
-            // Descontar créditos del desafío
-            const deductionSuccess = await this.updateBalance(-normalizedBet, 'bet', null);
+            // Descontar créditos del desafío ANTES de mostrar UI
+            // CRÍTICO: Esto debe ejecutarse ANTES de crear el desafío, pero como ya lo creamos,
+            // si falla debemos eliminarlo
+            let deductionSuccess = false;
+            try {
+                deductionSuccess = await this.updateBalance(-normalizedBet, 'bet', null);
+            } catch (deductionError) {
+                console.error('[createSocialChallenge] ❌ Error al descontar créditos (excepción):', deductionError);
+                deductionSuccess = false;
+            }
+            
             if (!deductionSuccess) {
+                console.error('[createSocialChallenge] ❌ Deducción falló, eliminando desafío creado...');
                 // Si falla la deducción, eliminar el desafío
-                await supabaseClient
-                    .from('social_challenges')
-                    .delete()
-                    .eq('id', challenge.id);
-                showToast('Error al descontar créditos. Intenta nuevamente.', 'error');
+                try {
+                    await supabaseClient
+                        .from('social_challenges')
+                        .delete()
+                        .eq('id', challenge.id);
+                    console.log('[createSocialChallenge] ✅ Desafío eliminado correctamente');
+                } catch (deleteError) {
+                    console.error('[createSocialChallenge] ❌ Error al eliminar desafío:', deleteError);
+                }
+                showToast('Error al descontar créditos. Verifica tu saldo y vuelve a intentar.', 'error');
                 return;
             }
+            
+            console.log('[createSocialChallenge] ✅ Créditos descontados exitosamente');
             
             // Generar link único
             const challengeLink = `${window.location.origin}${window.location.pathname}?challenge=${challengeId}`;
@@ -3768,18 +3785,36 @@ const GameEngine = {
                                             } else {
                                                 const retryErrorText = await retryResponse.text();
                                                 console.error('[updateBalance] ❌ Error al descontar después de conversión:', retryErrorText);
+                                                // Retornar false en lugar de lanzar error
+                                                return false;
                                             }
                                         } else {
                                             const addErrorText = await addCreditsResponse.text();
                                             console.error('[updateBalance] ❌ Error al agregar créditos desde MTR:', addErrorText);
+                                            // Retornar false en lugar de lanzar error
+                                            return false;
                                         }
                                     } catch (conversionError) {
                                         console.error('[updateBalance] ❌ Error en conversión automática:', conversionError);
+                                        // Retornar false en lugar de lanzar error
+                                        return false;
                                     }
+                                } else {
+                                    // Usuario no tiene suficiente MTR on-chain para cubrir la apuesta
+                                    console.error('[updateBalance] ❌ Usuario no tiene suficiente MTR on-chain para conversión automática');
+                                    // Retornar false en lugar de lanzar error
+                                    return false;
                                 }
+                            } else {
+                                // Error diferente a "Insufficient credits", retornar false
+                                console.error('[updateBalance] ❌ Error diferente a créditos insuficientes');
+                                return false;
                             }
-                            
-                            throw new Error(`Failed to deduct credits: ${response.status} ${response.statusText} - ${errorText}`);
+                        } else {
+                            // Error HTTP diferente a 400, retornar false
+                            console.error('[updateBalance] ❌ Error HTTP:', response.status);
+                            return false;
+                        }
                         }
 
                         const responseData = await response.json();
