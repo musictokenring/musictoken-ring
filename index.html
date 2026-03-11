@@ -3411,14 +3411,11 @@
                        navigator.userAgent.toLowerCase().includes('trust') ||
                        navigator.userAgent.toLowerCase().includes('binance'));
                 
-                // En navegador interno, usar window.ethereum si está disponible (más confiable)
+                // En navegador interno, intentar usar window.ethereum si está disponible (más confiable)
                 let clientToUse = publicClient;
-                if (isWalletBrowser && window.ethereum) {
+                if (isWalletBrowser && window.ethereum && typeof createPublicClient !== 'undefined' && typeof custom !== 'undefined') {
                     try {
                         // Crear cliente usando el provider de la wallet (más confiable en navegadores internos)
-                        const { createPublicClient, http } = await import('viem');
-                        const { base } = await import('viem/chains');
-                        const { createWalletClient, custom } = await import('viem');
                         clientToUse = createPublicClient({
                             chain: base,
                             transport: custom(window.ethereum)
@@ -3426,6 +3423,7 @@
                         console.log('[refreshMtrBalance] [WALLET-BROWSER] Usando provider de wallet para leer balance');
                     } catch (e) {
                         console.warn('[refreshMtrBalance] [WALLET-BROWSER] Error creando cliente con wallet provider, usando publicClient:', e);
+                        clientToUse = publicClient;
                     }
                 }
                 
