@@ -14,6 +14,7 @@ const { ClaimService } = require('./claim-service');
 const { VaultService } = require('./vault-service');
 const { DepositSyncService } = require('./deposit-sync-service');
 const { LiquidityManager } = require('./liquidity-manager');
+const { WalletLinkService } = require('./wallet-link-service');
 const { createClient } = require('@supabase/supabase-js');
 
 const app = express();
@@ -200,6 +201,16 @@ async function initializeServices() {
             console.error('[server] ⚠️ Error initializing liquidity manager:', liquidityError);
             console.error('[server] Error stack:', liquidityError.stack);
             console.log('[server] Continuing without liquidity manager...');
+            // Non-critical - continue without it
+        }
+
+        // Initialize Wallet Link Service
+        try {
+            walletLinkService = new WalletLinkService();
+            console.log('[server] ✅ Wallet Link Service initialized');
+        } catch (walletLinkError) {
+            console.error('[server] ⚠️ Error initializing wallet link service:', walletLinkError);
+            console.log('[server] Continuing without wallet link service...');
             // Non-critical - continue without it
         }
 
@@ -1256,6 +1267,152 @@ app.post('/api/deposits/process', async (req, res) => {
 
     } catch (error) {
         console.error('[server] Error processing deposit:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+/**
+ * Get user ID from wallet address (for internal wallet browsers)
+ * This endpoint allows wallet-based authentication when Supabase session is not available
+ */
+app.get('/api/user/wallet/:walletAddress', async (req, res) => {
+    try {
+        const walletAddress = req.params.walletAddress.toLowerCase();
+
+        if (!/^0x[a-fA-F0-9]{40}$/.test(walletAddress)) {
+            return res.status(400).json({ error: 'Invalid wallet address format' });
+        }
+
+        if (!walletLinkService) {
+            return res.status(503).json({ error: 'Wallet link service not available' });
+        }
+
+        const userId = await walletLinkService.getUserIdFromWallet(walletAddress);
+
+        if (!userId) {
+            return res.json({
+                linked: false,
+                userId: null,
+                message: 'Wallet not linked to any user account'
+            });
+        }
+
+        // Get user info
+        const { data: user } = await supabase
+            .from('users')
+            .select('id, wallet_address, email')
+            .eq('id', userId)
+            .single();
+
+        res.json({
+            linked: true,
+            userId: userId,
+            walletAddress: walletAddress,
+            userEmail: user?.email || null,
+            message: 'Wallet is linked to a user account'
+        });
+
+    } catch (error) {
+        console.error('[server] Error getting wallet link:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+/**
+ * Link wallet to authenticated user
+ * Requires Supabase authentication token
+ */
+app.post('/api/user/link-wallet', async (req, res) => {
+    try {
+        // Get Supabase auth token from Authorization header
+        const authHeader = req.headers.authorization;
+        if (!authHeader || !authHeader.startsWith('Bearer ')) {
+            return res.status(401).json({ error: 'Authentication required' });
+        }
+
+        const token = authHeader.replace('Bearer ', '');
+        
+        // Verify token and get user
+        const { data: { user: authUser }, error: authError } = await supabase.auth.getUser(token);
+        
+        if (authError || !authUser) {
+            return res.status(401).json({ error: 'Invalid or expired token' });
+        }
+
+        const { walletAddress } = req.body;
+
+        if (!walletAddress || !/^0x[a-fA-F0-9]{40}$/.test(walletAddress)) {
+            return res.status(400).json({ error: 'Invalid wallet address format' });
+        }
+
+        if (!walletLinkService) {
+            return res.status(503).json({ error: 'Wallet link service not available' });
+        }
+
+        // Link wallet to authenticated user
+        const result = await walletLinkService.linkWallet(
+            authUser.id,
+            walletAddress,
+            {
+                ip: req.ip || req.headers['x-forwarded-for'] || 'unknown',
+                userAgent: req.headers['user-agent'] || 'unknown',
+                linkedVia: 'google' // Could be 'google', 'email', 'manual'
+            }
+        );
+
+        if (!result.success) {
+            return res.status(400).json({
+                error: result.error || 'Failed to link wallet',
+                existingUserId: result.existingUserId || null
+            });
+        }
+
+        res.json({
+            success: true,
+            walletId: result.walletId,
+            isPrimary: result.isPrimary,
+            alreadyLinked: result.alreadyLinked || false,
+            message: result.alreadyLinked 
+                ? 'Wallet already linked to your account'
+                : 'Wallet linked successfully'
+        });
+
+    } catch (error) {
+        console.error('[server] Error linking wallet:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+/**
+ * Get all wallets linked to authenticated user
+ */
+app.get('/api/user/wallets', async (req, res) => {
+    try {
+        const authHeader = req.headers.authorization;
+        if (!authHeader || !authHeader.startsWith('Bearer ')) {
+            return res.status(401).json({ error: 'Authentication required' });
+        }
+
+        const token = authHeader.replace('Bearer ', '');
+        const { data: { user: authUser }, error: authError } = await supabase.auth.getUser(token);
+        
+        if (authError || !authUser) {
+            return res.status(401).json({ error: 'Invalid or expired token' });
+        }
+
+        if (!walletLinkService) {
+            return res.status(503).json({ error: 'Wallet link service not available' });
+        }
+
+        const wallets = await walletLinkService.getUserWallets(authUser.id);
+
+        res.json({
+            wallets: wallets,
+            count: wallets.length
+        });
+
+    } catch (error) {
+        console.error('[server] Error getting user wallets:', error);
         res.status(500).json({ error: error.message });
     }
 });

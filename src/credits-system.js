@@ -32,22 +32,51 @@
 
         /**
          * Load user credits balance
+         * Now supports wallet-based authentication for internal wallet browsers
          */
         async loadBalance(walletAddress) {
             try {
+                // 🔗 NUEVO: Try to get userId from wallet link if no Supabase session
+                let userIdFromWallet = null;
+                if (typeof supabaseClient !== 'undefined') {
+                    try {
+                        const { data: { session } } = await supabaseClient.auth.getSession();
+                        if (!session) {
+                            // No Supabase session - try wallet-based auth
+                            const walletResponse = await fetch(`${this.backendUrl}/api/user/wallet/${walletAddress}`);
+                            if (walletResponse.ok) {
+                                const walletData = await walletResponse.json();
+                                if (walletData.linked && walletData.userId) {
+                                    userIdFromWallet = walletData.userId;
+                                    console.log('[credits-system] ✅ Wallet linked to user:', userIdFromWallet);
+                                }
+                            }
+                        }
+                    } catch (walletAuthError) {
+                        console.warn('[credits-system] Could not check wallet link:', walletAuthError);
+                    }
+                }
+
                 const response = await fetch(`${this.backendUrl}/api/user/credits/${walletAddress}`);
-                
+
                 if (!response.ok) {
                     throw new Error(`HTTP ${response.status}`);
                 }
 
                 const data = await response.json();
-                
+
                 this.currentCredits = data.credits || 0;
                 // NUEVO: 1 crédito = 1 USDC fijo siempre
                 this.currentUsdcValue = this.currentCredits; // 1:1 fijo
                 this.currentRate = null; // Ya no se usa rate variable
                 this.currentMtrPrice = null; // Ya no relevante para créditos
+
+                // Store userId for later use
+                if (data.userId) {
+                    this.currentUserId = data.userId;
+                } else if (userIdFromWallet) {
+                    this.currentUserId = userIdFromWallet;
+                }
 
                 // Update UI - Asegurar que se actualice después de cargar
                 this.updateCreditsDisplay();
@@ -175,10 +204,32 @@
                     return null;
                 }
 
-                // Find user ID
-                const userId = await this.getUserId(walletAddress);
+                // Find user ID (supports both Supabase auth and wallet-based auth)
+                let userId = null;
+                
+                // Try Supabase session first
+                if (typeof supabaseClient !== 'undefined') {
+                    try {
+                        const { data: { session } } = await supabaseClient.auth.getSession();
+                        if (session && session.user) {
+                            userId = session.user.id;
+                            console.log('[credits-system] Using userId from Supabase session');
+                        }
+                    } catch (sessionError) {
+                        console.warn('[credits-system] Could not get Supabase session:', sessionError);
+                    }
+                }
+
+                // If no Supabase session, try wallet-based auth
                 if (!userId) {
-                    throw new Error('Usuario no encontrado');
+                    userId = await this.getUserId(walletAddress);
+                    if (userId) {
+                        console.log('[credits-system] Using userId from wallet link');
+                    }
+                }
+
+                if (!userId) {
+                    throw new Error('Usuario no encontrado. Conecta tu wallet o inicia sesión.');
                 }
 
                 if (typeof showToast === 'function') {
