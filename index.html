@@ -724,7 +724,9 @@
                             <span>Mínimo: <strong id="minBet" class="text-white">5</strong> créditos</span>
                         </div>
                         <input type="number" id="betAmount" placeholder="5" min="5"
-                               class="w-full px-4 py-3 rounded-lg bg-black/40 border border-white/10 text-white placeholder-gray-500 text-sm focus:outline-none focus:border-cyan-500/50 focus:ring-1 focus:ring-cyan-500/20 transition mb-3">
+                               class="w-full px-4 py-3 rounded-lg bg-black/40 border border-white/10 text-white placeholder-gray-500 text-sm focus:outline-none focus:border-cyan-500/50 focus:ring-1 focus:ring-cyan-500/20 transition mb-3"
+                               oninput="if(typeof window.updateBetEligibility === 'function') window.updateBetEligibility();"
+                               onchange="if(typeof window.updateBetEligibility === 'function') window.updateBetEligibility();">
                         <div class="flex gap-2 mb-5" id="betAmountButtons">
                             <button type="button" onclick="window.quickBet(5)" class="bet-amount-btn flex-1 py-2 rounded-lg text-xs font-bold bg-white/5 border border-white/10 text-gray-300 hover:text-white hover:border-cyan-500/30 transition cursor-pointer" data-amount="5">5</button>
                             <button type="button" onclick="window.quickBet(50)" class="bet-amount-btn flex-1 py-2 rounded-lg text-xs font-bold bg-white/5 border border-white/10 text-gray-300 hover:text-white hover:border-cyan-500/30 transition cursor-pointer" data-amount="50">50</button>
@@ -1060,7 +1062,12 @@
                 betInput.dispatchEvent(new Event('input', { bubbles: true }));
                 betInput.dispatchEvent(new Event('change', { bubbles: true }));
                 
-                // Actualizar elegibilidad
+                // CRÍTICO: Actualizar elegibilidad inmediatamente después de cambiar el valor
+                if (typeof window.updateBetEligibility === 'function') {
+                    window.updateBetEligibility();
+                }
+                
+                // Actualizar elegibilidad también con delay para asegurar
                 setTimeout(function() {
                     // Actualizar display del mínimo dinámicamente
                     const minBetEl = document.getElementById('minBet');
@@ -3101,15 +3108,28 @@
                 return;
             }
             
-            // Verificar créditos y balance on-chain
+            // Verificar créditos y balance on-chain ANTES de crear el desafío
             var credits = window.CreditsSystem ? (window.CreditsSystem.currentCredits || 0) : 0;
             var onchainBalance = Number(window.__mtrOnChainBalance || 0);
             var canCover = credits >= bet || onchainBalance >= bet;
             
-            // console.log('[createSocialChallenge] Verificación de saldo:', {...});
+            console.log('[createSocialChallenge] Verificación de saldo:', {
+                bet: bet,
+                credits: credits,
+                onchainBalance: onchainBalance,
+                canCover: canCover
+            });
             
             if (!canCover) {
-                showToast(`Créditos insuficientes. Disponibles: ${credits.toFixed(2)} créditos, ${onchainBalance.toLocaleString('es-ES')} MTR on-chain`, 'error');
+                var errorMsg = `Saldo insuficiente para apostar ${bet} créditos. `;
+                if (credits < bet && onchainBalance < bet) {
+                    errorMsg += `Disponibles: ${credits.toFixed(2)} créditos y ${onchainBalance.toLocaleString('es-ES', { maximumFractionDigits: 4 })} MTR on-chain`;
+                } else if (credits < bet) {
+                    errorMsg += `Tienes ${credits.toFixed(2)} créditos pero necesitas ${bet}. Tu balance MTR on-chain (${onchainBalance.toLocaleString('es-ES')}) puede usarse automáticamente.`;
+                } else {
+                    errorMsg += `Tienes ${onchainBalance.toLocaleString('es-ES', { maximumFractionDigits: 4 })} MTR on-chain pero necesitas ${bet} créditos.`;
+                }
+                showToast(errorMsg, 'error');
                 return;
             }
             

@@ -892,6 +892,11 @@ const GameEngine = {
             
             if (!deductionSuccess) {
                 console.error('[createSocialChallenge] ❌ Deducción falló, eliminando desafío creado...');
+                
+                // Obtener información de saldo para mensaje de error más claro
+                const credits = window.CreditsSystem?.currentCredits || 0;
+                const onchainBalance = Number(window.__mtrOnChainBalance || 0);
+                
                 // Si falla la deducción, eliminar el desafío
                 try {
                     await supabaseClient
@@ -902,7 +907,18 @@ const GameEngine = {
                 } catch (deleteError) {
                     console.error('[createSocialChallenge] ❌ Error al eliminar desafío:', deleteError);
                 }
-                showToast('Error al descontar créditos. Verifica tu saldo y vuelve a intentar.', 'error');
+                
+                // Mensaje de error más claro
+                let errorMsg = `No se pudieron descontar ${normalizedBet} créditos. `;
+                if (credits < normalizedBet && onchainBalance >= normalizedBet) {
+                    errorMsg += `Tienes ${credits.toFixed(2)} créditos pero ${onchainBalance.toLocaleString('es-ES')} MTR on-chain. La conversión automática falló. Intenta nuevamente.`;
+                } else if (credits < normalizedBet && onchainBalance < normalizedBet) {
+                    errorMsg += `Disponibles: ${credits.toFixed(2)} créditos y ${onchainBalance.toLocaleString('es-ES', { maximumFractionDigits: 4 })} MTR on-chain.`;
+                } else {
+                    errorMsg += `Verifica tu saldo y vuelve a intentar.`;
+                }
+                
+                showToast(errorMsg, 'error');
                 return;
             }
             
@@ -3859,7 +3875,7 @@ const GameEngine = {
                             
                             // Si el error es "Insufficient credits" pero el usuario tiene suficiente MTR on-chain,
                             // intentar convertir MTR a créditos automáticamente
-                            if (response.status === 400 && errorText.includes('Insufficient credit')) {
+                            if (response.status === 400 && (errorText.includes('Insufficient credit') || errorText.includes('insufficient') || errorText.toLowerCase().includes('credit'))) {
                                 const credits = window.CreditsSystem?.currentCredits || 0;
                                 const onchainBalance = Number(window.__mtrOnChainBalance || 0);
                                 const creditsNeeded = creditsToDeduct - credits;
