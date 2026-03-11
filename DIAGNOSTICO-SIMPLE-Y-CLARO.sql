@@ -3,6 +3,7 @@
 -- Ejecuta este script completo y verás TODOS los problemas claramente
 -- ============================================
 
+SELECT * FROM (
 -- ============================================
 -- PROBLEMA 1: Usuarios con DEPÓSITOS pero SIN WALLET VINCULADA
 -- Este es el problema principal que causa "Insufficient credits"
@@ -22,7 +23,6 @@ WHERE NOT EXISTS (
     SELECT 1 FROM user_wallets uw WHERE uw.user_id = au.id
 )
 GROUP BY au.id, au.email
-ORDER BY total_depositos DESC
 
 UNION ALL
 
@@ -138,6 +138,8 @@ WHERE NOT EXISTS (SELECT 1 FROM users u WHERE u.id = au.id)
     AND au.email IS NOT NULL
     AND (EXISTS (SELECT 1 FROM deposits d WHERE d.user_id = au.id) 
          OR EXISTS (SELECT 1 FROM user_credits uc WHERE uc.user_id = au.id))
+
+) resultados
 
 ORDER BY 
     CASE tipo
