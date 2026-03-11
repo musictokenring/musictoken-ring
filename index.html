@@ -2285,8 +2285,8 @@
                     }, 500);
                     setTimeout(function() {
                         console.log('[selectMode] Actualizando display (1000ms)...');
-                        if (typeof GameEngine.updatePracticeBetDisplay === 'function') {
-                            GameEngine.updatePracticeBetDisplay();
+                        if (typeof window.GameEngine !== 'undefined' && typeof window.GameEngine.updatePracticeBetDisplay === 'function') {
+                            window.GameEngine.updatePracticeBetDisplay();
                         }
                         // Verificar que el balance se muestre
                         var balanceLabel = document.getElementById('balanceLabel');
@@ -2441,7 +2441,7 @@
             document.getElementById('songSelection').classList.add('hidden');
             document.getElementById('modeSelector').classList.remove('hidden');
             window.currentMode = null;
-            if (typeof GameEngine !== 'undefined' && typeof GameEngine.updatePracticeBetDisplay === 'function') GameEngine.updatePracticeBetDisplay();
+            if (typeof window.GameEngine !== 'undefined' && typeof window.GameEngine.updatePracticeBetDisplay === 'function') window.GameEngine.updatePracticeBetDisplay();
             selectedSong = null;
             
             // En móvil, hacer scroll al selector de modos cuando se vuelve atrás
@@ -2489,7 +2489,7 @@
                 var betAmountInput = document.getElementById('betAmount');
                 if (betAmountInput && !betAmountInput.value) {
                     // Usar mínimo dinámico desde GameEngine si está disponible, sino 5
-                    const minBet = (typeof GameEngine !== 'undefined' && GameEngine.minBet) ? GameEngine.minBet : 5;
+                    const minBet = (typeof window.GameEngine !== 'undefined' && window.GameEngine.minBet) ? window.GameEngine.minBet : 5;
                     betAmountInput.value = String(minBet);
                 }
                 
