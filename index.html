@@ -1887,7 +1887,28 @@
                     }
                 }
                 
-                if (session) {
+                // Verificar si hay sesión Supabase O wallet vinculada (para navegadores internos)
+                let hasLinkedWallet = false;
+                const connectedAddress = window.connectedAddress || localStorage.getItem('mtr_wallet');
+                
+                // Si no hay sesión Supabase, verificar wallet vinculada (CRÍTICO para navegadores internos)
+                if (!session && connectedAddress) {
+                    try {
+                        const backendUrl = window.CONFIG?.BACKEND_API || window.CreditsSystem?.backendUrl || 'https://musictoken-ring.onrender.com';
+                        const walletResponse = await fetch(`${backendUrl}/api/user/wallet/${connectedAddress}`);
+                        if (walletResponse.ok) {
+                            const walletData = await walletResponse.json();
+                            if (walletData.linked && walletData.userId) {
+                                hasLinkedWallet = true;
+                                console.log('[init] ✅ Wallet vinculada detectada, permitiendo acceso sin sesión Supabase');
+                            }
+                        }
+                    } catch (error) {
+                        console.warn('[init] Error verificando wallet link:', error);
+                    }
+                }
+                
+                if (session || hasLinkedWallet) {
                     showModeSelector();
                     if (typeof GameEngine !== 'undefined') {
                         // Inicializar GameEngine sin bloquear
@@ -1898,12 +1919,24 @@
                     // NO conectar wallet automáticamente aquí - el usuario debe hacerlo manualmente después del login
                 } else {
                     showLoginWall();
-                    // Asegurar que la wallet esté desconectada si no hay sesión
-                    if (typeof window !== 'undefined') {
-                        window.connectedAddress = null;
-                        window.connectedChainId = null;
-                        if (typeof renderWallet === 'function') {
-                            renderWallet();
+                    // Solo desconectar wallet si NO hay sesión NI wallet vinculada
+                    // En navegador interno, mantener wallet conectada aunque no haya sesión Supabase
+                    const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+                    const isWalletBrowser = typeof window.isWalletBrowser === 'function' 
+                        ? window.isWalletBrowser() 
+                        : (navigator.userAgent.toLowerCase().includes('metamask') || 
+                           navigator.userAgent.toLowerCase().includes('mmsb') ||
+                           navigator.userAgent.toLowerCase().includes('trust') ||
+                           navigator.userAgent.toLowerCase().includes('binance'));
+                    
+                    // Solo desconectar en navegador externo sin sesión
+                    if (!isMobile || !isWalletBrowser) {
+                        if (typeof window !== 'undefined') {
+                            window.connectedAddress = null;
+                            window.connectedChainId = null;
+                            if (typeof renderWallet === 'function') {
+                                renderWallet();
+                            }
                         }
                     }
                 }
@@ -1957,6 +1990,29 @@
                 }
             } catch (error) {
                 console.error('Error inicializando sesión:', error);
+                // En navegador interno, verificar wallet vinculada antes de mostrar login wall
+                const connectedAddress = window.connectedAddress || localStorage.getItem('mtr_wallet');
+                if (connectedAddress) {
+                    try {
+                        const backendUrl = window.CONFIG?.BACKEND_API || window.CreditsSystem?.backendUrl || 'https://musictoken-ring.onrender.com';
+                        const walletResponse = await fetch(`${backendUrl}/api/user/wallet/${connectedAddress}`);
+                        if (walletResponse.ok) {
+                            const walletData = await walletResponse.json();
+                            if (walletData.linked && walletData.userId) {
+                                // Wallet vinculada, mostrar selector de modos
+                                showModeSelector();
+                                if (typeof GameEngine !== 'undefined') {
+                                    GameEngine.init().catch(function(initError) {
+                                        console.error('Error initializing GameEngine:', initError);
+                                    });
+                                }
+                                return;
+                            }
+                        }
+                    } catch (walletError) {
+                        console.warn('[init] Error verificando wallet link en catch:', walletError);
+                    }
+                }
                 showLoginWall();
             }
         });
@@ -1979,7 +2035,14 @@
                             // Wallet vinculada, ocultar login wall y mostrar selector de modos
                             loginWall.classList.add('hidden');
                             if (modeSelector) modeSelector.classList.remove('hidden');
-                            console.log('[showLoginWall] Wallet vinculada, ocultando login wall');
+                            console.log('[showLoginWall] Wallet vinculada, ocultando login wall y mostrando selector de modos');
+                            
+                            // Inicializar GameEngine si wallet está vinculada
+                            if (typeof GameEngine !== 'undefined' && typeof GameEngine.init === 'function') {
+                                GameEngine.init().catch(function(initError) {
+                                    console.error('[showLoginWall] Error initializing GameEngine:', initError);
+                                });
+                            }
                             return;
                         }
                     }
