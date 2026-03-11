@@ -23,8 +23,29 @@
                 return;
             }
             
+            // Detectar navegador interno de wallet
+            const isWalletBrowser = typeof window.isWalletBrowser === 'function' 
+                ? window.isWalletBrowser() 
+                : (navigator.userAgent.toLowerCase().includes('metamask') || 
+                   navigator.userAgent.toLowerCase().includes('mmsb') ||
+                   navigator.userAgent.toLowerCase().includes('trust') ||
+                   navigator.userAgent.toLowerCase().includes('binance'));
+            
+            console.log('[credits-system] Inicializando sistema de créditos', {
+                walletAddress: walletAddress.slice(0, 10) + '...',
+                isWalletBrowser
+            });
+            
             // Load initial balance
             await this.loadBalance(walletAddress);
+            
+            // En navegador interno, forzar actualización adicional después de un delay
+            if (isWalletBrowser) {
+                setTimeout(async () => {
+                    console.log('[credits-system] [WALLET-BROWSER] Re-cargando balance después de delay...');
+                    await this.loadBalance(walletAddress);
+                }, 2000);
+            }
             
             // Start periodic updates
             this.startPeriodicUpdates(walletAddress);

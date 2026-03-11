@@ -25,6 +25,7 @@
 
         /**
          * Check authentication and update UI accordingly
+         * Ahora también verifica wallet vinculada para navegadores internos
          */
         async checkAuthAndUpdateUI() {
             const claimInput = document.getElementById('claimCreditsAmount');
@@ -34,6 +35,9 @@
             if (!claimInput || !claimButton) return;
             
             let isAuthenticated = false;
+            let hasLinkedWallet = false;
+            
+            // 1. Verificar sesión Supabase
             if (typeof supabaseClient !== 'undefined') {
                 try {
                     const { data: { session } } = await supabaseClient.auth.getSession();
@@ -44,8 +48,26 @@
                 }
             }
             
-            if (!isAuthenticated) {
-                // Deshabilitar formulario si no está autenticado
+            // 2. Verificar wallet vinculada (CRÍTICO para navegadores internos)
+            const connectedAddress = window.connectedAddress || localStorage.getItem('mtr_wallet');
+            if (connectedAddress && !isAuthenticated) {
+                try {
+                    const backendUrl = window.CONFIG?.BACKEND_API || window.CreditsSystem?.backendUrl || 'https://musictoken-ring.onrender.com';
+                    const walletResponse = await fetch(`${backendUrl}/api/user/wallet/${connectedAddress}`);
+                    if (walletResponse.ok) {
+                        const walletData = await walletResponse.json();
+                        if (walletData.linked && walletData.userId) {
+                            hasLinkedWallet = true;
+                            console.log('[claim-ui] ✅ Wallet vinculada, permitiendo reclamar');
+                        }
+                    }
+                } catch (walletError) {
+                    console.warn('[claim-ui] Error verificando wallet link:', walletError);
+                }
+            }
+            
+            if (!isAuthenticated && !hasLinkedWallet) {
+                // Deshabilitar formulario si no está autenticado ni tiene wallet vinculada
                 claimInput.disabled = true;
                 claimInput.placeholder = 'Inicia sesión para reclamar créditos';
                 if (claimButton) {
@@ -57,7 +79,7 @@
                     authWarning.classList.remove('hidden');
                 }
             } else {
-                // Habilitar formulario si está autenticado
+                // Habilitar formulario si está autenticado o tiene wallet vinculada
                 claimInput.disabled = false;
                 claimInput.placeholder = 'Mínimo 5 créditos (~$5)';
                 if (claimButton) {
@@ -156,24 +178,47 @@
          */
         async processClaim() {
             try {
-                // 🔒 SEGURIDAD: Verificar autenticación antes de procesar claim
+                // 🔒 SEGURIDAD: Verificar autenticación o wallet vinculada antes de procesar claim
+                let isAuthenticated = false;
+                let hasLinkedWallet = false;
+                
+                // 1. Verificar sesión Supabase
                 if (typeof supabaseClient !== 'undefined') {
                     try {
                         const { data: { session } } = await supabaseClient.auth.getSession();
-                        if (!session) {
-                            if (typeof showToast === 'function') {
-                                showToast('Debes iniciar sesión para reclamar créditos', 'error');
-                            }
-                            console.warn('[claim-ui] Intento de claim sin autenticación bloqueado');
-                            return;
-                        }
+                        isAuthenticated = !!session;
                     } catch (authError) {
                         console.error('[claim-ui] Error verificando autenticación:', authError);
-                        if (typeof showToast === 'function') {
-                            showToast('Error verificando autenticación', 'error');
-                        }
-                        return;
                     }
+                }
+                
+                // 2. Verificar wallet vinculada si no hay sesión (para navegadores internos)
+                if (!isAuthenticated) {
+                    const connectedAddress = window.connectedAddress || localStorage.getItem('mtr_wallet');
+                    if (connectedAddress) {
+                        try {
+                            const backendUrl = window.CONFIG?.BACKEND_API || window.CreditsSystem?.backendUrl || 'https://musictoken-ring.onrender.com';
+                            const walletResponse = await fetch(`${backendUrl}/api/user/wallet/${connectedAddress}`);
+                            if (walletResponse.ok) {
+                                const walletData = await walletResponse.json();
+                                if (walletData.linked && walletData.userId) {
+                                    hasLinkedWallet = true;
+                                    console.log('[claim-ui] ✅ Wallet vinculada, procesando claim');
+                                }
+                            }
+                        } catch (walletError) {
+                            console.warn('[claim-ui] Error verificando wallet link:', walletError);
+                        }
+                    }
+                }
+                
+                // 3. Bloquear si no hay autenticación ni wallet vinculada
+                if (!isAuthenticated && !hasLinkedWallet) {
+                    if (typeof showToast === 'function') {
+                        showToast('Debes iniciar sesión o vincular tu wallet para reclamar créditos', 'error');
+                    }
+                    console.warn('[claim-ui] Intento de claim sin autenticación ni wallet vinculada bloqueado');
+                    return;
                 }
 
                 const input = document.getElementById('claimCreditsAmount');

@@ -1961,9 +1961,52 @@
             }
         });
 
-        function showLoginWall() {
-            document.getElementById('loginWall').classList.remove('hidden');
-            document.getElementById('modeSelector').classList.add('hidden');
+        async function showLoginWall() {
+            const loginWall = document.getElementById('loginWall');
+            const modeSelector = document.getElementById('modeSelector');
+            
+            if (!loginWall) return;
+            
+            // Verificar si wallet está vinculada antes de mostrar
+            const connectedAddress = window.connectedAddress || localStorage.getItem('mtr_wallet');
+            if (connectedAddress) {
+                try {
+                    const backendUrl = window.CONFIG?.BACKEND_API || window.CreditsSystem?.backendUrl || 'https://musictoken-ring.onrender.com';
+                    const walletResponse = await fetch(`${backendUrl}/api/user/wallet/${connectedAddress}`);
+                    if (walletResponse.ok) {
+                        const walletData = await walletResponse.json();
+                        if (walletData.linked && walletData.userId) {
+                            // Wallet vinculada, ocultar login wall y mostrar selector de modos
+                            loginWall.classList.add('hidden');
+                            if (modeSelector) modeSelector.classList.remove('hidden');
+                            console.log('[showLoginWall] Wallet vinculada, ocultando login wall');
+                            return;
+                        }
+                    }
+                } catch (error) {
+                    console.warn('[showLoginWall] Error verificando wallet link:', error);
+                }
+            }
+            
+            // Verificar sesión Supabase
+            if (typeof supabaseClient !== 'undefined') {
+                try {
+                    const { data: { session } } = await supabaseClient.auth.getSession();
+                    if (session && session.user) {
+                        // Usuario autenticado, ocultar login wall y mostrar selector de modos
+                        loginWall.classList.add('hidden');
+                        if (modeSelector) modeSelector.classList.remove('hidden');
+                        console.log('[showLoginWall] Usuario autenticado, ocultando login wall');
+                        return;
+                    }
+                } catch (error) {
+                    console.warn('[showLoginWall] Error verificando sesión:', error);
+                }
+            }
+            
+            // Mostrar login wall solo si no hay autenticación ni wallet vinculada
+            loginWall.classList.remove('hidden');
+            if (modeSelector) modeSelector.classList.add('hidden');
         }
         function showModeSelector() {
             document.getElementById('loginWall').classList.add('hidden');
@@ -3360,8 +3403,34 @@
             if (!address) return;
             if (!validateMtrTokenAddress()) { setOnchainBalanceError('Address inválida'); return; }
             try {
+                // Detectar si estamos en navegador interno de wallet
+                const isWalletBrowser = typeof window.isWalletBrowser === 'function' 
+                    ? window.isWalletBrowser() 
+                    : (navigator.userAgent.toLowerCase().includes('metamask') || 
+                       navigator.userAgent.toLowerCase().includes('mmsb') ||
+                       navigator.userAgent.toLowerCase().includes('trust') ||
+                       navigator.userAgent.toLowerCase().includes('binance'));
+                
+                // En navegador interno, usar window.ethereum si está disponible (más confiable)
+                let clientToUse = publicClient;
+                if (isWalletBrowser && window.ethereum) {
+                    try {
+                        // Crear cliente usando el provider de la wallet (más confiable en navegadores internos)
+                        const { createPublicClient, http } = await import('viem');
+                        const { base } = await import('viem/chains');
+                        const { createWalletClient, custom } = await import('viem');
+                        clientToUse = createPublicClient({
+                            chain: base,
+                            transport: custom(window.ethereum)
+                        });
+                        console.log('[refreshMtrBalance] [WALLET-BROWSER] Usando provider de wallet para leer balance');
+                    } catch (e) {
+                        console.warn('[refreshMtrBalance] [WALLET-BROWSER] Error creando cliente con wallet provider, usando publicClient:', e);
+                    }
+                }
+                
                 // Agregar timeout para evitar bloqueos
-                var balancePromise = publicClient.readContract({
+                var balancePromise = clientToUse.readContract({
                     address: MTR_TOKEN,
                     abi: [{ type: 'function', name: 'balanceOf', stateMutability: 'view', inputs: [{ name: 'account', type: 'address' }], outputs: [{ name: '', type: 'uint256' }] }],
                     functionName: 'balanceOf', args: [address]
@@ -3369,7 +3438,7 @@
                 
                 var balance = await Promise.race([
                     balancePromise,
-                    new Promise((_, reject) => setTimeout(() => reject(new Error('Balance timeout')), 10000)) // Aumentado a 10s
+                    new Promise((_, reject) => setTimeout(() => reject(new Error('Balance timeout')), 15000)) // Aumentado a 15s para navegadores internos
                 ]);
                 
                 var numericBalance = Number(formatUnits(balance, 18));
