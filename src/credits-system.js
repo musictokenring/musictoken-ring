@@ -32,23 +32,26 @@
 
         /**
          * Load user credits balance
-         * Now supports wallet-based authentication for internal wallet browsers
+         * Now supports wallet-based authentication for internal wallet browsers (MOBILE ONLY)
          */
         async loadBalance(walletAddress) {
             try {
-                // 🔗 NUEVO: Try to get userId from wallet link if no Supabase session
+                // 🔗 NUEVO: Try to get userId from wallet link if no Supabase session (MOBILE ONLY)
                 let userIdFromWallet = null;
-                if (typeof supabaseClient !== 'undefined') {
+                const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+                
+                if (isMobile && typeof supabaseClient !== 'undefined') {
                     try {
                         const { data: { session } } = await supabaseClient.auth.getSession();
                         if (!session) {
-                            // No Supabase session - try wallet-based auth
+                            // No Supabase session - try wallet-based auth (MOBILE ONLY)
+                            console.log('[credits-system] [MOBILE] No Supabase session, checking wallet link...');
                             const walletResponse = await fetch(`${this.backendUrl}/api/user/wallet/${walletAddress}`);
                             if (walletResponse.ok) {
                                 const walletData = await walletResponse.json();
                                 if (walletData.linked && walletData.userId) {
                                     userIdFromWallet = walletData.userId;
-                                    console.log('[credits-system] ✅ Wallet linked to user:', userIdFromWallet);
+                                    console.log('[credits-system] [MOBILE] ✅ Wallet linked to user:', userIdFromWallet);
                                 }
                             }
                         }
@@ -204,8 +207,9 @@
                     return null;
                 }
 
-                // Find user ID (supports both Supabase auth and wallet-based auth)
+                // Find user ID (supports both Supabase auth and wallet-based auth - MOBILE ONLY for wallet link)
                 let userId = null;
+                const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
                 
                 // Try Supabase session first
                 if (typeof supabaseClient !== 'undefined') {
@@ -220,11 +224,15 @@
                     }
                 }
 
-                // If no Supabase session, try wallet-based auth
+                // If no Supabase session, try wallet-based auth (MOBILE ONLY)
                 if (!userId) {
                     userId = await this.getUserId(walletAddress);
                     if (userId) {
-                        console.log('[credits-system] Using userId from wallet link');
+                        if (isMobile) {
+                            console.log('[credits-system] [MOBILE] Using userId from wallet link');
+                        } else {
+                            console.log('[credits-system] Using userId from backend API');
+                        }
                     }
                 }
 
@@ -273,7 +281,7 @@
 
         /**
          * Get user ID from wallet address
-         * Now supports wallet-based authentication for internal wallet browsers
+         * Now supports wallet-based authentication for internal wallet browsers (MOBILE ONLY)
          */
         async getUserId(walletAddress) {
             var logFn = window.__originalLog || console.log;
@@ -284,9 +292,13 @@
                 return null;
             }
             
+            // 🔗 Detectar si es dispositivo móvil
+            const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+            
             try {
                 logFn('[getUserId] ========================================');
                 logFn('[getUserId] Obteniendo userId para wallet:', walletAddress);
+                logFn('[getUserId] Dispositivo:', isMobile ? 'MÓVIL' : 'PC');
                 logFn('[getUserId] Backend URL:', this.backendUrl);
                 
                 // 🔗 NUEVO: Try Supabase session first
@@ -298,12 +310,14 @@
                             userIdFromSession = session.user.id;
                             logFn('[getUserId] ✅ Usuario autenticado con Supabase:', userIdFromSession);
                             
-                            // 🔗 NUEVO: Auto-link wallet if user is authenticated
-                            try {
-                                await this.linkWalletToUser(walletAddress);
-                                logFn('[getUserId] ✅ Wallet vinculada automáticamente');
-                            } catch (linkError) {
-                                logFn('[getUserId] ⚠️ No se pudo vincular wallet (puede estar ya vinculada):', linkError.message);
+                            // 🔗 NUEVO: Auto-link wallet if user is authenticated (MOBILE ONLY)
+                            if (isMobile) {
+                                try {
+                                    await this.linkWalletToUser(walletAddress);
+                                    logFn('[getUserId] [MOBILE] ✅ Wallet vinculada automáticamente');
+                                } catch (linkError) {
+                                    logFn('[getUserId] [MOBILE] ⚠️ No se pudo vincular wallet (puede estar ya vinculada):', linkError.message);
+                                }
                             }
                             
                             return userIdFromSession;
@@ -313,21 +327,21 @@
                     }
                 }
                 
-                // 🔗 NUEVO: Try wallet link if no Supabase session (for internal wallet browsers)
-                if (!userIdFromSession) {
+                // 🔗 NUEVO: Try wallet link if no Supabase session (MOBILE ONLY - for internal wallet browsers)
+                if (!userIdFromSession && isMobile) {
                     try {
-                        logFn('[getUserId] [Wallet Link] Verificando si wallet está vinculada...');
+                        logFn('[getUserId] [MOBILE] [Wallet Link] Verificando si wallet está vinculada...');
                         const walletResponse = await fetch(`${this.backendUrl}/api/user/wallet/${walletAddress}`);
                         if (walletResponse.ok) {
                             const walletData = await walletResponse.json();
                             if (walletData.linked && walletData.userId) {
-                                logFn('[getUserId] ✅✅✅ userId obtenido desde wallet link:', walletData.userId);
+                                logFn('[getUserId] [MOBILE] ✅✅✅ userId obtenido desde wallet link:', walletData.userId);
                                 logFn('[getUserId] ========================================');
                                 return walletData.userId;
                             }
                         }
                     } catch (walletLinkError) {
-                        logFn('[getUserId] ⚠️ Error verificando wallet link:', walletLinkError.message);
+                        logFn('[getUserId] [MOBILE] ⚠️ Error verificando wallet link:', walletLinkError.message);
                     }
                 }
                 

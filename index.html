@@ -3425,19 +3425,20 @@
                     if (creditsDisplay) creditsDisplay.classList.remove('hidden');
                 }
                 
-                // 🔗 NUEVO: Auto-link wallet if user is authenticated
-                if (connectedAddress && typeof supabaseClient !== 'undefined') {
+                // 🔗 NUEVO: Auto-link wallet if user is authenticated (MOBILE ONLY)
+                const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+                if (isMobile && connectedAddress && typeof supabaseClient !== 'undefined') {
                     (async function() {
                         try {
                             const { data: { session } } = await supabaseClient.auth.getSession();
                             if (session && session.user && window.CreditsSystem) {
-                                console.log('[renderWallet] Usuario autenticado, vinculando wallet automáticamente...');
+                                console.log('[renderWallet] [MOBILE] Usuario autenticado, vinculando wallet automáticamente...');
                                 try {
                                     await window.CreditsSystem.linkWalletToUser(connectedAddress);
-                                    console.log('[renderWallet] ✅ Wallet vinculada automáticamente');
+                                    console.log('[renderWallet] [MOBILE] ✅ Wallet vinculada automáticamente');
                                 } catch (linkError) {
                                     // Wallet puede estar ya vinculada o error de red - no es crítico
-                                    console.log('[renderWallet] Wallet no vinculada (puede estar ya vinculada):', linkError.message);
+                                    console.log('[renderWallet] [MOBILE] Wallet no vinculada (puede estar ya vinculada):', linkError.message);
                                 }
                             }
                         } catch (authError) {
