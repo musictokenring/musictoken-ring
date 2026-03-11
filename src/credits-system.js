@@ -505,6 +505,65 @@
                 console.error('[credits-system] Error getting price:', error);
             }
             return null;
+        },
+
+        /**
+         * Link wallet to authenticated user
+         * Called automatically when user connects wallet and is authenticated
+         */
+        async linkWalletToUser(walletAddress) {
+            try {
+                if (!walletAddress) {
+                    console.warn('[credits-system] linkWalletToUser: No wallet address provided');
+                    return false;
+                }
+
+                // Verify user is authenticated
+                if (typeof supabaseClient === 'undefined') {
+                    console.warn('[credits-system] linkWalletToUser: Supabase client not available');
+                    return false;
+                }
+
+                const { data: { session }, error: sessionError } = await supabaseClient.auth.getSession();
+                if (sessionError || !session || !session.user) {
+                    console.warn('[credits-system] linkWalletToUser: User not authenticated');
+                    return false;
+                }
+
+                const userId = session.user.id;
+                console.log('[credits-system] linkWalletToUser: Linking wallet', walletAddress, 'to user', userId);
+
+                // Call backend endpoint to link wallet
+                const response = await fetch(`${this.backendUrl}/api/user/link-wallet`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${session.access_token}`
+                    },
+                    body: JSON.stringify({
+                        walletAddress: walletAddress.toLowerCase()
+                    })
+                });
+
+                if (!response.ok) {
+                    const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
+                    // If wallet is already linked, that's OK
+                    if (response.status === 400 && errorData.error && errorData.error.includes('already linked')) {
+                        console.log('[credits-system] linkWalletToUser: Wallet already linked (OK)');
+                        return true;
+                    }
+                    console.error('[credits-system] linkWalletToUser: Error linking wallet:', errorData);
+                    return false;
+                }
+
+                const result = await response.json();
+                console.log('[credits-system] linkWalletToUser: ✅ Wallet linked successfully:', result);
+                return true;
+
+            } catch (error) {
+                console.error('[credits-system] linkWalletToUser: Exception:', error);
+                return false;
+            }
         }
     };
 
