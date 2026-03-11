@@ -30,7 +30,7 @@ BEGIN
         UPDATE user_wallets
         SET user_id = v_user_id,
             is_primary = TRUE,
-            linked_via = 'manual_correction',
+            linked_via = 'manual',
             updated_at = NOW()
         WHERE wallet_address = v_wallet_address;
         RAISE NOTICE '✅ Wallet actualizada al usuario: %', v_user_id;
@@ -70,7 +70,7 @@ BEGIN
             v_user_id,
             v_wallet_address,
             TRUE,
-            'manual_correction',
+            'manual',
             NOW(),
             NOW()
         )
@@ -78,7 +78,7 @@ BEGIN
         DO UPDATE SET
             user_id = v_user_id,
             is_primary = TRUE,
-            linked_via = COALESCE(user_wallets.linked_via, 'manual_correction'),
+            linked_via = COALESCE(user_wallets.linked_via, 'manual'),
             updated_at = NOW();
         
         RAISE NOTICE '✅ Wallet vinculada exitosamente';

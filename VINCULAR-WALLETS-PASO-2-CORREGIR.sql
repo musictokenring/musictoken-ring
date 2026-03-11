@@ -112,7 +112,7 @@ BEGIN
                         v_target_user_id,
                         v_wallet_address,
                         TRUE,
-                        'auto_correction',
+                        'manual',
                         NOW(),
                         NOW()
                     )
