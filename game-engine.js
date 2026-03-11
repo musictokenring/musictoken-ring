@@ -344,6 +344,39 @@ const GameEngine = {
                 // console.log('[updatePracticeBetDisplay] MutationObserver desconectado (modo normal)');
             }
             
+            // CRÍTICO: Forzar actualización de balances REALES cuando se sale de modo práctica
+            // Esto asegura que no queden valores demo mezclados
+            console.log('[updatePracticeBetDisplay] Saliendo de modo práctica, cargando balances REALES...');
+            
+            // Cargar balance real del usuario desde Supabase
+            if (typeof this.loadUserBalance === 'function') {
+                this.loadUserBalance().catch(err => {
+                    console.error('[updatePracticeBetDisplay] Error cargando balance real:', err);
+                });
+            }
+            
+            // Actualizar balance on-chain si hay wallet conectada
+            const connectedWallet = this.connectedWallet || localStorage.getItem('mtr_wallet');
+            if (connectedWallet && typeof window.refreshMtrBalance === 'function') {
+                window.refreshMtrBalance(connectedWallet).catch(err => {
+                    console.error('[updatePracticeBetDisplay] Error actualizando balance on-chain:', err);
+                });
+            }
+            
+            // Actualizar créditos desde backend si CreditsSystem está disponible
+            if (window.CreditsSystem && typeof window.CreditsSystem.loadBalance === 'function' && connectedWallet) {
+                window.CreditsSystem.loadBalance(connectedWallet).catch(err => {
+                    console.error('[updatePracticeBetDisplay] Error actualizando créditos:', err);
+                });
+            }
+            
+            // Forzar actualización del display después de un delay para permitir que los balances se carguen
+            setTimeout(() => {
+                if (typeof this.updateBalanceDisplay === 'function') {
+                    this.updateBalanceDisplay();
+                }
+            }, 300);
+            
             const onChainBalance = Number(window.__mtrOnChainBalance || 0);
             const playableBalance = onChainBalance > 0 ? onChainBalance : this.userBalance;
             if (valueEl) {
