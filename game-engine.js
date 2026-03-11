@@ -138,21 +138,27 @@ const GameEngine = {
         
         if (isInPracticeSection) {
             // Asegurar que el balance demo esté inicializado
-            if (this.practiceDemoBalance <= 0) {
-                this.practiceDemoBalance = this.practiceDemoInitialBalance;
+            if (!this.practiceDemoBalance || this.practiceDemoBalance <= 0) {
+                this.practiceDemoBalance = this.practiceDemoInitialBalance || 1000;
                 localStorage.setItem('mtr_practice_demo_balance', String(this.practiceDemoBalance));
-                // Log comentado para reducir ruido
-                // console.log('[practice] Demo balance reset to', this.practiceDemoBalance);
+                console.log('[practice] Demo balance inicializado a', this.practiceDemoBalance);
             }
             
             // Actualizar UI para modo práctica - FORZAR actualización
             if (labelEl) {
                 labelEl.textContent = 'Saldo demo (práctica)';
                 labelEl.style.color = '#8b5cf6'; // Color púrpura para práctica
-                // Log comentado para reducir ruido
-                // console.log('[updatePracticeBetDisplay] Label actualizado a "Saldo demo (práctica)"');
             } else {
                 console.error('[updatePracticeBetDisplay] balanceLabel no encontrado en el DOM');
+            }
+            
+            // FORZAR actualización del valor del balance
+            if (valueEl) {
+                valueEl.textContent = String(this.practiceDemoBalance || 1000);
+                valueEl.style.color = '#8b5cf6';
+                console.log('[updatePracticeBetDisplay] Balance demo actualizado a', this.practiceDemoBalance);
+            } else {
+                console.error('[updatePracticeBetDisplay] userBalance no encontrado en el DOM');
             }
             
             // Actualizar el label "Jugable" a "Saldo demo" en modo práctica
@@ -3864,9 +3870,9 @@ const GameEngine = {
                     // Intentar usar el sistema legacy como fallback
                     console.log('[updateBalance] Intentando usar sistema legacy como fallback...');
                 }
-                } else {
-                    console.error('[updateBalance] ❌ No hay walletAddress disponible');
-                }
+            } else {
+                console.error('[updateBalance] ❌ No hay walletAddress disponible');
+            }
                 // If CreditsSystem not available, fall through to legacy system
             }
             
