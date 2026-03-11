@@ -9,18 +9,25 @@
 ## 🔧 Soluciones Implementadas
 
 ### 1. **SQL para Usuario Actual** ✅
-- **Archivo:** [`SOLUCION-COMPLETA-VINCULAR-WALLET.sql`](SOLUCION-COMPLETA-VINCULAR-WALLET.sql)
+
+**Versión Segura (RECOMENDADA):**
+- **Archivo:** [`SOLUCION-VINCULAR-WALLET-SEGURA.sql`](SOLUCION-VINCULAR-WALLET-SEGURA.sql) ⭐
 - **Función:** Vincular wallet al usuario `52053c46-f6da-4861-9143-fd76d3e8e5d9`
 - **Características:**
-  - Busca y une usuarios duplicados si existen
-  - Mueve créditos y depósitos al usuario correcto
-  - Crea entrada en `users` y `user_wallets`
-  - **⚠️ IMPORTANTE:** Reemplaza `'WALLET_ADDRESS_AQUI'` con la wallet real del usuario
+  - ✅ NO elimina usuarios (solo actualiza)
+  - ✅ Muestra estado actual antes de modificar
+  - ✅ Busca usuarios duplicados y mueve datos
+  - ✅ Crea entrada en `users` y `user_wallets`
+  - ✅ **Más seguro** - No tiene operaciones DELETE destructivas
 - **📋 Cómo usar:**
-  1. Haz clic en el link de arriba para abrir el archivo
-  2. Copia todo el contenido
-  3. Reemplaza `'WALLET_ADDRESS_AQUI'` con la wallet real
-  4. Pégalo en Supabase SQL Editor y ejecuta
+  1. Primero ejecuta [`BUSCAR-WALLET-DEL-USUARIO.sql`](BUSCAR-WALLET-DEL-USUARIO.sql) para encontrar la wallet
+  2. Haz clic en [`SOLUCION-VINCULAR-WALLET-SEGURA.sql`](SOLUCION-VINCULAR-WALLET-SEGURA.sql) para abrir
+  3. Reemplaza `'WALLET_ADDRESS_AQUI'` con la wallet real (línea ~45)
+  4. Copia todo el contenido y ejecuta en Supabase SQL Editor
+
+**Versión Completa (con DELETE):**
+- **Archivo:** [`SOLUCION-COMPLETA-VINCULAR-WALLET.sql`](SOLUCION-COMPLETA-VINCULAR-WALLET.sql)
+- **Nota:** Esta versión elimina usuarios duplicados. Usa solo si estás seguro.
 
 ### 2. **Prevención Futura: Auto-vincular en Depósitos** ✅
 - **Archivo:** [`backend/deposit-listener.js`](backend/deposit-listener.js) (líneas 308-380)
