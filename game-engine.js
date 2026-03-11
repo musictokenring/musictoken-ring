@@ -3875,7 +3875,17 @@ const GameEngine = {
                             
                             // Si el error es "Insufficient credits" pero el usuario tiene suficiente MTR on-chain,
                             // intentar convertir MTR a créditos automáticamente
-                            if (response.status === 400 && (errorText.includes('Insufficient credit') || errorText.includes('insufficient') || errorText.toLowerCase().includes('credit'))) {
+                            // CRÍTICO: Verificar múltiples variantes del mensaje de error
+                            const errorTextLower = errorText.toLowerCase();
+                            const isInsufficientError = response.status === 400 && (
+                                errorTextLower.includes('insufficient') || 
+                                errorTextLower.includes('credit') ||
+                                errorTextLower.includes('saldo') ||
+                                errorTextLower.includes('balance') ||
+                                errorTextLower.includes('fondos')
+                            );
+                            
+                            if (isInsufficientError) {
                                 const credits = window.CreditsSystem?.currentCredits || 0;
                                 const onchainBalance = Number(window.__mtrOnChainBalance || 0);
                                 const creditsNeeded = creditsToDeduct - credits;
@@ -3884,11 +3894,13 @@ const GameEngine = {
                                     credits: credits,
                                     onchainBalance: onchainBalance,
                                     creditsNeeded: creditsNeeded,
-                                    creditsToDeduct: creditsToDeduct
+                                    creditsToDeduct: creditsToDeduct,
+                                    canConvert: onchainBalance >= creditsNeeded
                                 });
                                 
                                 // Si tiene suficiente MTR on-chain, intentar convertir automáticamente
-                                if (onchainBalance >= creditsNeeded) {
+                                // CRÍTICO: Verificar que tenga suficiente MTR para cubrir TODA la apuesta, no solo la diferencia
+                                if (onchainBalance >= creditsToDeduct) {
                                     console.log('[updateBalance] Usuario tiene suficiente MTR on-chain, convirtiendo automáticamente...');
                                     
                                     // Obtener precio actual de MTR (1 MTR = X USDC)
