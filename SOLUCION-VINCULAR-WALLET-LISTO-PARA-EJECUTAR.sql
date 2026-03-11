@@ -1,14 +1,10 @@
 -- ============================================
--- SOLUCIÓN SEGURA: Vincular wallet al usuario
+-- SOLUCIÓN LISTA PARA EJECUTAR: Vincular wallet al usuario
 -- User ID: 52053c46-f6da-4861-9143-fd76d3e8e5d9
+-- Wallet: 0x72ecA083FBceb05A4f21B1A9883A57bCD638b6Dd
 -- ============================================
--- 
--- ⚠️ IMPORTANTE: Reemplaza 'WALLET_ADDRESS_AQUI' con la wallet real ANTES de ejecutar
--- 
--- Esta versión es MÁS SEGURA porque:
--- 1. NO elimina usuarios (solo actualiza)
--- 2. Muestra qué va a hacer antes de hacerlo
--- 3. Usa UPDATE en lugar de DELETE para evitar pérdida de datos
+-- ✅ WALLET YA CONFIGURADA - LISTO PARA EJECUTAR
+-- Esta versión es SEGURA (no elimina usuarios, solo actualiza)
 -- ============================================
 
 -- PASO 1: Verificar estado actual (SOLO LECTURA - NO MODIFICA NADA)
@@ -62,8 +58,7 @@ ORDER BY total_depositos DESC;
 
 -- ============================================
 -- PASO 3: VINCULACIÓN SEGURA (SOLO INSERT/UPDATE - NO DELETE)
--- ============================================
--- ⚠️ REEMPLAZA 'WALLET_ADDRESS_AQUI' CON LA WALLET REAL ANTES DE EJECUTAR
+-- Wallet: 0x72ecA083FBceb05A4f21B1A9883A57bCD638b6Dd
 -- ============================================
 
 DO $$
@@ -74,8 +69,6 @@ DECLARE
     v_credits_to_move DECIMAL;
     v_deposits_to_move INTEGER;
 BEGIN
-    -- Wallet ya configurada: 0x72ecA083FBceb05A4f21B1A9883A57bCD638b6Dd
-
     -- Validar formato de wallet address
     IF NOT (v_wallet_address ~ '^0x[a-fA-F0-9]{40}$') THEN
         RAISE EXCEPTION 'Formato de wallet inválido. Debe comenzar con 0x y tener 40 caracteres hexadecimales.';
