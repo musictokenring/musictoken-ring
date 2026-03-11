@@ -1123,9 +1123,9 @@
                     var currentMode = typeof window.currentMode !== 'undefined' ? window.currentMode : null;
                     
                     // Validación de ELO solo para modos competitivos (no práctica)
-                    if (currentMode !== 'practice' && typeof GameEngine !== 'undefined' && typeof GameEngine.ensureSongEligibleForMatchmaking === 'function') {
+                    if (currentMode !== 'practice' && typeof window.GameEngine !== 'undefined' && typeof window.GameEngine.ensureSongEligibleForMatchmaking === 'function') {
                         try {
-                            var eloGate = await GameEngine.ensureSongEligibleForMatchmaking(song.id);
+                            var eloGate = await window.GameEngine.ensureSongEligibleForMatchmaking(song.id);
                             if (!eloGate.allowed) { 
                                 if (typeof showToast === 'function') {
                                     showToast(eloGate.reason || 'Canción fuera del rango ELO permitido', 'error');
@@ -1657,9 +1657,9 @@
             console.log('[selectSong] Seleccionando canción:', song, 'Modo actual:', currentMode);
             
             // Validación de ELO solo para modos competitivos (no práctica)
-            if (currentMode !== 'practice' && typeof GameEngine !== 'undefined' && typeof GameEngine.ensureSongEligibleForMatchmaking === 'function') {
+            if (currentMode !== 'practice' && typeof window.GameEngine !== 'undefined' && typeof window.GameEngine.ensureSongEligibleForMatchmaking === 'function') {
                 try {
-                    var eloGate = await GameEngine.ensureSongEligibleForMatchmaking(song.id);
+                    var eloGate = await window.GameEngine.ensureSongEligibleForMatchmaking(song.id);
                     if (!eloGate.allowed) { 
                         if (typeof showToast === 'function') {
                             showToast(eloGate.reason || 'Canción fuera del rango ELO permitido', 'error');
@@ -2248,32 +2248,32 @@
                 if (mode === 'practice') {
                     console.log('[selectMode] Modo práctica seleccionado, cargando balance demo...');
                     // FORZAR carga del balance demo
-                    if (typeof GameEngine.loadPracticeDemoBalance === 'function') {
-                        GameEngine.loadPracticeDemoBalance();
+                    if (typeof window.GameEngine.loadPracticeDemoBalance === 'function') {
+                        window.GameEngine.loadPracticeDemoBalance();
                     }
                     // Si el balance está en 0 o no existe, forzar reset a 1000
-                    if (!GameEngine.practiceDemoBalance || GameEngine.practiceDemoBalance <= 0) {
-                        GameEngine.practiceDemoBalance = GameEngine.practiceDemoInitialBalance || 1000;
-                        if (typeof GameEngine.setPracticeDemoBalance === 'function') {
-                            GameEngine.setPracticeDemoBalance(GameEngine.practiceDemoBalance);
+                    if (!window.GameEngine.practiceDemoBalance || window.GameEngine.practiceDemoBalance <= 0) {
+                        window.GameEngine.practiceDemoBalance = window.GameEngine.practiceDemoInitialBalance || 1000;
+                        if (typeof window.GameEngine.setPracticeDemoBalance === 'function') {
+                            window.GameEngine.setPracticeDemoBalance(window.GameEngine.practiceDemoBalance);
                         }
-                        console.log('[selectMode] Balance demo forzado a', GameEngine.practiceDemoBalance);
+                        console.log('[selectMode] Balance demo forzado a', window.GameEngine.practiceDemoBalance);
                     }
-                    console.log('[selectMode] Balance demo final:', GameEngine.practiceDemoBalance);
+                    console.log('[selectMode] Balance demo final:', window.GameEngine.practiceDemoBalance);
                     
                     // Actualizar display INMEDIATAMENTE y con delays para asegurar visibilidad
-                    if (typeof GameEngine.updatePracticeBetDisplay === 'function') {
-                        GameEngine.updatePracticeBetDisplay();
+                    if (typeof window.GameEngine.updatePracticeBetDisplay === 'function') {
+                        window.GameEngine.updatePracticeBetDisplay();
                     }
                     setTimeout(function() {
                         console.log('[selectMode] Actualizando display (50ms)...');
-                        if (typeof GameEngine.updatePracticeBetDisplay === 'function') {
-                            GameEngine.updatePracticeBetDisplay();
+                        if (typeof window.GameEngine.updatePracticeBetDisplay === 'function') {
+                            window.GameEngine.updatePracticeBetDisplay();
                         }
                     }, 50);
                     setTimeout(function() {
                         console.log('[selectMode] Actualizando display (200ms)...');
-                        if (typeof GameEngine.updatePracticeBetDisplay === 'function') {
+                        if (typeof window.GameEngine.updatePracticeBetDisplay === 'function') {
                             GameEngine.updatePracticeBetDisplay();
                         }
                     }, 200);
