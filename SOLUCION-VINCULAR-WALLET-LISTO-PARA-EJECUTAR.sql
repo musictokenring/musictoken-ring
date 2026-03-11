@@ -81,6 +81,10 @@ BEGIN
     RAISE NOTICE 'Wallet: %', v_wallet_address;
     RAISE NOTICE 'Usuario: %', v_auth_user_id;
     RAISE NOTICE '========================================';
+    
+    -- Deshabilitar trigger temporalmente para evitar error con NEW.wallet_address
+    RAISE NOTICE '⚠️ Deshabilitando trigger update_wallet_last_used temporalmente...';
+    ALTER TABLE user_credits DISABLE TRIGGER trigger_update_wallet_last_used_on_credits;
 
     -- PASO 3.1: Buscar si existe usuario en "users" con esta wallet
     SELECT id INTO v_users_id
@@ -180,6 +184,10 @@ BEGIN
     
     RAISE NOTICE '✅ Wallet vinculada en user_wallets';
 
+    -- Re-habilitar trigger
+    RAISE NOTICE '✅ Re-habilitando trigger update_wallet_last_used...';
+    ALTER TABLE user_credits ENABLE TRIGGER trigger_update_wallet_last_used_on_credits;
+    
     -- PASO 3.5: Verificar resultado final
     RAISE NOTICE '========================================';
     RAISE NOTICE '✅ VINCULACIÓN COMPLETA';
