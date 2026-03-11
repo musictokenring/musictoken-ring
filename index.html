@@ -1064,8 +1064,8 @@
                 setTimeout(function() {
                     // Actualizar display del mínimo dinámicamente
                     const minBetEl = document.getElementById('minBet');
-                    if (minBetEl && typeof GameEngine !== 'undefined' && GameEngine.minBet) {
-                        minBetEl.textContent = GameEngine.minBet;
+                    if (minBetEl && typeof window.GameEngine !== 'undefined' && window.GameEngine.minBet) {
+                        minBetEl.textContent = window.GameEngine.minBet;
                     }
                     
                     if (typeof window.updateBetEligibility === 'function') {
@@ -1910,13 +1910,11 @@
                 
                 if (session || hasLinkedWallet) {
                     showModeSelector();
-                    if (typeof GameEngine !== 'undefined') {
+                    if (typeof window.GameEngine !== 'undefined') {
                         // Inicializar GameEngine sin bloquear
-                        if (typeof window.GameEngine !== 'undefined') {
-                            window.GameEngine.init().catch(function(initError) {
-                                console.error('Error initializing GameEngine:', initError);
-                            });
-                        }
+                        window.GameEngine.init().catch(function(initError) {
+                            console.error('Error initializing GameEngine:', initError);
+                        });
                     }
                     // NO conectar wallet automáticamente aquí - el usuario debe hacerlo manualmente después del login
                 } else {
