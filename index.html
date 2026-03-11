@@ -1025,7 +1025,7 @@
     <script src="./src/deposit-ui.js?v=v2.7" defer></script>
     <script src="./src/ramp-integration.js?v=v2.7" defer></script>
     <script src="./src/claim-ui.js?v=v2.7" defer></script>
-    <script src="./game-engine.js?v=v2.7" defer></script>
+    <script src="./game-engine.js?v=v2.7"></script>
     <script>window.MTR_INLINE_TOP_STREAMS_ACTIVE = true;</script>
     <!-- DEFINIR quickBet INMEDIATAMENTE - ANTES DE CUALQUIER OTRO SCRIPT -->
     <script>
@@ -2931,12 +2931,6 @@
         }
         async function startPractice() {
             console.log('[startPractice] ✅ Función llamada');
-            console.log('[startPractice] Estado:', {
-                selectedSong: !!selectedSong,
-                selectedSongData: selectedSong,
-                GameEngine: typeof window.GameEngine !== 'undefined',
-                betAmount: document.getElementById('betAmount')?.value
-            });
             
             if (!selectedSong) { 
                 console.error('[startPractice] ❌ No hay canción seleccionada');
@@ -2944,11 +2938,26 @@
                 return; 
             }
             
+            // Esperar a que GameEngine esté disponible (máximo 5 segundos)
+            let attempts = 0;
+            const maxAttempts = 50; // 50 intentos x 100ms = 5 segundos
+            while (typeof window.GameEngine === 'undefined' && attempts < maxAttempts) {
+                await new Promise(resolve => setTimeout(resolve, 100));
+                attempts++;
+            }
+            
             if (typeof window.GameEngine === 'undefined') {
-                console.error('[startPractice] ❌ GameEngine no está definido');
+                console.error('[startPractice] ❌ GameEngine no está definido después de esperar');
                 showToast('GameEngine no está cargado. Recarga la página.', 'error');
                 return;
             }
+            
+            console.log('[startPractice] Estado:', {
+                selectedSong: !!selectedSong,
+                selectedSongData: selectedSong,
+                GameEngine: typeof window.GameEngine !== 'undefined',
+                betAmount: document.getElementById('betAmount')?.value
+            });
             
             if (typeof window.GameEngine.startPracticeMatch !== 'function') {
                 console.error('[startPractice] ❌ GameEngine.startPracticeMatch no es una función');
