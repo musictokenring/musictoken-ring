@@ -2564,22 +2564,20 @@
                 buttonsDiv.innerHTML = '<div class="flex gap-2"><input type="text" id="tournamentId" placeholder="ID de torneo" class="flex-1 px-3 py-2.5 rounded-lg bg-black/40 border border-white/10 text-white text-sm">' +
                     '<button type="button" onclick="joinTournamentMode()" class="' + btnPrimary + ' w-auto px-4" id="joinTournamentBtn" disabled>🏆 Unirme</button></div>';
             } else if (mode === 'social') {
-                // CRÍTICO: Verificar si la URL tiene ?mode=practice para mostrar saldo demo
-                var urlParams = new URLSearchParams(window.location.search);
-                var urlModeParam = urlParams.get('mode');
-                var isPracticeModeFromUrl = urlModeParam === 'practice';
-                
-                // Si la URL tiene ?mode=practice, forzar modo práctica para mostrar saldo demo
-                if (isPracticeModeFromUrl) {
-                    console.log('[updateActionButtons] ⚠️ URL tiene ?mode=practice pero se seleccionó modo social. Mostrando saldo DEMO.');
-                    // Actualizar display con saldo demo
-                    if (typeof window.GameEngine !== 'undefined') {
-                        if (typeof window.GameEngine.loadPracticeDemoBalance === 'function') {
-                            window.GameEngine.loadPracticeDemoBalance();
-                        }
-                        if (typeof window.GameEngine.updatePracticeBetDisplay === 'function') {
-                            window.GameEngine.updatePracticeBetDisplay();
-                        }
+                // REGLA: Modo social siempre muestra saldo REAL, nunca saldo demo
+                // Actualizar display con balances REALES desde la plataforma
+                if (typeof window.GameEngine !== 'undefined') {
+                    // Cargar balance real del usuario desde Supabase
+                    if (typeof window.GameEngine.loadUserBalance === 'function') {
+                        window.GameEngine.loadUserBalance().then(() => {
+                            console.log('[updateActionButtons] ✅ Balance real cargado para modo social');
+                        }).catch(err => {
+                            console.error('[updateActionButtons] ❌ Error cargando balance real:', err);
+                        });
+                    }
+                    // Actualizar display con balance real
+                    if (typeof window.GameEngine.updateBalanceDisplay === 'function') {
+                        window.GameEngine.updateBalanceDisplay();
                     }
                 }
                 
@@ -3577,11 +3575,9 @@
                 var badge = document.getElementById('onchainBalanceDisplay');
                 var onchain = document.getElementById('onchainMtrBalance');
                 
-                // CRÍTICO: Verificar tanto window.currentMode como el parámetro ?mode=practice en la URL
-                var urlParams = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
-                var urlModeParam = urlParams ? urlParams.get('mode') : null;
-                var isPracticeModeFromUrl = urlModeParam === 'practice';
-                const isPracticeMode = typeof window !== 'undefined' && (window.currentMode === 'practice' || isPracticeModeFromUrl);
+                // REGLA: Saldo demo SOLO en modo práctica (window.currentMode === 'practice')
+                // En todos los demás modos, mostrar saldo REAL
+                const isPracticeMode = typeof window !== 'undefined' && window.currentMode === 'practice';
                 
                 if (badge) badge.textContent = 'Tu MTR: ' + formatted;
                 if (onchain && !isPracticeMode) {
@@ -3598,8 +3594,8 @@
                     GameEngine.updatePracticeBetDisplay();
                 }
                 
-                // CRÍTICO: Actualizar perfil del jugador si está abierto y estamos en modo práctica
-                updateProfileBalanceForPracticeMode();
+                // REGLA: El perfil siempre muestra información REAL, nunca información de práctica
+                // No actualizar perfil con balance demo aquí
                 
                 // Actualizar elegibilidad de apuestas
                 if (typeof window.updateBetEligibility === 'function') {
@@ -3611,62 +3607,46 @@
             }
         }
         
-        // CRÍTICO: Función para actualizar el balance del perfil según el modo práctica
-        function updateProfileBalanceForPracticeMode() {
+        // REGLA: El perfil del jugador SIEMPRE muestra información REAL de juegos y batallas reales
+        // NUNCA muestra información de práctica (modo demo)
+        // Esta función asegura que el perfil siempre muestre datos reales
+        function ensureProfileShowsRealData() {
             try {
-                var urlParams = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
-                var urlModeParam = urlParams ? urlParams.get('mode') : null;
-                var isPracticeModeFromUrl = urlModeParam === 'practice';
-                var isPracticeMode = typeof window !== 'undefined' && (window.currentMode === 'practice' || isPracticeModeFromUrl);
-                
                 var profileModal = document.getElementById('profileModal');
                 if (!profileModal) return;
                 
                 var profileBalanceEl = document.getElementById('profileBalance');
                 var profileBalanceLabelEl = document.getElementById('profileBalanceLabel');
                 
-                if (isPracticeMode && profileBalanceEl && typeof window.GameEngine !== 'undefined') {
-                    // Cargar balance demo si no está cargado
-                    if (typeof window.GameEngine.loadPracticeDemoBalance === 'function') {
-                        window.GameEngine.loadPracticeDemoBalance();
-                    }
-                    var demoBalance = window.GameEngine.practiceDemoBalance || window.GameEngine.practiceDemoInitialBalance || 1000;
-                    profileBalanceEl.textContent = demoBalance + ' MTR (DEMO)';
-                    profileBalanceEl.style.color = '#8b5cf6';
-                    profileBalanceEl.style.fontWeight = 'bold';
-                    if (profileBalanceLabelEl) {
-                        profileBalanceLabelEl.textContent = '💰 Balance DEMO (práctica)';
-                        profileBalanceLabelEl.style.color = '#8b5cf6';
-                    }
-                    console.log('[updateProfileBalanceForPracticeMode] ✅ Perfil actualizado con balance DEMO:', demoBalance);
-                } else if (!isPracticeMode && profileBalanceEl) {
-                    // Restaurar formato normal si no está en modo práctica
+                // Asegurar que el perfil siempre muestre formato normal (sin DEMO)
+                if (profileBalanceEl) {
                     profileBalanceEl.style.color = '';
                     profileBalanceEl.style.fontWeight = '';
-                    if (profileBalanceLabelEl) {
-                        profileBalanceLabelEl.textContent = 'Balance';
-                        profileBalanceLabelEl.style.color = '';
-                    }
-                    // Remover "(DEMO)" si existe
+                    // Remover cualquier "(DEMO)" que pueda existir
                     if (profileBalanceEl.textContent.includes('(DEMO)')) {
                         profileBalanceEl.textContent = profileBalanceEl.textContent.replace(' (DEMO)', '');
                     }
                 }
+                
+                if (profileBalanceLabelEl) {
+                    profileBalanceLabelEl.textContent = 'Balance';
+                    profileBalanceLabelEl.style.color = '';
+                }
             } catch (e) {
-                console.error('[updateProfileBalanceForPracticeMode] Error:', e);
+                console.error('[ensureProfileShowsRealData] Error:', e);
             }
         }
         
-        // Observar cuando se abre el modal del perfil para actualizar el balance
+        // Observar cuando se abre el modal del perfil para asegurar que muestre datos reales
         if (typeof MutationObserver !== 'undefined') {
             var profileObserver = new MutationObserver(function(mutations) {
                 mutations.forEach(function(mutation) {
                     if (mutation.type === 'attributes' && mutation.attributeName === 'class') {
                         var profileModal = document.getElementById('profileModal');
                         if (profileModal && !profileModal.classList.contains('hidden')) {
-                            // Modal abierto, actualizar balance según modo práctica
+                            // Modal abierto, asegurar que muestre datos REALES
                             setTimeout(function() {
-                                updateProfileBalanceForPracticeMode();
+                                ensureProfileShowsRealData();
                             }, 100);
                         }
                     }
