@@ -81,6 +81,7 @@ let claimService;
 let vaultService;
 let depositSyncService;
 let liquidityManager;
+let walletLinkService;
 
 // 🔒 SEGURIDAD: Validar variables de entorno críticas
 function validateEnvironmentVariables() {
@@ -201,6 +202,16 @@ async function initializeServices() {
             console.error('[server] ⚠️ Error initializing liquidity manager:', liquidityError);
             console.error('[server] Error stack:', liquidityError.stack);
             console.log('[server] Continuing without liquidity manager...');
+            // Non-critical - continue without it
+        }
+
+        // Initialize Wallet Link Service
+        try {
+            walletLinkService = new WalletLinkService();
+            console.log('[server] ✅ Wallet Link Service initialized');
+        } catch (walletLinkError) {
+            console.error('[server] ⚠️ Error initializing wallet link service:', walletLinkError);
+            console.log('[server] Continuing without wallet link service...');
             // Non-critical - continue without it
         }
 

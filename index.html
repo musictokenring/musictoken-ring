@@ -3425,6 +3425,27 @@
                     if (creditsDisplay) creditsDisplay.classList.remove('hidden');
                 }
                 
+                // 🔗 NUEVO: Auto-link wallet if user is authenticated
+                if (connectedAddress && typeof supabaseClient !== 'undefined') {
+                    (async function() {
+                        try {
+                            const { data: { session } } = await supabaseClient.auth.getSession();
+                            if (session && session.user && window.CreditsSystem) {
+                                console.log('[renderWallet] Usuario autenticado, vinculando wallet automáticamente...');
+                                try {
+                                    await window.CreditsSystem.linkWalletToUser(connectedAddress);
+                                    console.log('[renderWallet] ✅ Wallet vinculada automáticamente');
+                                } catch (linkError) {
+                                    // Wallet puede estar ya vinculada o error de red - no es crítico
+                                    console.log('[renderWallet] Wallet no vinculada (puede estar ya vinculada):', linkError.message);
+                                }
+                            }
+                        } catch (authError) {
+                            console.warn('[renderWallet] Error verificando autenticación:', authError);
+                        }
+                    })();
+                }
+                
                 // CARGAR BALANCE DE LA WALLET INMEDIATAMENTE
                 if (connectedAddress) {
                     console.log('[renderWallet] Cargando balance para:', connectedAddress);
