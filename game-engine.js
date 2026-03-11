@@ -3851,13 +3851,14 @@ const GameEngine = {
                             console.error('[updateBalance] ❌ Error HTTP:', response.status);
                             return false;
                         }
+                        } else {
+                            // Response OK - procesar respuesta exitosa
+                            const responseData = await response.json();
+                            console.log('[updateBalance] ✅ Créditos descontados exitosamente:', responseData);
+                            
+                            await window.CreditsSystem.loadBalance(walletAddress);
+                            return true; // Return early, don't update legacy balance
                         }
-
-                        const responseData = await response.json();
-                        console.log('[updateBalance] ✅ Créditos descontados exitosamente:', responseData);
-                        
-                        await window.CreditsSystem.loadBalance(walletAddress);
-                        return true; // Return early, don't update legacy balance
                     } else {
                         console.error('[updateBalance] ❌ No se pudo obtener userId para wallet:', walletAddress);
                         // Intentar usar el sistema legacy como fallback

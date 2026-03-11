@@ -2494,21 +2494,21 @@
                 }
                 
                 // FORZAR carga y actualización del balance demo
-                if (typeof GameEngine !== 'undefined') {
-                    if (typeof GameEngine.loadPracticeDemoBalance === 'function') {
-                        GameEngine.loadPracticeDemoBalance();
+                if (typeof window.GameEngine !== 'undefined') {
+                    if (typeof window.GameEngine.loadPracticeDemoBalance === 'function') {
+                        window.GameEngine.loadPracticeDemoBalance();
                     }
                     // Si el balance está en 0, forzar reset
-                    if (GameEngine.practiceDemoBalance <= 0) {
-                        GameEngine.practiceDemoBalance = 1000;
-                        if (typeof GameEngine.setPracticeDemoBalance === 'function') {
-                            GameEngine.setPracticeDemoBalance(1000);
+                    if (window.GameEngine.practiceDemoBalance <= 0) {
+                        window.GameEngine.practiceDemoBalance = 1000;
+                        if (typeof window.GameEngine.setPracticeDemoBalance === 'function') {
+                            window.GameEngine.setPracticeDemoBalance(1000);
                         }
                         console.log('[updateActionButtons] Balance demo forzado a 1000');
                     }
                     // Actualizar display inmediatamente
-                    if (typeof GameEngine.updatePracticeBetDisplay === 'function') {
-                        GameEngine.updatePracticeBetDisplay();
+                    if (typeof window.GameEngine.updatePracticeBetDisplay === 'function') {
+                        window.GameEngine.updatePracticeBetDisplay();
                     }
                 }
                 
@@ -2944,13 +2944,13 @@
                 return; 
             }
             
-            if (typeof GameEngine === 'undefined') {
+            if (typeof window.GameEngine === 'undefined') {
                 console.error('[startPractice] ❌ GameEngine no está definido');
                 showToast('GameEngine no está cargado. Recarga la página.', 'error');
                 return;
             }
             
-            if (typeof GameEngine.startPracticeMatch !== 'function') {
+            if (typeof window.GameEngine.startPracticeMatch !== 'function') {
                 console.error('[startPractice] ❌ GameEngine.startPracticeMatch no es una función');
                 showToast('Error: Función de práctica no disponible', 'error');
                 return;
@@ -2963,7 +2963,7 @@
             console.log('[startPractice] Iniciando práctica con:', {
                 song: selectedSong.name,
                 bet: demoBet,
-                practiceBalance: GameEngine.practiceDemoBalance
+                practiceBalance: window.GameEngine ? window.GameEngine.practiceDemoBalance : 'N/A'
             });
             
             try {
@@ -2975,8 +2975,8 @@
                     console.log('[startPractice] Botón deshabilitado');
                 }
                 
-                console.log('[startPractice] Llamando a GameEngine.startPracticeMatch...');
-                await GameEngine.startPracticeMatch(selectedSong, demoBet);
+                console.log('[startPractice] Llamando a window.GameEngine.startPracticeMatch...');
+                await window.GameEngine.startPracticeMatch(selectedSong, demoBet);
                 console.log('[startPractice] ✅ startPracticeMatch completado');
             } catch (error) {
                 console.error('[startPractice] ❌❌❌ ERROR:', error);
