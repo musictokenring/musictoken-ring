@@ -183,29 +183,48 @@ ORDER BY vt.created_at DESC;
 -- QUERY 9: Top 10 Direcciones Sospechosas por Monto Total
 -- Identifica las direcciones que recibieron más fondos sin ser usuarios
 -- ============================================================================
-SELECT 
-    COALESCE(c.recipient_wallet, vt.wallet_address) as suspicious_address,
-    COUNT(DISTINCT c.id) as claim_count,
-    COUNT(DISTINCT vt.id) as vault_transaction_count,
-    SUM(COALESCE(c.usdc_amount, 0)) as total_from_claims,
-    SUM(COALESCE(vt.amount_usdc, 0)) as total_from_vault,
-    SUM(COALESCE(c.usdc_amount, 0) + COALESCE(vt.amount_usdc, 0)) as total_usdc,
-    MIN(COALESCE(c.created_at, vt.created_at)) as first_activity,
-    MAX(COALESCE(c.created_at, vt.created_at)) as last_activity
-FROM (
-    SELECT recipient_wallet as address, usdc_amount, created_at, id
+WITH claims_data AS (
+    SELECT 
+        recipient_wallet as address, 
+        usdc_amount, 
+        created_at, 
+        id
     FROM claims
     WHERE created_at > NOW() - INTERVAL '30 days'
-) c
-FULL OUTER JOIN (
-    SELECT wallet_address as address, amount_usdc, created_at, id
+),
+vault_data AS (
+    SELECT 
+        wallet_address as address, 
+        amount_usdc, 
+        created_at, 
+        id
     FROM vault_transactions
     WHERE transaction_type = 'withdrawal'
     AND created_at > NOW() - INTERVAL '30 days'
-) vt ON LOWER(c.address) = LOWER(vt.address)
-LEFT JOIN users u ON LOWER(u.wallet_address) = LOWER(COALESCE(c.address, vt.address))
+),
+combined_addresses AS (
+    SELECT DISTINCT LOWER(address) as address_lower
+    FROM (
+        SELECT LOWER(recipient_wallet) as address FROM claims WHERE created_at > NOW() - INTERVAL '30 days'
+        UNION
+        SELECT LOWER(wallet_address) as address FROM vault_transactions WHERE transaction_type = 'withdrawal' AND created_at > NOW() - INTERVAL '30 days'
+    ) all_addresses
+)
+SELECT 
+    ca.address_lower as suspicious_address,
+    COUNT(DISTINCT c.id) as claim_count,
+    COUNT(DISTINCT vt.id) as vault_transaction_count,
+    COALESCE(SUM(c.usdc_amount), 0) as total_from_claims,
+    COALESCE(SUM(vt.amount_usdc), 0) as total_from_vault,
+    COALESCE(SUM(c.usdc_amount), 0) + COALESCE(SUM(vt.amount_usdc), 0) as total_usdc,
+    MIN(COALESCE(c.created_at, vt.created_at)) as first_activity,
+    MAX(COALESCE(c.created_at, vt.created_at)) as last_activity
+FROM combined_addresses ca
+LEFT JOIN claims c ON LOWER(c.recipient_wallet) = ca.address_lower AND c.created_at > NOW() - INTERVAL '30 days'
+LEFT JOIN vault_data vt ON LOWER(vt.address) = ca.address_lower
+LEFT JOIN users u ON LOWER(u.wallet_address) = ca.address_lower
 WHERE u.id IS NULL  -- No es usuario registrado
-GROUP BY COALESCE(c.address, vt.address)
+GROUP BY ca.address_lower
 ORDER BY total_usdc DESC
 LIMIT 10;
 
