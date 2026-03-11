@@ -10,11 +10,65 @@
         /**
          * Initialize claim UI
          */
-        init() {
+        async init() {
             this.createClaimSection();
             this.loadVaultBalance();
             // Update vault balance every 30 seconds
             setInterval(() => this.loadVaultBalance(), 30000);
+            
+            // 🔒 SEGURIDAD: Verificar autenticación y mostrar/ocultar formulario
+            await this.checkAuthAndUpdateUI();
+            
+            // Verificar autenticación periódicamente
+            setInterval(() => this.checkAuthAndUpdateUI(), 10000);
+        },
+
+        /**
+         * Check authentication and update UI accordingly
+         */
+        async checkAuthAndUpdateUI() {
+            const claimInput = document.getElementById('claimCreditsAmount');
+            const claimButton = document.querySelector('button[onclick="ClaimUI.processClaim()"]');
+            const authWarning = document.getElementById('claimAuthWarning');
+            
+            if (!claimInput || !claimButton) return;
+            
+            let isAuthenticated = false;
+            if (typeof supabaseClient !== 'undefined') {
+                try {
+                    const { data: { session } } = await supabaseClient.auth.getSession();
+                    isAuthenticated = !!session;
+                } catch (error) {
+                    console.error('[claim-ui] Error checking auth:', error);
+                    isAuthenticated = false;
+                }
+            }
+            
+            if (!isAuthenticated) {
+                // Deshabilitar formulario si no está autenticado
+                claimInput.disabled = true;
+                claimInput.placeholder = 'Inicia sesión para reclamar créditos';
+                if (claimButton) {
+                    claimButton.disabled = true;
+                    claimButton.classList.add('opacity-50', 'cursor-not-allowed');
+                    claimButton.classList.remove('hover:opacity-90', 'cursor-pointer');
+                }
+                if (authWarning) {
+                    authWarning.classList.remove('hidden');
+                }
+            } else {
+                // Habilitar formulario si está autenticado
+                claimInput.disabled = false;
+                claimInput.placeholder = 'Mínimo 5 créditos (~$5)';
+                if (claimButton) {
+                    claimButton.disabled = false;
+                    claimButton.classList.remove('opacity-50', 'cursor-not-allowed');
+                    claimButton.classList.add('hover:opacity-90', 'cursor-pointer');
+                }
+                if (authWarning) {
+                    authWarning.classList.add('hidden');
+                }
+            }
         },
 
         /**
@@ -29,6 +83,12 @@
                     <div class="max-w-2xl mx-auto p-6 sm:p-8 rounded-2xl border border-fuchsia-500/15 bg-gradient-to-br from-gray-900/80 to-purple-950/30 neon-border-magenta">
                         <h3 class="text-xl font-bold text-fuchsia-400 neon-text-magenta mb-2">💸 Reclamar Premios</h3>
                         <p class="text-gray-400 text-sm mb-6">Convierte tus créditos ganados a USDC. Los fondos se envían automáticamente a tu wallet.</p>
+                        
+                        <div id="claimAuthWarning" class="hidden p-4 rounded-lg bg-yellow-500/10 border border-yellow-500/20 mb-4">
+                            <div class="text-sm text-yellow-400">
+                                ⚠️ Debes iniciar sesión para reclamar créditos. <a href="#" onclick="window.location.reload()" class="underline">Iniciar sesión</a>
+                            </div>
+                        </div>
                         
                         <div class="mb-4 p-4 rounded-lg bg-black/40 border border-white/10">
                             <div class="text-sm text-gray-400 mb-2">Créditos disponibles:</div>
@@ -96,6 +156,26 @@
          */
         async processClaim() {
             try {
+                // 🔒 SEGURIDAD: Verificar autenticación antes de procesar claim
+                if (typeof supabaseClient !== 'undefined') {
+                    try {
+                        const { data: { session } } = await supabaseClient.auth.getSession();
+                        if (!session) {
+                            if (typeof showToast === 'function') {
+                                showToast('Debes iniciar sesión para reclamar créditos', 'error');
+                            }
+                            console.warn('[claim-ui] Intento de claim sin autenticación bloqueado');
+                            return;
+                        }
+                    } catch (authError) {
+                        console.error('[claim-ui] Error verificando autenticación:', authError);
+                        if (typeof showToast === 'function') {
+                            showToast('Error verificando autenticación', 'error');
+                        }
+                        return;
+                    }
+                }
+
                 const input = document.getElementById('claimCreditsAmount');
                 const credits = parseFloat(input?.value || 0);
                 const walletAddress = window.connectedAddress || localStorage.getItem('mtr_wallet');
