@@ -312,9 +312,11 @@ class DepositListener {
                 .eq('wallet_address', from.toLowerCase())
                 .single();
 
+            let userId;
+
             if (!user) {
-                console.warn(`[deposit-listener] User not found for wallet ${from}`);
-                // Create user if doesn't exist
+                console.warn(`[deposit-listener] User not found for wallet ${from}, creating wallet-only user`);
+                // Create wallet-only user (for users who haven't logged in with Google/Email yet)
                 const { data: newUser, error: createError } = await supabase
                     .from('users')
                     .insert([{
@@ -329,10 +331,78 @@ class DepositListener {
                     return;
                 }
 
-                await this.creditUser(newUser.id, creditsRounded, txHash, tokenName, amount, usdcValue, depositFee);
+                userId = newUser.id;
+
+                // 🔗 CRÍTICO: Vincular wallet en user_wallets automáticamente
+                // Esto permite que el usuario opere usando solo su wallet como identidad
+                const { error: linkError } = await supabase
+                    .from('user_wallets')
+                    .insert([{
+                        user_id: userId,
+                        wallet_address: from.toLowerCase(),
+                        is_primary: true,
+                        linked_via: 'auto', // Auto-linked from deposit
+                        created_at: new Date().toISOString(),
+                        updated_at: new Date().toISOString()
+                    }])
+                    .select()
+                    .single();
+
+                if (linkError) {
+                    // Si ya existe, actualizar
+                    if (linkError.code === '23505') { // Unique constraint violation
+                        console.log(`[deposit-listener] Wallet already linked, updating...`);
+                        await supabase
+                            .from('user_wallets')
+                            .update({
+                                user_id: userId,
+                                is_primary: true,
+                                linked_via: 'auto',
+                                updated_at: new Date().toISOString()
+                            })
+                            .eq('wallet_address', from.toLowerCase());
+                    } else {
+                        console.error('[deposit-listener] Error linking wallet:', linkError);
+                        // Continuar de todas formas - el depósito debe procesarse
+                    }
+                } else {
+                    console.log(`[deposit-listener] ✅ Wallet ${from} auto-linked to user ${userId}`);
+                }
+
             } else {
-                await this.creditUser(user.id, creditsRounded, txHash, tokenName, amount, usdcValue, depositFee);
+                userId = user.id;
+
+                // 🔗 CRÍTICO: Verificar y vincular wallet en user_wallets si no está vinculada
+                // Esto previene el error cuando usuario tiene Google login pero wallet no está vinculada
+                const { data: existingLink } = await supabase
+                    .from('user_wallets')
+                    .select('id')
+                    .eq('wallet_address', from.toLowerCase())
+                    .single();
+
+                if (!existingLink) {
+                    console.log(`[deposit-listener] Wallet ${from} not in user_wallets, auto-linking to user ${userId}`);
+                    const { error: linkError } = await supabase
+                        .from('user_wallets')
+                        .insert([{
+                            user_id: userId,
+                            wallet_address: from.toLowerCase(),
+                            is_primary: true,
+                            linked_via: 'auto', // Auto-linked from deposit
+                            created_at: new Date().toISOString(),
+                            updated_at: new Date().toISOString()
+                        }]);
+
+                    if (linkError) {
+                        console.error('[deposit-listener] Error auto-linking wallet:', linkError);
+                        // Continuar de todas formas - el depósito debe procesarse
+                    } else {
+                        console.log(`[deposit-listener] ✅ Wallet ${from} auto-linked to existing user ${userId}`);
+                    }
+                }
             }
+
+            await this.creditUser(userId, creditsRounded, txHash, tokenName, amount, usdcValue, depositFee);
 
             this.processedTxHashes.add(txHash);
             console.log(`[deposit-listener] ✅ Credited ${creditsRounded} credits (${usdcValue} USDC - ${depositFee} fee) to user ${from}`);

@@ -314,6 +314,28 @@ app.get('/api/user/credits/:walletAddress', async (req, res) => {
                 console.error('[server] Error creando registro de créditos:', creditsError);
                 // Continuar aunque falle la creación del registro de créditos
             }
+
+            // 🔗 CRÍTICO: Vincular wallet en user_wallets automáticamente
+            // Esto permite que el usuario opere usando solo su wallet como identidad (wallet-only mode)
+            if (walletLinkService) {
+                try {
+                    const linkResult = await walletLinkService.linkWallet(
+                        user.id,
+                        walletAddress,
+                        {
+                            ip: req.ip || req.headers['x-forwarded-for'] || 'unknown',
+                            userAgent: req.headers['user-agent'] || 'unknown',
+                            linkedVia: 'auto' // Auto-linked from wallet connection
+                        }
+                    );
+                    if (linkResult.success) {
+                        console.log(`[server] ✅ Wallet ${walletAddress} auto-linked to user ${user.id} (wallet-only mode)`);
+                    }
+                } catch (linkError) {
+                    console.error('[server] Error auto-linking wallet:', linkError);
+                    // Continuar aunque falle la vinculación
+                }
+            }
         }
 
         // Get credits
@@ -344,20 +366,56 @@ app.get('/api/user/credits/:walletAddress', async (req, res) => {
 
 /**
  * Deduct credits (for betting)
+ * Supports both userId and walletAddress for wallet-only operations
  */
 app.post('/api/user/deduct-credits', async (req, res) => {
     try {
-        const { userId, credits } = req.body;
+        const { userId, credits, walletAddress } = req.body;
 
-        if (!userId || !credits || credits <= 0) {
-            return res.status(400).json({ error: 'Invalid parameters' });
+        if (!credits || credits <= 0) {
+            return res.status(400).json({ error: 'Invalid credits amount' });
+        }
+
+        let targetUserId = userId;
+
+        // 🔗 NUEVO: Si no hay userId pero hay walletAddress, buscar userId desde wallet
+        // Esto permite operaciones wallet-only (sin login con Google/Email)
+        if (!targetUserId && walletAddress) {
+            // Buscar usuario por wallet en users table
+            const { data: userByWallet } = await supabase
+                .from('users')
+                .select('id')
+                .eq('wallet_address', walletAddress.toLowerCase())
+                .single();
+
+            if (userByWallet) {
+                targetUserId = userByWallet.id;
+                console.log(`[server] [WALLET-ONLY] Found userId ${targetUserId} from wallet ${walletAddress}`);
+            } else {
+                // Intentar buscar en user_wallets (wallet link)
+                if (walletLinkService) {
+                    const userIdFromLink = await walletLinkService.getUserIdFromWallet(walletAddress);
+                    if (userIdFromLink) {
+                        targetUserId = userIdFromLink;
+                        console.log(`[server] [WALLET-ONLY] Found userId ${targetUserId} from wallet link`);
+                    }
+                }
+            }
+
+            if (!targetUserId) {
+                return res.status(400).json({ error: 'User not found. Connect wallet or login first.' });
+            }
+        }
+
+        if (!targetUserId) {
+            return res.status(400).json({ error: 'userId or walletAddress required' });
         }
 
         // Get current balance
         const { data: currentBalance } = await supabase
             .from('user_credits')
             .select('credits')
-            .eq('user_id', userId)
+            .eq('user_id', targetUserId)
             .single();
 
         if (!currentBalance || currentBalance.credits < credits) {
@@ -366,7 +424,7 @@ app.post('/api/user/deduct-credits', async (req, res) => {
 
         // Deduct credits
         const { error: deductError } = await supabase.rpc('decrement_user_credits', {
-            user_id_param: userId,
+            user_id_param: targetUserId,
             credits_to_subtract: credits
         });
 
@@ -376,10 +434,10 @@ app.post('/api/user/deduct-credits', async (req, res) => {
             await supabase
                 .from('user_credits')
                 .update({ credits: newBalance, updated_at: new Date().toISOString() })
-                .eq('user_id', userId);
+                .eq('user_id', targetUserId);
         }
 
-        res.json({ success: true, creditsDeducted: credits });
+        res.json({ success: true, creditsDeducted: credits, userId: targetUserId });
     } catch (error) {
         console.error('[server] Error deducting credits:', error);
         res.status(500).json({ error: error.message });
@@ -1355,6 +1413,7 @@ app.get('/api/user/wallet/:walletAddress', async (req, res) => {
 /**
  * Link wallet to authenticated user
  * Requires Supabase authentication token
+ * Also syncs wallet-only operations if user did operations before logging in
  */
 app.post('/api/user/link-wallet', async (req, res) => {
     try {
@@ -1381,6 +1440,16 @@ app.post('/api/user/link-wallet', async (req, res) => {
 
         if (!walletLinkService) {
             return res.status(503).json({ error: 'Wallet link service not available' });
+        }
+
+        // 🔗 NUEVO: Sync wallet-only operations if user did operations before logging in
+        const { syncWalletOnLogin } = require('./sync-wallet-on-login');
+        try {
+            const syncResult = await syncWalletOnLogin(authUser.id, walletAddress);
+            console.log('[server] Wallet sync result:', syncResult);
+        } catch (syncError) {
+            console.warn('[server] Error syncing wallet operations (continuing anyway):', syncError.message);
+            // Continue with linking even if sync fails
         }
 
         // Link wallet to authenticated user
