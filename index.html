@@ -2273,8 +2273,8 @@
                     }, 50);
                     setTimeout(function() {
                         console.log('[selectMode] Actualizando display (200ms)...');
-                        if (typeof window.GameEngine.updatePracticeBetDisplay === 'function') {
-                            GameEngine.updatePracticeBetDisplay();
+                        if (typeof window.GameEngine !== 'undefined' && typeof window.GameEngine.updatePracticeBetDisplay === 'function') {
+                            window.GameEngine.updatePracticeBetDisplay();
                         }
                     }, 200);
                     setTimeout(function() {
