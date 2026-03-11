@@ -66,11 +66,11 @@ LEFT JOIN user_wallets uw ON uw.user_id = au.id
 LEFT JOIN user_credits uc ON uc.user_id = au.id;
 
 -- ============================================
--- PASO 4: USUARIOS DE PRUEBA RECOMENDADOS
+-- PASO 4: USUARIOS DE PRUEBA RECOMENDADOS (auth.users)
 -- ============================================
--- Usuarios ideales para probar diferentes escenarios
+-- Usuarios ideales para probar diferentes escenarios (solo usuarios en auth.users)
 SELECT 
-    '🧪 USUARIOS DE PRUEBA RECOMENDADOS' AS tipo,
+    '🧪 USUARIOS DE PRUEBA RECOMENDADOS (auth.users)' AS tipo,
     au.id::TEXT AS user_id,
     au.email AS email,
     CASE 
@@ -98,3 +98,31 @@ ORDER BY
         ELSE 6
     END,
     au.created_at DESC;
+
+-- ============================================
+-- PASO 5: USUARIOS CON WALLET VINCULADA (incluye usuarios solo en users)
+-- ============================================
+-- Muestra TODOS los usuarios con wallet vinculada, incluso si no están en auth.users
+SELECT 
+    '🔗 TODOS LOS USUARIOS CON WALLET VINCULADA' AS tipo,
+    uw.user_id::TEXT AS user_id,
+    au.email AS email,
+    CASE 
+        WHEN au.id IS NOT NULL THEN '✅ Existe en auth.users'
+        ELSE '⚠️ Solo existe en users (wallet-only)'
+    END AS tipo_usuario,
+    uw.wallet_address AS wallet_vinculada,
+    COALESCE(uc.credits, 0) AS creditos,
+    (SELECT COUNT(*) FROM deposits d WHERE d.user_id = uw.user_id) AS num_depositos,
+    CASE 
+        WHEN COALESCE(uc.credits, 0) >= 5 THEN '✅ Puede aceptar desafíos (mínimo 5 créditos)'
+        WHEN COALESCE(uc.credits, 0) > 0 THEN '⚠️ Tiene créditos pero menos del mínimo'
+        ELSE '⚠️ Sin créditos - puede tener MTR on-chain'
+    END AS estado_para_desafios
+FROM user_wallets uw
+LEFT JOIN auth.users au ON au.id = uw.user_id
+LEFT JOIN user_credits uc ON uc.user_id = uw.user_id
+WHERE uw.is_primary = TRUE
+ORDER BY 
+    CASE WHEN au.id IS NOT NULL THEN 1 ELSE 2 END,  -- Usuarios en auth.users primero
+    creditos DESC NULLS LAST;
