@@ -378,16 +378,38 @@ const GameEngine = {
                 }
             }, 300);
             
+            // CRÍTICO: Mostrar balance REAL (on-chain o créditos o Supabase)
+            // NO usar saldo demo en modo normal
             const onChainBalance = Number(window.__mtrOnChainBalance || 0);
-            const playableBalance = onChainBalance > 0 ? onChainBalance : this.userBalance;
+            let creditsBalance = 0;
+            if (window.CreditsSystem && window.CreditsSystem.currentCredits !== undefined) {
+                creditsBalance = Number(window.CreditsSystem.currentCredits || 0);
+            }
+            const playableBalance = onChainBalance > 0 ? onChainBalance : (creditsBalance > 0 ? creditsBalance : this.userBalance);
+            
             if (valueEl) {
                 valueEl.textContent = playableBalance.toLocaleString('es-ES');
                 valueEl.style.color = '';
+                // Asegurar que no tenga "(DEMO)"
+                if (valueEl.textContent.includes('(DEMO)')) {
+                    valueEl.textContent = valueEl.textContent.replace(' (DEMO)', '');
+                }
             }
             if (onchainEl) {
-                onchainEl.textContent = onChainBalance > 0 ? playableBalance.toLocaleString('es-ES') : '--';
+                onchainEl.textContent = onChainBalance > 0 ? onChainBalance.toLocaleString('es-ES') : '--';
                 onchainEl.style.color = '';
+                // Asegurar que no tenga "(DEMO)"
+                if (onchainEl.textContent.includes('(DEMO)')) {
+                    onchainEl.textContent = onchainEl.textContent.replace(' (DEMO)', '');
+                }
             }
+            
+            console.log('[updatePracticeBetDisplay] Modo normal - Balance REAL mostrado:', {
+                playableBalance: playableBalance,
+                onChainBalance: onChainBalance,
+                creditsBalance: creditsBalance,
+                userBalance: this.userBalance
+            });
         }
     },
     
