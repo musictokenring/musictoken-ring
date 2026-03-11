@@ -605,7 +605,7 @@ const GameEngine = {
 
     /**
      * Check if user has sufficient credits for betting
-     * CRÍTICO: Para desafíos sociales, también verifica balance on-chain MTR como alternativa
+     * CRÍTICO: Recarga balance antes de verificar para asegurar sincronización con backend
      */
     async hasSufficientCredits(betAmount) {
         if (!window.CreditsSystem) {
@@ -613,22 +613,40 @@ const GameEngine = {
             return this.hasSufficientBalance(betAmount);
         }
 
+        // CRÍTICO: Recargar balance antes de verificar para asegurar sincronización con backend
+        const walletAddress = window.connectedAddress || localStorage.getItem('mtr_wallet');
+        if (walletAddress) {
+            try {
+                console.log('[hasSufficientCredits] Recargando balance antes de verificar...');
+                await window.CreditsSystem.loadBalance(walletAddress);
+                // Esperar un momento para que se actualice
+                await new Promise(resolve => setTimeout(resolve, 200));
+            } catch (error) {
+                console.warn('[hasSufficientCredits] Error al recargar balance:', error);
+            }
+        }
+
         const credits = window.CreditsSystem.currentCredits || 0;
         const onchainBalance = Number(window.__mtrOnChainBalance || 0);
         
-        // CRÍTICO: Verificar TANTO créditos off-chain COMO balance on-chain MTR
-        // El usuario puede apostar con cualquiera de los dos
+        // ESPECIFICACIÓN REFINADA: Solo usar créditos estables para validar apuestas
+        // MTR nativo se convierte automáticamente en backend si es necesario
         const hasEnoughCredits = Number(betAmount) <= credits;
-        const hasEnoughOnChain = Number(betAmount) <= onchainBalance;
         
-        console.log('[game-engine] hasSufficientCredits - Bet:', betAmount, 'Credits:', credits, 'OnChain:', onchainBalance, 'HasCredits:', hasEnoughCredits, 'HasOnChain:', hasEnoughOnChain);
+        console.log('[hasSufficientCredits] Verificando:', {
+            betAmount: betAmount,
+            credits: credits,
+            onchainBalance: onchainBalance,
+            hasEnoughCredits: hasEnoughCredits
+        });
         
-        if (hasEnoughCredits || hasEnoughOnChain) {
+        if (hasEnoughCredits) {
             return true;
         }
         
-        // Si no tiene suficiente en ninguno, mostrar error con ambos balances
-        showToast(`Saldo insuficiente. Créditos: ${credits.toFixed(2)}, MTR on-chain: ${onchainBalance.toLocaleString('es-ES', { maximumFractionDigits: 4 })}`, 'error');
+        // Si no hay suficientes créditos, mostrar mensaje claro
+        const shortfall = betAmount - credits;
+        showToast(`MTR créditos jugables insuficientes. Necesitas ${betAmount}, tienes ${credits.toFixed(2)}. ${onchainBalance > 0 ? `Tienes ${onchainBalance.toLocaleString('es-ES')} MTR on-chain que puede convertirse automáticamente.` : 'Deposita USDC para obtener más créditos.'}`, 'error');
         return false;
     },
     
