@@ -859,7 +859,16 @@ const GameEngine = {
         
         console.log('[createSocialChallenge] ✅ Apuesta validada - normalizedBet:', normalizedBet);
         
-        // Verificar créditos suficientes
+        // Verificar créditos suficientes ANTES de crear el desafío
+        // CRÍTICO: Recargar balance primero para asegurar sincronización con backend
+        const walletAddress = window.connectedAddress || localStorage.getItem('mtr_wallet');
+        if (walletAddress && window.CreditsSystem) {
+            console.log('[createSocialChallenge] Recargando balance antes de verificar créditos...');
+            await window.CreditsSystem.loadBalance(walletAddress);
+            // Esperar un momento para que se actualice
+            await new Promise(resolve => setTimeout(resolve, 300));
+        }
+        
         if (!(await this.hasSufficientCredits(normalizedBet))) {
             return;
         }
@@ -3885,9 +3894,64 @@ const GameEngine = {
                                 errorText: errorText
                             });
                             
-                            // Si el error es "Insufficient credits" pero el usuario tiene suficiente MTR on-chain,
+                            // CRÍTICO: Primero verificar si realmente hay suficientes créditos en el frontend
+                            // Si hay suficientes créditos pero el backend rechaza, puede ser un problema de sincronización
+                            const credits = window.CreditsSystem?.currentCredits || 0;
+                            const hasEnoughCredits = credits >= creditsToDeduct;
+                            
+                            console.log('[updateBalance] Verificación de créditos:', {
+                                credits: credits,
+                                creditsToDeduct: creditsToDeduct,
+                                hasEnoughCredits: hasEnoughCredits,
+                                errorText: errorText
+                            });
+                            
+                            // Si hay suficientes créditos pero el backend rechaza, intentar recargar balance y reintentar
+                            if (hasEnoughCredits && response.status === 400) {
+                                console.log('[updateBalance] ⚠️ Hay suficientes créditos pero backend rechazó. Recargando balance y reintentando...');
+                                
+                                // Recargar balance desde backend
+                                await window.CreditsSystem.loadBalance(walletAddress);
+                                
+                                // Esperar un momento para que se actualice
+                                await new Promise(resolve => setTimeout(resolve, 500));
+                                
+                                // Verificar nuevamente después de recargar
+                                const refreshedCredits = window.CreditsSystem?.currentCredits || 0;
+                                console.log('[updateBalance] Créditos después de recargar:', refreshedCredits);
+                                
+                                if (refreshedCredits >= creditsToDeduct) {
+                                    console.log('[updateBalance] 🔄 Reintentando deducción después de recargar balance...');
+                                    
+                                    // Reintentar deducción
+                                    const retryResponse = await fetch(`${backendUrl}/api/user/deduct-credits`, {
+                                        method: 'POST',
+                                        headers: { 'Content-Type': 'application/json' },
+                                        body: JSON.stringify({
+                                            userId,
+                                            credits: creditsToDeduct,
+                                            reason: 'match_bet',
+                                            matchId: matchId
+                                        })
+                                    });
+                                    
+                                    if (retryResponse.ok) {
+                                        const retryData = await retryResponse.json();
+                                        console.log('[updateBalance] ✅✅✅ Créditos descontados exitosamente después de recargar:', retryData);
+                                        await window.CreditsSystem.loadBalance(walletAddress);
+                                        return true;
+                                    } else {
+                                        const retryErrorText = await retryResponse.text();
+                                        console.error('[updateBalance] ❌ Error persistente después de recargar:', {
+                                            status: retryResponse.status,
+                                            errorText: retryErrorText
+                                        });
+                                    }
+                                }
+                            }
+                            
+                            // Si el error es "Insufficient credits" y NO hay suficientes créditos en frontend,
                             // intentar convertir MTR a créditos automáticamente
-                            // CRÍTICO: Verificar múltiples variantes del mensaje de error
                             const errorTextLower = errorText.toLowerCase();
                             const isInsufficientError = response.status === 400 && (
                                 errorTextLower.includes('insufficient') || 
@@ -3897,8 +3961,7 @@ const GameEngine = {
                                 errorTextLower.includes('fondos')
                             );
                             
-                            if (isInsufficientError) {
-                                const credits = window.CreditsSystem?.currentCredits || 0;
+                            if (isInsufficientError && !hasEnoughCredits) {
                                 const onchainBalance = Number(window.__mtrOnChainBalance || 0);
                                 const creditsNeeded = creditsToDeduct - credits;
                                 
@@ -3907,7 +3970,7 @@ const GameEngine = {
                                     onchainBalance: onchainBalance,
                                     creditsNeeded: creditsNeeded,
                                     creditsToDeduct: creditsToDeduct,
-                                    canConvert: onchainBalance >= creditsNeeded
+                                    canConvert: onchainBalance >= creditsNeeded && creditsNeeded > 0
                                 });
                                 
                                 // CRÍTICO: Verificar que tenga suficiente MTR para cubrir la diferencia necesaria
