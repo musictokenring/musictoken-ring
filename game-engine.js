@@ -3917,16 +3917,18 @@ const GameEngine = {
                             const credits = window.CreditsSystem?.currentCredits || 0;
                             const hasEnoughCredits = credits >= creditsToDeduct;
                             
-                            console.log('[updateBalance] Verificación de créditos:', {
+                            console.log('[updateBalance] 🔍 Verificación de créditos (ANTES de recargar):', {
                                 credits: credits,
                                 creditsToDeduct: creditsToDeduct,
                                 hasEnoughCredits: hasEnoughCredits,
-                                errorText: errorText
+                                errorText: errorText,
+                                userId: userId,
+                                walletAddress: walletAddress
                             });
                             
                             // Si hay suficientes créditos pero el backend rechaza, intentar recargar balance y reintentar
                             if (hasEnoughCredits && response.status === 400) {
-                                console.log('[updateBalance] ⚠️ Hay suficientes créditos pero backend rechazó. Recargando balance y reintentando...');
+                                console.log('[updateBalance] ⚠️⚠️⚠️ Hay suficientes créditos (' + credits + ') pero backend rechazó. Recargando balance y reintentando...');
                                 
                                 // Recargar balance desde backend
                                 await window.CreditsSystem.loadBalance(walletAddress);
@@ -3936,7 +3938,7 @@ const GameEngine = {
                                 
                                 // Verificar nuevamente después de recargar
                                 const refreshedCredits = window.CreditsSystem?.currentCredits || 0;
-                                console.log('[updateBalance] Créditos después de recargar:', refreshedCredits);
+                                console.log('[updateBalance] 🔄 Créditos después de recargar:', refreshedCredits, '(necesita:', creditsToDeduct + ')');
                                 
                                 if (refreshedCredits >= creditsToDeduct) {
                                     console.log('[updateBalance] 🔄 Reintentando deducción después de recargar balance...');
@@ -3960,11 +3962,14 @@ const GameEngine = {
                                         return true;
                                     } else {
                                         const retryErrorText = await retryResponse.text();
-                                        console.error('[updateBalance] ❌ Error persistente después de recargar:', {
+                                        console.error('[updateBalance] ❌❌❌ Error persistente después de recargar:', {
                                             status: retryResponse.status,
-                                            errorText: retryErrorText
+                                            errorText: retryErrorText,
+                                            refreshedCredits: refreshedCredits,
+                                            creditsToDeduct: creditsToDeduct
                                         });
-                                        // Si el backend sigue rechazando después de recargar, retornar false
+                                        // Si el backend sigue rechazando después de recargar y hay suficientes créditos,
+                                        // puede ser un problema del backend. Retornar false para que el usuario vea el error.
                                         return false;
                                     }
                                 } else {
@@ -3974,6 +3979,13 @@ const GameEngine = {
                                     });
                                     // Continuar con lógica de conversión MTR si es necesario
                                 }
+                            } else {
+                                console.log('[updateBalance] ⚠️ NO hay suficientes créditos o error diferente:', {
+                                    hasEnoughCredits: hasEnoughCredits,
+                                    status: response.status,
+                                    credits: credits,
+                                    creditsToDeduct: creditsToDeduct
+                                });
                             }
                             
                             // Si el error es "Insufficient credits" y NO hay suficientes créditos en frontend,
@@ -3992,14 +4004,18 @@ const GameEngine = {
                             const finalCredits = window.CreditsSystem?.currentCredits || credits;
                             const finalHasEnoughCredits = finalCredits >= creditsToDeduct;
                             
-                            console.log('[updateBalance] Verificación final antes de conversión MTR:', {
+                            console.log('[updateBalance] 🔍🔍🔍 Verificación FINAL antes de conversión MTR:', {
                                 finalCredits: finalCredits,
+                                credits: credits, // Valor antes de recargar
                                 creditsToDeduct: creditsToDeduct,
                                 finalHasEnoughCredits: finalHasEnoughCredits,
-                                isInsufficientError: isInsufficientError
+                                isInsufficientError: isInsufficientError,
+                                hasEnoughCredits: hasEnoughCredits // Valor antes de recargar
                             });
                             
+                            // CRÍTICO: Solo intentar conversión MTR si realmente faltan créditos Y es un error de créditos insuficientes
                             if (isInsufficientError && !finalHasEnoughCredits) {
+                                console.log('[updateBalance] ✅ Condiciones cumplidas para conversión MTR');
                                 const onchainBalance = Number(window.__mtrOnChainBalance || 0);
                                 // CRÍTICO: Usar finalCredits (después de recargar) para calcular créditos necesarios
                                 const creditsNeeded = creditsToDeduct - finalCredits;
@@ -4114,20 +4130,23 @@ const GameEngine = {
                                     }
                                 } else {
                                     // Usuario no tiene suficiente MTR on-chain para cubrir la diferencia necesaria
-                                    console.error('[updateBalance] ❌ Usuario no tiene suficiente MTR on-chain para conversión automática:', {
+                                    console.error('[updateBalance] ❌❌❌ Usuario no tiene suficiente MTR on-chain para conversión automática:', {
                                         creditsNeeded: creditsNeeded,
                                         onchainBalance: onchainBalance,
-                                        credits: finalCredits,
-                                        creditsToDeduct: creditsToDeduct
+                                        finalCredits: finalCredits,
+                                        creditsToDeduct: creditsToDeduct,
+                                        canConvert: onchainBalance >= creditsNeeded && creditsNeeded > 0
                                     });
                                     // Retornar false en lugar de lanzar error
                                     return false;
                                 }
                             } else {
                                 // Error diferente o ya hay suficientes créditos
-                                console.error('[updateBalance] ❌ Error diferente a créditos insuficientes o ya hay suficientes créditos:', {
+                                console.error('[updateBalance] ❌ NO se intentará conversión MTR porque:', {
                                     isInsufficientError: isInsufficientError,
                                     finalHasEnoughCredits: finalHasEnoughCredits,
+                                    finalCredits: finalCredits,
+                                    creditsToDeduct: creditsToDeduct,
                                     errorText: errorText
                                 });
                                 return false;
