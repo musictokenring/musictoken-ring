@@ -2247,52 +2247,56 @@
                 // Si es modo práctica, asegurar que el balance demo esté cargado primero
                 if (mode === 'practice') {
                     console.log('[selectMode] Modo práctica seleccionado, cargando balance demo...');
-                    // FORZAR carga del balance demo
-                    if (typeof window.GameEngine.loadPracticeDemoBalance === 'function') {
-                        window.GameEngine.loadPracticeDemoBalance();
-                    }
-                    // Si el balance está en 0 o no existe, forzar reset a 1000
-                    if (!window.GameEngine.practiceDemoBalance || window.GameEngine.practiceDemoBalance <= 0) {
-                        window.GameEngine.practiceDemoBalance = window.GameEngine.practiceDemoInitialBalance || 1000;
-                        if (typeof window.GameEngine.setPracticeDemoBalance === 'function') {
-                            window.GameEngine.setPracticeDemoBalance(window.GameEngine.practiceDemoBalance);
+                    // Esperar a que GameEngine esté disponible
+                    const initPracticeBalance = async () => {
+                        let attempts = 0;
+                        while (typeof window.GameEngine === 'undefined' && attempts < 50) {
+                            await new Promise(resolve => setTimeout(resolve, 100));
+                            attempts++;
                         }
-                        console.log('[selectMode] Balance demo forzado a', window.GameEngine.practiceDemoBalance);
-                    }
-                    console.log('[selectMode] Balance demo final:', window.GameEngine.practiceDemoBalance);
-                    
-                    // Actualizar display INMEDIATAMENTE y con delays para asegurar visibilidad
-                    if (typeof window.GameEngine.updatePracticeBetDisplay === 'function') {
-                        window.GameEngine.updatePracticeBetDisplay();
-                    }
-                    setTimeout(function() {
-                        console.log('[selectMode] Actualizando display (50ms)...');
-                        if (typeof window.GameEngine.updatePracticeBetDisplay === 'function') {
-                            window.GameEngine.updatePracticeBetDisplay();
+                        if (typeof window.GameEngine !== 'undefined') {
+                            // FORZAR carga del balance demo
+                            if (typeof window.GameEngine.loadPracticeDemoBalance === 'function') {
+                                window.GameEngine.loadPracticeDemoBalance();
+                            }
+                            // Si el balance está en 0 o no existe, forzar reset a 1000
+                            if (!window.GameEngine.practiceDemoBalance || window.GameEngine.practiceDemoBalance <= 0) {
+                                window.GameEngine.practiceDemoBalance = window.GameEngine.practiceDemoInitialBalance || 1000;
+                                if (typeof window.GameEngine.setPracticeDemoBalance === 'function') {
+                                    window.GameEngine.setPracticeDemoBalance(window.GameEngine.practiceDemoBalance);
+                                }
+                                console.log('[selectMode] Balance demo forzado a', window.GameEngine.practiceDemoBalance);
+                            }
+                            console.log('[selectMode] Balance demo final:', window.GameEngine.practiceDemoBalance);
+                            
+                            // Actualizar display INMEDIATAMENTE y con delays para asegurar visibilidad
+                            if (typeof window.GameEngine.updatePracticeBetDisplay === 'function') {
+                                window.GameEngine.updatePracticeBetDisplay();
+                            }
+                            setTimeout(function() {
+                                if (typeof window.GameEngine !== 'undefined' && typeof window.GameEngine.updatePracticeBetDisplay === 'function') {
+                                    window.GameEngine.updatePracticeBetDisplay();
+                                }
+                            }, 100);
+                            setTimeout(function() {
+                                if (typeof window.GameEngine !== 'undefined' && typeof window.GameEngine.updatePracticeBetDisplay === 'function') {
+                                    window.GameEngine.updatePracticeBetDisplay();
+                                }
+                            }, 500);
+                            setTimeout(function() {
+                                if (typeof window.GameEngine !== 'undefined' && typeof window.GameEngine.updatePracticeBetDisplay === 'function') {
+                                    window.GameEngine.updatePracticeBetDisplay();
+                                }
+                                // Verificar que el balance se muestre
+                                var balanceLabel = document.getElementById('balanceLabel');
+                                var userBalance = document.getElementById('userBalance');
+                                console.log('[selectMode] Verificación final - Label:', balanceLabel?.textContent, 'Balance:', userBalance?.textContent);
+                            }, 1000);
+                        } else {
+                            console.error('[selectMode] GameEngine no disponible después de esperar');
                         }
-                    }, 50);
-                    setTimeout(function() {
-                        console.log('[selectMode] Actualizando display (200ms)...');
-                        if (typeof window.GameEngine !== 'undefined' && typeof window.GameEngine.updatePracticeBetDisplay === 'function') {
-                            window.GameEngine.updatePracticeBetDisplay();
-                        }
-                    }, 200);
-                    setTimeout(function() {
-                        console.log('[selectMode] Actualizando display (500ms)...');
-                        if (typeof window.GameEngine !== 'undefined' && typeof window.GameEngine.updatePracticeBetDisplay === 'function') {
-                            window.GameEngine.updatePracticeBetDisplay();
-                        }
-                    }, 500);
-                    setTimeout(function() {
-                        console.log('[selectMode] Actualizando display (1000ms)...');
-                        if (typeof window.GameEngine !== 'undefined' && typeof window.GameEngine.updatePracticeBetDisplay === 'function') {
-                            window.GameEngine.updatePracticeBetDisplay();
-                        }
-                        // Verificar que el balance se muestre
-                        var balanceLabel = document.getElementById('balanceLabel');
-                        var userBalance = document.getElementById('userBalance');
-                        console.log('[selectMode] Verificación final - Label:', balanceLabel?.textContent, 'Balance:', userBalance?.textContent);
-                    }, 1000);
+                    };
+                    initPracticeBalance();
                 } else {
                     // Para otros modos, actualizar display normalmente
                     if (typeof GameEngine.updateBalanceDisplay === 'function') {
