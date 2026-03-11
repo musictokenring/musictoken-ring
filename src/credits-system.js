@@ -103,7 +103,7 @@
         updateCreditsDisplay() {
             // SIN LOGS - Esta función se ejecuta frecuentemente
             
-            // Update combined display FIRST (this contains the child elements)
+            // Update combined display FIRST (this contains the child elements) - DESKTOP
             const combinedDisplay = document.getElementById('creditsCombinedDisplay');
             if (combinedDisplay) {
                 // Actualizar el contenido completo del combined display
@@ -139,6 +139,19 @@
                 const usdcDisplay = document.getElementById('usdcValueDisplay');
                 if (usdcDisplay) {
                     usdcDisplay.textContent = `= $${this.currentUsdcValue.toFixed(2)} USDC`;
+                }
+            }
+            
+            // Update mobile display (compacto)
+            const mobileDisplay = document.getElementById('creditsCombinedDisplayMobile');
+            if (mobileDisplay) {
+                const creditsMobile = document.getElementById('creditsDisplayMobile');
+                const usdcMobile = document.getElementById('usdcValueDisplayMobile');
+                if (creditsMobile) creditsMobile.textContent = this.currentCredits.toFixed(2);
+                if (usdcMobile) usdcMobile.textContent = `$${this.currentUsdcValue.toFixed(2)}`;
+                // Mostrar si hay créditos o wallet conectada
+                if (this.currentCredits > 0 || window.connectedAddress) {
+                    mobileDisplay.classList.remove('hidden');
                 }
             }
 
