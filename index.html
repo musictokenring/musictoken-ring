@@ -720,7 +720,7 @@
                         <h3 class="text-lg font-bold text-white mb-4">💰 Tu Apuesta</h3>
                         <div class="grid grid-cols-2 gap-3 text-sm text-gray-400 mb-4">
                             <span><span id="balanceLabel">Tu MTR (on-chain)</span>: <strong id="onchainMtrBalance" class="text-white">--</strong></span>
-                            <span>Jugable: <strong id="userBalance" class="text-white">0</strong> MTR</span>
+                            <span><span id="playableLabel">Jugable</span>: <strong id="userBalance" class="text-white">0</strong> <span id="balanceUnit">MTR</span></span>
                             <span>Mínimo: <strong id="minBet" class="text-white">5</strong> créditos</span>
                         </div>
                         <input type="number" id="betAmount" placeholder="5" min="5"
@@ -2298,9 +2298,45 @@
                     };
                     initPracticeBalance();
                 } else {
-                    // Para otros modos, actualizar display normalmente
-                    if (typeof GameEngine.updateBalanceDisplay === 'function') {
-                        GameEngine.updateBalanceDisplay();
+                    // Para otros modos, actualizar display con balances REALES desde la plataforma
+                    console.log('[selectMode] Modo no-práctica seleccionado, cargando balances REALES...');
+                    
+                    // CRÍTICO: Cargar balances reales desde la plataforma
+                    if (typeof window.GameEngine !== 'undefined') {
+                        // Cargar balance real del usuario desde Supabase
+                        if (typeof window.GameEngine.loadUserBalance === 'function') {
+                            window.GameEngine.loadUserBalance().then(() => {
+                                console.log('[selectMode] ✅ Balance real cargado desde plataforma');
+                            }).catch(err => {
+                                console.error('[selectMode] ❌ Error cargando balance real:', err);
+                            });
+                        }
+                        
+                        // Actualizar balance on-chain desde blockchain
+                        const connectedWallet = window.__mtrConnectedWallet || localStorage.getItem('mtr_wallet');
+                        if (connectedWallet && typeof window.refreshMtrBalance === 'function') {
+                            window.refreshMtrBalance(connectedWallet).then(() => {
+                                console.log('[selectMode] ✅ Balance on-chain actualizado desde blockchain');
+                            }).catch(err => {
+                                console.error('[selectMode] ❌ Error actualizando balance on-chain:', err);
+                            });
+                        }
+                        
+                        // Actualizar créditos desde backend si CreditsSystem está disponible
+                        if (window.CreditsSystem && typeof window.CreditsSystem.loadBalance === 'function' && connectedWallet) {
+                            window.CreditsSystem.loadBalance(connectedWallet).then(() => {
+                                console.log('[selectMode] ✅ Créditos actualizados desde backend');
+                            }).catch(err => {
+                                console.error('[selectMode] ❌ Error actualizando créditos:', err);
+                            });
+                        }
+                        
+                        // Actualizar display después de cargar balances reales
+                        if (typeof window.GameEngine.updateBalanceDisplay === 'function') {
+                            setTimeout(() => {
+                                window.GameEngine.updateBalanceDisplay();
+                            }, 500); // Delay para permitir que los balances se carguen
+                        }
                     }
                 }
             }

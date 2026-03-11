@@ -145,28 +145,32 @@ const GameEngine = {
             }
             
             // Actualizar UI para modo práctica - FORZAR actualización
+            // CRÍTICO: Hacer muy claro que es DEMO y NO es balance real
             if (labelEl) {
-                labelEl.textContent = 'Saldo demo (práctica)';
+                labelEl.textContent = '💰 Balance DEMO (práctica)';
                 labelEl.style.color = '#8b5cf6'; // Color púrpura para práctica
+                labelEl.style.fontWeight = 'bold';
             } else {
                 console.error('[updatePracticeBetDisplay] balanceLabel no encontrado en el DOM');
             }
             
-            // FORZAR actualización del valor del balance
+            // FORZAR actualización del valor del balance DEMO
             if (valueEl) {
                 const balanceValue = this.practiceDemoBalance || this.practiceDemoInitialBalance || 1000;
                 valueEl.textContent = String(balanceValue);
                 valueEl.style.color = '#8b5cf6';
-                console.log('[updatePracticeBetDisplay] ✅ Balance demo actualizado a', balanceValue);
+                valueEl.style.fontWeight = 'bold';
+                console.log('[updatePracticeBetDisplay] ✅ Balance DEMO actualizado a', balanceValue);
             } else {
                 console.error('[updatePracticeBetDisplay] ❌ userBalance no encontrado en el DOM');
             }
             
-            // También actualizar onchainMtrBalance para mostrar el balance demo
+            // También actualizar onchainMtrBalance para mostrar el balance DEMO
             if (onchainEl) {
                 const balanceValue = this.practiceDemoBalance || this.practiceDemoInitialBalance || 1000;
-                onchainEl.textContent = String(balanceValue);
+                onchainEl.textContent = String(balanceValue) + ' (DEMO)';
                 onchainEl.style.color = '#8b5cf6';
+                onchainEl.style.fontWeight = 'bold';
             }
             
             // Actualizar el label "Jugable" a "Saldo demo" en modo práctica
@@ -257,9 +261,11 @@ const GameEngine = {
             
             const formattedBalance = this.practiceDemoBalance.toLocaleString('es-ES');
             
+            // CRÍTICO: Asegurar que el balance DEMO esté claramente marcado
             if (valueEl) {
                 valueEl.textContent = formattedBalance;
                 valueEl.style.color = '#8b5cf6';
+                valueEl.style.fontWeight = 'bold';
                 // Log comentado para reducir ruido
                 // console.log('[updatePracticeBetDisplay] userBalance actualizado a', formattedBalance);
             } else {
@@ -267,8 +273,9 @@ const GameEngine = {
             }
             
             if (onchainEl) {
-                onchainEl.textContent = formattedBalance;
+                onchainEl.textContent = formattedBalance + ' (DEMO)';
                 onchainEl.style.color = '#8b5cf6';
+                onchainEl.style.fontWeight = 'bold';
                 // Log comentado para reducir ruido
                 // console.log('[updatePracticeBetDisplay] onchainMtrBalance actualizado a', formattedBalance);
             } else {
@@ -288,10 +295,27 @@ const GameEngine = {
             }
             
         } else {
-            // Modo normal: mostrar balance real
+            // Modo normal: mostrar balance REAL (no demo)
+            // CRÍTICO: Asegurar que se muestre el balance real desde la plataforma
             if (labelEl) {
                 labelEl.textContent = 'Tu MTR (on-chain)';
                 labelEl.style.color = '';
+                labelEl.style.fontWeight = '';
+            }
+            
+            // Asegurar que los valores muestren balance REAL
+            if (valueEl) {
+                valueEl.style.color = '';
+                valueEl.style.fontWeight = '';
+            }
+            
+            if (onchainEl) {
+                onchainEl.style.color = '';
+                onchainEl.style.fontWeight = '';
+                // Remover cualquier "(DEMO)" que pueda quedar
+                if (onchainEl.textContent.includes('(DEMO)')) {
+                    onchainEl.textContent = onchainEl.textContent.replace(' (DEMO)', '');
+                }
             }
             
             // Restaurar el label "Jugable" en modo normal
@@ -413,18 +437,49 @@ const GameEngine = {
         
         // NO actualizar userBalance si estamos específicamente en la sección de Práctica (dejar que updatePracticeBetDisplay lo maneje)
         if (!isInPracticeSection) {
-            // Para modo normal, usar saldo on-chain si está disponible, sino usar userBalance
-            const playableBalance = onChainBalance > 0 ? onChainBalance : this.userBalance;
+            // CRÍTICO: En modo normal, SIEMPRE mostrar balance REAL desde la plataforma
+            // Prioridad: 1) Balance on-chain (blockchain), 2) Créditos del backend, 3) Balance de Supabase
             
-            console.log('[updateBalanceDisplay] Modo normal - Balance jugable:', playableBalance, 'On-chain:', onChainBalance, 'User:', this.userBalance);
+            // Obtener créditos del backend si CreditsSystem está disponible
+            let creditsBalance = 0;
+            if (window.CreditsSystem && window.CreditsSystem.currentCredits !== undefined) {
+                creditsBalance = Number(window.CreditsSystem.currentCredits || 0);
+            }
+            
+            // Para modo normal, usar saldo on-chain si está disponible, sino usar créditos, sino usar userBalance
+            const playableBalance = onChainBalance > 0 ? onChainBalance : (creditsBalance > 0 ? creditsBalance : this.userBalance);
+            
+            console.log('[updateBalanceDisplay] Modo normal - Balance REAL:', {
+                playableBalance: playableBalance,
+                onChainBalance: onChainBalance,
+                creditsBalance: creditsBalance,
+                userBalance: this.userBalance
+            });
 
             const userBalanceEl = document.getElementById('userBalance');
             if (userBalanceEl) {
-                userBalanceEl.textContent = playableBalance.toLocaleString('es-ES');
+                // CRÍTICO: Asegurar que NO muestre "(DEMO)" en modo normal
+                const displayValue = playableBalance.toLocaleString('es-ES');
+                userBalanceEl.textContent = displayValue;
                 userBalanceEl.style.color = '';
-                console.log('[updateBalanceDisplay] userBalance actualizado a', playableBalance);
+                userBalanceEl.style.fontWeight = '';
+                console.log('[updateBalanceDisplay] ✅ userBalance actualizado con balance REAL:', displayValue);
             } else {
                 console.warn('[updateBalanceDisplay] userBalance no encontrado');
+            }
+            
+            // Actualizar onchainMtrBalance con balance REAL
+            const onchainEl = document.getElementById('onchainMtrBalance');
+            if (onchainEl) {
+                const displayValue = onChainBalance.toLocaleString('es-ES');
+                onchainEl.textContent = displayValue;
+                onchainEl.style.color = '';
+                onchainEl.style.fontWeight = '';
+                // Asegurar que no tenga "(DEMO)"
+                if (onchainEl.textContent.includes('(DEMO)')) {
+                    onchainEl.textContent = onchainEl.textContent.replace(' (DEMO)', '');
+                }
+                console.log('[updateBalanceDisplay] ✅ onchainMtrBalance actualizado con balance REAL:', displayValue);
             }
             
             // Asegurar que el label "Jugable" esté restaurado en modo normal
@@ -432,15 +487,28 @@ const GameEngine = {
             if (playableLabelEl && playableLabelEl.textContent !== 'Jugable') {
                 playableLabelEl.textContent = 'Jugable';
                 playableLabelEl.style.color = '';
-                console.log('[updateBalanceDisplay] playableLabel restaurado a "Jugable"');
+                playableLabelEl.style.fontWeight = '';
+                console.log('[updateBalanceDisplay] ✅ playableLabel restaurado a "Jugable"');
             }
             
-            // Asegurar que el texto "MTR" esté restaurado en modo normal
+            // Asegurar que el texto "MTR" esté restaurado en modo normal (sin "(demo)")
             const balanceUnitEl = document.getElementById('balanceUnit');
-            if (balanceUnitEl && balanceUnitEl.textContent !== 'MTR') {
-                balanceUnitEl.textContent = 'MTR';
-                balanceUnitEl.style.color = '';
-                console.log('[updateBalanceDisplay] balanceUnit restaurado a "MTR"');
+            if (balanceUnitEl) {
+                if (balanceUnitEl.textContent !== 'MTR' && balanceUnitEl.textContent.includes('MTR')) {
+                    balanceUnitEl.textContent = 'MTR';
+                    balanceUnitEl.style.color = '';
+                    balanceUnitEl.style.fontWeight = '';
+                    console.log('[updateBalanceDisplay] ✅ balanceUnit restaurado a "MTR"');
+                }
+            }
+            
+            // Asegurar que balanceLabel muestre texto correcto
+            const balanceLabelEl = document.getElementById('balanceLabel');
+            if (balanceLabelEl && balanceLabelEl.textContent.includes('DEMO')) {
+                balanceLabelEl.textContent = 'Tu MTR (on-chain)';
+                balanceLabelEl.style.color = '';
+                balanceLabelEl.style.fontWeight = '';
+                console.log('[updateBalanceDisplay] ✅ balanceLabel restaurado');
             }
         }
         
