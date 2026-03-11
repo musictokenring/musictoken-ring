@@ -3964,12 +3964,21 @@ const GameEngine = {
                                             status: retryResponse.status,
                                             errorText: retryErrorText
                                         });
+                                        // Si el backend sigue rechazando después de recargar, retornar false
+                                        return false;
                                     }
+                                } else {
+                                    console.error('[updateBalance] ❌ Después de recargar, créditos insuficientes:', {
+                                        refreshedCredits: refreshedCredits,
+                                        creditsToDeduct: creditsToDeduct
+                                    });
+                                    // Continuar con lógica de conversión MTR si es necesario
                                 }
                             }
                             
                             // Si el error es "Insufficient credits" y NO hay suficientes créditos en frontend,
                             // intentar convertir MTR a créditos automáticamente
+                            // CRÍTICO: Solo intentar conversión si realmente faltan créditos
                             const errorTextLower = errorText.toLowerCase();
                             const isInsufficientError = response.status === 400 && (
                                 errorTextLower.includes('insufficient') || 
@@ -3979,7 +3988,18 @@ const GameEngine = {
                                 errorTextLower.includes('fondos')
                             );
                             
-                            if (isInsufficientError && !hasEnoughCredits) {
+                            // CRÍTICO: Verificar créditos DESPUÉS de recargar (si se recargó)
+                            const finalCredits = window.CreditsSystem?.currentCredits || credits;
+                            const finalHasEnoughCredits = finalCredits >= creditsToDeduct;
+                            
+                            console.log('[updateBalance] Verificación final antes de conversión MTR:', {
+                                finalCredits: finalCredits,
+                                creditsToDeduct: creditsToDeduct,
+                                finalHasEnoughCredits: finalHasEnoughCredits,
+                                isInsufficientError: isInsufficientError
+                            });
+                            
+                            if (isInsufficientError && !finalHasEnoughCredits) {
                                 const onchainBalance = Number(window.__mtrOnChainBalance || 0);
                                 const creditsNeeded = creditsToDeduct - credits;
                                 
@@ -4091,11 +4111,25 @@ const GameEngine = {
                                         return false;
                                     }
                                 } else {
-                                    // Usuario no tiene suficiente MTR on-chain para cubrir la apuesta
-                                    console.error('[updateBalance] ❌ Usuario no tiene suficiente MTR on-chain para conversión automática');
+                                    // Usuario no tiene suficiente MTR on-chain para cubrir la diferencia necesaria
+                                    console.error('[updateBalance] ❌ Usuario no tiene suficiente MTR on-chain para conversión automática:', {
+                                        creditsNeeded: creditsNeeded,
+                                        onchainBalance: onchainBalance,
+                                        credits: finalCredits,
+                                        creditsToDeduct: creditsToDeduct
+                                    });
                                     // Retornar false en lugar de lanzar error
                                     return false;
                                 }
+                            } else {
+                                // Error diferente o ya hay suficientes créditos
+                                console.error('[updateBalance] ❌ Error diferente a créditos insuficientes o ya hay suficientes créditos:', {
+                                    isInsufficientError: isInsufficientError,
+                                    finalHasEnoughCredits: finalHasEnoughCredits,
+                                    errorText: errorText
+                                });
+                                return false;
+                            }
                             } else {
                                 // Error diferente a "Insufficient credits", retornar false
                                 console.error('[updateBalance] ❌ Error diferente a créditos insuficientes');
