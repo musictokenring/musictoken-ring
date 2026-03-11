@@ -115,6 +115,18 @@ const GameEngine = {
     },
 
     updatePracticeBetDisplay() {
+        // CRÍTICO: Protección contra loops infinitos
+        // Evitar ejecuciones múltiples simultáneas
+        if (this._updatingPracticeDisplay) {
+            return; // Ya se está actualizando, evitar loop
+        }
+        this._updatingPracticeDisplay = true;
+        
+        // Resetear flag después de un delay
+        setTimeout(() => {
+            this._updatingPracticeDisplay = false;
+        }, 100);
+        
         const labelEl = document.getElementById('balanceLabel');
         const valueEl = document.getElementById('userBalance');
         const onchainEl = document.getElementById('onchainMtrBalance');
@@ -341,42 +353,11 @@ const GameEngine = {
             if (this.practiceLabelObserver) {
                 this.practiceLabelObserver.disconnect();
                 this.practiceLabelObserver = null;
-                // Log comentado para reducir ruido
-                // console.log('[updatePracticeBetDisplay] MutationObserver desconectado (modo normal)');
             }
             
-            // CRÍTICO: Forzar actualización de balances REALES cuando se sale de modo práctica
-            // Esto asegura que no queden valores demo mezclados
-            console.log('[updatePracticeBetDisplay] Saliendo de modo práctica, cargando balances REALES...');
-            
-            // Cargar balance real del usuario desde Supabase
-            if (typeof this.loadUserBalance === 'function') {
-                this.loadUserBalance().catch(err => {
-                    console.error('[updatePracticeBetDisplay] Error cargando balance real:', err);
-                });
-            }
-            
-            // Actualizar balance on-chain si hay wallet conectada
-            const connectedWallet = this.connectedWallet || localStorage.getItem('mtr_wallet');
-            if (connectedWallet && typeof window.refreshMtrBalance === 'function') {
-                window.refreshMtrBalance(connectedWallet).catch(err => {
-                    console.error('[updatePracticeBetDisplay] Error actualizando balance on-chain:', err);
-                });
-            }
-            
-            // Actualizar créditos desde backend si CreditsSystem está disponible
-            if (window.CreditsSystem && typeof window.CreditsSystem.loadBalance === 'function' && connectedWallet) {
-                window.CreditsSystem.loadBalance(connectedWallet).catch(err => {
-                    console.error('[updatePracticeBetDisplay] Error actualizando créditos:', err);
-                });
-            }
-            
-            // Forzar actualización del display después de un delay para permitir que los balances se carguen
-            setTimeout(() => {
-                if (typeof this.updateBalanceDisplay === 'function') {
-                    this.updateBalanceDisplay();
-                }
-            }, 300);
+            // CRÍTICO: NO llamar a loadBalance aquí para evitar loops infinitos
+            // updatePracticeBetDisplay solo debe actualizar el DISPLAY, no cargar datos
+            // La carga de balances reales se hace en selectMode() cuando se cambia de modo
             
             // CRÍTICO: Mostrar balance REAL (on-chain o créditos o Supabase)
             // NO usar saldo demo en modo normal
@@ -477,6 +458,18 @@ const GameEngine = {
     },
     
     updateBalanceDisplay() {
+        // CRÍTICO: Protección contra loops infinitos
+        // Evitar ejecuciones múltiples simultáneas
+        if (this._updatingBalanceDisplay) {
+            return; // Ya se está actualizando, evitar loop
+        }
+        this._updatingBalanceDisplay = true;
+        
+        // Resetear flag después de un delay
+        setTimeout(() => {
+            this._updatingBalanceDisplay = false;
+        }, 100);
+        
         // Verificar si estamos específicamente en la sección de Práctica
         const isInPracticeSection = typeof window !== 'undefined' && window.currentMode === 'practice';
         
@@ -568,11 +561,13 @@ const GameEngine = {
             }
         }
         
-        // Siempre actualizar el display de práctica para que maneje el modo correcto
-        // Usar setTimeout para asegurar que el DOM esté listo
-        setTimeout(() => {
-            this.updatePracticeBetDisplay();
-        }, 0);
+        // CRÍTICO: Solo actualizar display de práctica si estamos en modo práctica
+        // NO llamar siempre para evitar loops infinitos
+        if (isInPracticeSection) {
+            setTimeout(() => {
+                this.updatePracticeBetDisplay();
+            }, 0);
+        }
     },
 
     getAvailableWalletBalance() {
