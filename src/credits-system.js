@@ -273,6 +273,7 @@
 
         /**
          * Get user ID from wallet address
+         * Now supports wallet-based authentication for internal wallet browsers
          */
         async getUserId(walletAddress) {
             var logFn = window.__originalLog || console.log;
@@ -287,6 +288,48 @@
                 logFn('[getUserId] ========================================');
                 logFn('[getUserId] Obteniendo userId para wallet:', walletAddress);
                 logFn('[getUserId] Backend URL:', this.backendUrl);
+                
+                // 🔗 NUEVO: Try Supabase session first
+                let userIdFromSession = null;
+                if (typeof supabaseClient !== 'undefined') {
+                    try {
+                        const { data: { session } } = await supabaseClient.auth.getSession();
+                        if (session && session.user) {
+                            userIdFromSession = session.user.id;
+                            logFn('[getUserId] ✅ Usuario autenticado con Supabase:', userIdFromSession);
+                            
+                            // 🔗 NUEVO: Auto-link wallet if user is authenticated
+                            try {
+                                await this.linkWalletToUser(walletAddress);
+                                logFn('[getUserId] ✅ Wallet vinculada automáticamente');
+                            } catch (linkError) {
+                                logFn('[getUserId] ⚠️ No se pudo vincular wallet (puede estar ya vinculada):', linkError.message);
+                            }
+                            
+                            return userIdFromSession;
+                        }
+                    } catch (sessionError) {
+                        logFn('[getUserId] ⚠️ Error verificando sesión Supabase:', sessionError.message);
+                    }
+                }
+                
+                // 🔗 NUEVO: Try wallet link if no Supabase session (for internal wallet browsers)
+                if (!userIdFromSession) {
+                    try {
+                        logFn('[getUserId] [Wallet Link] Verificando si wallet está vinculada...');
+                        const walletResponse = await fetch(`${this.backendUrl}/api/user/wallet/${walletAddress}`);
+                        if (walletResponse.ok) {
+                            const walletData = await walletResponse.json();
+                            if (walletData.linked && walletData.userId) {
+                                logFn('[getUserId] ✅✅✅ userId obtenido desde wallet link:', walletData.userId);
+                                logFn('[getUserId] ========================================');
+                                return walletData.userId;
+                            }
+                        }
+                    } catch (walletLinkError) {
+                        logFn('[getUserId] ⚠️ Error verificando wallet link:', walletLinkError.message);
+                    }
+                }
                 
                 // PRIMERO intentar obtener del backend API (más confiable)
                 try {
