@@ -2243,7 +2243,7 @@
             updateActionButtons(mode);
             
             // Actualizar display de balance según el modo
-            if (typeof GameEngine !== 'undefined') {
+            if (typeof window.GameEngine !== 'undefined') {
                 // Si es modo práctica, asegurar que el balance demo esté cargado primero
                 if (mode === 'practice') {
                     console.log('[selectMode] Modo práctica seleccionado, cargando balance demo...');
