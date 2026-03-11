@@ -40,19 +40,41 @@
                 let userIdFromWallet = null;
                 const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
                 
-                if (isMobile && typeof supabaseClient !== 'undefined') {
+                // Detectar si estamos en navegador interno de wallet
+                const isWalletBrowser = typeof window.isWalletBrowser === 'function' 
+                    ? window.isWalletBrowser() 
+                    : (navigator.userAgent.toLowerCase().includes('metamask') || 
+                       navigator.userAgent.toLowerCase().includes('mmsb') ||
+                       navigator.userAgent.toLowerCase().includes('trust') ||
+                       navigator.userAgent.toLowerCase().includes('binance'));
+                
+                // En navegador interno de wallet, SIEMPRE verificar wallet link primero
+                if (isMobile && (isWalletBrowser || typeof supabaseClient === 'undefined')) {
                     try {
-                        const { data: { session } } = await supabaseClient.auth.getSession();
-                        if (!session) {
-                            // No Supabase session - try wallet-based auth (MOBILE ONLY)
-                            console.log('[credits-system] [MOBILE] No Supabase session, checking wallet link...');
+                        let hasSupabaseSession = false;
+                        if (typeof supabaseClient !== 'undefined') {
+                            try {
+                                const { data: { session } } = await supabaseClient.auth.getSession();
+                                hasSupabaseSession = !!(session && session.user);
+                            } catch (e) {
+                                // Ignorar errores de sesión
+                            }
+                        }
+                        
+                        if (!hasSupabaseSession) {
+                            // No Supabase session - try wallet-based auth (CRÍTICO para navegadores internos)
+                            console.log('[credits-system] [MOBILE] [WALLET-BROWSER] No Supabase session, checking wallet link...');
                             const walletResponse = await fetch(`${this.backendUrl}/api/user/wallet/${walletAddress}`);
                             if (walletResponse.ok) {
                                 const walletData = await walletResponse.json();
                                 if (walletData.linked && walletData.userId) {
                                     userIdFromWallet = walletData.userId;
-                                    console.log('[credits-system] [MOBILE] ✅ Wallet linked to user:', userIdFromWallet);
+                                    console.log('[credits-system] [MOBILE] [WALLET-BROWSER] ✅ Wallet linked to user:', userIdFromWallet);
+                                } else {
+                                    console.log('[credits-system] [MOBILE] [WALLET-BROWSER] ⚠️ Wallet NO vinculada aún');
                                 }
+                            } else {
+                                console.warn('[credits-system] [MOBILE] [WALLET-BROWSER] Error verificando wallet link:', walletResponse.status);
                             }
                         }
                     } catch (walletAuthError) {
@@ -80,6 +102,13 @@
                 } else if (userIdFromWallet) {
                     this.currentUserId = userIdFromWallet;
                 }
+
+                console.log('[credits-system] [MOBILE] Saldos cargados:', {
+                    credits: this.currentCredits,
+                    usdcValue: this.currentUsdcValue,
+                    userId: this.currentUserId,
+                    isWalletBrowser
+                });
 
                 // Update UI - Asegurar que se actualice después de cargar
                 this.updateCreditsDisplay();

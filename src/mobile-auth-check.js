@@ -1,10 +1,28 @@
 /**
  * Mobile Authentication Check
  * Verifica estado de autenticación y oculta/muestra botón "Iniciar Sesión" en móvil
+ * Mejorado para navegadores internos de wallets
  */
 
 (function() {
     'use strict';
+
+    /**
+     * Detectar si estamos en navegador interno de wallet
+     */
+    function isWalletBrowser() {
+        if (typeof window.isWalletBrowser === 'function') {
+            return window.isWalletBrowser();
+        }
+        var userAgent = navigator.userAgent.toLowerCase();
+        return userAgent.includes('metamask') || 
+               userAgent.includes('mmsb') ||
+               userAgent.includes('trust') ||
+               userAgent.includes('trustwallet') ||
+               userAgent.includes('binance') ||
+               userAgent.includes('coinbase') ||
+               (window.ethereum && window.ethereum.isMetaMask && window.location.protocol === 'https:');
+    }
 
     /**
      * Verificar autenticación y actualizar UI del botón "Iniciar Sesión"
@@ -15,11 +33,18 @@
 
         const authButton = document.getElementById('authButton');
         const authButtonBtn = document.getElementById('authButtonBtn');
-        if (!authButton || !authButtonBtn) return;
+        if (!authButton) return;
 
         try {
             let isAuthenticated = false;
             let hasLinkedWallet = false;
+            const inWalletBrowser = isWalletBrowser();
+            const connectedAddress = window.connectedAddress;
+
+            console.log('[mobile-auth] 🔍 Verificando autenticación...', {
+                inWalletBrowser,
+                connectedAddress: connectedAddress ? connectedAddress.slice(0, 10) + '...' : null
+            });
 
             // 1. Verificar sesión Supabase
             if (typeof supabaseClient !== 'undefined') {
@@ -34,36 +59,62 @@
                 }
             }
 
-            // 2. Verificar wallet vinculada (si hay wallet conectada)
-            const connectedAddress = window.connectedAddress;
-            if (connectedAddress && window.CreditsSystem) {
+            // 2. Verificar wallet vinculada (CRÍTICO para navegadores internos)
+            if (connectedAddress) {
                 try {
-                    const walletResponse = await fetch(`${window.CreditsSystem.backendUrl}/api/user/wallet/${connectedAddress}`);
+                    const backendUrl = window.CreditsSystem?.backendUrl || 'https://musictoken-ring.onrender.com';
+                    const walletResponse = await fetch(`${backendUrl}/api/user/wallet/${connectedAddress}`);
+                    
                     if (walletResponse.ok) {
                         const walletData = await walletResponse.json();
                         if (walletData.linked && walletData.userId) {
                             hasLinkedWallet = true;
-                            console.log('[mobile-auth] ✅ Wallet vinculada a usuario');
+                            console.log('[mobile-auth] ✅ Wallet vinculada a usuario:', walletData.userId);
+                            
+                            // Si estamos en navegador interno y wallet está vinculada, cargar saldos
+                            if (inWalletBrowser && window.CreditsSystem && typeof window.CreditsSystem.loadBalance === 'function') {
+                                console.log('[mobile-auth] [WALLET-BROWSER] Cargando saldos usando wallet link...');
+                                await window.CreditsSystem.loadBalance(connectedAddress);
+                            }
+                        } else {
+                            console.log('[mobile-auth] ⚠️ Wallet NO vinculada:', walletData);
                         }
+                    } else {
+                        console.warn('[mobile-auth] Error en respuesta wallet link:', walletResponse.status);
                     }
                 } catch (walletError) {
-                    console.warn('[mobile-auth] Error verificando wallet link:', walletError);
+                    console.error('[mobile-auth] Error verificando wallet link:', walletError);
                 }
             }
 
             // 3. Ocultar botón "Iniciar Sesión" si está autenticado o tiene wallet vinculada
             if (isAuthenticated || hasLinkedWallet) {
                 authButton.style.display = 'none';
-                console.log('[mobile-auth] 🔒 Botón "Iniciar Sesión" ocultado (usuario autenticado o wallet vinculada)');
+                console.log('[mobile-auth] 🔒 Botón "Iniciar Sesión" ocultado', {
+                    isAuthenticated,
+                    hasLinkedWallet,
+                    inWalletBrowser
+                });
             } else {
-                authButton.style.display = 'inline-flex';
-                console.log('[mobile-auth] 🔓 Botón "Iniciar Sesión" visible (usuario no autenticado)');
+                // Solo mostrar en navegador externo, no en navegador interno sin wallet vinculada
+                if (!inWalletBrowser) {
+                    authButton.style.display = 'inline-flex';
+                    console.log('[mobile-auth] 🔓 Botón "Iniciar Sesión" visible (navegador externo, no autenticado)');
+                } else {
+                    // En navegador interno sin wallet vinculada, ocultar también (mostrar solo transacciones)
+                    authButton.style.display = 'none';
+                    console.log('[mobile-auth] 🔒 Botón "Iniciar Sesión" ocultado (navegador interno, wallet no vinculada)');
+                }
             }
 
         } catch (error) {
             console.error('[mobile-auth] Error verificando autenticación:', error);
-            // En caso de error, mostrar el botón por seguridad
-            if (authButton) authButton.style.display = 'inline-flex';
+            // En caso de error, mostrar el botón solo en navegador externo
+            if (authButton && !isWalletBrowser()) {
+                authButton.style.display = 'inline-flex';
+            } else if (authButton) {
+                authButton.style.display = 'none';
+            }
         }
     }
 

@@ -3440,9 +3440,14 @@
                     window.dispatchEvent(new CustomEvent('walletConnected', { detail: { address: connectedAddress } }));
                 }
                 
-                // Verificar autenticación después de conectar wallet
+                // Verificar autenticación después de conectar wallet (con delay para asegurar carga)
                 if (typeof window.checkAuthAndUpdateUI === 'function') {
-                    setTimeout(window.checkAuthAndUpdateUI, 500);
+                    // Ejecutar inmediatamente y después de un delay
+                    setTimeout(() => {
+                        window.checkAuthAndUpdateUI();
+                        // Ejecutar de nuevo después de cargar saldos
+                        setTimeout(window.checkAuthAndUpdateUI, 1000);
+                    }, 500);
                 }
                 
                 // 🔗 NUEVO: Auto-link wallet if user is authenticated (MOBILE ONLY)
