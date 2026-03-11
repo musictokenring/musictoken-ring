@@ -1912,9 +1912,11 @@
                     showModeSelector();
                     if (typeof GameEngine !== 'undefined') {
                         // Inicializar GameEngine sin bloquear
-                        GameEngine.init().catch(function(initError) {
-                            console.error('Error initializing GameEngine:', initError);
-                        });
+                        if (typeof window.GameEngine !== 'undefined') {
+                            window.GameEngine.init().catch(function(initError) {
+                                console.error('Error initializing GameEngine:', initError);
+                            });
+                        }
                     }
                     // NO conectar wallet automáticamente aquí - el usuario debe hacerlo manualmente después del login
                 } else {
@@ -2001,10 +2003,10 @@
                             if (walletData.linked && walletData.userId) {
                                 // Wallet vinculada, mostrar selector de modos
                                 showModeSelector();
-                                if (typeof GameEngine !== 'undefined') {
-                                    GameEngine.init().catch(function(initError) {
-                                        console.error('Error initializing GameEngine:', initError);
-                                    });
+                    if (typeof window.GameEngine !== 'undefined') {
+                        window.GameEngine.init().catch(function(initError) {
+                            console.error('Error initializing GameEngine:', initError);
+                        });
                                 }
                                 return;
                             }
@@ -2038,8 +2040,8 @@
                             console.log('[showLoginWall] Wallet vinculada, ocultando login wall y mostrando selector de modos');
                             
                             // Inicializar GameEngine si wallet está vinculada
-                            if (typeof GameEngine !== 'undefined' && typeof GameEngine.init === 'function') {
-                                GameEngine.init().catch(function(initError) {
+                            if (typeof window.GameEngine !== 'undefined' && typeof window.GameEngine.init === 'function') {
+                                window.GameEngine.init().catch(function(initError) {
                                     console.error('[showLoginWall] Error initializing GameEngine:', initError);
                                 });
                             }
