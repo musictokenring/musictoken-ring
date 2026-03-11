@@ -16,8 +16,8 @@
    - ❌ NO se crea entrada en tabla `users` (legacy)
    - ❌ NO se vincula wallet en `user_wallets`
 
-2. **Usuario hace depósito con MetaMask**
-   - Backend detecta depósito desde wallet `0x...`
+2. **Usuario hace depósito con Trust Wallet** (o cualquier wallet externa)
+   - Backend detecta depósito desde wallet `0x...` (Trust Wallet en este caso)
    - Backend busca usuario en `users` por wallet address
    - ❌ NO encuentra usuario (porque se registró con Google, no con wallet)
    - Backend crea **NUEVO usuario** en `users` con la wallet

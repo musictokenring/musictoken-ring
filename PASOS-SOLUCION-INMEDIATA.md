@@ -16,7 +16,7 @@ Ejecuta `INVESTIGAR-USUARIO-SIN-WALLET.sql` para obtener:
 
 **Opción A: Preguntar al usuario**
 - Contacta al usuario y pregúntale qué wallet address usó para hacer el depósito
-- O pídele que se conecte con MetaMask y te diga su dirección
+- O pídele que se conecte con su wallet (Trust Wallet, MetaMask, etc.) y te diga su dirección
 
 **Opción B: Revisar logs del backend**
 - Busca en los logs del backend cuando se procesó el depósito

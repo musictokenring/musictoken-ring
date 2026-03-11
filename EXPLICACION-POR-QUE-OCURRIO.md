@@ -13,7 +13,7 @@ Usuario con ID `52053c46-f6da-4861-9143-fd76d3e8e5d9` tiene **5.0358 créditos**
 - El sistema NO vinculó ninguna wallet en `user_wallets`
 
 ### 2. **Depósito realizado después del registro**
-- El usuario hizo un depósito usando su wallet de MetaMask/otra wallet
+- El usuario hizo un depósito usando su wallet (Trust Wallet en este caso, pero puede ser cualquier wallet externa)
 - El backend procesó el depósito y:
   - ✅ Creó el registro en `deposits` con el `user_id` correcto
   - ✅ Acreditó los créditos en `user_credits`
