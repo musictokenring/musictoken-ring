@@ -949,10 +949,16 @@ const GameEngine = {
                 
                 // Mensaje de error más claro
                 let errorMsg = `No se pudieron descontar ${normalizedBet} créditos. `;
-                if (credits < normalizedBet && onchainBalance >= normalizedBet) {
+                
+                // CRÍTICO: Si había suficientes créditos pero el backend rechazó, indicar que es un problema del backend
+                if (credits >= normalizedBet) {
+                    errorMsg += `Tienes ${credits.toFixed(2)} créditos disponibles pero el backend rechazó la deducción. `;
+                    errorMsg += `Esto puede ser un problema de sincronización. Por favor, recarga la página e intenta nuevamente.`;
+                } else if (credits < normalizedBet && onchainBalance >= normalizedBet) {
                     errorMsg += `Tienes ${credits.toFixed(2)} créditos pero ${onchainBalance.toLocaleString('es-ES')} MTR on-chain. La conversión automática falló. Intenta nuevamente.`;
                 } else if (credits < normalizedBet && onchainBalance < normalizedBet) {
-                    errorMsg += `Disponibles: ${credits.toFixed(2)} créditos y ${onchainBalance.toLocaleString('es-ES', { maximumFractionDigits: 4 })} MTR on-chain.`;
+                    errorMsg += `Disponibles: ${credits.toFixed(2)} créditos y ${onchainBalance.toLocaleString('es-ES', { maximumFractionDigits: 4 })} MTR on-chain. `;
+                    errorMsg += `Deposita USDC para obtener más créditos.`;
                 } else {
                     errorMsg += `Verifica tu saldo y vuelve a intentar.`;
                 }
@@ -3926,6 +3932,10 @@ const GameEngine = {
                                 walletAddress: walletAddress
                             });
                             
+                            // CRÍTICO: Si hay suficientes créditos pero el backend rechaza, puede ser un problema de sincronización
+                            // Guardar esta información para NO intentar conversión MTR después
+                            const hadEnoughCreditsInitially = hasEnoughCredits;
+                            
                             // Si hay suficientes créditos pero el backend rechaza, intentar recargar balance y reintentar
                             if (hasEnoughCredits && response.status === 400) {
                                 console.log('[updateBalance] ⚠️⚠️⚠️ Hay suficientes créditos (' + credits + ') pero backend rechazó. Recargando balance y reintentando...');
@@ -3970,14 +3980,22 @@ const GameEngine = {
                                         });
                                         // Si el backend sigue rechazando después de recargar y hay suficientes créditos,
                                         // puede ser un problema del backend. Retornar false para que el usuario vea el error.
+                                        // NO intentar conversión MTR porque había suficientes créditos inicialmente
                                         return false;
                                     }
                                 } else {
                                     console.error('[updateBalance] ❌ Después de recargar, créditos insuficientes:', {
                                         refreshedCredits: refreshedCredits,
-                                        creditsToDeduct: creditsToDeduct
+                                        creditsToDeduct: creditsToDeduct,
+                                        hadEnoughCreditsInitially: hadEnoughCreditsInitially
                                     });
-                                    // Continuar con lógica de conversión MTR si es necesario
+                                    // Si había suficientes créditos inicialmente pero después de recargar no hay suficientes,
+                                    // puede ser un problema del backend. NO intentar conversión MTR.
+                                    if (hadEnoughCreditsInitially) {
+                                        console.error('[updateBalance] ❌ NO se intentará conversión MTR porque había suficientes créditos inicialmente');
+                                        return false;
+                                    }
+                                    // Continuar con lógica de conversión MTR solo si NO había suficientes créditos inicialmente
                                 }
                             } else {
                                 console.log('[updateBalance] ⚠️ NO hay suficientes créditos o error diferente:', {
@@ -4019,7 +4037,7 @@ const GameEngine = {
                             // 2. NO hay suficientes créditos después de recargar (si se recargó)
                             // 3. NO había suficientes créditos inicialmente (para evitar conversión cuando el problema es del backend)
                             // Si había suficientes créditos inicialmente pero el backend rechazó, NO intentar conversión MTR
-                            if (isInsufficientError && !finalHasEnoughCredits && !hasEnoughCredits) {
+                            if (isInsufficientError && !finalHasEnoughCredits && !hadEnoughCreditsInitially) {
                                 console.log('[updateBalance] ✅ Condiciones cumplidas para conversión MTR (no había suficientes créditos inicialmente)');
                                 const onchainBalance = Number(window.__mtrOnChainBalance || 0);
                                 // CRÍTICO: Usar finalCredits (después de recargar) para calcular créditos necesarios
@@ -4147,7 +4165,7 @@ const GameEngine = {
                                 }
                             } else {
                                 // Error diferente, ya hay suficientes créditos, o había suficientes créditos inicialmente pero backend rechazó
-                                if (hasEnoughCredits && response.status === 400) {
+                                if (hadEnoughCreditsInitially && response.status === 400) {
                                     console.error('[updateBalance] ❌❌❌ NO se intentará conversión MTR porque había suficientes créditos inicialmente pero backend rechazó:', {
                                         credits: credits,
                                         creditsToDeduct: creditsToDeduct,
@@ -4159,7 +4177,7 @@ const GameEngine = {
                                     console.error('[updateBalance] ❌ NO se intentará conversión MTR porque:', {
                                         isInsufficientError: isInsufficientError,
                                         finalHasEnoughCredits: finalHasEnoughCredits,
-                                        hasEnoughCredits: hasEnoughCredits,
+                                        hadEnoughCreditsInitially: hadEnoughCreditsInitially,
                                         finalCredits: finalCredits,
                                         creditsToDeduct: creditsToDeduct,
                                         errorText: errorText
