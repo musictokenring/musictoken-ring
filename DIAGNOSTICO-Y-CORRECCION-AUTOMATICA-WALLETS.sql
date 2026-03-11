@@ -17,7 +17,7 @@ SELECT
     END AS estado_wallet,
     uw.wallet_address AS wallet_en_user_wallets,
     (SELECT COUNT(*) FROM deposits d WHERE d.user_id = uc.user_id) AS num_depositos,
-    (SELECT MAX(d.wallet_address) FROM deposits d WHERE d.user_id = uc.user_id LIMIT 1) AS wallet_de_depositos
+    (SELECT u2.wallet_address FROM users u2 WHERE u2.id = uc.user_id LIMIT 1) AS wallet_de_users
 FROM user_credits uc
 LEFT JOIN auth.users au ON au.id = uc.user_id
 LEFT JOIN users u ON u.id = uc.user_id
@@ -54,7 +54,11 @@ BEGIN
             uc.user_id,
             uc.credits,
             u.wallet_address AS wallet_from_users,
-            (SELECT MAX(d.wallet_address) FROM deposits d WHERE d.user_id = uc.user_id LIMIT 1) AS wallet_from_deposits
+            -- Buscar wallet desde users usando el user_id de los deposits
+            (SELECT u2.wallet_address FROM users u2 
+             INNER JOIN deposits d ON d.user_id = u2.id 
+             WHERE d.user_id = uc.user_id 
+             LIMIT 1) AS wallet_from_deposits_users
         FROM user_credits uc
         LEFT JOIN users u ON u.id = uc.user_id
         LEFT JOIN user_wallets uw ON uw.user_id = uc.user_id
@@ -153,7 +157,7 @@ BEGIN
         ELSE
             RAISE NOTICE '⚠️ No se encontró wallet para este usuario';
             RAISE NOTICE '   - Wallet en users: %', v_user_record.wallet_from_users;
-            RAISE NOTICE '   - Wallet en deposits: %', v_user_record.wallet_from_deposits;
+            RAISE NOTICE '   - Wallet en users relacionados con deposits: %', v_user_record.wallet_from_deposits_users;
         END IF;
         
         v_users_processed := v_users_processed + 1;
