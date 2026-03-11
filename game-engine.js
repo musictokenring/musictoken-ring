@@ -881,10 +881,43 @@ const GameEngine = {
         // CRÍTICO: Recargar balance primero para asegurar sincronización con backend
         const walletAddress = window.connectedAddress || localStorage.getItem('mtr_wallet');
         if (walletAddress && window.CreditsSystem) {
-            console.log('[createSocialChallenge] Recargando balance antes de verificar créditos...');
+            console.log('[createSocialChallenge] 🔄 Recargando balance antes de verificar créditos...');
             await window.CreditsSystem.loadBalance(walletAddress);
             // Esperar un momento para que se actualice
-            await new Promise(resolve => setTimeout(resolve, 300));
+            await new Promise(resolve => setTimeout(resolve, 500));
+            
+            // CRÍTICO: Verificar balance directamente desde el backend antes de continuar
+            const backendUrl = window.CONFIG?.BACKEND_API || 'https://musictoken-ring.onrender.com';
+            try {
+                const balanceResponse = await fetch(`${backendUrl}/api/user/credits/${walletAddress}`);
+                if (balanceResponse.ok) {
+                    const balanceData = await balanceResponse.json();
+                    const backendCredits = balanceData.credits || 0;
+                    console.log('[createSocialChallenge] 🔍 Balance desde backend:', backendCredits, '(necesita:', normalizedBet + ')');
+                    
+                    // Actualizar CreditsSystem con el balance del backend
+                    if (window.CreditsSystem) {
+                        window.CreditsSystem.currentCredits = backendCredits;
+                        window.CreditsSystem.currentUsdcValue = backendCredits;
+                        window.CreditsSystem.updateCreditsDisplay();
+                    }
+                    
+                    // Si el backend muestra créditos insuficientes, mostrar error claro
+                    if (backendCredits < normalizedBet) {
+                        const onchainBalance = Number(window.__mtrOnChainBalance || 0);
+                        let errorMsg = `Créditos insuficientes. Tienes ${backendCredits.toFixed(2)} créditos pero necesitas ${normalizedBet}. `;
+                        if (onchainBalance >= normalizedBet) {
+                            errorMsg += `Tienes ${onchainBalance.toLocaleString('es-ES')} MTR on-chain que puede convertirse automáticamente. Intenta nuevamente.`;
+                        } else {
+                            errorMsg += `Deposita USDC para obtener más créditos.`;
+                        }
+                        showToast(errorMsg, 'error');
+                        return;
+                    }
+                }
+            } catch (balanceError) {
+                console.warn('[createSocialChallenge] Error al verificar balance desde backend:', balanceError);
+            }
         }
         
         if (!(await this.hasSufficientCredits(normalizedBet))) {
