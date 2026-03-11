@@ -66,6 +66,7 @@ DECLARE
     v_credits_user2 DECIMAL;
     v_credits_to_move DECIMAL;
     v_deposits_to_move INTEGER;
+    v_existing_user_id UUID;
 BEGIN
     RAISE NOTICE '========================================';
     RAISE NOTICE 'UNIENDO USUARIOS Y VINCULANDO WALLET';
@@ -88,24 +89,41 @@ BEGIN
 
     -- CRÍTICO: Crear entrada en tabla "users" para Usuario 2 si no existe
     -- Esto es necesario porque user_credits tiene foreign key a users
-    INSERT INTO users (
-        id,
-        wallet_address,
-        created_at,
-        updated_at
-    )
-    VALUES (
-        v_user2_id,
-        v_wallet_address,
-        NOW(),
-        NOW()
-    )
-    ON CONFLICT (id) 
-    DO UPDATE SET
-        wallet_address = v_wallet_address,
-        updated_at = NOW();
+    -- Primero verificar si la wallet ya existe con otro user_id
+    SELECT id INTO v_existing_user_id
+    FROM users
+    WHERE LOWER(wallet_address) = v_wallet_address
+    LIMIT 1;
     
-    RAISE NOTICE '✅ Usuario 2 creado/verificado en tabla users';
+    IF v_existing_user_id IS NOT NULL AND v_existing_user_id != v_user2_id THEN
+        -- La wallet existe con otro usuario (Usuario 1), actualizar al Usuario 2
+        UPDATE users 
+        SET id = v_user2_id,
+            updated_at = NOW()
+        WHERE id = v_existing_user_id;
+        RAISE NOTICE '✅ Wallet existente actualizada al Usuario 2 (era Usuario 1: %)', v_existing_user_id;
+    ELSIF v_existing_user_id IS NULL THEN
+        -- La wallet no existe, crear nuevo registro
+        INSERT INTO users (
+            id,
+            wallet_address,
+            created_at,
+            updated_at
+        )
+        VALUES (
+            v_user2_id,
+            v_wallet_address,
+            NOW(),
+            NOW()
+        );
+        RAISE NOTICE '✅ Usuario 2 creado en tabla users';
+    ELSE
+        -- La wallet ya existe con el Usuario 2, solo actualizar timestamp
+        UPDATE users 
+        SET updated_at = NOW()
+        WHERE id = v_user2_id;
+        RAISE NOTICE '✅ Usuario 2 ya existe en tabla users';
+    END IF;
 
     -- Mover créditos del Usuario 1 al Usuario 2 (el que usa el frontend)
     IF v_credits_user1 > 0 THEN
