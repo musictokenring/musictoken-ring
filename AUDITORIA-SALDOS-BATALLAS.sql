@@ -48,9 +48,10 @@ SELECT
     uc.credits AS creditos_actuales,
     uc.updated_at AS ultima_actualizacion,
     uw.wallet_address,
-    uw.network,
+    uw.is_primary AS es_wallet_principal,
+    uw.linked_via AS metodo_vinculacion,
     uw.created_at AS wallet_vinculada_en,
-    uw.is_primary AS es_wallet_principal
+    uw.last_used_at AS ultimo_uso
 FROM user_wallets uw
 LEFT JOIN auth.users u ON u.id = uw.user_id
 LEFT JOIN user_credits uc ON uc.user_id = u.id
@@ -291,10 +292,11 @@ SELECT
     uw.user_id,
     u.email,
     uw.wallet_address,
-    uw.network,
-    uc.credits AS creditos_actuales,
     uw.is_primary AS es_wallet_principal,
+    uw.linked_via AS metodo_vinculacion,
+    uc.credits AS creditos_actuales,
     uw.created_at AS wallet_vinculada_en,
+    uw.last_used_at AS ultimo_uso,
     uc.updated_at AS creditos_actualizados_en
 FROM user_wallets uw
 LEFT JOIN auth.users u ON u.id = uw.user_id
@@ -378,9 +380,10 @@ WITH user_info AS (
 wallet_info AS (
     SELECT 
         uw.wallet_address,
-        uw.network,
         uw.is_primary AS es_wallet_principal,
-        uw.created_at AS wallet_vinculada_en
+        uw.linked_via AS metodo_vinculacion,
+        uw.created_at AS wallet_vinculada_en,
+        uw.last_used_at AS ultimo_uso
     FROM user_wallets uw
     WHERE uw.user_id = (SELECT user_id FROM user_info)
 ),
