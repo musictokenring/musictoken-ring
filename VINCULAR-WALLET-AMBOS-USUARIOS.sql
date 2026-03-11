@@ -96,34 +96,40 @@ BEGIN
     LIMIT 1;
     
     IF v_existing_user_id IS NOT NULL AND v_existing_user_id != v_user2_id THEN
-        -- La wallet existe con otro usuario (Usuario 1), actualizar al Usuario 2
+        -- La wallet existe con otro usuario (Usuario 1)
+        -- NO podemos cambiar el id porque hay foreign keys que lo referencian
+        -- En su lugar, moveremos todos los datos relacionados al Usuario 2
+        -- y luego actualizaremos la wallet del Usuario 1 para evitar conflictos
+        RAISE NOTICE '⚠️ Wallet existe con Usuario 1 (%). Moveremos datos al Usuario 2', v_existing_user_id;
+        
+        -- Los créditos y depósitos ya se moverán más abajo en el script
+        -- Aquí solo actualizamos la wallet del Usuario 1 para evitar conflictos
         UPDATE users 
-        SET id = v_user2_id,
+        SET wallet_address = v_wallet_address || '_old_' || v_existing_user_id::TEXT,
             updated_at = NOW()
         WHERE id = v_existing_user_id;
-        RAISE NOTICE '✅ Wallet existente actualizada al Usuario 2 (era Usuario 1: %)', v_existing_user_id;
-    ELSIF v_existing_user_id IS NULL THEN
-        -- La wallet no existe, crear nuevo registro
-        INSERT INTO users (
-            id,
-            wallet_address,
-            created_at,
-            updated_at
-        )
-        VALUES (
-            v_user2_id,
-            v_wallet_address,
-            NOW(),
-            NOW()
-        );
-        RAISE NOTICE '✅ Usuario 2 creado en tabla users';
-    ELSE
-        -- La wallet ya existe con el Usuario 2, solo actualizar timestamp
-        UPDATE users 
-        SET updated_at = NOW()
-        WHERE id = v_user2_id;
-        RAISE NOTICE '✅ Usuario 2 ya existe en tabla users';
+        RAISE NOTICE '✅ Wallet del Usuario 1 actualizada para evitar conflictos';
     END IF;
+    
+    -- Crear entrada para Usuario 2 si no existe
+    INSERT INTO users (
+        id,
+        wallet_address,
+        created_at,
+        updated_at
+    )
+    VALUES (
+        v_user2_id,
+        v_wallet_address,
+        NOW(),
+        NOW()
+    )
+    ON CONFLICT (id) 
+    DO UPDATE SET
+        wallet_address = v_wallet_address,
+        updated_at = NOW();
+    
+    RAISE NOTICE '✅ Usuario 2 creado/verificado en tabla users';
 
     -- Mover créditos del Usuario 1 al Usuario 2 (el que usa el frontend)
     IF v_credits_user1 > 0 THEN
