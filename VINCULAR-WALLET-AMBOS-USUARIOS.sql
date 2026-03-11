@@ -86,6 +86,27 @@ BEGIN
     RAISE NOTICE 'Créditos Usuario 1: %', v_credits_user1;
     RAISE NOTICE 'Créditos Usuario 2: %', v_credits_user2;
 
+    -- CRÍTICO: Crear entrada en tabla "users" para Usuario 2 si no existe
+    -- Esto es necesario porque user_credits tiene foreign key a users
+    INSERT INTO users (
+        id,
+        wallet_address,
+        created_at,
+        updated_at
+    )
+    VALUES (
+        v_user2_id,
+        v_wallet_address,
+        NOW(),
+        NOW()
+    )
+    ON CONFLICT (id) 
+    DO UPDATE SET
+        wallet_address = v_wallet_address,
+        updated_at = NOW();
+    
+    RAISE NOTICE '✅ Usuario 2 creado/verificado en tabla users';
+
     -- Mover créditos del Usuario 1 al Usuario 2 (el que usa el frontend)
     IF v_credits_user1 > 0 THEN
         v_credits_to_move := v_credits_user1;
@@ -114,25 +135,13 @@ BEGIN
         RAISE NOTICE '✅ Depósitos movidos: % depósitos al Usuario 2', v_deposits_to_move;
     END IF;
 
-    -- Crear/actualizar entrada en tabla "users" con el user_id del frontend
-    INSERT INTO users (
-        id,
-        wallet_address,
-        created_at,
-        updated_at
-    )
-    VALUES (
-        v_user2_id,
-        v_wallet_address,
-        NOW(),
-        NOW()
-    )
-    ON CONFLICT (wallet_address) 
-    DO UPDATE SET
-        id = v_user2_id,
-        updated_at = NOW();
+    -- Actualizar entrada en tabla "users" con la wallet (ya fue creada arriba)
+    UPDATE users
+    SET wallet_address = v_wallet_address,
+        updated_at = NOW()
+    WHERE id = v_user2_id;
     
-    RAISE NOTICE '✅ Usuario 2 creado/actualizado en tabla users';
+    RAISE NOTICE '✅ Wallet actualizada en tabla users para Usuario 2';
 
     -- Vincular wallet al Usuario 2 (el que usa el frontend)
     INSERT INTO user_wallets (
