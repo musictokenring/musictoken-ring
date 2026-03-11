@@ -154,11 +154,19 @@ const GameEngine = {
             
             // FORZAR actualización del valor del balance
             if (valueEl) {
-                valueEl.textContent = String(this.practiceDemoBalance || 1000);
+                const balanceValue = this.practiceDemoBalance || this.practiceDemoInitialBalance || 1000;
+                valueEl.textContent = String(balanceValue);
                 valueEl.style.color = '#8b5cf6';
-                console.log('[updatePracticeBetDisplay] Balance demo actualizado a', this.practiceDemoBalance);
+                console.log('[updatePracticeBetDisplay] ✅ Balance demo actualizado a', balanceValue);
             } else {
-                console.error('[updatePracticeBetDisplay] userBalance no encontrado en el DOM');
+                console.error('[updatePracticeBetDisplay] ❌ userBalance no encontrado en el DOM');
+            }
+            
+            // También actualizar onchainMtrBalance para mostrar el balance demo
+            if (onchainEl) {
+                const balanceValue = this.practiceDemoBalance || this.practiceDemoInitialBalance || 1000;
+                onchainEl.textContent = String(balanceValue);
+                onchainEl.style.color = '#8b5cf6';
             }
             
             // Actualizar el label "Jugable" a "Saldo demo" en modo práctica
