@@ -4010,12 +4010,17 @@ const GameEngine = {
                                 creditsToDeduct: creditsToDeduct,
                                 finalHasEnoughCredits: finalHasEnoughCredits,
                                 isInsufficientError: isInsufficientError,
-                                hasEnoughCredits: hasEnoughCredits // Valor antes de recargar
+                                hasEnoughCredits: hasEnoughCredits, // Valor antes de recargar
+                                alreadyTriedReload: hasEnoughCredits && response.status === 400 // Si ya intentamos recargar
                             });
                             
-                            // CRÍTICO: Solo intentar conversión MTR si realmente faltan créditos Y es un error de créditos insuficientes
-                            if (isInsufficientError && !finalHasEnoughCredits) {
-                                console.log('[updateBalance] ✅ Condiciones cumplidas para conversión MTR');
+                            // CRÍTICO: Solo intentar conversión MTR si:
+                            // 1. Es un error de créditos insuficientes
+                            // 2. NO hay suficientes créditos después de recargar (si se recargó)
+                            // 3. NO había suficientes créditos inicialmente (para evitar conversión cuando el problema es del backend)
+                            // Si había suficientes créditos inicialmente pero el backend rechazó, NO intentar conversión MTR
+                            if (isInsufficientError && !finalHasEnoughCredits && !hasEnoughCredits) {
+                                console.log('[updateBalance] ✅ Condiciones cumplidas para conversión MTR (no había suficientes créditos inicialmente)');
                                 const onchainBalance = Number(window.__mtrOnChainBalance || 0);
                                 // CRÍTICO: Usar finalCredits (después de recargar) para calcular créditos necesarios
                                 const creditsNeeded = creditsToDeduct - finalCredits;
@@ -4141,14 +4146,25 @@ const GameEngine = {
                                     return false;
                                 }
                             } else {
-                                // Error diferente o ya hay suficientes créditos
-                                console.error('[updateBalance] ❌ NO se intentará conversión MTR porque:', {
-                                    isInsufficientError: isInsufficientError,
-                                    finalHasEnoughCredits: finalHasEnoughCredits,
-                                    finalCredits: finalCredits,
-                                    creditsToDeduct: creditsToDeduct,
-                                    errorText: errorText
-                                });
+                                // Error diferente, ya hay suficientes créditos, o había suficientes créditos inicialmente pero backend rechazó
+                                if (hasEnoughCredits && response.status === 400) {
+                                    console.error('[updateBalance] ❌❌❌ NO se intentará conversión MTR porque había suficientes créditos inicialmente pero backend rechazó:', {
+                                        credits: credits,
+                                        creditsToDeduct: creditsToDeduct,
+                                        finalCredits: finalCredits,
+                                        errorText: errorText,
+                                        message: 'Esto sugiere un problema del backend, no falta de créditos'
+                                    });
+                                } else {
+                                    console.error('[updateBalance] ❌ NO se intentará conversión MTR porque:', {
+                                        isInsufficientError: isInsufficientError,
+                                        finalHasEnoughCredits: finalHasEnoughCredits,
+                                        hasEnoughCredits: hasEnoughCredits,
+                                        finalCredits: finalCredits,
+                                        creditsToDeduct: creditsToDeduct,
+                                        errorText: errorText
+                                    });
+                                }
                                 return false;
                             }
                             } else {
