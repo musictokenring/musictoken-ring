@@ -74,6 +74,10 @@ BEGIN
     RAISE NOTICE 'Usuario 1: %', v_user1_id;
     RAISE NOTICE 'Usuario 2 (frontend): %', v_user2_id;
     RAISE NOTICE '========================================';
+    
+    -- Deshabilitar trigger temporalmente para evitar error con NEW.wallet_address
+    RAISE NOTICE '⚠️ Deshabilitando trigger update_wallet_last_used temporalmente...';
+    ALTER TABLE user_credits DISABLE TRIGGER trigger_update_wallet_last_used_on_credits;
 
     -- Obtener créditos de ambos usuarios
     SELECT COALESCE(credits, 0) INTO v_credits_user1
@@ -201,6 +205,10 @@ BEGIN
     
     RAISE NOTICE '✅ Usuario 1 actualizado (wallet cambiada para evitar conflictos)';
 
+    -- Re-habilitar trigger
+    RAISE NOTICE '✅ Re-habilitando trigger update_wallet_last_used...';
+    ALTER TABLE user_credits ENABLE TRIGGER trigger_update_wallet_last_used_on_credits;
+    
     RAISE NOTICE '========================================';
     RAISE NOTICE '✅ UNIÓN COMPLETA';
     RAISE NOTICE 'Todo movido al Usuario 2 (frontend): %', v_user2_id;
