@@ -81,10 +81,11 @@
                 if (btn && window.currentMode === 'social') {
                     var betInput = document.getElementById('betAmount');
                     var bet = betInput ? parseFloat(betInput.value || '0') : 0;
-                    var onchainBalance = Number(window.__mtrOnChainBalance || 0);
+                    // ESPECIFICACIÓN REFINADA: Solo usar créditos estables para validar apuestas
+                    // MTR nativo se convierte automáticamente a créditos estables en el backend
                     var credits = window.CreditsSystem ? (window.CreditsSystem.currentCredits || 0) : 0;
                     var minBet = 5;
-                    var canCover = bet >= minBet && (credits >= bet || onchainBalance >= bet);
+                    var canCover = bet >= minBet && credits >= bet; // Solo créditos estables
                     var hasSong = !!window.selectedSong;
                     btn.disabled = !canCover || !hasSong;
                     // ELIMINAR CUALQUIER REFERENCIA A "100" en el tooltip - FORZADO
@@ -95,7 +96,7 @@
                     }
                     // Establecer tooltip correcto
                     if (!canCover && bet > 0) {
-                        btn.title = bet < minBet ? 'Apuesta mínima: ' + minBet + ' créditos' : 'Créditos y saldo MTR insuficientes';
+                        btn.title = bet < minBet ? 'Apuesta mínima: ' + minBet + ' MTR créditos' : 'MTR créditos jugables insuficientes (necesitas ' + bet + ', tienes ' + credits.toFixed(2) + ')';
                     } else {
                         btn.title = '';
                     }
@@ -236,9 +237,9 @@
             if (btn && window.currentMode === 'social') {
                 var betInput = document.getElementById('betAmount');
                 var bet = betInput ? parseFloat(betInput.value || '0') : 0;
-                var onchainBalance = Number(window.__mtrOnChainBalance || 0);
+                // ESPECIFICACIÓN REFINADA: Solo usar créditos estables para validar apuestas
                 var credits = window.CreditsSystem ? (window.CreditsSystem.currentCredits || 0) : 0;
-                var canCover = bet >= 5 && (credits >= bet || onchainBalance >= bet);
+                var canCover = bet >= 5 && credits >= bet; // Solo créditos estables
                 var hasSong = !!window.selectedSong;
                 btn.disabled = !canCover || !hasSong;
                 var title = btn.getAttribute('title') || btn.title || '';
@@ -461,9 +462,9 @@
                 if (btn && window.currentMode === 'social') {
                     var betInput = document.getElementById('betAmount');
                     var bet = betInput ? parseFloat(betInput.value || '0') : 0;
-                    var onchainBalance = Number(window.__mtrOnChainBalance || 0);
+                    // ESPECIFICACIÓN REFINADA: Solo usar créditos estables para validar apuestas
                     var credits = window.CreditsSystem ? (window.CreditsSystem.currentCredits || 0) : 0;
-                    var canCover = bet >= 5 && (credits >= bet || onchainBalance >= bet);
+                    var canCover = bet >= 5 && credits >= bet; // Solo créditos estables
                     var hasSong = !!window.selectedSong;
                     btn.disabled = !canCover || !hasSong;
                     var title = btn.getAttribute('title') || btn.title || '';
@@ -983,7 +984,10 @@
                 <p class="text-gray-500 text-xs mt-1">Miembro desde: <span id="profileSince">-</span></p>
             </div>
             <div class="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-6">
-                <div class="p-3 rounded-lg bg-white/[0.03] border border-white/5 text-center"><span class="text-xs text-gray-400 block" id="profileBalanceLabel">Balance</span><strong id="profileBalance" class="text-white">-</strong></div>
+                <div class="p-3 rounded-lg bg-white/[0.03] border border-white/5 text-center cursor-help" title="MTR créditos jugables: Fichas estables que valen siempre $1 cada una (1:1 USDC estable)">
+                    <span class="text-xs text-gray-400 block" id="profileBalanceLabel">MTR créditos</span>
+                    <strong id="profileBalance" class="text-white">-</strong>
+                </div>
                 <div class="p-3 rounded-lg bg-white/[0.03] border border-white/5 text-center"><span class="text-xs text-gray-400 block">Partidas</span><strong id="profileMatches" class="text-white">-</strong></div>
                 <div class="p-3 rounded-lg bg-white/[0.03] border border-white/5 text-center"><span class="text-xs text-gray-400 block">Victorias</span><strong id="profileWins" class="text-white">-</strong></div>
                 <div class="p-3 rounded-lg bg-white/[0.03] border border-white/5 text-center"><span class="text-xs text-gray-400 block">Derrotas</span><strong id="profileLosses" class="text-white">-</strong></div>
@@ -2853,25 +2857,26 @@
             var createSocialBtn = document.getElementById('createSocialBtn');
             var startPracticeBtn = document.getElementById('startPracticeBtn');
             var betAmountEl = document.getElementById('betAmount');
-            var onchainBalance = Number(window.__mtrOnChainBalance || 0);
+            // ESPECIFICACIÓN REFINADA: Solo usar créditos estables para validar apuestas
             var credits = window.CreditsSystem ? (window.CreditsSystem.currentCredits || 0) : 0;
             var bet = parseFloat(betAmountEl?.value || '0');
             
+            // ESPECIFICACIÓN REFINADA: Solo usar créditos estables para validar apuestas
             console.log('[updateBetEligibility] Estado actual:', {
                 selectedSong: !!selectedSong,
                 bet: bet,
-                onchainBalance: onchainBalance,
                 credits: credits,
                 currentMode: window.currentMode || currentMode
             });
             
             if (startQuickBtn) {
-                var canCoverBet = !!bet && bet > 0 && onchainBalance >= bet;
+                // Solo validar con créditos estables (MTR nativo se convierte automáticamente en backend)
+                var canCoverBet = !!bet && bet > 0 && credits >= bet;
                 var shouldEnableQuick = !!selectedSong && canCoverBet;
                 startQuickBtn.disabled = !shouldEnableQuick;
                 startQuickBtn.title = (!shouldEnableQuick) ? 
-                    (!selectedSong ? 'Selecciona una canción primero' : (!canCoverBet ? 'Saldo on-chain insuficiente para la apuesta' : '')) : '';
-                console.log('[updateBetEligibility] Quick Match - Song:', !!selectedSong, 'Bet:', bet, 'Balance:', onchainBalance, 'CanCover:', canCoverBet, 'Enabled:', !startQuickBtn.disabled);
+                    (!selectedSong ? 'Selecciona una canción primero' : (!canCoverBet ? `MTR créditos jugables insuficientes (necesitas ${bet}, tienes ${credits.toFixed(2)})` : '')) : '';
+                console.log('[updateBetEligibility] Quick Match - Song:', !!selectedSong, 'Bet:', bet, 'Créditos:', credits, 'CanCover:', canCoverBet, 'Enabled:', !startQuickBtn.disabled);
             }
             
             // Para desafíos sociales, verificar créditos y mínimo dinámico
@@ -2893,7 +2898,7 @@
                     if (bet < minBetAmount) {
                         createSocialBtn.title = 'Apuesta mínima: ' + minBetAmount + ' créditos';
                     } else {
-                        createSocialBtn.title = 'Créditos y saldo MTR insuficientes';
+                        createSocialBtn.title = `MTR créditos jugables insuficientes (necesitas ${bet}, tienes ${credits.toFixed(2)})`;
                     }
                 } else {
                     createSocialBtn.title = '';
@@ -2963,8 +2968,10 @@
             }
             const minBetAmount = (typeof GameEngine !== 'undefined' && GameEngine.minBet) ? GameEngine.minBet : 5;
             var bet = parseInt(document.getElementById('betAmount').value) || minBetAmount;
-            if (Number(window.__mtrOnChainBalance || 0) < bet) { 
-                showToast('Saldo on-chain insuficiente', 'error'); 
+            // ESPECIFICACIÓN REFINADA: Solo validar con créditos estables
+            var credits = window.CreditsSystem ? (window.CreditsSystem.currentCredits || 0) : 0;
+            if (credits < bet) { 
+                showToast(`MTR créditos jugables insuficientes. Necesitas ${bet}, tienes ${credits.toFixed(2)}`, 'error'); 
                 updateBetEligibility(); 
                 return; 
             }
@@ -3109,24 +3116,20 @@
                 return;
             }
             
-            // Verificar créditos y balance on-chain ANTES de crear el desafío
+            // ESPECIFICACIÓN REFINADA: Solo verificar créditos estables (MTR nativo se convierte automáticamente en backend)
             var credits = window.CreditsSystem ? (window.CreditsSystem.currentCredits || 0) : 0;
-            var onchainBalance = Number(window.__mtrOnChainBalance || 0);
-            var canCover = credits >= bet || onchainBalance >= bet;
+            var canCover = credits >= bet;
             
             console.log('[createSocialChallenge] Verificación de saldo:', {
                 bet: bet,
                 credits: credits,
-                onchainBalance: onchainBalance,
                 canCover: canCover
             });
             
             if (!canCover) {
-                var errorMsg = `Saldo insuficiente para apostar ${bet} créditos. `;
-                if (credits < bet && onchainBalance < bet) {
-                    errorMsg += `Disponibles: ${credits.toFixed(2)} créditos y ${onchainBalance.toLocaleString('es-ES', { maximumFractionDigits: 4 })} MTR on-chain`;
-                } else if (credits < bet) {
-                    errorMsg += `Tienes ${credits.toFixed(2)} créditos pero necesitas ${bet}. Tu balance MTR on-chain (${onchainBalance.toLocaleString('es-ES')}) puede usarse automáticamente.`;
+                var errorMsg = `MTR créditos jugables insuficientes para apostar ${bet}. `;
+                errorMsg += `Tienes ${credits.toFixed(2)} MTR créditos pero necesitas ${bet}. `;
+                errorMsg += `Deposita USDC para obtener más MTR créditos jugables (1 crédito = $1 USDC estable).`;
                 } else {
                     errorMsg += `Tienes ${onchainBalance.toLocaleString('es-ES', { maximumFractionDigits: 4 })} MTR on-chain pero necesitas ${bet} créditos.`;
                 }
@@ -3652,8 +3655,9 @@
                 }
                 
                 if (profileBalanceLabelEl) {
-                    profileBalanceLabelEl.textContent = 'Balance';
+                    profileBalanceLabelEl.textContent = 'MTR créditos';
                     profileBalanceLabelEl.style.color = '';
+                    profileBalanceLabelEl.title = 'MTR créditos jugables: Fichas estables 1:1 USDC';
                 }
             } catch (e) {
                 console.error('[ensureProfileShowsRealData] Error:', e);
@@ -5279,7 +5283,7 @@
                                 btn.removeAttribute('title');
                             }
                             if (!canCover && bet > 0) {
-                                btn.title = bet < 5 ? 'Apuesta mínima: 5 créditos' : 'Créditos y saldo MTR insuficientes';
+                                btn.title = bet < 5 ? 'Apuesta mínima: 5 MTR créditos' : `MTR créditos jugables insuficientes (necesitas ${bet}, tienes ${credits.toFixed(2)})`;
                             } else {
                                 btn.title = '';
                             }
