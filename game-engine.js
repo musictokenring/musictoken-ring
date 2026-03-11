@@ -3931,11 +3931,19 @@ const GameEngine = {
     }
 };
 
-// Inicializar
+// Inicializar - Asignar inmediatamente para que esté disponible
+if (typeof window !== 'undefined') {
+    window.GameEngine = GameEngine;
+    console.log('🎮 GameEngine asignado a window.GameEngine');
+}
+
+// También inicializar cuando DOM esté listo
 document.addEventListener('DOMContentLoaded', () => {
-    if (window.supabaseClient) {
-        window.GameEngine = GameEngine;
+    if (window.supabaseClient && window.GameEngine) {
         console.log('🎮 GameEngine loaded!');
+    } else if (!window.GameEngine) {
+        window.GameEngine = GameEngine;
+        console.log('🎮 GameEngine asignado en DOMContentLoaded');
     }
 });
 

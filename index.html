@@ -2928,7 +2928,7 @@
             var roomCode = document.getElementById('joinRoomCode').value.toUpperCase();
             const minBetAmount = (typeof GameEngine !== 'undefined' && GameEngine.minBet) ? GameEngine.minBet : 5;
             var bet = parseInt(document.getElementById('betAmount').value) || minBetAmount;
-            if (typeof GameEngine !== 'undefined') await GameEngine.joinPrivateRoom(roomCode, selectedSong, bet);
+            if (typeof window.GameEngine !== 'undefined') await window.GameEngine.joinPrivateRoom(roomCode, selectedSong, bet);
             else showToast('GameEngine no está cargado', 'error');
         }
         async function startPractice() {
@@ -2936,7 +2936,7 @@
             console.log('[startPractice] Estado:', {
                 selectedSong: !!selectedSong,
                 selectedSongData: selectedSong,
-                GameEngine: typeof GameEngine !== 'undefined',
+                GameEngine: typeof window.GameEngine !== 'undefined',
                 betAmount: document.getElementById('betAmount')?.value
             });
             
