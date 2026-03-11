@@ -9,30 +9,35 @@
 ## 🔧 Soluciones Implementadas
 
 ### 1. **SQL para Usuario Actual** ✅
-- **Archivo:** `SOLUCION-COMPLETA-VINCULAR-WALLET.sql`
+- **Archivo:** [`SOLUCION-COMPLETA-VINCULAR-WALLET.sql`](SOLUCION-COMPLETA-VINCULAR-WALLET.sql)
 - **Función:** Vincular wallet al usuario `52053c46-f6da-4861-9143-fd76d3e8e5d9`
 - **Características:**
   - Busca y une usuarios duplicados si existen
   - Mueve créditos y depósitos al usuario correcto
   - Crea entrada en `users` y `user_wallets`
   - **⚠️ IMPORTANTE:** Reemplaza `'WALLET_ADDRESS_AQUI'` con la wallet real del usuario
+- **📋 Cómo usar:**
+  1. Haz clic en el link de arriba para abrir el archivo
+  2. Copia todo el contenido
+  3. Reemplaza `'WALLET_ADDRESS_AQUI'` con la wallet real
+  4. Pégalo en Supabase SQL Editor y ejecuta
 
 ### 2. **Prevención Futura: Auto-vincular en Depósitos** ✅
-- **Archivo:** `backend/deposit-listener.js`
+- **Archivo:** [`backend/deposit-listener.js`](backend/deposit-listener.js) (líneas 308-380)
 - **Cambio:** Cuando se procesa un depósito:
   - ✅ Si usuario NO existe → Crea usuario Y vincula wallet automáticamente en `user_wallets`
   - ✅ Si usuario existe pero wallet NO está vinculada → Vincula automáticamente en `user_wallets`
   - ✅ Previene el error para futuros usuarios
 
 ### 3. **Soporte para Wallet-Only Operations** ✅
-- **Archivo:** `backend/server-auto.js`
+- **Archivo:** [`backend/server-auto.js`](backend/server-auto.js) (líneas 276-317, 345-387)
 - **Cambios:**
   - ✅ Endpoint `/api/user/credits/:walletAddress` crea `user_wallets` automáticamente
   - ✅ Endpoint `/api/user/deduct-credits` acepta `walletAddress` además de `userId`
   - ✅ Permite operaciones usando solo wallet como identidad (sin login Google/Email)
 
 ### 4. **Sincronización Wallet-Only → Login** ✅
-- **Archivo:** `backend/sync-wallet-on-login.js`
+- **Archivo:** [`backend/sync-wallet-on-login.js`](backend/sync-wallet-on-login.js)
 - **Función:** Cuando usuario con operaciones wallet-only hace login con Google/Email:
   - ✅ Busca usuario wallet-only
   - ✅ Une créditos, depósitos y claims al usuario autenticado
@@ -40,7 +45,7 @@
   - ✅ Elimina usuario duplicado
 
 ### 5. **Auto-vincular al Conectar Wallet** ✅
-- **Archivo:** `src/credits-system.js`
+- **Archivo:** [`src/credits-system.js`](src/credits-system.js) (líneas 509-567)
 - **Función:** Método `linkWalletToUser()` implementado
 - **Comportamiento:** Cuando usuario autenticado conecta wallet → se vincula automáticamente
 
@@ -90,19 +95,41 @@
 
 ## 📝 Instrucciones para Usuario Actual
 
-1. **Obtener wallet address del usuario:**
-   - Preguntar al usuario qué wallet usó (Trust Wallet)
-   - O revisar logs del backend cuando se procesó el depósito
-   - O ejecutar `SOLUCION-UNIR-USUARIOS-DUPLICADOS.sql` PASO 2 para encontrar usuario duplicado
+### Paso 1: Obtener wallet address del usuario
 
-2. **Ejecutar SQL:**
-   - Abrir `SOLUCION-COMPLETA-VINCULAR-WALLET.sql`
-   - Reemplazar `'WALLET_ADDRESS_AQUI'` con la wallet real
-   - Ejecutar en Supabase SQL Editor
+**Opción A:** Preguntar al usuario qué wallet usó (Trust Wallet)
 
-3. **Verificar:**
-   - Usuario debería poder crear desafíos sociales ahora
-   - Créditos se deducen correctamente
+**Opción B:** Revisar logs del backend cuando se procesó el depósito
+
+**Opción C:** Ejecutar script SQL para encontrar usuario duplicado
+- **Archivo:** [`SOLUCION-UNIR-USUARIOS-DUPLICADOS.sql`](SOLUCION-UNIR-USUARIOS-DUPLICADOS.sql)
+- Ejecuta el **PASO 2** para encontrar usuario duplicado en tabla `users`
+
+**Opción D:** Ejecutar script de investigación
+- **Archivo:** [`INVESTIGAR-USUARIO-SIN-WALLET.sql`](INVESTIGAR-USUARIO-SIN-WALLET.sql)
+- Este script muestra depósitos del usuario y puede ayudar a identificar la wallet
+
+### Paso 2: Ejecutar SQL de vinculación
+
+1. **Abrir el archivo SQL:**
+   - Haz clic aquí: [`SOLUCION-COMPLETA-VINCULAR-WALLET.sql`](SOLUCION-COMPLETA-VINCULAR-WALLET.sql)
+   - O busca el archivo en el proyecto
+
+2. **Modificar el script:**
+   - Busca la línea que dice: `v_wallet_address TEXT := 'WALLET_ADDRESS_AQUI';`
+   - Reemplaza `'WALLET_ADDRESS_AQUI'` con la wallet real (ejemplo: `'0x72eca083fbceb05a4f21b1a9883a57bcd638b6dd'`)
+
+3. **Ejecutar en Supabase:**
+   - Copia TODO el contenido del archivo
+   - Pégalo en Supabase SQL Editor
+   - Ejecuta (Run o Ctrl+Enter)
+   - Verifica que muestre "✅ VINCULACIÓN COMPLETA"
+
+### Paso 3: Verificar
+
+1. Recarga la página completamente (Ctrl+Shift+R)
+2. Usuario debería poder crear desafíos sociales ahora
+3. Créditos se deducen correctamente
 
 ## 🚀 Despliegue
 
@@ -112,9 +139,29 @@ Los cambios están listos para producción:
 - ✅ SQL listo para usuario actual
 
 **Próximos pasos:**
-1. Desplegar cambios del backend
-2. Ejecutar SQL para usuario actual
+1. Desplegar cambios del backend (ya están en el código)
+2. Ejecutar SQL para usuario actual usando [`SOLUCION-COMPLETA-VINCULAR-WALLET.sql`](SOLUCION-COMPLETA-VINCULAR-WALLET.sql)
 3. Verificar que funciona correctamente
+
+## 📚 Archivos de Referencia
+
+### Scripts SQL Disponibles:
+- [`SOLUCION-COMPLETA-VINCULAR-WALLET.sql`](SOLUCION-COMPLETA-VINCULAR-WALLET.sql) - **PRINCIPAL** - Vincular wallet al usuario actual
+- [`SOLUCION-UNIR-USUARIOS-DUPLICADOS.sql`](SOLUCION-UNIR-USUARIOS-DUPLICADOS.sql) - Buscar y unir usuarios duplicados
+- [`INVESTIGAR-USUARIO-SIN-WALLET.sql`](INVESTIGAR-USUARIO-SIN-WALLET.sql) - Investigar usuario específico
+- [`DIAGNOSTICO-SIMPLE-Y-CLARO.sql`](DIAGNOSTICO-SIMPLE-Y-CLARO.sql) - Diagnóstico completo del sistema
+- [`VINCULAR-WALLET-SEGURO.sql`](VINCULAR-WALLET-SEGURO.sql) - Vinculación segura (versión anterior)
+
+### Archivos de Código Modificados:
+- [`backend/deposit-listener.js`](backend/deposit-listener.js) - Auto-vinculación en depósitos
+- [`backend/server-auto.js`](backend/server-auto.js) - Soporte wallet-only y auto-vinculación
+- [`backend/sync-wallet-on-login.js`](backend/sync-wallet-on-login.js) - Sincronización wallet-only → login
+- [`src/credits-system.js`](src/credits-system.js) - Método `linkWalletToUser()` implementado
+
+### Documentación:
+- [`RESUMEN-SOLUCION-COMPLETA.md`](RESUMEN-SOLUCION-COMPLETA.md) - Este archivo
+- [`SOLUCION-COMPLETA-PREVENCION-FUTURA.md`](SOLUCION-COMPLETA-PREVENCION-FUTURA.md) - Detalles técnicos
+- [`RESUMEN-PROBLEMA-Y-SOLUCION.md`](RESUMEN-PROBLEMA-Y-SOLUCION.md) - Explicación del problema
 
 ## ✨ Resultado Final
 
