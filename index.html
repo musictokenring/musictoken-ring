@@ -2279,8 +2279,8 @@
                     }, 200);
                     setTimeout(function() {
                         console.log('[selectMode] Actualizando display (500ms)...');
-                        if (typeof GameEngine.updatePracticeBetDisplay === 'function') {
-                            GameEngine.updatePracticeBetDisplay();
+                        if (typeof window.GameEngine !== 'undefined' && typeof window.GameEngine.updatePracticeBetDisplay === 'function') {
+                            window.GameEngine.updatePracticeBetDisplay();
                         }
                     }, 500);
                     setTimeout(function() {
