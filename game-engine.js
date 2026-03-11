@@ -1143,7 +1143,42 @@ const GameEngine = {
                 return;
             }
             
-            // Verificar créditos suficientes
+            // CRÍTICO: Obtener wallet del usuario que acepta
+            const walletAddress = this.connectedWallet || localStorage.getItem('mtr_wallet');
+            if (!walletAddress) {
+                showToast('Debes conectar tu wallet para aceptar el desafío', 'error');
+                return;
+            }
+            
+            console.log('[acceptSocialChallenge] 🔍 Usuario aceptando desafío:', {
+                userId: session.user.id,
+                walletAddress: walletAddress,
+                betAmount: normalizedBet,
+                challengeId: challengeId
+            });
+            
+            // CRÍTICO: Recargar balance ANTES de verificar créditos
+            // Esto asegura que tenemos los datos más recientes del backend
+            console.log('[acceptSocialChallenge] 🔄 Recargando balance antes de verificar créditos...');
+            await window.CreditsSystem.loadBalance(walletAddress);
+            
+            // Verificar créditos directamente con el backend antes de proceder
+            const backendUrl = window.CONFIG?.BACKEND_API || 'https://musictoken-backend.onrender.com';
+            const creditsResponse = await fetch(`${backendUrl}/api/user/credits/${walletAddress}`);
+            
+            if (creditsResponse.ok) {
+                const creditsData = await creditsResponse.json();
+                console.log('[acceptSocialChallenge] 💰 Créditos del backend:', creditsData);
+                
+                if (!creditsData.credits || creditsData.credits < normalizedBet) {
+                    showToast(`Créditos insuficientes. Tienes ${creditsData.credits || 0} créditos, necesitas ${normalizedBet}`, 'error');
+                    return;
+                }
+            } else {
+                console.warn('[acceptSocialChallenge] ⚠️ No se pudo verificar créditos con el backend, continuando con verificación local...');
+            }
+            
+            // Verificar créditos suficientes (después de recargar)
             if (!(await this.hasSufficientCredits(normalizedBet))) {
                 return;
             }
@@ -3910,11 +3945,19 @@ const GameEngine = {
                 
                 if (walletAddress) {
                     // Deduct credits via backend
-                    const backendUrl = window.CONFIG?.BACKEND_API || 'https://musictoken-ring.onrender.com';
-                    console.log('[updateBalance] Obteniendo userId para wallet:', walletAddress);
+                    const backendUrl = window.CONFIG?.BACKEND_API || 'https://musictoken-backend.onrender.com';
+                    console.log('[updateBalance] 🔍 Obteniendo userId para wallet:', walletAddress);
+                    console.log('[updateBalance] 🔍 Backend URL:', backendUrl);
                     
                     const userId = await window.CreditsSystem.getUserId(walletAddress);
-                    console.log('[updateBalance] userId obtenido:', userId);
+                    console.log('[updateBalance] ✅ userId obtenido:', userId);
+                    
+                    if (!userId) {
+                        console.error('[updateBalance] ❌❌❌ NO se pudo obtener userId para wallet:', walletAddress);
+                        console.error('[updateBalance] ❌ Esto puede indicar que la wallet no está vinculada al usuario');
+                        showToast('Error: Wallet no vinculada. Por favor, recarga la página y vuelve a conectar tu wallet.', 'error');
+                        return false;
+                    }
                     
                     if (userId) {
                         const creditsToDeduct = Math.abs(amount);
@@ -3926,15 +3969,33 @@ const GameEngine = {
                         });
                         
                         // Deduct credits
+                        // CRÍTICO: Enviar tanto userId como walletAddress para que el backend pueda encontrar el usuario
+                        // incluso si el userId no está correctamente vinculado
+                        const requestBody = {
+                            credits: creditsToDeduct,
+                            reason: 'match_bet',
+                            matchId: matchId
+                        };
+                        
+                        // Enviar userId si está disponible
+                        if (userId) {
+                            requestBody.userId = userId;
+                        }
+                        
+                        // CRÍTICO: Siempre enviar walletAddress para que el backend pueda buscar el userId si es necesario
+                        if (walletAddress) {
+                            requestBody.walletAddress = walletAddress;
+                        }
+                        
+                        console.log('[updateBalance] 📤 Enviando request al backend:', {
+                            ...requestBody,
+                            walletAddress: walletAddress ? walletAddress.substring(0, 10) + '...' : 'N/A'
+                        });
+                        
                         const response = await fetch(`${backendUrl}/api/user/deduct-credits`, {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({
-                                userId,
-                                credits: creditsToDeduct,
-                                reason: 'match_bet',
-                                matchId: matchId
-                            })
+                            body: JSON.stringify(requestBody)
                         });
 
                         console.log('[updateBalance] Respuesta del backend:', {
@@ -3987,15 +4048,29 @@ const GameEngine = {
                                     console.log('[updateBalance] 🔄 Reintentando deducción después de recargar balance...');
                                     
                                     // Reintentar deducción
+                                    const retryRequestBody = {
+                                        credits: creditsToDeduct,
+                                        reason: 'match_bet',
+                                        matchId: matchId
+                                    };
+                                    
+                                    if (userId) {
+                                        retryRequestBody.userId = userId;
+                                    }
+                                    
+                                    if (walletAddress) {
+                                        retryRequestBody.walletAddress = walletAddress;
+                                    }
+                                    
+                                    console.log('[updateBalance] 🔄 Reintentando con request:', {
+                                        ...retryRequestBody,
+                                        walletAddress: walletAddress ? walletAddress.substring(0, 10) + '...' : 'N/A'
+                                    });
+                                    
                                     const retryResponse = await fetch(`${backendUrl}/api/user/deduct-credits`, {
                                         method: 'POST',
                                         headers: { 'Content-Type': 'application/json' },
-                                        body: JSON.stringify({
-                                            userId,
-                                            credits: creditsToDeduct,
-                                            reason: 'match_bet',
-                                            matchId: matchId
-                                        })
+                                        body: JSON.stringify(retryRequestBody)
                                     });
                                     
                                     if (retryResponse.ok) {
