@@ -96,15 +96,19 @@ function validateEnvironmentVariables() {
     if (missing.length > 0) {
         const error = `❌ Missing required environment variables: ${missing.join(', ')}`;
         console.error(`[SECURITY] ${error}`);
-        throw new Error(error);
+        console.error(`[SECURITY] ⚠️ Server will start but some features may not work`);
+        // No lanzar error - permitir que el servidor inicie para diagnóstico
+        // Los servicios individuales manejarán sus propios errores
+        return false;
     }
     
     // Validar formato de direcciones
     const PLATFORM_WALLET = process.env.PLATFORM_WALLET_ADDRESS;
-    if (!/^0x[a-fA-F0-9]{40}$/.test(PLATFORM_WALLET)) {
-        const error = `❌ Invalid PLATFORM_WALLET_ADDRESS format: ${PLATFORM_WALLET}`;
+    if (!PLATFORM_WALLET || !/^0x[a-fA-F0-9]{40}$/.test(PLATFORM_WALLET)) {
+        const error = `❌ Invalid PLATFORM_WALLET_ADDRESS format: ${PLATFORM_WALLET || 'undefined'}`;
         console.error(`[SECURITY] ${error}`);
-        throw new Error(error);
+        console.error(`[SECURITY] ⚠️ Server will start but wallet operations may fail`);
+        return false;
     }
     
     // Validar que las wallets no sean la misma (si están configuradas)
@@ -124,13 +128,18 @@ function validateEnvironmentVariables() {
     console.log('[server] ✅ Environment variables validated');
     console.log(`[server] 🔒 Platform Wallet: ${PLATFORM_WALLET}`);
     console.log(`[server] 🔒 Vault Wallet: ${process.env.VAULT_WALLET_ADDRESS || 'Not configured (using platform wallet)'}`);
+    return true;
 }
 
 // Initialize all services
 async function initializeServices() {
     try {
         // 🔒 SEGURIDAD: Validar variables de entorno antes de inicializar servicios
-        validateEnvironmentVariables();
+        const envValid = validateEnvironmentVariables();
+        if (!envValid) {
+            console.warn('[server] ⚠️ Environment variables validation failed, but continuing initialization...');
+            console.warn('[server] ⚠️ Some services may not work correctly. Check your environment variables in Render.');
+        }
         
         console.log('[server] Initializing automated services...');
 
@@ -154,8 +163,17 @@ async function initializeServices() {
             // Server continues with Base listener only
         }
 
-        // Initialize claim service
-        claimService = new ClaimService();
+        // Initialize claim service (puede fallar si ADMIN_WALLET_PRIVATE_KEY no está configurado)
+        try {
+            claimService = new ClaimService();
+            console.log('[server] ✅ Claim service initialized');
+        } catch (claimError) {
+            console.error('[server] ⚠️ Error initializing claim service:', claimError.message);
+            console.error('[server] ⚠️ Claim service requires ADMIN_WALLET_PRIVATE_KEY to be set');
+            console.log('[server] Continuing without claim service...');
+            // No fallar - el servicio se puede inicializar más tarde cuando se configure
+            claimService = null;
+        }
 
         // Initialize vault service (no requiere init(), se inicializa en constructor)
         try {
@@ -328,6 +346,13 @@ app.post('/api/user/deduct-credits', async (req, res) => {
  */
 // 🔒 SEGURIDAD: Aplicar rate limiting al endpoint de claims
 app.post('/api/claim', claimRateLimiter, async (req, res) => {
+    // Verificar que claimService esté inicializado
+    if (!claimService) {
+        return res.status(503).json({ 
+            error: 'Claim service not available',
+            message: 'El servicio de claims no está disponible. Verifica que ADMIN_WALLET_PRIVATE_KEY esté configurado en Render.'
+        });
+    }
     try {
         const { userId, credits, walletAddress } = req.body;
 
