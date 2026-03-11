@@ -3898,9 +3898,10 @@ const GameEngine = {
                                     canConvert: onchainBalance >= creditsNeeded
                                 });
                                 
-                                // Si tiene suficiente MTR on-chain, intentar convertir automáticamente
-                                // CRÍTICO: Verificar que tenga suficiente MTR para cubrir TODA la apuesta, no solo la diferencia
-                                if (onchainBalance >= creditsToDeduct) {
+                                // CRÍTICO: Verificar que tenga suficiente MTR para cubrir la diferencia necesaria
+                                // Si tiene 5.04 créditos y necesita 50, necesita 44.96 créditos más
+                                // Si tiene 3000 MTR on-chain, puede convertir
+                                if (onchainBalance >= creditsNeeded && creditsNeeded > 0) {
                                     console.log('[updateBalance] Usuario tiene suficiente MTR on-chain, convirtiendo automáticamente...');
                                     
                                     // Obtener precio actual de MTR (1 MTR = X USDC)
