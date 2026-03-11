@@ -493,7 +493,12 @@
                     <span class="text-base sm:text-xl lg:text-2xl font-extrabold text-cyan-400 neon-text-cyan tracking-tight">MusicToken Ring</span>
                 </div>
 
-                <div class="flex items-center gap-1.5 sm:gap-2 lg:gap-4 text-sm flex-shrink-0">
+                <div class="flex items-center gap-1 sm:gap-1.5 sm:gap-2 lg:gap-4 text-sm flex-shrink-0 overflow-x-auto" style="max-width: 100%;">
+                    <!-- Saldos en móvil (compacto) -->
+                    <span id="creditsCombinedDisplayMobile" class="sm:hidden px-1.5 py-0.5 rounded text-[10px] bg-fuchsia-500/10 text-fuchsia-400 font-semibold whitespace-nowrap">
+                        <span id="creditsDisplayMobile">0</span> <span id="usdcValueDisplayMobile" class="text-gray-400">$0</span>
+                    </span>
+                    <!-- Saldos en desktop -->
                     <span id="onchainBalanceDisplay" class="hidden sm:inline px-2 py-1 rounded-md bg-cyan-500/10 text-cyan-400 text-xs font-semibold">On-chain: --</span>
                     <span id="creditsCombinedDisplay" class="hidden sm:inline px-2 py-1 rounded-md bg-fuchsia-500/10 text-fuchsia-400 text-xs font-semibold flex items-center gap-2">
                         <span id="creditsDisplay">0 créditos</span>
@@ -501,12 +506,12 @@
                     </span>
                     <span id="appBalanceDisplay" class="hidden sm:inline px-2 py-1 rounded-md bg-fuchsia-500/10 text-fuchsia-400 text-xs font-semibold">Jugable: --</span>
                     <span id="walletAddress" class="hidden text-cyan-300 font-mono text-xs bg-cyan-500/10 px-2 py-1 rounded-md"></span>
-                    <button type="button" id="walletConnectBtn" class="px-2.5 sm:px-4 py-2 rounded-lg text-xs sm:text-sm font-semibold bg-cyan-500/10 border border-cyan-500/30 text-cyan-400 hover:bg-cyan-500/20 transition-all duration-200 cursor-pointer whitespace-nowrap">
+                    <button type="button" id="walletConnectBtn" class="px-2 sm:px-2.5 sm:px-4 py-1.5 sm:py-2 rounded-lg text-[10px] sm:text-xs sm:text-sm font-semibold bg-cyan-500/10 border border-cyan-500/30 text-cyan-400 hover:bg-cyan-500/20 transition-all duration-200 cursor-pointer whitespace-nowrap flex-shrink-0">
                         <span class="hidden sm:inline">Conectar Wallet</span>
                         <span class="sm:hidden">Wallet</span>
                     </button>
-                    <div id="authButton">
-                        <button type="button" onclick="openAuthModal()" class="px-2.5 sm:px-4 py-2 rounded-lg text-xs sm:text-sm font-semibold bg-fuchsia-500/10 border border-fuchsia-500/30 text-fuchsia-400 hover:bg-fuchsia-500/20 transition-all duration-200 cursor-pointer whitespace-nowrap">
+                    <div id="authButton" class="flex-shrink-0">
+                        <button type="button" onclick="openAuthModal()" id="authButtonBtn" class="px-2 sm:px-2.5 sm:px-4 py-1.5 sm:py-2 rounded-lg text-[10px] sm:text-xs sm:text-sm font-semibold bg-fuchsia-500/10 border border-fuchsia-500/30 text-fuchsia-400 hover:bg-fuchsia-500/20 transition-all duration-200 cursor-pointer whitespace-nowrap">
                             <span class="hidden sm:inline">Iniciar Sesión</span>
                             <span class="sm:hidden">Login</span>
                         </button>
@@ -3423,6 +3428,19 @@
                 if (window.CreditsSystem && typeof window.CreditsSystem.init === 'function') {
                     window.CreditsSystem.init(connectedAddress);
                     if (creditsDisplay) creditsDisplay.classList.remove('hidden');
+                    // Mostrar display móvil también
+                    const mobileDisplay = document.getElementById('creditsCombinedDisplayMobile');
+                    if (mobileDisplay) mobileDisplay.classList.remove('hidden');
+                }
+                
+                // Disparar evento para mobile-auth-check
+                if (window.dispatchEvent) {
+                    window.dispatchEvent(new CustomEvent('walletConnected', { detail: { address: connectedAddress } }));
+                }
+                
+                // Verificar autenticación después de conectar wallet
+                if (typeof window.checkAuthAndUpdateUI === 'function') {
+                    setTimeout(window.checkAuthAndUpdateUI, 500);
                 }
                 
                 // 🔗 NUEVO: Auto-link wallet if user is authenticated (MOBILE ONLY)
@@ -3469,6 +3487,20 @@
                 // Stop credits updates
                 if (window.CreditsSystem && typeof window.CreditsSystem.stopPeriodicUpdates === 'function') {
                     window.CreditsSystem.stopPeriodicUpdates();
+                }
+                
+                // Ocultar display móvil cuando no hay wallet
+                const mobileDisplay = document.getElementById('creditsCombinedDisplayMobile');
+                if (mobileDisplay) mobileDisplay.classList.add('hidden');
+                
+                // Disparar evento para mobile-auth-check
+                if (window.dispatchEvent) {
+                    window.dispatchEvent(new CustomEvent('walletDisconnected'));
+                }
+                
+                // Verificar autenticación después de desconectar wallet
+                if (typeof window.checkAuthAndUpdateUI === 'function') {
+                    setTimeout(window.checkAuthAndUpdateUI, 500);
                 }
             }
         }
