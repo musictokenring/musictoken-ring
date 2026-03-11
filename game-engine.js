@@ -119,10 +119,13 @@ const GameEngine = {
         const valueEl = document.getElementById('userBalance');
         const onchainEl = document.getElementById('onchainMtrBalance');
         
-        // CRÍTICO: El balance demo SOLO debe mostrarse cuando el usuario está específicamente
-        // en la sección de Práctica (window.currentMode === 'practice'), NO en otras secciones
-        // como Desafío Social, Torneo, etc., incluso si la URL tiene ?mode=practice
-        const isInPracticeSection = typeof window !== 'undefined' && window.currentMode === 'practice';
+        // CRÍTICO: Verificar tanto window.currentMode como el parámetro ?mode=practice en la URL
+        // Si la URL tiene ?mode=practice, mostrar saldo demo incluso si se seleccionó otro modo
+        // Esto asegura coherencia cuando el usuario navega desde práctica a otros modos
+        var urlParams = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
+        var urlModeParam = urlParams ? urlParams.get('mode') : null;
+        var isPracticeModeFromUrl = urlModeParam === 'practice';
+        const isInPracticeSection = typeof window !== 'undefined' && (window.currentMode === 'practice' || isPracticeModeFromUrl);
         
         // Logs comentados para reducir ruido - esta función se ejecuta frecuentemente
         // console.log('[updatePracticeBetDisplay] En sección práctica:', isInPracticeSection, 'currentMode:', window.currentMode, 'Balance demo:', this.practiceDemoBalance);
