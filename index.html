@@ -3130,9 +3130,6 @@
                 var errorMsg = `MTR créditos jugables insuficientes para apostar ${bet}. `;
                 errorMsg += `Tienes ${credits.toFixed(2)} MTR créditos pero necesitas ${bet}. `;
                 errorMsg += `Deposita USDC para obtener más MTR créditos jugables (1 crédito = $1 USDC estable).`;
-                } else {
-                    errorMsg += `Tienes ${onchainBalance.toLocaleString('es-ES', { maximumFractionDigits: 4 })} MTR on-chain pero necesitas ${bet} créditos.`;
-                }
                 showToast(errorMsg, 'error');
                 return;
             }
