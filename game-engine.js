@@ -4001,10 +4001,12 @@ const GameEngine = {
                             
                             if (isInsufficientError && !finalHasEnoughCredits) {
                                 const onchainBalance = Number(window.__mtrOnChainBalance || 0);
-                                const creditsNeeded = creditsToDeduct - credits;
+                                // CRÍTICO: Usar finalCredits (después de recargar) para calcular créditos necesarios
+                                const creditsNeeded = creditsToDeduct - finalCredits;
                                 
                                 console.log('[updateBalance] Créditos insuficientes, verificando MTR on-chain:', {
-                                    credits: credits,
+                                    finalCredits: finalCredits,
+                                    credits: credits, // Valor antes de recargar (para referencia)
                                     onchainBalance: onchainBalance,
                                     creditsNeeded: creditsNeeded,
                                     creditsToDeduct: creditsToDeduct,
