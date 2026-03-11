@@ -1144,9 +1144,16 @@ const GameEngine = {
             }
             
             // CRÍTICO: Obtener wallet del usuario que acepta
-            const walletAddress = this.connectedWallet || localStorage.getItem('mtr_wallet');
+            // Si es usuario nuevo, puede que no tenga wallet conectada todavía
+            let walletAddress = this.connectedWallet || localStorage.getItem('mtr_wallet');
+            
+            // Si no tiene wallet conectada, pedirle que la conecte
             if (!walletAddress) {
-                showToast('Debes conectar tu wallet para aceptar el desafío', 'error');
+                showToast('Debes conectar tu wallet para aceptar el desafío. Conecta tu wallet y vuelve a intentar.', 'error');
+                // Mostrar modal de conexión de wallet si está disponible
+                if (typeof renderWallet === 'function') {
+                    renderWallet();
+                }
                 return;
             }
             
@@ -1157,6 +1164,16 @@ const GameEngine = {
                 challengeId: challengeId
             });
             
+            // CRÍTICO: Vincular wallet automáticamente si es usuario nuevo
+            // Esto asegura que el backend pueda encontrar el userId desde walletAddress
+            console.log('[acceptSocialChallenge] 🔗 Vinculando wallet automáticamente...');
+            const walletLinked = await window.CreditsSystem.linkWalletToUser(walletAddress);
+            if (walletLinked) {
+                console.log('[acceptSocialChallenge] ✅ Wallet vinculada automáticamente');
+            } else {
+                console.warn('[acceptSocialChallenge] ⚠️ No se pudo vincular wallet (puede estar ya vinculada)');
+            }
+            
             // CRÍTICO: Recargar balance ANTES de verificar créditos
             // Esto asegura que tenemos los datos más recientes del backend
             console.log('[acceptSocialChallenge] 🔄 Recargando balance antes de verificar créditos...');
@@ -1166,21 +1183,35 @@ const GameEngine = {
             const backendUrl = window.CONFIG?.BACKEND_API || 'https://musictoken-backend.onrender.com';
             const creditsResponse = await fetch(`${backendUrl}/api/user/credits/${walletAddress}`);
             
+            let userCredits = 0;
             if (creditsResponse.ok) {
                 const creditsData = await creditsResponse.json();
+                userCredits = creditsData.credits || 0;
                 console.log('[acceptSocialChallenge] 💰 Créditos del backend:', creditsData);
-                
-                if (!creditsData.credits || creditsData.credits < normalizedBet) {
-                    showToast(`Créditos insuficientes. Tienes ${creditsData.credits || 0} créditos, necesitas ${normalizedBet}`, 'error');
-                    return;
-                }
             } else {
-                console.warn('[acceptSocialChallenge] ⚠️ No se pudo verificar créditos con el backend, continuando con verificación local...');
+                console.warn('[acceptSocialChallenge] ⚠️ No se pudo verificar créditos con el backend');
+            }
+            
+            // CRÍTICO: Si el usuario no tiene créditos suficientes, mostrar mensaje claro
+            // pero permitir que acepte el desafío (luego necesitará recargar antes de ejecutar)
+            if (!userCredits || userCredits < normalizedBet) {
+                const missingCredits = normalizedBet - userCredits;
+                showToast(
+                    `Créditos insuficientes. Tienes ${userCredits.toFixed(2)} créditos, necesitas ${normalizedBet}. ` +
+                    `Debes recargar ${missingCredits.toFixed(2)} créditos más para ejecutar este desafío. ` +
+                    `Puedes recargar desde el menú de depósitos.`,
+                    'error'
+                );
+                // NO retornar aquí - permitir que acepte el desafío pero luego requerir recarga
+                // El match se creará pero no se ejecutará hasta que tenga créditos suficientes
             }
             
             // Verificar créditos suficientes (después de recargar)
-            if (!(await this.hasSufficientCredits(normalizedBet))) {
-                return;
+            // Si no tiene suficientes, el match se creará pero no se ejecutará
+            const hasEnoughCredits = await this.hasSufficientCredits(normalizedBet);
+            if (!hasEnoughCredits) {
+                console.warn('[acceptSocialChallenge] ⚠️ Usuario no tiene créditos suficientes, pero se permitirá aceptar el desafío');
+                // Continuar para crear el match, pero el usuario necesitará recargar antes de ejecutar
             }
             
             // Verificar ELO si está habilitado
@@ -2036,6 +2067,28 @@ const GameEngine = {
     
     async createMatch(type, player1Id, player2Id, song1, song2Data, bet1, bet2) {
         try {
+            // CRÍTICO: Verificar créditos antes de descontar
+            // Si el usuario no tiene créditos suficientes, mostrar mensaje claro pero permitir crear el match
+            const walletAddress = this.connectedWallet || localStorage.getItem('mtr_wallet');
+            if (walletAddress && window.CreditsSystem) {
+                await window.CreditsSystem.loadBalance(walletAddress);
+                const currentCredits = window.CreditsSystem.currentCredits || 0;
+                
+                if (currentCredits < bet1) {
+                    const missingCredits = bet1 - currentCredits;
+                    console.warn('[game-engine] Usuario no tiene créditos suficientes para ejecutar el match');
+                    showToast(
+                        `No tienes créditos suficientes para ejecutar este match. ` +
+                        `Tienes ${currentCredits.toFixed(2)} créditos, necesitas ${bet1}. ` +
+                        `Debes recargar ${missingCredits.toFixed(2)} créditos más. ` +
+                        `El match se creará pero no se ejecutará hasta que recargues.`,
+                        'warning'
+                    );
+                    // Continuar para crear el match, pero no descontar créditos todavía
+                    // El match quedará en estado "pending" hasta que el usuario recargue
+                }
+            }
+            
             // CRÍTICO: Descontar créditos ANTES de crear el match
             // Si falla la deducción, no se crea el match
             const deductionSuccess = await this.updateBalance(-bet1, 'bet', null);
