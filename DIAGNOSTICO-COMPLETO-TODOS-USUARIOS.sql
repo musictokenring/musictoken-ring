@@ -52,28 +52,30 @@ ORDER BY
 -- ============================================
 SELECT 
     '📊 RESUMEN POR ESTADO' AS tipo,
-    CASE 
-        WHEN uw.wallet_address IS NOT NULL THEN '✅ Con wallet vinculada'
-        WHEN u.wallet_address IS NOT NULL THEN '⚠️ Wallet en users pero no vinculada'
-        ELSE '❌ Sin wallet'
-    END AS estado,
-    COUNT(DISTINCT au.id) AS total_usuarios,
-    SUM(COALESCE(uc.credits, 0)) AS total_creditos,
-    COUNT(DISTINCT CASE WHEN (SELECT COUNT(*) FROM deposits d WHERE d.user_id = au.id) > 0 THEN au.id END) AS usuarios_con_depositos
-FROM auth.users au
-LEFT JOIN users u ON u.id = au.id
-LEFT JOIN user_wallets uw ON uw.user_id = au.id
-LEFT JOIN user_credits uc ON uc.user_id = au.id
-GROUP BY 
-    CASE 
-        WHEN uw.wallet_address IS NOT NULL THEN '✅ Con wallet vinculada'
-        WHEN u.wallet_address IS NOT NULL THEN '⚠️ Wallet en users pero no vinculada'
-        ELSE '❌ Sin wallet'
-    END
+    estado,
+    COUNT(*) AS total_usuarios,
+    SUM(creditos) AS total_creditos,
+    COUNT(CASE WHEN tiene_depositos THEN 1 END) AS usuarios_con_depositos
+FROM (
+    SELECT 
+        au.id,
+        CASE 
+            WHEN uw.wallet_address IS NOT NULL THEN '✅ Con wallet vinculada'
+            WHEN u.wallet_address IS NOT NULL THEN '⚠️ Wallet en users pero no vinculada'
+            ELSE '❌ Sin wallet'
+        END AS estado,
+        COALESCE(uc.credits, 0) AS creditos,
+        CASE WHEN (SELECT COUNT(*) FROM deposits d WHERE d.user_id = au.id) > 0 THEN TRUE ELSE FALSE END AS tiene_depositos
+    FROM auth.users au
+    LEFT JOIN users u ON u.id = au.id
+    LEFT JOIN user_wallets uw ON uw.user_id = au.id
+    LEFT JOIN user_credits uc ON uc.user_id = au.id
+) AS usuarios_con_estado
+GROUP BY estado
 ORDER BY 
-    CASE 
-        WHEN uw.wallet_address IS NOT NULL THEN 1
-        WHEN u.wallet_address IS NOT NULL THEN 2
+    CASE estado
+        WHEN '✅ Con wallet vinculada' THEN 1
+        WHEN '⚠️ Wallet en users pero no vinculada' THEN 2
         ELSE 3
     END;
 
