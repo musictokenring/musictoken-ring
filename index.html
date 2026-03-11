@@ -5168,5 +5168,31 @@
             window.updateBetEligibility = window.updateBetEligibility || function() {};
         }
     </script>
+
+    <!-- Script de seguridad: Deshabilitar watchdog si existe (para prevenir bloqueos) -->
+    <script>
+        (function() {
+            'use strict';
+            // Detectar y deshabilitar cualquier watchdog que pueda estar activo
+            setTimeout(function() {
+                // Buscar y deshabilitar funciones relacionadas con watchdog
+                if (window.initWatchdog) {
+                    window.initWatchdog = function() { console.warn('[SECURITY] Watchdog deshabilitado'); };
+                }
+                // Deshabilitar MutationObserver si está relacionado con watchdog
+                var observers = window.__watchdogObservers || [];
+                observers.forEach(function(obs) {
+                    if (obs && typeof obs.disconnect === 'function') {
+                        obs.disconnect();
+                    }
+                });
+                // Limpiar cualquier intervalo relacionado con watchdog
+                var intervals = window.__watchdogIntervals || [];
+                intervals.forEach(function(id) {
+                    if (id) clearInterval(id);
+                });
+            }, 100);
+        })();
+    </script>
 </body>
 </html>
