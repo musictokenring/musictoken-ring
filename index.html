@@ -495,16 +495,17 @@
 
                 <div class="flex items-center gap-1 sm:gap-1.5 sm:gap-2 lg:gap-4 text-sm flex-shrink-0 overflow-x-auto" style="max-width: 100%;">
                     <!-- Saldos en móvil (compacto) -->
-                    <span id="creditsCombinedDisplayMobile" class="sm:hidden px-1.5 py-0.5 rounded text-[10px] bg-fuchsia-500/10 text-fuchsia-400 font-semibold whitespace-nowrap">
+                    <span id="creditsCombinedDisplayMobile" class="sm:hidden px-1.5 py-0.5 rounded text-[10px] bg-fuchsia-500/10 text-fuchsia-400 font-semibold whitespace-nowrap cursor-help" title="MTR créditos jugables: Fichas estables 1:1 USDC">
                         <span id="creditsDisplayMobile">0</span> <span id="usdcValueDisplayMobile" class="text-gray-400">$0</span>
                     </span>
                     <!-- Saldos en desktop -->
                     <span id="onchainBalanceDisplay" class="hidden sm:inline px-2 py-1 rounded-md bg-cyan-500/10 text-cyan-400 text-xs font-semibold">On-chain: --</span>
-                    <span id="creditsCombinedDisplay" class="hidden sm:inline px-2 py-1 rounded-md bg-fuchsia-500/10 text-fuchsia-400 text-xs font-semibold flex items-center gap-2">
-                        <span id="creditsDisplay">0 créditos</span>
-                        <span id="usdcValueDisplay" class="text-gray-400">≈ $0 USDC</span>
+                    <span id="creditsCombinedDisplay" class="hidden sm:inline px-2 py-1 rounded-md bg-fuchsia-500/10 text-fuchsia-400 text-xs font-semibold flex items-center gap-2 cursor-help" title="MTR créditos jugables: Fichas estables que valen siempre $1 cada una. No fluctúan como el token MTR nativo. 1 MTR crédito = $1 USDC estable (1:1 fijo – sin volatilidad)">
+                        <span id="creditsDisplay">0 MTR créditos</span>
+                        <span id="usdcValueDisplay" class="text-gray-400">= $0 USDC estables</span>
+                        <span class="text-xs text-green-400" title="Créditos estables: 1 crédito = 1 USDC fijo">✓</span>
                     </span>
-                    <span id="appBalanceDisplay" class="hidden sm:inline px-2 py-1 rounded-md bg-fuchsia-500/10 text-fuchsia-400 text-xs font-semibold">Jugable: --</span>
+                    <span id="appBalanceDisplay" class="hidden sm:inline px-2 py-1 rounded-md bg-fuchsia-500/10 text-fuchsia-400 text-xs font-semibold cursor-help" title="MTR créditos jugables disponibles para apostar. Estas fichas valen siempre $1 cada una (1:1 USDC estable)">Fichas jugables: --</span>
                     <span id="walletAddress" class="hidden text-cyan-300 font-mono text-xs bg-cyan-500/10 px-2 py-1 rounded-md"></span>
                     <button type="button" id="walletConnectBtn" class="px-2 sm:px-2.5 sm:px-4 py-1.5 sm:py-2 rounded-lg text-[10px] sm:text-xs sm:text-sm font-semibold bg-cyan-500/10 border border-cyan-500/30 text-cyan-400 hover:bg-cyan-500/20 transition-all duration-200 cursor-pointer whitespace-nowrap flex-shrink-0">
                         <span class="hidden sm:inline">Conectar Wallet</span>
@@ -719,8 +720,8 @@
                     <div class="p-6 rounded-2xl border border-white/5 bg-white/[0.02]">
                         <h3 class="text-lg font-bold text-white mb-4">💰 Tu Apuesta</h3>
                         <div class="grid grid-cols-2 gap-3 text-sm text-gray-400 mb-4">
-                            <span><span id="balanceLabel">Tu MTR (on-chain)</span>: <strong id="onchainMtrBalance" class="text-white">--</strong></span>
-                            <span><span id="playableLabel">Jugable</span>: <strong id="userBalance" class="text-white">0</strong> <span id="balanceUnit">MTR</span></span>
+                            <span class="hidden"><span id="balanceLabel">Tu MTR (on-chain)</span>: <strong id="onchainMtrBalance" class="text-white">--</strong></span>
+                            <span><span id="playableLabel">Fichas jugables</span>: <strong id="userBalance" class="text-white">0</strong> <span id="balanceUnit">MTR créditos</span> <span class="text-xs text-green-400 cursor-help" title="Estas fichas valen siempre $1 cada una. No fluctúan como el token MTR nativo. 1 MTR crédito jugable = $1 USDC estable (1:1 fijo – sin volatilidad)">✓</span></span>
                             <span>Mínimo: <strong id="minBet" class="text-white">5</strong> créditos</span>
                         </div>
                         <input type="number" id="betAmount" placeholder="5" min="5"
@@ -3599,7 +3600,9 @@
                 // En todos los demás modos, mostrar saldo REAL
                 const isPracticeMode = typeof window !== 'undefined' && window.currentMode === 'practice';
                 
-                if (badge) badge.textContent = 'Tu MTR: ' + formatted;
+                // ESPECIFICACIÓN REFINADA: NO mostrar MTR nativo en el header
+                // Solo mostrar créditos estables como "MTR créditos jugables"
+                // if (badge) badge.textContent = 'Tu MTR: ' + formatted; // OCULTADO - MTR nativo no se muestra
                 if (onchain && !isPracticeMode) {
                     onchain.textContent = formatted;
                     console.log('[refreshMtrBalance] Balance actualizado en UI:', formatted);

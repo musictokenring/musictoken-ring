@@ -359,37 +359,51 @@ const GameEngine = {
             // updatePracticeBetDisplay solo debe actualizar el DISPLAY, no cargar datos
             // La carga de balances reales se hace en selectMode() cuando se cambia de modo
             
-            // CRÍTICO: Mostrar balance REAL (on-chain o créditos o Supabase)
-            // NO usar saldo demo en modo normal
-            const onChainBalance = Number(window.__mtrOnChainBalance || 0);
+            // ESPECIFICACIÓN REFINADA: Mostrar SOLO créditos estables como "MTR créditos jugables"
+            // NO mostrar MTR nativo como saldo jugable
             let creditsBalance = 0;
             if (window.CreditsSystem && window.CreditsSystem.currentCredits !== undefined) {
                 creditsBalance = Number(window.CreditsSystem.currentCredits || 0);
             }
-            const playableBalance = onChainBalance > 0 ? onChainBalance : (creditsBalance > 0 ? creditsBalance : this.userBalance);
+            
+            // CRÍTICO: Usar SOLO créditos estables como saldo jugable
+            const playableBalance = creditsBalance; // Solo créditos estables
             
             if (valueEl) {
-                valueEl.textContent = playableBalance.toLocaleString('es-ES');
+                valueEl.textContent = playableBalance.toFixed(2);
                 valueEl.style.color = '';
+                valueEl.title = 'MTR créditos jugables: Fichas estables que valen siempre $1 cada una';
                 // Asegurar que no tenga "(DEMO)"
                 if (valueEl.textContent.includes('(DEMO)')) {
                     valueEl.textContent = valueEl.textContent.replace(' (DEMO)', '');
                 }
             }
+            
+            // OCULTAR onchainMtrBalance - MTR nativo NO se muestra como saldo jugable
             if (onchainEl) {
-                onchainEl.textContent = onChainBalance > 0 ? onChainBalance.toLocaleString('es-ES') : '--';
-                onchainEl.style.color = '';
-                // Asegurar que no tenga "(DEMO)"
-                if (onchainEl.textContent.includes('(DEMO)')) {
-                    onchainEl.textContent = onchainEl.textContent.replace(' (DEMO)', '');
+                onchainEl.style.display = 'none'; // Ocultar MTR nativo
+                const balanceLabelEl = document.getElementById('balanceLabel');
+                if (balanceLabelEl) {
+                    balanceLabelEl.style.display = 'none'; // Ocultar label también
                 }
             }
             
-            console.log('[updatePracticeBetDisplay] Modo normal - Balance REAL mostrado:', {
+            // Actualizar label y unidad para mostrar "MTR créditos jugables"
+            const playableLabelEl = document.getElementById('playableLabel');
+            if (playableLabelEl && playableLabelEl.textContent !== 'Fichas jugables') {
+                playableLabelEl.textContent = 'Fichas jugables';
+                playableLabelEl.title = 'MTR créditos jugables: Fichas estables 1:1 USDC';
+            }
+            
+            const balanceUnitEl = document.getElementById('balanceUnit');
+            if (balanceUnitEl && balanceUnitEl.textContent !== 'MTR créditos') {
+                balanceUnitEl.textContent = 'MTR créditos';
+                balanceUnitEl.title = 'Alias gráfico: Estas fichas valen siempre $1 cada una (1:1 USDC estable)';
+            }
+            
+            console.log('[updatePracticeBetDisplay] Modo normal - Créditos estables mostrados:', {
                 playableBalance: playableBalance,
-                onChainBalance: onChainBalance,
-                creditsBalance: creditsBalance,
-                userBalance: this.userBalance
+                creditsBalance: creditsBalance
             });
         }
     },
@@ -473,91 +487,89 @@ const GameEngine = {
         // Verificar si estamos específicamente en la sección de Práctica
         const isInPracticeSection = typeof window !== 'undefined' && window.currentMode === 'practice';
         
-        // SIEMPRE actualizar appBalanceDisplay con balance REAL (on-chain), incluso en modo práctica
-        // El header siempre debe mostrar el balance real de la wallet, nunca el balance de práctica
-        const onChainBalance = Number(window.__mtrOnChainBalance || 0);
+        // ESPECIFICACIÓN REFINADA: Mostrar SOLO créditos estables como "MTR créditos jugables"
+        // NO mostrar MTR nativo como saldo jugable - solo se maneja en backend
+        // Obtener créditos estables del sistema de créditos
+        let creditsBalance = 0;
+        if (window.CreditsSystem && window.CreditsSystem.currentCredits !== undefined) {
+            creditsBalance = Number(window.CreditsSystem.currentCredits || 0);
+        }
+        
         const balanceEl = document.getElementById('appBalanceDisplay');
         if (balanceEl) {
-            // SIEMPRE mostrar balance real, incluso si es 0
-            balanceEl.textContent = `Jugable: ${onChainBalance.toLocaleString('es-ES')} MTR`;
+            // Mostrar créditos estables como "MTR créditos jugables" (alias gráfico)
+            balanceEl.textContent = `Fichas jugables: ${creditsBalance.toFixed(2)} MTR créditos`;
             balanceEl.style.color = '';
-            console.log('[updateBalanceDisplay] Header actualizado con balance REAL:', onChainBalance, '(en sección práctica:', isInPracticeSection, ', currentMode:', window.currentMode, ')');
+            balanceEl.title = 'MTR créditos jugables: Fichas estables que valen siempre $1 cada una. No fluctúan como el token MTR nativo.';
+            console.log('[updateBalanceDisplay] Header actualizado con créditos estables:', creditsBalance, '(en sección práctica:', isInPracticeSection, ', currentMode:', window.currentMode, ')');
         }
         
         // NO actualizar userBalance si estamos específicamente en la sección de Práctica (dejar que updatePracticeBetDisplay lo maneje)
         if (!isInPracticeSection) {
-            // CRÍTICO: En modo normal, SIEMPRE mostrar balance REAL desde la plataforma
-            // Prioridad: 1) Balance on-chain (blockchain), 2) Créditos del backend, 3) Balance de Supabase
+            // ESPECIFICACIÓN REFINADA: En modo normal, mostrar SOLO créditos estables como "MTR créditos jugables"
+            // NO mostrar MTR nativo como saldo jugable - solo se maneja en backend
             
-            // Obtener créditos del backend si CreditsSystem está disponible
-            let creditsBalance = 0;
+            // Obtener créditos estables del sistema de créditos (único saldo jugable)
             if (window.CreditsSystem && window.CreditsSystem.currentCredits !== undefined) {
                 creditsBalance = Number(window.CreditsSystem.currentCredits || 0);
             }
             
-            // Para modo normal, usar saldo on-chain si está disponible, sino usar créditos, sino usar userBalance
-            const playableBalance = onChainBalance > 0 ? onChainBalance : (creditsBalance > 0 ? creditsBalance : this.userBalance);
+            // CRÍTICO: Usar SOLO créditos estables como saldo jugable
+            // NO usar onChainBalance (MTR nativo) como saldo jugable
+            const playableBalance = creditsBalance; // Solo créditos estables
             
-            console.log('[updateBalanceDisplay] Modo normal - Balance REAL:', {
+            console.log('[updateBalanceDisplay] Modo normal - Créditos estables (MTR créditos jugables):', {
                 playableBalance: playableBalance,
-                onChainBalance: onChainBalance,
                 creditsBalance: creditsBalance,
+                onChainBalance: onChainBalance, // Solo para referencia, NO se muestra como jugable
                 userBalance: this.userBalance
             });
 
             const userBalanceEl = document.getElementById('userBalance');
             if (userBalanceEl) {
-                // CRÍTICO: Asegurar que NO muestre "(DEMO)" en modo normal
-                const displayValue = playableBalance.toLocaleString('es-ES');
+                // Mostrar créditos estables como "MTR créditos jugables"
+                const displayValue = playableBalance.toFixed(2);
                 userBalanceEl.textContent = displayValue;
                 userBalanceEl.style.color = '';
                 userBalanceEl.style.fontWeight = '';
-                console.log('[updateBalanceDisplay] ✅ userBalance actualizado con balance REAL:', displayValue);
+                userBalanceEl.title = 'MTR créditos jugables: Fichas estables que valen siempre $1 cada una';
+                console.log('[updateBalanceDisplay] ✅ userBalance actualizado con créditos estables:', displayValue);
             } else {
                 console.warn('[updateBalanceDisplay] userBalance no encontrado');
             }
             
-            // Actualizar onchainMtrBalance con balance REAL
+            // OCULTAR onchainMtrBalance - MTR nativo NO se muestra como saldo jugable
             const onchainEl = document.getElementById('onchainMtrBalance');
             if (onchainEl) {
-                const displayValue = onChainBalance.toLocaleString('es-ES');
-                onchainEl.textContent = displayValue;
-                onchainEl.style.color = '';
-                onchainEl.style.fontWeight = '';
-                // Asegurar que no tenga "(DEMO)"
-                if (onchainEl.textContent.includes('(DEMO)')) {
-                    onchainEl.textContent = onchainEl.textContent.replace(' (DEMO)', '');
+                // Ocultar visualmente el balance de MTR nativo
+                const balanceLabelEl = document.getElementById('balanceLabel');
+                if (balanceLabelEl) {
+                    balanceLabelEl.style.display = 'none'; // Ocultar label de MTR on-chain
                 }
-                console.log('[updateBalanceDisplay] ✅ onchainMtrBalance actualizado con balance REAL:', displayValue);
+                onchainEl.style.display = 'none'; // Ocultar valor de MTR on-chain
+                console.log('[updateBalanceDisplay] ✅ MTR nativo oculto (no se muestra como saldo jugable)');
             }
             
-            // Asegurar que el label "Jugable" esté restaurado en modo normal
+            // Asegurar que el label muestre "Fichas jugables" en modo normal
             const playableLabelEl = document.getElementById('playableLabel');
-            if (playableLabelEl && playableLabelEl.textContent !== 'Jugable') {
-                playableLabelEl.textContent = 'Jugable';
+            if (playableLabelEl && playableLabelEl.textContent !== 'Fichas jugables') {
+                playableLabelEl.textContent = 'Fichas jugables';
                 playableLabelEl.style.color = '';
                 playableLabelEl.style.fontWeight = '';
-                console.log('[updateBalanceDisplay] ✅ playableLabel restaurado a "Jugable"');
+                playableLabelEl.title = 'MTR créditos jugables: Fichas estables 1:1 USDC';
+                console.log('[updateBalanceDisplay] ✅ playableLabel actualizado a "Fichas jugables"');
             }
             
-            // Asegurar que el texto "MTR" esté restaurado en modo normal (sin "(demo)")
+            // Asegurar que el texto muestre "MTR créditos" (alias gráfico para créditos estables)
             const balanceUnitEl = document.getElementById('balanceUnit');
             if (balanceUnitEl) {
-                if (balanceUnitEl.textContent !== 'MTR' && balanceUnitEl.textContent.includes('MTR')) {
-                    balanceUnitEl.textContent = 'MTR';
+                if (balanceUnitEl.textContent !== 'MTR créditos') {
+                    balanceUnitEl.textContent = 'MTR créditos';
                     balanceUnitEl.style.color = '';
                     balanceUnitEl.style.fontWeight = '';
-                    console.log('[updateBalanceDisplay] ✅ balanceUnit restaurado a "MTR"');
+                    balanceUnitEl.title = 'Alias gráfico: Estas fichas valen siempre $1 cada una (1:1 USDC estable)';
+                    console.log('[updateBalanceDisplay] ✅ balanceUnit actualizado a "MTR créditos"');
                 }
-            }
-            
-            // Asegurar que balanceLabel muestre texto correcto
-            const balanceLabelEl = document.getElementById('balanceLabel');
-            if (balanceLabelEl && balanceLabelEl.textContent.includes('DEMO')) {
-                balanceLabelEl.textContent = 'Tu MTR (on-chain)';
-                balanceLabelEl.style.color = '';
-                balanceLabelEl.style.fontWeight = '';
-                console.log('[updateBalanceDisplay] ✅ balanceLabel restaurado');
             }
         }
         

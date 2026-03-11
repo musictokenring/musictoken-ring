@@ -154,13 +154,16 @@
             // SIN LOGS - Esta función se ejecuta frecuentemente
             
             // Update combined display FIRST (this contains the child elements) - DESKTOP
+            // ESPECIFICACIÓN REFINADA: Mostrar créditos estables como "MTR créditos jugables" (alias gráfico)
+            // Internamente son créditos estables 1:1 USDC, pero visualmente se muestran como "MTR créditos"
             const combinedDisplay = document.getElementById('creditsCombinedDisplay');
             if (combinedDisplay) {
                 // Actualizar el contenido completo del combined display
+                // Mostrar como "MTR créditos jugables" con clarificación de que son estables 1:1 USDC
                 combinedDisplay.innerHTML = `
-                    <span id="creditsDisplay" class="text-cyan-400 font-bold">${this.currentCredits.toFixed(2)} créditos</span>
-                    <span id="usdcValueDisplay" class="text-gray-400 text-sm">= $${this.currentUsdcValue.toFixed(2)} USDC</span>
-                    <span class="text-xs text-green-400 ml-1" title="Créditos estables: 1 crédito = 1 USDC fijo">✓</span>
+                    <span id="creditsDisplay" class="text-cyan-400 font-bold">${this.currentCredits.toFixed(2)} MTR créditos</span>
+                    <span id="usdcValueDisplay" class="text-gray-400 text-sm">= $${this.currentUsdcValue.toFixed(2)} USDC estables</span>
+                    <span class="text-xs text-green-400 ml-1 cursor-help" title="Estas fichas valen siempre $1 cada una. No fluctúan como el token MTR nativo. 1 MTR crédito jugable = $1 USDC estable (1:1 fijo – sin volatilidad)">✓</span>
                 `;
                 
                 // Asegurar que el elemento esté visible si hay créditos
@@ -172,23 +175,23 @@
                 // Ahora actualizar los elementos individuales si existen (pueden estar en otros lugares)
                 const creditsBadge = document.getElementById('creditsDisplay');
                 if (creditsBadge && creditsBadge !== combinedDisplay.querySelector('#creditsDisplay')) {
-                    creditsBadge.textContent = `${this.currentCredits.toFixed(2)} créditos`;
+                    creditsBadge.textContent = `${this.currentCredits.toFixed(2)} MTR créditos`;
                 }
 
                 const usdcDisplay = document.getElementById('usdcValueDisplay');
                 if (usdcDisplay && usdcDisplay !== combinedDisplay.querySelector('#usdcValueDisplay')) {
-                    usdcDisplay.textContent = `= $${this.currentUsdcValue.toFixed(2)} USDC`;
+                    usdcDisplay.textContent = `= $${this.currentUsdcValue.toFixed(2)} USDC estables`;
                 }
             } else {
                 // Fallback: intentar actualizar elementos individuales si existen
                 const creditsBadge = document.getElementById('creditsDisplay');
                 if (creditsBadge) {
-                    creditsBadge.textContent = `${this.currentCredits.toFixed(2)} créditos`;
+                    creditsBadge.textContent = `${this.currentCredits.toFixed(2)} MTR créditos`;
                 }
 
                 const usdcDisplay = document.getElementById('usdcValueDisplay');
                 if (usdcDisplay) {
-                    usdcDisplay.textContent = `= $${this.currentUsdcValue.toFixed(2)} USDC`;
+                    usdcDisplay.textContent = `= $${this.currentUsdcValue.toFixed(2)} USDC estables`;
                 }
             }
             
