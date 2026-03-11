@@ -243,12 +243,35 @@ app.get('/api/user/credits/:walletAddress', async (req, res) => {
     try {
         const walletAddress = req.params.walletAddress.toLowerCase();
 
-        // Find user
+        // Find user (standard flow - works for both PC and mobile)
         let { data: user, error: userError } = await supabase
             .from('users')
             .select('id')
             .eq('wallet_address', walletAddress)
             .single();
+        
+        // 🔗 NUEVO: Try wallet link as fallback (MOBILE ONLY - for internal wallet browsers)
+        // This is detected by checking if user-agent indicates mobile device
+        const userAgent = req.headers['user-agent'] || '';
+        const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(userAgent);
+        
+        if ((!user || (userError && userError.code === 'PGRST116')) && isMobile && walletLinkService) {
+            console.log('[server] [MOBILE] User not found in users table, checking wallet link...');
+            const userIdFromLink = await walletLinkService.getUserIdFromWallet(walletAddress);
+            if (userIdFromLink) {
+                // User found via wallet link
+                const { data: userData } = await supabase
+                    .from('users')
+                    .select('id')
+                    .eq('id', userIdFromLink)
+                    .single();
+                if (userData) {
+                    user = userData;
+                    userError = null;
+                    console.log('[server] [MOBILE] ✅ User found via wallet link:', userIdFromLink);
+                }
+            }
+        }
 
         // Si el usuario no existe, crearlo automáticamente
         if (!user || (userError && userError.code === 'PGRST116')) {
