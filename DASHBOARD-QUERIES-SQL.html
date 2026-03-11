@@ -1,0 +1,614 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard - Queries SQL para Investigación</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            padding: 20px;
+            min-height: 100vh;
+        }
+        
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            overflow: hidden;
+        }
+        
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+        
+        .header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+        }
+        
+        .header p {
+            font-size: 1.1em;
+            opacity: 0.9;
+        }
+        
+        .nav {
+            background: #f8f9fa;
+            padding: 20px;
+            border-bottom: 2px solid #e9ecef;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            justify-content: center;
+        }
+        
+        .nav-button {
+            padding: 10px 20px;
+            background: white;
+            border: 2px solid #667eea;
+            color: #667eea;
+            border-radius: 25px;
+            cursor: pointer;
+            font-weight: 600;
+            transition: all 0.3s;
+            text-decoration: none;
+            display: inline-block;
+        }
+        
+        .nav-button:hover {
+            background: #667eea;
+            color: white;
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+        
+        .nav-button.priority {
+            background: #ff6b6b;
+            color: white;
+            border-color: #ff6b6b;
+        }
+        
+        .nav-button.priority:hover {
+            background: #ee5a6f;
+        }
+        
+        .content {
+            padding: 30px;
+        }
+        
+        .query-section {
+            margin-bottom: 40px;
+            border: 2px solid #e9ecef;
+            border-radius: 10px;
+            overflow: hidden;
+            display: none;
+        }
+        
+        .query-section.active {
+            display: block;
+        }
+        
+        .query-header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .query-header h2 {
+            font-size: 1.5em;
+        }
+        
+        .query-header.priority {
+            background: linear-gradient(135deg, #ff6b6b 0%, #ee5a6f 100%);
+        }
+        
+        .copy-button {
+            background: white;
+            color: #667eea;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-weight: 600;
+            transition: all 0.3s;
+        }
+        
+        .copy-button:hover {
+            background: #f0f0f0;
+            transform: scale(1.05);
+        }
+        
+        .copy-button.copied {
+            background: #51cf66;
+            color: white;
+        }
+        
+        .query-content {
+            padding: 20px;
+            background: #f8f9fa;
+        }
+        
+        .query-description {
+            background: white;
+            padding: 15px;
+            border-left: 4px solid #667eea;
+            margin-bottom: 20px;
+            border-radius: 5px;
+        }
+        
+        .query-description.priority {
+            border-left-color: #ff6b6b;
+        }
+        
+        pre {
+            background: #2d2d2d;
+            color: #f8f8f2;
+            padding: 20px;
+            border-radius: 5px;
+            overflow-x: auto;
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+            line-height: 1.5;
+            margin: 0;
+        }
+        
+        .instructions {
+            background: #fff3cd;
+            border: 1px solid #ffc107;
+            padding: 20px;
+            border-radius: 10px;
+            margin-bottom: 30px;
+        }
+        
+        .instructions h3 {
+            color: #856404;
+            margin-bottom: 10px;
+        }
+        
+        .instructions ol {
+            margin-left: 20px;
+        }
+        
+        .instructions li {
+            margin-bottom: 8px;
+            color: #856404;
+        }
+        
+        .priority-badge {
+            display: inline-block;
+            background: #ff6b6b;
+            color: white;
+            padding: 5px 15px;
+            border-radius: 20px;
+            font-size: 0.8em;
+            font-weight: 600;
+            margin-left: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🔍 Dashboard - Queries SQL para Investigación</h1>
+            <p>Fuga de Fondos del Vault - Copia y pega fácilmente cada query</p>
+        </div>
+        
+        <div class="nav">
+            <a href="#" class="nav-button priority" onclick="showQuery('q04')">⭐ Query 4: Resumen Claims</a>
+            <a href="#" class="nav-button priority" onclick="showQuery('q08')">⭐ Query 8: Resumen Vault</a>
+            <a href="#" class="nav-button priority" onclick="showQuery('q07')">⭐ Query 7: Transacciones Sospechosas</a>
+            <a href="#" class="nav-button" onclick="showQuery('q01')">Query 1: Estructura Claims</a>
+            <a href="#" class="nav-button" onclick="showQuery('q02')">Query 2: Contar Claims</a>
+            <a href="#" class="nav-button" onclick="showQuery('q03')">Query 3: Claims Wallet Incorrecta</a>
+            <a href="#" class="nav-button" onclick="showQuery('q05')">Query 5: Estructura Vault</a>
+            <a href="#" class="nav-button" onclick="showQuery('q06')">Query 6: Transacciones Vault</a>
+            <a href="#" class="nav-button" onclick="showQuery('q09')">Query 9: Estructura Alerts</a>
+            <a href="#" class="nav-button" onclick="showQuery('q10')">Query 10: Alertas Seguridad</a>
+            <a href="#" class="nav-button" onclick="showQuery('q11')">Query 11: Alertas Mismatch</a>
+            <a href="#" class="nav-button" onclick="showQuery('q12')">Query 12: Direcciones Claims</a>
+            <a href="#" class="nav-button" onclick="showQuery('q13')">Query 13: Direcciones Vault</a>
+        </div>
+        
+        <div class="content">
+            <div class="instructions">
+                <h3>📋 Instrucciones de Uso</h3>
+                <ol>
+                    <li>Haz clic en cualquier botón de arriba para ver la query</li>
+                    <li>Lee la descripción de la query</li>
+                    <li>Haz clic en "Copiar Query" para copiar el código SQL</li>
+                    <li>Pega en Supabase → SQL Editor</li>
+                    <li>Ejecuta la query (Ctrl+Enter o botón "Run")</li>
+                    <li>Revisa los resultados cuidadosamente</li>
+                </ol>
+            </div>
+            
+            <!-- Query 1 -->
+            <div id="q01" class="query-section">
+                <div class="query-header">
+                    <h2>Query 1: Verificar Estructura de la Tabla 'claims'</h2>
+                    <button class="copy-button" onclick="copyQuery('sql01')">📋 Copiar Query</button>
+                </div>
+                <div class="query-content">
+                    <div class="query-description">
+                        <strong>Propósito:</strong> Verifica que la tabla 'claims' existe y muestra todas sus columnas con sus tipos de datos.
+                    </div>
+                    <pre id="sql01">SELECT 
+    table_name,
+    column_name,
+    data_type,
+    is_nullable
+FROM information_schema.columns
+WHERE table_name = 'claims'
+ORDER BY ordinal_position;</pre>
+                </div>
+            </div>
+            
+            <!-- Query 2 -->
+            <div id="q02" class="query-section">
+                <div class="query-header">
+                    <h2>Query 2: Contar TODOS los Claims</h2>
+                    <button class="copy-button" onclick="copyQuery('sql02')">📋 Copiar Query</button>
+                </div>
+                <div class="query-content">
+                    <div class="query-description">
+                        <strong>Propósito:</strong> Cuenta todos los claims en la base de datos (sin límite de tiempo) y muestra estadísticas generales.
+                    </div>
+                    <pre id="sql02">SELECT 
+    COUNT(*) as total_claims_all_time,
+    COUNT(CASE WHEN status = 'completed' THEN 1 END) as completed_claims,
+    COUNT(CASE WHEN status = 'processing' THEN 1 END) as processing_claims,
+    COUNT(CASE WHEN status = 'failed' THEN 1 END) as failed_claims,
+    MIN(created_at) as first_claim_ever,
+    MAX(created_at) as last_claim_ever,
+    SUM(usdc_amount) as total_usdc_all_time
+FROM claims;</pre>
+                </div>
+            </div>
+            
+            <!-- Query 3 -->
+            <div id="q03" class="query-section">
+                <div class="query-header">
+                    <h2>Query 3: Claims con Wallet Incorrecta</h2>
+                    <button class="copy-button" onclick="copyQuery('sql03')">📋 Copiar Query</button>
+                </div>
+                <div class="query-content">
+                    <div class="query-description">
+                        <strong>Propósito:</strong> Encuentra todos los claims donde la wallet de destino NO coincide con la wallet registrada del usuario.
+                    </div>
+                    <pre id="sql03">SELECT 
+    c.id,
+    c.user_id,
+    u.wallet_address as user_wallet,
+    c.recipient_wallet as claimed_wallet,
+    c.usdc_amount,
+    c.status,
+    c.tx_hash,
+    c.created_at,
+    CASE 
+        WHEN LOWER(c.recipient_wallet) != LOWER(u.wallet_address) THEN '⚠️ MISMATCH'
+        ELSE '✅ MATCH'
+    END as wallet_status
+FROM claims c
+JOIN users u ON c.user_id = u.id
+WHERE LOWER(c.recipient_wallet) != LOWER(u.wallet_address)
+ORDER BY c.created_at DESC
+LIMIT 100;</pre>
+                </div>
+            </div>
+            
+            <!-- Query 4 - PRIORITY -->
+            <div id="q04" class="query-section active">
+                <div class="query-header priority">
+                    <h2>Query 4: Resumen de Claims con Wallet Incorrecta <span class="priority-badge">MUY IMPORTANTE</span></h2>
+                    <button class="copy-button" onclick="copyQuery('sql04')">📋 Copiar Query</button>
+                </div>
+                <div class="query-content">
+                    <div class="query-description priority">
+                        <strong>⭐ ESTA ES UNA DE LAS QUERIES MÁS IMPORTANTES</strong><br>
+                        <strong>Propósito:</strong> Agrupa por wallet de destino y muestra totales robados. Te mostrará las direcciones sospechosas y los montos totales.
+                    </div>
+                    <pre id="sql04">SELECT 
+    c.recipient_wallet as suspicious_wallet,
+    COUNT(*) as claim_count,
+    SUM(c.usdc_amount) as total_usdc,
+    MIN(c.created_at) as first_claim,
+    MAX(c.created_at) as last_claim,
+    STRING_AGG(DISTINCT u.wallet_address, ', ') as user_wallets_affected
+FROM claims c
+JOIN users u ON c.user_id = u.id
+WHERE LOWER(c.recipient_wallet) != LOWER(u.wallet_address)
+AND (c.status = 'completed' OR c.status = 'success')
+GROUP BY c.recipient_wallet
+ORDER BY total_usdc DESC;</pre>
+                </div>
+            </div>
+            
+            <!-- Query 5 -->
+            <div id="q05" class="query-section">
+                <div class="query-header">
+                    <h2>Query 5: Verificar Estructura de la Tabla 'vault_transactions'</h2>
+                    <button class="copy-button" onclick="copyQuery('sql05')">📋 Copiar Query</button>
+                </div>
+                <div class="query-content">
+                    <div class="query-description">
+                        <strong>Propósito:</strong> Verifica que la tabla 'vault_transactions' existe y muestra todas sus columnas con sus tipos de datos.
+                    </div>
+                    <pre id="sql05">SELECT 
+    table_name,
+    column_name,
+    data_type,
+    is_nullable
+FROM information_schema.columns
+WHERE table_name = 'vault_transactions'
+ORDER BY ordinal_position;</pre>
+                </div>
+            </div>
+            
+            <!-- Query 6 -->
+            <div id="q06" class="query-section">
+                <div class="query-header">
+                    <h2>Query 6: TODAS las Transacciones del Vault</h2>
+                    <button class="copy-button" onclick="copyQuery('sql06')">📋 Copiar Query</button>
+                </div>
+                <div class="query-content">
+                    <div class="query-description">
+                        <strong>Propósito:</strong> Estadísticas generales de todas las transacciones del vault (sin límite de tiempo).
+                    </div>
+                    <pre id="sql06">SELECT 
+    COUNT(*) as total_vault_transactions,
+    COUNT(CASE WHEN transaction_type = 'withdrawal' THEN 1 END) as withdrawals,
+    COUNT(CASE WHEN transaction_type = 'deposit' THEN 1 END) as deposits,
+    COUNT(CASE WHEN transaction_type = 'fee' THEN 1 END) as fees,
+    COUNT(CASE WHEN status = 'completed' THEN 1 END) as completed,
+    COUNT(CASE WHEN status = 'pending' THEN 1 END) as pending,
+    COUNT(CASE WHEN status = 'failed' THEN 1 END) as failed,
+    MIN(created_at) as first_transaction,
+    MAX(created_at) as last_transaction,
+    SUM(CASE WHEN transaction_type = 'withdrawal' AND status = 'completed' THEN amount_usdc ELSE 0 END) as total_withdrawn
+FROM vault_transactions;</pre>
+                </div>
+            </div>
+            
+            <!-- Query 7 - PRIORITY -->
+            <div id="q07" class="query-section">
+                <div class="query-header priority">
+                    <h2>Query 7: Transacciones del Vault a Direcciones Desconocidas <span class="priority-badge">MUY IMPORTANTE</span></h2>
+                    <button class="copy-button" onclick="copyQuery('sql07')">📋 Copiar Query</button>
+                </div>
+                <div class="query-content">
+                    <div class="query-description priority">
+                        <strong>⭐ ESTA ES UNA DE LAS QUERIES MÁS IMPORTANTES</strong><br>
+                        <strong>Propósito:</strong> Encuentra retiros del vault a direcciones que NO pertenecen a usuarios. Muestra todas las transacciones sospechosas.
+                    </div>
+                    <pre id="sql07">SELECT 
+    vt.id,
+    vt.transaction_type,
+    vt.wallet_address,
+    vt.amount_usdc,
+    vt.tx_hash,
+    vt.reason,
+    vt.status,
+    vt.created_at,
+    vt.ip_address,
+    vt.user_agent,
+    CASE 
+        WHEN u.id IS NULL THEN '⚠️ NO ES USUARIO'
+        ELSE '✅ ES USUARIO'
+    END as address_status
+FROM vault_transactions vt
+LEFT JOIN users u ON LOWER(u.wallet_address) = LOWER(vt.wallet_address)
+WHERE vt.transaction_type = 'withdrawal'
+AND u.id IS NULL  -- Dirección no pertenece a ningún usuario
+ORDER BY vt.created_at DESC
+LIMIT 100;</pre>
+                </div>
+            </div>
+            
+            <!-- Query 8 - PRIORITY -->
+            <div id="q08" class="query-section">
+                <div class="query-header priority">
+                    <h2>Query 8: Resumen de Transacciones Sospechosas <span class="priority-badge">MUY IMPORTANTE</span></h2>
+                    <button class="copy-button" onclick="copyQuery('sql08')">📋 Copiar Query</button>
+                </div>
+                <div class="query-content">
+                    <div class="query-description priority">
+                        <strong>⭐ ESTA ES UNA DE LAS QUERIES MÁS IMPORTANTES</strong><br>
+                        <strong>Propósito:</strong> Agrupa transacciones sospechosas por dirección y muestra totales. Te mostrará las direcciones que recibieron más fondos del vault.
+                    </div>
+                    <pre id="sql08">SELECT 
+    vt.wallet_address as suspicious_address,
+    COUNT(*) as transaction_count,
+    SUM(vt.amount_usdc) as total_usdc,
+    MIN(vt.created_at) as first_transaction,
+    MAX(vt.created_at) as last_transaction,
+    STRING_AGG(DISTINCT vt.reason, ', ') as reasons,
+    STRING_AGG(DISTINCT vt.ip_address, ', ') as ip_addresses
+FROM vault_transactions vt
+LEFT JOIN users u ON LOWER(u.wallet_address) = LOWER(vt.wallet_address)
+WHERE vt.transaction_type = 'withdrawal'
+AND u.id IS NULL  -- Dirección no pertenece a ningún usuario
+AND vt.status = 'completed'
+GROUP BY vt.wallet_address
+ORDER BY total_usdc DESC;</pre>
+                </div>
+            </div>
+            
+            <!-- Query 9 -->
+            <div id="q09" class="query-section">
+                <div class="query-header">
+                    <h2>Query 9: Verificar Estructura de la Tabla 'security_alerts'</h2>
+                    <button class="copy-button" onclick="copyQuery('sql09')">📋 Copiar Query</button>
+                </div>
+                <div class="query-content">
+                    <div class="query-description">
+                        <strong>Propósito:</strong> Verifica que la tabla 'security_alerts' existe y muestra todas sus columnas con sus tipos de datos.
+                    </div>
+                    <pre id="sql09">SELECT 
+    table_name,
+    column_name,
+    data_type,
+    is_nullable
+FROM information_schema.columns
+WHERE table_name = 'security_alerts'
+ORDER BY ordinal_position;</pre>
+                </div>
+            </div>
+            
+            <!-- Query 10 -->
+            <div id="q10" class="query-section">
+                <div class="query-header">
+                    <h2>Query 10: TODAS las Alertas de Seguridad</h2>
+                    <button class="copy-button" onclick="copyQuery('sql10')">📋 Copiar Query</button>
+                </div>
+                <div class="query-content">
+                    <div class="query-description">
+                        <strong>Propósito:</strong> Estadísticas generales de alertas de seguridad (sin límite de tiempo).
+                    </div>
+                    <pre id="sql10">SELECT 
+    COUNT(*) as total_alerts,
+    COUNT(CASE WHEN alert_type = 'WALLET_MISMATCH' THEN 1 END) as wallet_mismatch_alerts,
+    COUNT(CASE WHEN severity = 'critical' THEN 1 END) as critical_alerts,
+    COUNT(CASE WHEN severity = 'high' THEN 1 END) as high_alerts,
+    COUNT(CASE WHEN resolved = false THEN 1 END) as unresolved_alerts,
+    MIN(created_at) as first_alert,
+    MAX(created_at) as last_alert
+FROM security_alerts;</pre>
+                </div>
+            </div>
+            
+            <!-- Query 11 -->
+            <div id="q11" class="query-section">
+                <div class="query-header">
+                    <h2>Query 11: Alertas de Wallet Mismatch</h2>
+                    <button class="copy-button" onclick="copyQuery('sql11')">📋 Copiar Query</button>
+                </div>
+                <div class="query-content">
+                    <div class="query-description">
+                        <strong>Propósito:</strong> Muestra todas las alertas de wallet mismatch detectadas (sin límite de tiempo).
+                    </div>
+                    <pre id="sql11">SELECT 
+    sa.id,
+    sa.alert_type,
+    sa.severity,
+    sa.details,
+    sa.user_id,
+    u.wallet_address as user_wallet,
+    sa.ip_address,
+    sa.user_agent,
+    sa.resolved,
+    sa.created_at
+FROM security_alerts sa
+LEFT JOIN users u ON sa.user_id = u.id
+WHERE sa.alert_type = 'WALLET_MISMATCH'
+ORDER BY sa.created_at DESC
+LIMIT 100;</pre>
+                </div>
+            </div>
+            
+            <!-- Query 12 -->
+            <div id="q12" class="query-section">
+                <div class="query-header">
+                    <h2>Query 12: Verificar Todas las Direcciones Únicas en Claims</h2>
+                    <button class="copy-button" onclick="copyQuery('sql12')">📋 Copiar Query</button>
+                </div>
+                <div class="query-content">
+                    <div class="query-description">
+                        <strong>Propósito:</strong> Muestra todas las direcciones que recibieron claims y sus totales.
+                    </div>
+                    <pre id="sql12">SELECT 
+    recipient_wallet,
+    COUNT(*) as claim_count,
+    SUM(usdc_amount) as total_usdc,
+    MIN(created_at) as first_claim,
+    MAX(created_at) as last_claim
+FROM claims
+GROUP BY recipient_wallet
+ORDER BY total_usdc DESC
+LIMIT 50;</pre>
+                </div>
+            </div>
+            
+            <!-- Query 13 -->
+            <div id="q13" class="query-section">
+                <div class="query-header">
+                    <h2>Query 13: Verificar Todas las Direcciones Únicas en Vault</h2>
+                    <button class="copy-button" onclick="copyQuery('sql13')">📋 Copiar Query</button>
+                </div>
+                <div class="query-content">
+                    <div class="query-description">
+                        <strong>Propósito:</strong> Muestra todas las direcciones que recibieron retiros del vault y sus totales.
+                    </div>
+                    <pre id="sql13">SELECT 
+    wallet_address,
+    COUNT(*) as transaction_count,
+    SUM(amount_usdc) as total_usdc,
+    MIN(created_at) as first_transaction,
+    MAX(created_at) as last_transaction
+FROM vault_transactions
+WHERE transaction_type = 'withdrawal'
+GROUP BY wallet_address
+ORDER BY total_usdc DESC
+LIMIT 50;</pre>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        function showQuery(queryId) {
+            // Ocultar todas las queries
+            document.querySelectorAll('.query-section').forEach(section => {
+                section.classList.remove('active');
+            });
+            
+            // Mostrar la query seleccionada
+            document.getElementById(queryId).classList.add('active');
+            
+            // Scroll suave hacia la query
+            document.getElementById(queryId).scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+        
+        function copyQuery(sqlId) {
+            const sqlElement = document.getElementById(sqlId);
+            const text = sqlElement.textContent;
+            
+            // Copiar al portapapeles
+            navigator.clipboard.writeText(text).then(() => {
+                // Cambiar el botón temporalmente
+                const button = event.target;
+                const originalText = button.textContent;
+                button.textContent = '✅ Copiado!';
+                button.classList.add('copied');
+                
+                setTimeout(() => {
+                    button.textContent = originalText;
+                    button.classList.remove('copied');
+                }, 2000);
+            }).catch(err => {
+                console.error('Error al copiar:', err);
+                alert('Error al copiar. Por favor, selecciona el texto manualmente.');
+            });
+        }
+        
+        // Mostrar la primera query por defecto
+        document.addEventListener('DOMContentLoaded', () => {
+            showQuery('q04');
+        });
+    </script>
+</body>
+</html>
