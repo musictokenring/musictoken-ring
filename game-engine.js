@@ -1351,12 +1351,35 @@ const GameEngine = {
                 // El match se creará pero no se ejecutará hasta que tenga créditos suficientes
             }
             
-            // Verificar créditos suficientes (después de recargar)
-            // Si no tiene suficientes, el match se creará pero no se ejecutará
+            // Verificar créditos suficientes (después de recargar y posible conversión)
+            // CRÍTICO: Recargar créditos una vez más después de la conversión para asegurar sincronización
+            await window.CreditsSystem.loadBalance(walletAddress);
+            await new Promise(resolve => setTimeout(resolve, 300));
+            
             const hasEnoughCredits = await this.hasSufficientCredits(normalizedBet);
             if (!hasEnoughCredits) {
-                console.warn('[acceptSocialChallenge] ⚠️ Usuario no tiene créditos suficientes, pero se permitirá aceptar el desafío');
-                // Continuar para crear el match, pero el usuario necesitará recargar antes de ejecutar
+                // Verificar créditos directamente desde el backend una última vez
+                const finalBackendUrl = window.CONFIG?.BACKEND_API || window.CreditsSystem?.backendUrl || 'https://musictoken-ring.onrender.com';
+                const finalCreditsResponse = await fetch(`${finalBackendUrl}/api/user/credits/${walletAddress}`);
+                let finalUserCredits = 0;
+                if (finalCreditsResponse.ok) {
+                    const finalCreditsData = await finalCreditsResponse.json();
+                    finalUserCredits = finalCreditsData.credits || 0;
+                }
+                
+                if (finalUserCredits < normalizedBet) {
+                    console.error('[acceptSocialChallenge] ❌❌❌ Créditos insuficientes después de todos los intentos');
+                    console.error('[acceptSocialChallenge] Créditos actuales:', finalUserCredits);
+                    console.error('[acceptSocialChallenge] Créditos requeridos:', normalizedBet);
+                    showToast(
+                        `Créditos insuficientes. Tienes ${finalUserCredits.toFixed(2)} créditos, necesitas ${normalizedBet}. ` +
+                        `Por favor, recarga créditos desde el menú de depósitos.`,
+                        'error'
+                    );
+                    return; // NO continuar si no hay créditos suficientes
+                } else {
+                    console.log('[acceptSocialChallenge] ✅ Créditos suficientes después de verificación final');
+                }
             }
             
             // Verificar ELO si está habilitado
