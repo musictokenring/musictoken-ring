@@ -1212,17 +1212,90 @@ const GameEngine = {
                 console.warn('[acceptSocialChallenge] ⚠️ No se pudo verificar créditos con el backend');
             }
             
-            // CRÍTICO: Si el usuario no tiene créditos suficientes, mostrar mensaje claro
-            // pero permitir que acepte el desafío (luego necesitará recargar antes de ejecutar)
+            // CRÍTICO: Si el usuario no tiene créditos suficientes, intentar convertir MTR on-chain automáticamente
             if (!userCredits || userCredits < normalizedBet) {
                 const missingCredits = normalizedBet - userCredits;
-                showToast(
-                    `Créditos insuficientes. Tienes ${userCredits.toFixed(2)} créditos, necesitas ${normalizedBet}. ` +
-                    `Debes recargar ${missingCredits.toFixed(2)} créditos más para ejecutar este desafío. ` +
-                    `Puedes recargar desde el menú de depósitos.`,
-                    'error'
-                );
-                // NO retornar aquí - permitir que acepte el desafío pero luego requerir recarga
+                const onchainBalance = Number(window.__mtrOnChainBalance || 0);
+                
+                console.log('[acceptSocialChallenge] 💰 Verificando conversión MTR on-chain:', {
+                    userCredits: userCredits,
+                    normalizedBet: normalizedBet,
+                    missingCredits: missingCredits,
+                    onchainBalance: onchainBalance,
+                    canConvert: onchainBalance >= missingCredits
+                });
+                
+                // Si tiene suficiente MTR on-chain, convertir automáticamente
+                if (onchainBalance >= missingCredits && missingCredits > 0) {
+                    console.log('[acceptSocialChallenge] 🔄 Convirtiendo MTR on-chain a créditos automáticamente...');
+                    
+                    try {
+                        // Obtener userId para la conversión
+                        const userIdForConversion = await window.CreditsSystem.getUserId(walletAddress);
+                        
+                        if (userIdForConversion) {
+                            // Convertir MTR a créditos (asumiendo 1:1 por ahora)
+                            const mtrToUsdcRate = 1; // TODO: Obtener precio real de MTR/USDC
+                            const mtrToConvert = missingCredits / mtrToUsdcRate;
+                            
+                            const addCreditsResponse = await fetch(`${backendUrl}/api/user/add-credits`, {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({
+                                    userId: userIdForConversion,
+                                    credits: missingCredits,
+                                    reason: 'mtr_conversion',
+                                    mtrAmount: mtrToConvert,
+                                    note: `Conversión automática de ${mtrToConvert.toFixed(4)} MTR a ${missingCredits} créditos USDC`
+                                })
+                            });
+                            
+                            if (addCreditsResponse.ok) {
+                                const addData = await addCreditsResponse.json();
+                                console.log('[acceptSocialChallenge] ✅ Créditos agregados automáticamente desde MTR:', addData);
+                                
+                                // Recargar balance después de la conversión
+                                await window.CreditsSystem.loadBalance(walletAddress);
+                                
+                                showToast(
+                                    `✅ Convertidos ${missingCredits.toFixed(2)} créditos desde tu MTR on-chain automáticamente.`,
+                                    'success'
+                                );
+                            } else {
+                                const errorText = await addCreditsResponse.text();
+                                console.error('[acceptSocialChallenge] ❌ Error al convertir MTR a créditos:', errorText);
+                                showToast(
+                                    `Créditos insuficientes. Tienes ${userCredits.toFixed(2)} créditos, necesitas ${normalizedBet}. ` +
+                                    `Debes recargar ${missingCredits.toFixed(2)} créditos más para ejecutar este desafío.`,
+                                    'error'
+                                );
+                            }
+                        } else {
+                            console.warn('[acceptSocialChallenge] ⚠️ No se pudo obtener userId para conversión');
+                            showToast(
+                                `Créditos insuficientes. Tienes ${userCredits.toFixed(2)} créditos, necesitas ${normalizedBet}. ` +
+                                `Debes recargar ${missingCredits.toFixed(2)} créditos más para ejecutar este desafío.`,
+                                'error'
+                            );
+                        }
+                    } catch (conversionError) {
+                        console.error('[acceptSocialChallenge] ❌ Error en conversión automática:', conversionError);
+                        showToast(
+                            `Créditos insuficientes. Tienes ${userCredits.toFixed(2)} créditos, necesitas ${normalizedBet}. ` +
+                            `Debes recargar ${missingCredits.toFixed(2)} créditos más para ejecutar este desafío.`,
+                            'error'
+                        );
+                    }
+                } else {
+                    // No tiene suficiente MTR on-chain
+                    showToast(
+                        `Créditos insuficientes. Tienes ${userCredits.toFixed(2)} créditos, necesitas ${normalizedBet}. ` +
+                        `Debes recargar ${missingCredits.toFixed(2)} créditos más para ejecutar este desafío. ` +
+                        `Puedes recargar desde el menú de depósitos.`,
+                        'error'
+                    );
+                }
+                // NO retornar aquí - permitir que acepte el desafío pero luego requerir recarga si la conversión falló
                 // El match se creará pero no se ejecutará hasta que tenga créditos suficientes
             }
             
