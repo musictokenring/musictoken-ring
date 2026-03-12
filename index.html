@@ -1958,27 +1958,44 @@
                     if (connectedWallet && window.CreditsSystem && typeof window.CreditsSystem.loadBalance === 'function') {
                         console.log('[init] 🔄 Cargando créditos para wallet conectada:', connectedWallet);
                         console.log('[init] 🔄 CreditsSystem.backendUrl:', window.CreditsSystem.backendUrl);
+                        console.log('[init] 🔄 CreditsSystem object:', window.CreditsSystem);
+                        console.log('[init] 🔄 loadBalance function:', typeof window.CreditsSystem.loadBalance);
                         
-                        window.CreditsSystem.loadBalance(connectedWallet).then(() => {
-                            console.log('[init] ✅ Créditos cargados inicialmente');
-                            console.log('[init] ✅ currentCredits después de cargar:', window.CreditsSystem?.currentCredits);
+                        // CRÍTICO: Llamar loadBalance con try-catch explícito para capturar cualquier error
+                        try {
+                            const loadBalancePromise = window.CreditsSystem.loadBalance(connectedWallet);
+                            console.log('[init] 🔄 Promise de loadBalance creada:', loadBalancePromise);
                             
-                            // Actualizar display después de cargar
-                            if (typeof window.CreditsSystem.updateCreditsDisplay === 'function') {
-                                console.log('[init] 🔄 Actualizando display de créditos...');
-                                window.CreditsSystem.updateCreditsDisplay();
+                            if (loadBalancePromise && typeof loadBalancePromise.then === 'function') {
+                                loadBalancePromise.then(() => {
+                                    console.log('[init] ✅ Créditos cargados inicialmente');
+                                    console.log('[init] ✅ currentCredits después de cargar:', window.CreditsSystem?.currentCredits);
+                                    
+                                    // Actualizar display después de cargar
+                                    if (typeof window.CreditsSystem.updateCreditsDisplay === 'function') {
+                                        console.log('[init] 🔄 Actualizando display de créditos...');
+                                        window.CreditsSystem.updateCreditsDisplay();
+                                    }
+                                    
+                                    if (typeof window.GameEngine !== 'undefined' && typeof window.GameEngine.updateBalanceDisplay === 'function') {
+                                        setTimeout(() => {
+                                            console.log('[init] 🔄 Actualizando GameEngine display...');
+                                            window.GameEngine.updateBalanceDisplay();
+                                        }, 200);
+                                    }
+                                }).catch(err => {
+                                    console.error('[init] ❌ Error en promise de loadBalance:', err);
+                                    console.error('[init] ❌ Error message:', err?.message);
+                                    console.error('[init] ❌ Error stack:', err?.stack);
+                                });
+                            } else {
+                                console.error('[init] ❌ loadBalance no devolvió una promise válida:', loadBalancePromise);
                             }
-                            
-                            if (typeof window.GameEngine !== 'undefined' && typeof window.GameEngine.updateBalanceDisplay === 'function') {
-                                setTimeout(() => {
-                                    console.log('[init] 🔄 Actualizando GameEngine display...');
-                                    window.GameEngine.updateBalanceDisplay();
-                                }, 200);
-                            }
-                        }).catch(err => {
-                            console.error('[init] ❌ Error cargando créditos inicialmente:', err);
-                            console.error('[init] ❌ Error stack:', err.stack);
-                        });
+                        } catch (syncError) {
+                            console.error('[init] ❌ Error síncrono al llamar loadBalance:', syncError);
+                            console.error('[init] ❌ Error message:', syncError?.message);
+                            console.error('[init] ❌ Error stack:', syncError?.stack);
+                        }
                     } else {
                         console.warn('[init] ⚠️ No se puede cargar créditos:', {
                             connectedWallet: !!connectedWallet,
