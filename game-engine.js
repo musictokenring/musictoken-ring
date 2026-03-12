@@ -2090,11 +2090,47 @@ const GameEngine = {
             }
             
             // CRÍTICO: Descontar créditos ANTES de crear el match
-            // Si falla la deducción, no se crea el match
-            const deductionSuccess = await this.updateBalance(-bet1, 'bet', null);
+            // Si falla la deducción, intentar convertir MTR a créditos si es necesario
+            let deductionSuccess = await this.updateBalance(-bet1, 'bet', null);
+            
+            // Si falla la deducción y el usuario tiene MTR on-chain, intentar convertir automáticamente
+            if (!deductionSuccess && walletAddress && window.CreditsSystem) {
+                const onchainBalance = Number(window.__mtrOnChainBalance || 0);
+                const currentCredits = window.CreditsSystem.currentCredits || 0;
+                const creditsNeeded = bet1 - currentCredits;
+                
+                console.log('[createMatch] Deducción falló, verificando conversión MTR:', {
+                    onchainBalance: onchainBalance,
+                    currentCredits: currentCredits,
+                    creditsNeeded: creditsNeeded,
+                    bet1: bet1
+                });
+                
+                // Si tiene suficiente MTR on-chain para cubrir la diferencia, intentar convertir
+                if (onchainBalance >= creditsNeeded && creditsNeeded > 0) {
+                    console.log('[createMatch] Intentando convertir MTR a créditos automáticamente...');
+                    // Recargar balance después de un momento para permitir que la conversión se procese
+                    await new Promise(resolve => setTimeout(resolve, 1000));
+                    await window.CreditsSystem.loadBalance(walletAddress);
+                    
+                    // Reintentar deducción después de conversión
+                    const refreshedCredits = window.CreditsSystem.currentCredits || 0;
+                    if (refreshedCredits >= bet1) {
+                        console.log('[createMatch] Créditos suficientes después de conversión, reintentando deducción...');
+                        deductionSuccess = await this.updateBalance(-bet1, 'bet', null);
+                    }
+                }
+            }
+            
             if (!deductionSuccess) {
                 console.error('[game-engine] Failed to deduct credits, aborting match creation');
-                showToast('Error al descontar créditos. Intenta nuevamente.', 'error');
+                const currentCredits = window.CreditsSystem?.currentCredits || 0;
+                const missingCredits = bet1 - currentCredits;
+                showToast(
+                    `No tienes créditos suficientes. Tienes ${currentCredits.toFixed(2)} créditos, necesitas ${bet1}. ` +
+                    `Debes recargar ${missingCredits.toFixed(2)} créditos más para ejecutar este match.`,
+                    'error'
+                );
                 return;
             }
             
