@@ -1185,14 +1185,6 @@
                         }
                     }
                     
-                    // Si hay un desafío pendiente, intentar aceptarlo
-                    if (window.pendingChallengeId && window.currentMode === 'social') {
-                        if (typeof handleSocialChallengeAccept === 'function') {
-                            await handleSocialChallengeAccept();
-                        }
-                        return;
-                    }
-                    
                     if (!song || !song.id) {
                         console.error('[selectSong] Canción inválida:', song);
                         if (typeof showToast === 'function') {
@@ -1201,7 +1193,7 @@
                         return;
                     }
                     
-                    // Actualizar variables globales - FORZADO
+                    // CRÍTICO: Actualizar variables globales PRIMERO antes de cualquier otra lógica
                     if (typeof window !== 'undefined') {
                         window.selectedSong = song;
                         logFn('[selectSongForBattle] ✅ window.selectedSong establecido:', song);
@@ -1219,6 +1211,17 @@
                         }
                     } catch(e) {
                         logFn('[selectSongForBattle] ⚠️ No se pudo establecer selectedSong local:', e);
+                    }
+                    
+                    // CRÍTICO: Si hay un desafío pendiente, intentar aceptarlo DESPUÉS de establecer selectedSong
+                    if (window.pendingChallengeId && window.currentMode === 'social') {
+                        logFn('[selectSongForBattle] 🔄 Desafío pendiente detectado, llamando handleSocialChallengeAccept...');
+                        if (typeof handleSocialChallengeAccept === 'function') {
+                            await handleSocialChallengeAccept();
+                        } else {
+                            logFn('[selectSongForBattle] ⚠️ handleSocialChallengeAccept no disponible');
+                        }
+                        return;
                     }
                     
                     // Verificación final
@@ -3762,10 +3765,23 @@
 
         // Manejar aceptación de desafío cuando se selecciona canción
         async function handleSocialChallengeAccept() {
-            if (window.pendingChallengeId && selectedSong) {
+            // CRÍTICO: Usar window.selectedSong en lugar de selectedSong local para asegurar que tenemos la canción
+            const songToUse = window.selectedSong || selectedSong;
+            
+            console.log('[handleSocialChallengeAccept] 🔍 Verificando condiciones:', {
+                pendingChallengeId: window.pendingChallengeId,
+                selectedSong: songToUse,
+                currentMode: window.currentMode
+            });
+            
+            if (window.pendingChallengeId && songToUse && songToUse.id) {
                 // CRÍTICO: Usar el betAmount del desafío, no el del input
-                var bet = window.pendingChallengeBetAmount || parseFloat(document.getElementById('betAmount').value) || 5;
-                console.log('[handleSocialChallengeAccept] Aceptando desafío con apuesta:', bet);
+                var bet = window.pendingChallengeBetAmount || parseFloat(document.getElementById('betAmount')?.value) || 5;
+                console.log('[handleSocialChallengeAccept] ✅ Aceptando desafío con:', {
+                    challengeId: window.pendingChallengeId,
+                    song: songToUse.name,
+                    bet: bet
+                });
 
                 if (typeof GameEngine !== 'undefined' && typeof GameEngine.acceptSocialChallenge === 'function') {
                     // CRÍTICO: Recargar saldo ANTES de aceptar para asegurar sincronización
@@ -3776,7 +3792,12 @@
                         await new Promise(resolve => setTimeout(resolve, 300));
                     }
                     
-                    await GameEngine.acceptSocialChallenge(window.pendingChallengeId, selectedSong, bet);
+                    // CRÍTICO: Asegurar que selectedSong esté establecido antes de llamar
+                    if (!window.selectedSong) {
+                        window.selectedSong = songToUse;
+                    }
+                    
+                    await GameEngine.acceptSocialChallenge(window.pendingChallengeId, songToUse, bet);
                     
                     // CRÍTICO: Recargar saldo DESPUÉS de aceptar para reflejar la deducción
                     if (walletAddress && window.CreditsSystem) {
@@ -3788,8 +3809,19 @@
                     window.pendingChallengeId = null; // Limpiar después de aceptar
                     window.pendingChallengeBetAmount = null;
                     window.pendingChallengeInfo = null;
+                    window.selectedSong = null; // Limpiar también la canción seleccionada
+                } else {
+                    console.error('[handleSocialChallengeAccept] ❌ GameEngine o acceptSocialChallenge no disponible');
+                    if (typeof showToast === 'function') {
+                        showToast('Error: Sistema de juego no disponible', 'error');
+                    }
                 }
             } else {
+                console.warn('[handleSocialChallengeAccept] ⚠️ Condiciones no cumplidas:', {
+                    hasPendingChallenge: !!window.pendingChallengeId,
+                    hasSong: !!songToUse,
+                    songId: songToUse?.id
+                });
                 if (typeof showToast === 'function') {
                     showToast('Selecciona una canción primero para aceptar el desafío', 'info');
                 }
