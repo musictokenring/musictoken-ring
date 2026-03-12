@@ -231,9 +231,14 @@
                 console.error('[credits-system] ❌ Error stack:', error.stack);
                 console.error('[credits-system] ❌ Wallet address:', walletAddress);
                 console.error('[credits-system] ❌ Backend URL:', this.backendUrl);
-                this.currentCredits = 0;
-                this.currentUsdcValue = 0;
-                this.updateCreditsDisplay();
+                
+                // CRÍTICO: NO resetear el saldo a 0 si hay un error - mantener el saldo anterior
+                // Solo loggear el error pero preservar el estado actual
+                const previousCredits = this.currentCredits || 0;
+                console.warn('[credits-system] ⚠️ Error cargando balance, manteniendo saldo anterior:', previousCredits);
+                
+                // NO llamar a updateCreditsDisplay() aquí porque borraría el saldo visible
+                // El saldo anterior se mantiene y la UI no se actualiza con valores incorrectos
             }
         },
 

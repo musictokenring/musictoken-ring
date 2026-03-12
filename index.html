@@ -1342,54 +1342,53 @@
                         }
                     }
                     
-                    // CRÍTICO: Recargar saldo ANTES de actualizar variables para mostrar saldos correctos
-                    if (walletAddress && window.CreditsSystem && typeof window.CreditsSystem.loadBalance === 'function') {
-                        logFn('[selectSongForBattle] 🔄 Recargando saldo antes de seleccionar canción...');
-                        try {
-                            await window.CreditsSystem.loadBalance(walletAddress);
-                            // Esperar un momento para que se actualice la UI
-                            await new Promise(resolve => setTimeout(resolve, 200));
-                            logFn('[selectSongForBattle] ✅ Saldo recargado correctamente');
+                    // CRÍTICO: NO recargar saldo al seleccionar canción - esto puede causar errores que borren el saldo
+                    // Solo verificar el saldo actual sin recargarlo para evitar borrar el saldo por errores temporales
+                    logFn('[selectSongForBattle] ✅ Verificando saldo actual sin recargar:', window.CreditsSystem?.currentCredits || 0);
+                    
+                    // CRÍTICO: Si hay un desafío pendiente y créditos insuficientes, intentar conversión automática
+                    if (window.pendingChallengeId && window.pendingChallengeBetAmount) {
+                        const currentCredits = window.CreditsSystem?.currentCredits || 0;
+                        const requiredCredits = window.pendingChallengeBetAmount;
+                        const onchainBalance = Number(window.__mtrOnChainBalance || 0);
+                        
+                        logFn('[selectSongForBattle] 💰 Verificando créditos:', {
+                            currentCredits: currentCredits,
+                            requiredCredits: requiredCredits,
+                            onchainBalance: onchainBalance,
+                            canConvert: onchainBalance >= (requiredCredits - currentCredits)
+                        });
+                        
+                        if (currentCredits < requiredCredits && onchainBalance >= (requiredCredits - currentCredits)) {
+                            logFn('[selectSongForBattle] 💰 Créditos insuficientes, intentando conversión automática...');
+                            const missingCredits = requiredCredits - currentCredits;
                             
-                            // CRÍTICO: Si hay un desafío pendiente y créditos insuficientes, intentar conversión automática
-                            if (window.pendingChallengeId && window.pendingChallengeBetAmount) {
-                                const currentCredits = window.CreditsSystem.currentCredits || 0;
-                                const requiredCredits = window.pendingChallengeBetAmount;
-                                const onchainBalance = Number(window.__mtrOnChainBalance || 0);
-                                
-                                if (currentCredits < requiredCredits && onchainBalance >= (requiredCredits - currentCredits)) {
-                                    logFn('[selectSongForBattle] 💰 Créditos insuficientes, intentando conversión automática...');
-                                    const missingCredits = requiredCredits - currentCredits;
-                                    
-                                    try {
-                                        const userId = await window.CreditsSystem.getUserId(walletAddress);
-                                        if (userId && window.supabaseClient) {
-                                            const { data: { session } } = await window.supabaseClient.auth.getSession();
-                                            if (session) {
-                                                const { error: rpcError } = await window.supabaseClient.rpc('increment_user_credits', {
-                                                    user_id_param: userId,
-                                                    credits_to_add: missingCredits
-                                                });
-                                                
-                                                if (!rpcError) {
-                                                    logFn('[selectSongForBattle] ✅ Conversión automática exitosa');
-                                                    await new Promise(resolve => setTimeout(resolve, 500));
-                                                    await window.CreditsSystem.loadBalance(walletAddress);
-                                                    if (typeof showToast === 'function') {
-                                                        showToast(`✅ Convertidos ${missingCredits.toFixed(2)} créditos automáticamente`, 'success');
-                                                    }
-                                                } else {
-                                                    console.error('[selectSongForBattle] ❌ Error en conversión automática:', rpcError);
-                                                }
+                            try {
+                                const userId = await window.CreditsSystem.getUserId(walletAddress);
+                                if (userId && window.supabaseClient) {
+                                    const { data: { session } } = await window.supabaseClient.auth.getSession();
+                                    if (session) {
+                                        const { error: rpcError } = await window.supabaseClient.rpc('increment_user_credits', {
+                                            user_id_param: userId,
+                                            credits_to_add: missingCredits
+                                        });
+                                        
+                                        if (!rpcError) {
+                                            logFn('[selectSongForBattle] ✅ Conversión automática exitosa');
+                                            // Solo recargar después de conversión exitosa
+                                            await new Promise(resolve => setTimeout(resolve, 500));
+                                            await window.CreditsSystem.loadBalance(walletAddress);
+                                            if (typeof showToast === 'function') {
+                                                showToast(`✅ Convertidos ${missingCredits.toFixed(2)} créditos automáticamente`, 'success');
                                             }
+                                        } else {
+                                            console.error('[selectSongForBattle] ❌ Error en conversión automática:', rpcError);
                                         }
-                                    } catch (conversionError) {
-                                        console.error('[selectSongForBattle] ❌ Error en conversión automática:', conversionError);
                                     }
                                 }
+                            } catch (conversionError) {
+                                console.error('[selectSongForBattle] ❌ Error en conversión automática:', conversionError);
                             }
-                        } catch (balanceError) {
-                            console.error('[selectSongForBattle] ❌ Error recargando saldo:', balanceError);
                         }
                     }
                     
