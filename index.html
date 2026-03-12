@@ -2027,14 +2027,43 @@
                         console.log('[INIT] window.pendingChallengeBetAmount:', window.pendingChallengeBetAmount);
                         console.log('[INIT] window.pendingChallengeInfo:', window.pendingChallengeInfo);
                         
+                        // CRÍTICO: Verificar que los datos se cargaron correctamente antes de continuar
+                        if (!challengeLoaded || !window.pendingChallengeBetAmount) {
+                            console.error('[INIT] ❌ No se pudo cargar el desafío correctamente');
+                            if (typeof showToast === 'function') {
+                                showToast('Error al cargar el desafío. Intenta recargar la página.', 'error');
+                            }
+                            return;
+                        }
+                        
                         // Cambiar a modo social DESPUÉS de cargar el desafío
+                        console.log('[INIT] 🔄 Cambiando a modo social...');
                         selectMode('social');
                         
-                        // CRÍTICO: Forzar actualización de UI después de un pequeño delay para asegurar que el DOM esté listo
+                        // CRÍTICO: Forzar actualización de UI después de múltiples delays para asegurar que el DOM esté listo
                         setTimeout(() => {
-                            console.log('[INIT] 🔄 Forzando actualización de UI después de selectMode...');
+                            console.log('[INIT] 🔄 Forzando actualización de UI (delay 1)...');
                             updateActionButtons('social');
-                        }, 100);
+                        }, 200);
+                        
+                        setTimeout(() => {
+                            console.log('[INIT] 🔄 Forzando actualización de UI (delay 2)...');
+                            updateActionButtons('social');
+                        }, 500);
+                        
+                        setTimeout(() => {
+                            console.log('[INIT] 🔄 Forzando actualización de UI (delay 3)...');
+                            updateActionButtons('social');
+                            // Verificar que los cambios se aplicaron
+                            var betInput = document.getElementById('betAmount');
+                            var btn = document.getElementById('createSocialBtn');
+                            console.log('[INIT] ✅ Verificación final:', {
+                                betInputReadonly: betInput ? betInput.readOnly : 'NO ENCONTRADO',
+                                betInputValue: betInput ? betInput.value : 'NO ENCONTRADO',
+                                btnText: btn ? btn.textContent : 'NO ENCONTRADO',
+                                pendingChallengeBetAmount: window.pendingChallengeBetAmount
+                            });
+                        }, 1000);
                         
                         if (typeof showToast === 'function') showToast('Desafío detectado. Selecciona tu canción para aceptarlo.', 'info');
                     } else {
@@ -3460,15 +3489,23 @@
                     supabase = supabaseClient;
                 }
                 
-                // Si aún no está disponible, esperar un poco
+                // Si aún no está disponible, esperar más tiempo con múltiples intentos
                 if (!supabase) {
                     console.warn('[loadChallengeInfo] ⏳ Supabase no disponible, esperando...');
-                    await new Promise(resolve => setTimeout(resolve, 500));
-                    supabase = window.supabaseClient || (typeof supabaseClient !== 'undefined' ? supabaseClient : null);
+                    for (let i = 0; i < 5; i++) {
+                        await new Promise(resolve => setTimeout(resolve, 300));
+                        supabase = window.supabaseClient || (typeof supabaseClient !== 'undefined' ? supabaseClient : null);
+                        if (supabase) {
+                            console.log('[loadChallengeInfo] ✅ Supabase disponible después de intento', i + 1);
+                            break;
+                        }
+                    }
                 }
                 
                 if (!supabase) {
                     console.error('[loadChallengeInfo] ❌ Supabase client NO disponible después de esperar');
+                    console.error('[loadChallengeInfo] window.supabaseClient:', typeof window.supabaseClient);
+                    console.error('[loadChallengeInfo] typeof supabaseClient:', typeof supabaseClient);
                     return false;
                 }
                 
