@@ -499,8 +499,8 @@
         .challenge-section-active {
             position: relative;
             border-radius: 1.5rem;
-            overflow: visible; /* Visible para que los bordes se vean fuera */
-            padding: 0; /* Sin padding para que el contenido no se mueva */
+            overflow: hidden; /* Hidden para que los bordes no se extiendan fuera */
+            padding: 5px; /* Padding para espacio del borde */
             background: transparent !important; /* Contenido claro sin degradado */
         }
         
@@ -508,7 +508,7 @@
         .challenge-section-active::before {
             content: '';
             position: absolute;
-            top: -5px;
+            top: 0;
             left: 0;
             right: 0;
             height: 5px; /* Borde más grueso: 5px */
@@ -528,15 +528,13 @@
             animation: lightBeamTop 2s linear infinite;
             filter: blur(0.5px);
             pointer-events: none; /* No interfiere con clics */
-            /* Asegurar que respete las esquinas del contenedor */
-            clip-path: polygon(0 0, 100% 0, 100% 100%, 0 100%);
         }
         
         /* Borde inferior animado - SOLO en el borde, más grueso */
         .challenge-section-active::after {
             content: '';
             position: absolute;
-            bottom: -5px;
+            bottom: 0;
             left: 0;
             right: 0;
             height: 5px; /* Borde más grueso: 5px */
@@ -556,28 +554,26 @@
             animation: lightBeamBottom 2s linear infinite;
             filter: blur(0.5px);
             pointer-events: none; /* No interfiere con clics */
-            /* Asegurar que respete las esquinas del contenedor */
-            clip-path: polygon(0 0, 100% 0, 100% 100%, 0 100%);
         }
         
-        /* Bordes laterales usando box-shadow - SOLO en los bordes, más gruesos */
+        /* Bordes laterales usando elementos adicionales creados dinámicamente */
         .challenge-section-active {
             box-shadow: 
-                -5px 0 0 0 rgba(0, 243, 255, 0.5),
-                5px 0 0 0 rgba(0, 243, 255, 0.5);
+                0 0 0 5px rgba(0, 243, 255, 0.5) inset,
+                0 0 0 5px rgba(0, 243, 255, 0.5);
             animation: borderSideGlow 2s ease-in-out infinite;
         }
         
         @keyframes borderSideGlow {
             0%, 100% {
                 box-shadow: 
-                    -5px 0 0 0 rgba(0, 243, 255, 0.4),
-                    5px 0 0 0 rgba(0, 243, 255, 0.4);
+                    0 0 0 5px rgba(0, 243, 255, 0.4) inset,
+                    0 0 0 5px rgba(0, 243, 255, 0.4);
             }
             50% {
                 box-shadow: 
-                    -5px 0 0 0 rgba(236, 72, 153, 0.7),
-                    5px 0 0 0 rgba(236, 72, 153, 0.7);
+                    0 0 0 5px rgba(236, 72, 153, 0.7) inset,
+                    0 0 0 5px rgba(236, 72, 153, 0.7);
             }
         }
         
