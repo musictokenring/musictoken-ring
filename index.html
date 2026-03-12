@@ -4509,24 +4509,30 @@
                                         console.warn('[refreshMtrBalance] ⚠️ No se pudieron leer créditos directamente desde Supabase:', creditsError);
                                         // Fallback: intentar con loadBalance del backend
                                         if (window.CreditsSystem && typeof window.CreditsSystem.loadBalance === 'function') {
-                                            await window.CreditsSystem.loadBalance(walletAddress);
+                                            await window.CreditsSystem.loadBalance(conversionWalletAddress);
                                         }
                                     }
                                 } catch (directReadError) {
                                     console.error('[refreshMtrBalance] ❌ Error leyendo créditos directamente:', directReadError);
                                     // Fallback: intentar con loadBalance del backend
-                                    await window.CreditsSystem.loadBalance(walletAddress);
+                                    if (window.CreditsSystem && typeof window.CreditsSystem.loadBalance === 'function') {
+                                        await window.CreditsSystem.loadBalance(conversionWalletAddress);
+                                    }
                                 }
                                 
                                 // CRÍTICO: También intentar recargar desde el backend como respaldo
                                 console.log('[refreshMtrBalance] 🔄 Recargando también desde backend como respaldo...');
                                 await new Promise(resolve => setTimeout(resolve, 500));
-                                await window.CreditsSystem.loadBalance(walletAddress);
+                                if (window.CreditsSystem && typeof window.CreditsSystem.loadBalance === 'function') {
+                                    await window.CreditsSystem.loadBalance(conversionWalletAddress);
+                                }
                                 
                                 // Esperar un poco más y recargar de nuevo
                                 await new Promise(resolve => setTimeout(resolve, 500));
                                 console.log('[refreshMtrBalance] 🔄 Segunda recarga desde backend...');
-                                await window.CreditsSystem.loadBalance(walletAddress);
+                                if (window.CreditsSystem && typeof window.CreditsSystem.loadBalance === 'function') {
+                                    await window.CreditsSystem.loadBalance(conversionWalletAddress);
+                                }
                                 
                                 // CRÍTICO: Forzar actualización del display múltiples veces con delays
                                 console.log('[refreshMtrBalance] 🔄 Actualizando display de créditos...');
