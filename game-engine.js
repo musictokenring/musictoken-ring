@@ -332,7 +332,7 @@ const GameEngine = {
             }
             
             // Restaurar el label "Jugable" en modo normal
-            const playableLabelEl = document.getElementById('playableLabel');
+            let playableLabelEl = document.getElementById('playableLabel');
             if (playableLabelEl && playableLabelEl.textContent !== 'Jugable') {
                 playableLabelEl.textContent = 'Jugable';
                 playableLabelEl.style.color = '';
@@ -341,7 +341,7 @@ const GameEngine = {
             }
             
             // Restaurar el texto "MTR" normal en modo normal
-            const balanceUnitEl = document.getElementById('balanceUnit');
+            let balanceUnitEl = document.getElementById('balanceUnit');
             if (balanceUnitEl && balanceUnitEl.textContent !== 'MTR') {
                 balanceUnitEl.textContent = 'MTR';
                 balanceUnitEl.style.color = '';
@@ -389,13 +389,15 @@ const GameEngine = {
             }
             
             // Actualizar label y unidad para mostrar "MTR créditos jugables"
-            const playableLabelEl = document.getElementById('playableLabel');
+            // CRÍTICO: Reutilizar la variable ya declarada arriba, no redeclarar
+            playableLabelEl = document.getElementById('playableLabel');
             if (playableLabelEl && playableLabelEl.textContent !== 'Fichas jugables') {
                 playableLabelEl.textContent = 'Fichas jugables';
                 playableLabelEl.title = 'MTR créditos jugables: Fichas estables 1:1 USDC';
             }
             
-            const balanceUnitEl = document.getElementById('balanceUnit');
+            // CRÍTICO: Reutilizar la variable ya declarada arriba, no redeclarar
+            balanceUnitEl = document.getElementById('balanceUnit');
             if (balanceUnitEl && balanceUnitEl.textContent !== 'MTR créditos') {
                 balanceUnitEl.textContent = 'MTR créditos';
                 balanceUnitEl.title = 'Alias gráfico: Estas fichas valen siempre $1 cada una (1:1 USDC estable)';
