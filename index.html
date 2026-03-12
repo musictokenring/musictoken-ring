@@ -457,6 +457,51 @@
         @keyframes fadeInUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
         @keyframes bounce { 0% { transform: scale(0.3); opacity: 0; } 50% { transform: scale(1.1); } 100% { transform: scale(1); opacity: 1; } }
         @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.7; } }
+        
+        /* Animación de gradiente animado para retos sociales */
+        @keyframes gradientGlow {
+            0% {
+                background-position: 0% 50%;
+                box-shadow: 0 0 20px rgba(0, 243, 255, 0.3), 0 0 40px rgba(236, 72, 153, 0.2), inset 0 0 20px rgba(0, 243, 255, 0.1);
+            }
+            50% {
+                background-position: 100% 50%;
+                box-shadow: 0 0 30px rgba(236, 72, 153, 0.4), 0 0 60px rgba(0, 243, 255, 0.3), inset 0 0 30px rgba(236, 72, 153, 0.15);
+            }
+            100% {
+                background-position: 0% 50%;
+                box-shadow: 0 0 20px rgba(0, 243, 255, 0.3), 0 0 40px rgba(236, 72, 153, 0.2), inset 0 0 20px rgba(0, 243, 255, 0.1);
+            }
+        }
+        
+        .challenge-song-selector-active {
+            background: linear-gradient(135deg, rgba(0, 243, 255, 0.15) 0%, rgba(236, 72, 153, 0.15) 50%, rgba(0, 243, 255, 0.15) 100%);
+            background-size: 200% 200%;
+            animation: gradientGlow 3s ease infinite;
+            border: 2px solid rgba(0, 243, 255, 0.5) !important;
+            position: relative;
+        }
+        
+        .challenge-song-selector-active::before {
+            content: '';
+            position: absolute;
+            top: -2px;
+            left: -2px;
+            right: -2px;
+            bottom: -2px;
+            background: linear-gradient(45deg, rgba(0, 243, 255, 0.5), rgba(236, 72, 153, 0.5), rgba(0, 243, 255, 0.5));
+            background-size: 200% 200%;
+            animation: gradientGlow 2s ease infinite;
+            border-radius: 1rem;
+            z-index: -1;
+            filter: blur(8px);
+        }
+        
+        .challenge-song-selector-active .text-gray-500 {
+            color: rgba(0, 243, 255, 0.9) !important;
+            font-weight: 600;
+            text-shadow: 0 0 10px rgba(0, 243, 255, 0.5);
+        }
 
         .track-item { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-radius: 12px; background: rgba(15,15,40,0.6); border: 1px solid rgba(255,255,255,0.06); cursor: pointer; transition: all 0.25s ease; }
         .track-item:hover { background: rgba(0,243,255,0.08); border-color: rgba(0,243,255,0.3); box-shadow: 0 0 20px rgba(0,243,255,0.1); transform: translateY(-1px); }
@@ -736,7 +781,7 @@
                 </div>
 
                 <div class="space-y-6">
-                    <div id="selectedSongCard" class="p-6 rounded-2xl border border-white/5 bg-white/[0.02] min-h-[120px] flex items-center justify-center">
+                    <div id="selectedSongCard" class="p-6 rounded-2xl border border-white/5 bg-white/[0.02] min-h-[120px] flex items-center justify-center transition-all duration-500">
                         <div class="text-center text-gray-500">
                             <div class="text-3xl mb-2">🎵</div>
                             <p>Selecciona una canción</p>
@@ -2124,6 +2169,11 @@
                             // Cambiar a modo social DESPUÉS de cargar el desafío
                             console.log('[INIT] 🔄 Cambiando a modo social...');
                             selectMode('social');
+                            
+                            // CRÍTICO: Activar efecto visual después de cambiar a modo social
+                            setTimeout(function() {
+                                activateChallengeSongSelector();
+                            }, 500);
                             
                             // CRÍTICO: Forzar actualización de UI después de múltiples delays
                             setTimeout(() => {
@@ -3708,6 +3758,9 @@
                 // CRÍTICO: Actualizar modal del reto con información visual
                 updateChallengeModal(challenge);
                 
+                // CRÍTICO: Activar efecto visual animado en el selector de canción
+                activateChallengeSongSelector();
+                
                 // CRÍTICO: Mostrar modal del reto automáticamente si no hay sesión o si el usuario no está en modo social
                 const { data: { session } } = await supabase.auth.getSession();
                 if (!session || window.currentMode !== 'social') {
@@ -3762,6 +3815,52 @@
                 console.error('[updateChallengeModal] ❌ Error actualizando modal:', error);
             }
         }
+        
+        // Activar efecto visual animado en el selector de canción cuando hay un reto pendiente
+        function activateChallengeSongSelector() {
+            try {
+                const selectedSongCard = document.getElementById('selectedSongCard');
+                if (selectedSongCard && window.pendingChallengeId) {
+                    // Agregar clase para activar el efecto de gradiente animado
+                    selectedSongCard.classList.add('challenge-song-selector-active');
+                    
+                    // Actualizar el texto para indicar que debe seleccionar una canción
+                    const placeholderText = selectedSongCard.querySelector('p');
+                    if (placeholderText) {
+                        placeholderText.textContent = '✨ Selecciona tu canción para competir ✨';
+                    }
+                    
+                    console.log('[activateChallengeSongSelector] ✅ Efecto visual activado en selector de canción');
+                    
+                    // Asegurar que el efecto se mantenga incluso si el elemento se actualiza
+                    const observer = new MutationObserver(function(mutations) {
+                        mutations.forEach(function(mutation) {
+                            if (mutation.type === 'attributes' && mutation.attributeName === 'class') {
+                                // Si se removió la clase, volver a agregarla si aún hay reto pendiente
+                                if (window.pendingChallengeId && !selectedSongCard.classList.contains('challenge-song-selector-active')) {
+                                    selectedSongCard.classList.add('challenge-song-selector-active');
+                                }
+                            }
+                        });
+                    });
+                    
+                    observer.observe(selectedSongCard, {
+                        attributes: true,
+                        attributeFilter: ['class']
+                    });
+                    
+                    // Limpiar observer cuando se acepte el reto
+                    setTimeout(function() {
+                        if (!window.pendingChallengeId) {
+                            observer.disconnect();
+                            selectedSongCard.classList.remove('challenge-song-selector-active');
+                        }
+                    }, 30000); // Limpiar después de 30 segundos si no se acepta
+                }
+            } catch (error) {
+                console.error('[activateChallengeSongSelector] ❌ Error activando efecto visual:', error);
+            }
+        }
 
         // Manejar aceptación de desafío cuando se selecciona canción
         async function handleSocialChallengeAccept() {
@@ -3786,16 +3885,28 @@
                 // CRÍTICO: Verificar que GameEngine esté disponible, esperar si es necesario
                 let gameEngineAvailable = typeof window.GameEngine !== 'undefined' && typeof window.GameEngine.acceptSocialChallenge === 'function';
                 
-                // Si no está disponible, esperar un poco y reintentar
+                // Si no está disponible, esperar más tiempo y reintentar múltiples veces
                 if (!gameEngineAvailable) {
                     console.log('[handleSocialChallengeAccept] ⏳ GameEngine no disponible, esperando...');
-                    for (let i = 0; i < 5; i++) {
+                    console.log('[handleSocialChallengeAccept] Verificando window.GameEngine:', typeof window.GameEngine);
+                    
+                    // Esperar hasta 3 segundos con múltiples intentos
+                    for (let i = 0; i < 15; i++) {
                         await new Promise(resolve => setTimeout(resolve, 200));
                         gameEngineAvailable = typeof window.GameEngine !== 'undefined' && typeof window.GameEngine.acceptSocialChallenge === 'function';
                         if (gameEngineAvailable) {
-                            console.log('[handleSocialChallengeAccept] ✅ GameEngine disponible después de esperar');
+                            console.log('[handleSocialChallengeAccept] ✅ GameEngine disponible después de', (i + 1) * 200, 'ms');
                             break;
                         }
+                        if (i === 0 || i === 4 || i === 9) {
+                            console.log('[handleSocialChallengeAccept] ⏳ Esperando GameEngine... Intento', i + 1, '/15');
+                        }
+                    }
+                    
+                    // Último intento: verificar si GameEngine existe pero no tiene el método
+                    if (!gameEngineAvailable && typeof window.GameEngine !== 'undefined') {
+                        console.warn('[handleSocialChallengeAccept] ⚠️ GameEngine existe pero acceptSocialChallenge no está disponible');
+                        console.warn('[handleSocialChallengeAccept] Métodos disponibles:', Object.keys(window.GameEngine || {}));
                     }
                 }
                 
@@ -3820,6 +3931,12 @@
                         console.log('[handleSocialChallengeAccept] 🔄 Recargando saldo después de aceptar...');
                         await new Promise(resolve => setTimeout(resolve, 500));
                         await window.CreditsSystem.loadBalance(walletAddress);
+                    }
+                    
+                    // CRÍTICO: Desactivar efecto visual después de aceptar
+                    const selectedSongCard = document.getElementById('selectedSongCard');
+                    if (selectedSongCard) {
+                        selectedSongCard.classList.remove('challenge-song-selector-active');
                     }
                     
                     window.pendingChallengeId = null; // Limpiar después de aceptar
