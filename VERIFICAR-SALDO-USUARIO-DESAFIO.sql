@@ -8,10 +8,13 @@
 -- - Estado del desafío
 
 -- PASO 1: Verificar usuario por wallet address
--- Reemplaza '0x7537...2253' con la wallet del usuario que está aceptando el desafío
+-- ⚠️ IMPORTANTE: NO usar la wallet de tesorería (0x75376BC58830f27415402875D26B73A6BE8E2253)
+-- Esa wallet es del sistema, no de usuarios individuales
+-- Reemplaza con la wallet REAL del usuario que está aceptando el desafío
 DO $$
 DECLARE
-    target_wallet TEXT := '0x7537...2253'; -- ⚠️ CAMBIAR ESTA WALLET
+    target_wallet TEXT := '0x7537...2253'; -- ⚠️ CAMBIAR ESTA WALLET (NO usar wallet de tesorería)
+    treasury_wallet TEXT := '0x75376BC58830f27415402875D26B73A6BE8E2253'; -- Wallet de tesorería
     user_record RECORD;
     credits_record RECORD;
     deposits_record RECORD;
@@ -20,6 +23,17 @@ BEGIN
     RAISE NOTICE 'VERIFICACIÓN DE SALDO PARA DESAFÍO';
     RAISE NOTICE '==========================================';
     RAISE NOTICE '';
+    
+    -- CRÍTICO: Verificar que NO sea la wallet de tesorería
+    IF LOWER(target_wallet) = LOWER(treasury_wallet) THEN
+        RAISE NOTICE '❌❌❌ ERROR: Estás usando la wallet de TESORERÍA del sistema!';
+        RAISE NOTICE 'La wallet % es la wallet de tesorería y NO debe usarse para aceptar desafíos', target_wallet;
+        RAISE NOTICE 'Los usuarios deben usar sus propias wallets personales';
+        RAISE NOTICE '';
+        RAISE NOTICE 'Wallet de tesorería: %', treasury_wallet;
+        RAISE NOTICE 'Esta wallet contiene los fondos del sistema (fees, depósitos, etc.)';
+        RETURN;
+    END IF;
     
     -- Buscar usuario por wallet
     SELECT 

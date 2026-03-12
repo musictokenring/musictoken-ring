@@ -1147,6 +1147,17 @@ const GameEngine = {
             // Si es usuario nuevo, puede que no tenga wallet conectada todavía
             let walletAddress = this.connectedWallet || localStorage.getItem('mtr_wallet');
             
+            // CRÍTICO: Verificar que NO sea la wallet de tesorería del sistema
+            const TREASURY_WALLET = '0x75376BC58830f27415402875D26B73A6BE8E2253';
+            if (walletAddress && walletAddress.toLowerCase() === TREASURY_WALLET.toLowerCase()) {
+                console.error('[acceptSocialChallenge] ❌❌❌ ERROR: Usuario intentando usar wallet de tesorería!');
+                showToast('Error: No puedes usar la wallet de tesorería del sistema. Conecta tu wallet personal.', 'error');
+                if (typeof renderWallet === 'function') {
+                    renderWallet();
+                }
+                return;
+            }
+            
             // Si no tiene wallet conectada, pedirle que la conecte
             if (!walletAddress) {
                 showToast('Debes conectar tu wallet para aceptar el desafío. Conecta tu wallet y vuelve a intentar.', 'error');
