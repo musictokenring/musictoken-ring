@@ -4135,11 +4135,27 @@
                 if (numericBalance > 0 && window.CreditsSystem && typeof window.CreditsSystem.currentCredits !== 'undefined') {
                     const currentCredits = Number(window.CreditsSystem.currentCredits || 0);
                     
-                    // Solo convertir si hay MTR pero 0 créditos
-                    if (currentCredits === 0 && numericBalance > 0) {
+                    // CRÍTICO: Protección contra conversiones múltiples
+                    // Usar un flag para evitar que se ejecute múltiples veces
+                    const conversionKey = `mtr_conversion_${address}_${numericBalance}`;
+                    const lastConversion = sessionStorage.getItem(conversionKey);
+                    const now = Date.now();
+                    
+                    // Solo convertir si:
+                    // 1. Hay MTR pero 0 créditos
+                    // 2. NO se ha convertido recientemente (últimos 30 segundos) para esta wallet y balance
+                    const shouldConvert = currentCredits === 0 && numericBalance > 0;
+                    const recentlyConverted = lastConversion && (now - Number(lastConversion)) < 30000; // 30 segundos
+                    
+                    if (shouldConvert && !recentlyConverted) {
+                        // Marcar que estamos convirtiendo para evitar duplicados
+                        sessionStorage.setItem(conversionKey, String(now));
+                        
                         console.log('[refreshMtrBalance] 🔄 Detectado MTR on-chain pero 0 créditos, iniciando conversión automática...', {
                             onchainBalance: numericBalance,
-                            currentCredits: currentCredits
+                            currentCredits: currentCredits,
+                            lastConversion: lastConversion,
+                            recentlyConverted: recentlyConverted
                         });
                         
                         // Convertir automáticamente (usar 1:1 por ahora, TODO: obtener precio real)
@@ -4386,7 +4402,14 @@
                                         'success'
                                     );
                                 }
+                                
+                                // CRÍTICO: Limpiar el flag de conversión después de un tiempo para permitir reconversión si es necesario
+                                setTimeout(() => {
+                                    sessionStorage.removeItem(conversionKey);
+                                }, 60000); // Limpiar después de 60 segundos
                             } catch (conversionError) {
+                                // En caso de error, limpiar el flag para permitir reintento
+                                sessionStorage.removeItem(conversionKey);
                                 const isCorsError = conversionError && (
                                     conversionError.message?.includes('CORS') ||
                                     conversionError.message?.includes('fetch') ||
