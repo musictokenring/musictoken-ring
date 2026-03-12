@@ -3204,8 +3204,21 @@
             // FORZAR mínimo a 5 para social mode - NUNCA usar 100
             const minBetAmount = 5; // SIEMPRE 5 para social mode
             if (createSocialBtn) {
+                // CRÍTICO: Obtener onchainBalance correctamente
+                var onchainBalance = Number(window.__mtrOnChainBalance || 0);
+                
+                // CRÍTICO: Si estamos aceptando un desafío, NO deshabilitar el botón por falta de créditos
+                // El usuario puede aceptar el desafío pero necesitará recargar antes de ejecutar
+                var isAcceptingChallenge = window.pendingChallengeId && window.pendingChallengeId !== null;
+                
                 var canCoverSocialBet = !!bet && bet >= minBetAmount && (credits >= bet || onchainBalance >= bet);
-                createSocialBtn.disabled = !canCoverSocialBet || !selectedSong;
+                
+                // Si está aceptando un desafío, solo verificar que haya canción seleccionada
+                if (isAcceptingChallenge) {
+                    createSocialBtn.disabled = !selectedSong;
+                } else {
+                    createSocialBtn.disabled = !canCoverSocialBet || !selectedSong;
+                }
                 
                 // ELIMINAR CUALQUIER REFERENCIA A "100" en el tooltip - FORZADO
                 var currentTitle = createSocialBtn.getAttribute('title') || createSocialBtn.title || '';
