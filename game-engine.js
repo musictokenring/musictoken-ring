@@ -4383,7 +4383,7 @@ const GameEngine = {
             // CRÍTICO: Obtener estadísticas actuales del usuario
             const { data: currentStats, error: statsError } = await supabase
                 .from('users')
-                .select('total_matches, total_wins, total_losses, total_credits_won, total_streams')
+                .select('total_matches, total_wins, total_losses, total_credits_won, total_streams, total_wagered')
                 .eq('id', userId)
                 .single();
             
@@ -4398,21 +4398,26 @@ const GameEngine = {
             const currentLosses = currentStats?.total_losses || 0;
             const currentCreditsWon = parseFloat(currentStats?.total_credits_won || 0);
             const currentStreams = currentStats?.total_streams || 0;
+            const currentWagered = parseFloat(currentStats?.total_wagered || 0);
             
-            // Obtener streams totales del match
+            // Obtener información completa del match para calcular apuesta del usuario
             const { data: matchData } = await supabase
                 .from('matches')
-                .select('player1_streams, player2_streams, player1_id, player2_id')
+                .select('player1_streams, player2_streams, player1_id, player2_id, player1_bet, player2_bet, total_pot')
                 .eq('id', matchId)
                 .single();
             
             let userStreams = 0;
+            let userBet = 0;
+            
             if (matchData) {
                 // Determinar cuántos streams tuvo el usuario en este match
                 if (matchData.player1_id === userId) {
                     userStreams = matchData.player1_streams || 0;
+                    userBet = parseFloat(matchData.player1_bet || 0);
                 } else if (matchData.player2_id === userId) {
                     userStreams = matchData.player2_streams || 0;
+                    userBet = parseFloat(matchData.player2_bet || 0);
                 }
             }
             
@@ -4423,6 +4428,7 @@ const GameEngine = {
                 total_losses: won ? currentLosses : currentLosses + 1,
                 total_credits_won: currentCreditsWon + (won ? creditsWon : 0),
                 total_streams: currentStreams + userStreams,
+                total_wagered: currentWagered + userBet,
                 updated_at: new Date().toISOString()
             };
             
