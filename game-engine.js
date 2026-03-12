@@ -4357,27 +4357,38 @@ const GameEngine = {
                                         // CRÍTICO: Si el backend sigue rechazando pero hay suficientes créditos,
                                         // intentar usar Supabase RPC directamente como fallback
                                         if (refreshedCredits >= creditsToDeduct && retryResponse.status === 400) {
-                                            console.warn('[updateBalance] ⚠️ Backend rechazó pero hay créditos suficientes. Intentando deducción directa vía Supabase RPC...');
+                                            console.warn('[updateBalance] ⚠️⚠️⚠️ BACKEND RECHAZÓ PERO HAY CRÉDITOS SUFICIENTES');
+                                            console.warn('[updateBalance] ⚠️ Créditos disponibles:', refreshedCredits, 'Necesarios:', creditsToDeduct);
+                                            console.warn('[updateBalance] ⚠️ Intentando deducción directa vía Supabase RPC...');
                                             
                                             try {
                                                 const supabase = window.supabaseClient || (typeof supabaseClient !== 'undefined' ? supabaseClient : null);
-                                                if (supabase) {
+                                                if (!supabase) {
+                                                    console.error('[updateBalance] ❌ Supabase client no disponible para RPC fallback');
+                                                } else {
+                                                    console.log('[updateBalance] ✅ Supabase client disponible, buscando publicUserId...');
+                                                    
                                                     // CRÍTICO: Obtener publicUserId (de public.users) no authUserId (de auth.users)
                                                     // Buscar o crear registro en public.users para esta wallet
                                                     let publicUserIdForRpc = null;
                                                     
                                                     try {
-                                                        // Buscar si ya existe un usuario con esta wallet
+                                                        console.log('[updateBalance] 🔍 Buscando usuario con wallet:', walletAddress.toLowerCase());
+                                                        
+                                                        // Buscar si ya existe un usuario con esta wallet (case-insensitive)
                                                         const { data: existingUser, error: findError } = await supabase
                                                             .from('users')
                                                             .select('id')
-                                                            .eq('wallet_address', walletAddress.toLowerCase())
-                                                            .single();
+                                                            .ilike('wallet_address', walletAddress) // Case-insensitive search
+                                                            .maybeSingle();
                                                         
                                                         if (existingUser && !findError) {
                                                             publicUserIdForRpc = existingUser.id;
-                                                            console.log('[updateBalance] ✅ Usuario encontrado para RPC fallback:', publicUserIdForRpc);
+                                                            console.log('[updateBalance] ✅✅✅ Usuario encontrado para RPC fallback:', publicUserIdForRpc);
                                                         } else {
+                                                            console.log('[updateBalance] ⚠️ Usuario no encontrado, intentando crear...');
+                                                            console.log('[updateBalance] ⚠️ Find error:', findError);
+                                                            
                                                             // Si no existe, intentar crear uno
                                                             const { data: newUser, error: insertError } = await supabase
                                                                 .from('users')
@@ -4387,36 +4398,67 @@ const GameEngine = {
                                                             
                                                             if (newUser && !insertError) {
                                                                 publicUserIdForRpc = newUser.id;
-                                                                console.log('[updateBalance] ✅ Usuario creado para RPC fallback:', publicUserIdForRpc);
+                                                                console.log('[updateBalance] ✅✅✅ Usuario creado para RPC fallback:', publicUserIdForRpc);
                                                             } else {
-                                                                console.error('[updateBalance] ❌ No se pudo obtener ni crear publicUserId para RPC fallback:', insertError);
+                                                                console.error('[updateBalance] ❌❌❌ No se pudo obtener ni crear publicUserId para RPC fallback');
+                                                                console.error('[updateBalance] ❌ Insert error:', insertError);
+                                                                
+                                                                // Último intento: buscar sin case-sensitive
+                                                                const { data: retryUser } = await supabase
+                                                                    .from('users')
+                                                                    .select('id')
+                                                                    .eq('wallet_address', walletAddress.toLowerCase())
+                                                                    .maybeSingle();
+                                                                
+                                                                if (retryUser) {
+                                                                    publicUserIdForRpc = retryUser.id;
+                                                                    console.log('[updateBalance] ✅ Usuario encontrado en segundo intento:', publicUserIdForRpc);
+                                                                }
                                                             }
                                                         }
                                                     } catch (userLookupError) {
-                                                        console.error('[updateBalance] ❌ Error buscando usuario para RPC fallback:', userLookupError);
+                                                        console.error('[updateBalance] ❌❌❌ Error buscando usuario para RPC fallback:', userLookupError);
                                                     }
                                                     
                                                     if (publicUserIdForRpc) {
-                                                        console.log('[updateBalance] 🔄 Llamando decrement_user_credits RPC con publicUserId:', publicUserIdForRpc);
-                                                        const { error: rpcError } = await supabase.rpc('decrement_user_credits', {
+                                                        console.log('[updateBalance] 🔄🔄🔄 LLAMANDO decrement_user_credits RPC...');
+                                                        console.log('[updateBalance] 🔄 Parámetros:', {
+                                                            user_id_param: publicUserIdForRpc,
+                                                            credits_to_subtract: creditsToDeduct
+                                                        });
+                                                        
+                                                        const { error: rpcError, data: rpcData } = await supabase.rpc('decrement_user_credits', {
                                                             user_id_param: publicUserIdForRpc,
                                                             credits_to_subtract: creditsToDeduct
                                                         });
                                                         
                                                         if (!rpcError) {
-                                                            console.log('[updateBalance] ✅✅✅ Créditos descontados exitosamente vía Supabase RPC (fallback)');
+                                                            console.log('[updateBalance] ✅✅✅✅✅ CRÉDITOS DESCONTADOS EXITOSAMENTE VÍA SUPABASE RPC (FALLBACK)');
+                                                            console.log('[updateBalance] ✅ RPC data:', rpcData);
                                                             await window.CreditsSystem.loadBalance(walletAddress);
                                                             return true;
                                                         } else {
-                                                            console.error('[updateBalance] ❌ Error en RPC fallback:', rpcError);
+                                                            console.error('[updateBalance] ❌❌❌ ERROR EN RPC FALLBACK:', rpcError);
+                                                            console.error('[updateBalance] ❌ Código:', rpcError.code);
+                                                            console.error('[updateBalance] ❌ Mensaje:', rpcError.message);
+                                                            console.error('[updateBalance] ❌ Detalles:', rpcError.details);
+                                                            console.error('[updateBalance] ❌ Hint:', rpcError.hint);
                                                         }
                                                     } else {
-                                                        console.error('[updateBalance] ❌ No se pudo obtener publicUserId para RPC fallback');
+                                                        console.error('[updateBalance] ❌❌❌ NO SE PUDO OBTENER publicUserId PARA RPC FALLBACK');
                                                     }
                                                 }
                                             } catch (rpcFallbackError) {
-                                                console.error('[updateBalance] ❌ Error ejecutando RPC fallback:', rpcFallbackError);
+                                                console.error('[updateBalance] ❌❌❌ ERROR EJECUTANDO RPC FALLBACK:', rpcFallbackError);
+                                                console.error('[updateBalance] ❌ Stack:', rpcFallbackError.stack);
                                             }
+                                        } else {
+                                            console.log('[updateBalance] ⚠️ No se ejecutará fallback RPC porque:', {
+                                                refreshedCredits: refreshedCredits,
+                                                creditsToDeduct: creditsToDeduct,
+                                                hasEnoughCredits: refreshedCredits >= creditsToDeduct,
+                                                retryStatus: retryResponse.status
+                                            });
                                         }
                                         
                                         // Si el backend sigue rechazando después de recargar y hay suficientes créditos,
