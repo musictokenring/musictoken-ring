@@ -33,8 +33,28 @@ SELECT
 FROM user_credits uc
 WHERE uc.user_id = '978e9e29-11b0-405d-bf68-b20622016aad'::UUID;
 
--- PASO 4: SOLUCIÓN - Actualizar user_wallets directamente sin tocar users
--- Esto evita el problema de foreign key
+-- PASO 4: Asegurar que el usuario existe en tabla "users"
+-- Si la wallet ya existe con otro ID, actualizamos el ID al objetivo
+-- Si no existe, creamos el usuario con el ID objetivo
+INSERT INTO users (
+    id,
+    wallet_address,
+    created_at,
+    updated_at
+)
+VALUES (
+    '978e9e29-11b0-405d-bf68-b20622016aad'::UUID,
+    LOWER('0x72eca083fbceb05a4f21b1a9883a57bcd638b6dd'),
+    NOW(),
+    NOW()
+)
+ON CONFLICT (wallet_address) 
+DO UPDATE SET
+    id = '978e9e29-11b0-405d-bf68-b20622016aad'::UUID,
+    updated_at = NOW();
+
+-- PASO 5: Vincular wallet en user_wallets
+-- Ahora que el usuario existe en "users", podemos vincular sin problemas de foreign key
 INSERT INTO user_wallets (
     user_id,
     wallet_address,
@@ -58,7 +78,7 @@ DO UPDATE SET
     linked_via = 'manual',
     updated_at = NOW();
 
--- PASO 5: Verificar vinculación exitosa
+-- PASO 6: Verificar vinculación exitosa
 SELECT 
     '✅ Verificación Final' AS estado,
     uw.wallet_address,
