@@ -1413,6 +1413,37 @@ const GameEngine = {
             
             showToast('¡Desafío aceptado! Iniciando partida...', 'success');
             
+            // CRÍTICO: Iniciar el juego después de aceptar el desafío
+            // El match ya fue creado por createMatch, ahora necesitamos iniciar la batalla
+            if (this.currentMatch && this.currentMatch.id) {
+                console.log('[acceptSocialChallenge] 🎮 Iniciando batalla con match:', this.currentMatch.id);
+                try {
+                    // Esperar un momento para asegurar que todo esté sincronizado
+                    await new Promise(resolve => setTimeout(resolve, 500));
+                    
+                    // Iniciar la batalla usando el método estándar
+                    if (typeof this.startBattle === 'function') {
+                        await this.startBattle();
+                    } else if (typeof this.showBattleScreen === 'function') {
+                        await this.showBattleScreen();
+                    } else {
+                        // Fallback: recargar la página para iniciar el juego
+                        console.log('[acceptSocialChallenge] ⚠️ Métodos de inicio no disponibles, recargando página...');
+                        window.location.reload();
+                    }
+                } catch (battleError) {
+                    console.error('[acceptSocialChallenge] ❌ Error iniciando batalla:', battleError);
+                    // Si falla, intentar recargar la página como último recurso
+                    showToast('Error iniciando batalla. Recargando...', 'error');
+                    setTimeout(() => {
+                        window.location.reload();
+                    }, 2000);
+                }
+            } else {
+                console.error('[acceptSocialChallenge] ❌ No hay match creado para iniciar');
+                showToast('Error: No se pudo crear el match. Por favor, intenta de nuevo.', 'error');
+            }
+            
         } catch (error) {
             console.error('Error accepting social challenge:', error);
             showToast('Error al aceptar desafío', 'error');

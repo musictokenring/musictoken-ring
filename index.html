@@ -1329,6 +1329,20 @@
                         return;
                     }
                     
+                    // CRÍTICO: Recargar saldo ANTES de actualizar variables para mostrar saldos correctos
+                    const walletAddress = window.connectedAddress || localStorage.getItem('mtr_wallet');
+                    if (walletAddress && window.CreditsSystem && typeof window.CreditsSystem.loadBalance === 'function') {
+                        logFn('[selectSongForBattle] 🔄 Recargando saldo antes de seleccionar canción...');
+                        try {
+                            await window.CreditsSystem.loadBalance(walletAddress);
+                            // Esperar un momento para que se actualice la UI
+                            await new Promise(resolve => setTimeout(resolve, 200));
+                            logFn('[selectSongForBattle] ✅ Saldo recargado correctamente');
+                        } catch (balanceError) {
+                            console.error('[selectSongForBattle] ❌ Error recargando saldo:', balanceError);
+                        }
+                    }
+                    
                     // CRÍTICO: Actualizar variables globales PRIMERO antes de cualquier otra lógica
                     if (typeof window !== 'undefined') {
                         window.selectedSong = song;
@@ -1347,6 +1361,16 @@
                         }
                     } catch(e) {
                         logFn('[selectSongForBattle] ⚠️ No se pudo establecer selectedSong local:', e);
+                    }
+                    
+                    // CRÍTICO: Actualizar UI de créditos después de recargar saldo
+                    if (window.CreditsSystem && typeof window.CreditsSystem.updateCreditsDisplay === 'function') {
+                        try {
+                            window.CreditsSystem.updateCreditsDisplay();
+                            logFn('[selectSongForBattle] ✅ UI de créditos actualizada');
+                        } catch (uiError) {
+                            console.error('[selectSongForBattle] ❌ Error actualizando UI de créditos:', uiError);
+                        }
                     }
                     
                     // CRÍTICO: Si hay un desafío pendiente, intentar aceptarlo DESPUÉS de establecer selectedSong
