@@ -2016,12 +2016,26 @@
                     console.log('[INIT] 🔍 Desafío detectado en URL:', challengeParam);
                     // Guardar challenge ID primero
                     window.pendingChallengeId = challengeParam;
+                    console.log('[INIT] ✅ window.pendingChallengeId establecido:', window.pendingChallengeId);
                     
                     // Mostrar UI para aceptar desafío
                     if (session) {
-                        // Cargar información del desafío ANTES de cambiar a modo social
-                        await loadChallengeInfo(challengeParam);
+                        console.log('[INIT] ✅ Sesión encontrada, cargando información del desafío...');
+                        // CRÍTICO: Cargar información del desafío ANTES de cambiar a modo social
+                        const challengeLoaded = await loadChallengeInfo(challengeParam);
+                        console.log('[INIT] Desafío cargado:', challengeLoaded);
+                        console.log('[INIT] window.pendingChallengeBetAmount:', window.pendingChallengeBetAmount);
+                        console.log('[INIT] window.pendingChallengeInfo:', window.pendingChallengeInfo);
+                        
+                        // Cambiar a modo social DESPUÉS de cargar el desafío
                         selectMode('social');
+                        
+                        // CRÍTICO: Forzar actualización de UI después de un pequeño delay para asegurar que el DOM esté listo
+                        setTimeout(() => {
+                            console.log('[INIT] 🔄 Forzando actualización de UI después de selectMode...');
+                            updateActionButtons('social');
+                        }, 100);
+                        
                         if (typeof showToast === 'function') showToast('Desafío detectado. Selecciona tu canción para aceptarlo.', 'info');
                     } else {
                         // Si no hay sesión, cargar después del login
@@ -2678,6 +2692,14 @@
                 var isAcceptingChallenge = window.pendingChallengeId && window.pendingChallengeId !== null;
                 var challengeBetAmount = window.pendingChallengeBetAmount || null;
                 var challengeInfo = window.pendingChallengeInfo || null;
+                
+                console.log('[updateActionButtons] 🔍 Verificando desafío pendiente:', {
+                    isAcceptingChallenge: isAcceptingChallenge,
+                    pendingChallengeId: window.pendingChallengeId,
+                    challengeBetAmount: challengeBetAmount,
+                    challengeInfo: challengeInfo ? '✅ Existe' : '❌ No existe',
+                    mode: mode
+                });
                 
                 // Actualizar título y subtítulo según el contexto
                 // CRÍTICO: Usar modeTitle y buscar/crear socialChallengeSubtitle
@@ -3410,14 +3432,28 @@
         // Cargar información del desafío desde la base de datos
         async function loadChallengeInfo(challengeId) {
             try {
-                // CRÍTICO: Usar window.supabaseClient en lugar de supabaseClient
-                const supabase = window.supabaseClient || (typeof supabaseClient !== 'undefined' ? supabaseClient : null);
-                if (!supabase) {
-                    console.warn('[loadChallengeInfo] Supabase client no disponible');
-                    return;
+                console.log('[loadChallengeInfo] 🔍 INICIANDO carga de desafío:', challengeId);
+                console.log('[loadChallengeInfo] window.supabaseClient disponible:', typeof window.supabaseClient !== 'undefined');
+                
+                // CRÍTICO: Esperar a que Supabase esté disponible
+                let supabase = window.supabaseClient;
+                if (!supabase && typeof supabaseClient !== 'undefined') {
+                    supabase = supabaseClient;
                 }
                 
-                console.log('[loadChallengeInfo] 🔍 Cargando información del desafío:', challengeId);
+                // Si aún no está disponible, esperar un poco
+                if (!supabase) {
+                    console.warn('[loadChallengeInfo] ⏳ Supabase no disponible, esperando...');
+                    await new Promise(resolve => setTimeout(resolve, 500));
+                    supabase = window.supabaseClient || (typeof supabaseClient !== 'undefined' ? supabaseClient : null);
+                }
+                
+                if (!supabase) {
+                    console.error('[loadChallengeInfo] ❌ Supabase client NO disponible después de esperar');
+                    return false;
+                }
+                
+                console.log('[loadChallengeInfo] ✅ Supabase disponible, consultando desafío...');
                 const { data: challenge, error } = await supabase
                     .from('social_challenges')
                     .select('*')
@@ -3426,30 +3462,36 @@
                     .single();
                 
                 if (error || !challenge) {
-                    console.error('[loadChallengeInfo] Error cargando desafío:', error);
+                    console.error('[loadChallengeInfo] ❌ Error cargando desafío:', error);
                     if (typeof showToast === 'function') {
                         showToast('Desafío no encontrado o ya fue aceptado', 'error');
                     }
-                    return;
+                    return false;
                 }
                 
                 // Guardar información del desafío
                 window.pendingChallengeBetAmount = challenge.bet_amount;
                 window.pendingChallengeInfo = challenge;
                 
-                console.log('[loadChallengeInfo] ✅ Desafío cargado:', {
+                console.log('[loadChallengeInfo] ✅✅✅ Desafío cargado EXITOSAMENTE:', {
                     challengeId: challengeId,
                     betAmount: challenge.bet_amount,
-                    challengerSong: challenge.challenger_song_name
+                    challengerSong: challenge.challenger_song_name,
+                    pendingChallengeBetAmount: window.pendingChallengeBetAmount,
+                    pendingChallengeInfo: window.pendingChallengeInfo
                 });
                 
-                // Actualizar UI si ya estamos en modo social
+                // CRÍTICO: Actualizar UI inmediatamente después de cargar
                 if (window.currentMode === 'social') {
+                    console.log('[loadChallengeInfo] 🔄 Actualizando UI porque ya estamos en modo social');
                     updateActionButtons('social');
                 }
                 
+                return true;
             } catch (error) {
-                console.error('[loadChallengeInfo] Error:', error);
+                console.error('[loadChallengeInfo] ❌❌❌ ERROR CRÍTICO:', error);
+                console.error('[loadChallengeInfo] Stack:', error.stack);
+                return false;
             }
         }
         
