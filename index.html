@@ -2071,6 +2071,8 @@
                                 var betInput = document.getElementById('betAmount');
                                 var btn = document.getElementById('createSocialBtn');
                                 var betButtons = document.getElementById('betAmountButtons');
+                                var challengeBetAmount = window.pendingChallengeBetAmount || (window.pendingChallengeInfo && window.pendingChallengeInfo.bet_amount);
+                                
                                 console.log('[INIT] ✅✅✅ VERIFICACIÓN FINAL:', {
                                     betInputReadonly: betInput ? betInput.readOnly : 'NO ENCONTRADO',
                                     betInputValue: betInput ? betInput.value : 'NO ENCONTRADO',
@@ -2079,25 +2081,28 @@
                                     btnExists: !!btn,
                                     betButtonsDisplay: betButtons ? betButtons.style.display : 'NO ENCONTRADO',
                                     pendingChallengeBetAmount: window.pendingChallengeBetAmount,
-                                    pendingChallengeId: window.pendingChallengeId
+                                    challengeBetAmount: challengeBetAmount,
+                                    pendingChallengeId: window.pendingChallengeId,
+                                    challengeInfo: window.pendingChallengeInfo ? '✅ Existe' : '❌ No existe'
                                 });
                                 
                                 // Si aún no está correcto, forzar manualmente
-                                if (betInput && window.pendingChallengeBetAmount && !betInput.readOnly) {
+                                if (betInput && challengeBetAmount && !betInput.readOnly) {
                                     console.warn('[INIT] ⚠️ Campo no está readonly, forzando manualmente...');
-                                    betInput.value = String(window.pendingChallengeBetAmount);
+                                    betInput.value = String(challengeBetAmount);
                                     betInput.readOnly = true;
                                     betInput.style.backgroundColor = 'rgba(0, 0, 0, 0.6)';
                                     betInput.style.cursor = 'not-allowed';
                                     betInput.style.opacity = '0.7';
+                                    betInput.title = 'La apuesta está fijada por el retador: ' + challengeBetAmount + ' créditos';
                                 }
                                 
-                                if (btn && window.pendingChallengeId && btn.textContent.includes('Crear')) {
+                                if (btn && window.pendingChallengeId && challengeBetAmount && btn.textContent.includes('Crear')) {
                                     console.warn('[INIT] ⚠️ Botón dice "Crear", forzando manualmente...');
                                     btn.textContent = '✅ Aceptar e Iniciar Desafío';
                                 }
                                 
-                                if (betButtons && window.pendingChallengeId && betButtons.style.display !== 'none') {
+                                if (betButtons && window.pendingChallengeId && challengeBetAmount && betButtons.style.display !== 'none') {
                                     console.warn('[INIT] ⚠️ Botones de apuesta visibles, ocultando manualmente...');
                                     betButtons.style.display = 'none';
                                 }
