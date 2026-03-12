@@ -4149,107 +4149,87 @@
                         const userId = await window.CreditsSystem.getUserId(walletAddress);
                         
                         if (userId && walletAddress) {
-                            const backendUrl = window.CONFIG?.BACKEND_API || window.CreditsSystem?.backendUrl || 'https://musictoken-ring.onrender.com';
-                            
                             try {
-                                console.log('[refreshMtrBalance] 🔄 Convirtiendo MTR a créditos automáticamente...', {
+                                console.log('[refreshMtrBalance] 🔄 Convirtiendo MTR a créditos automáticamente usando Supabase RPC...', {
                                     userId: userId,
                                     walletAddress: walletAddress,
                                     creditsToAdd: creditsToAdd,
                                     mtrAmount: numericBalance
                                 });
                                 
-                                const addCreditsUrl = `${backendUrl}/api/user/add-credits`;
-                                const addCreditsBody = {
-                                    userId: userId,
-                                    credits: creditsToAdd,
-                                    reason: 'mtr_conversion_auto',
-                                    mtrAmount: numericBalance,
-                                    note: `Conversión automática al cargar: ${numericBalance.toFixed(4)} MTR → ${creditsToAdd.toFixed(2)} créditos USDC`
-                                };
+                                // CRÍTICO: Usar Supabase RPC directamente en lugar del backend que no tiene el endpoint
+                                const supabase = window.supabaseClient || (typeof supabaseClient !== 'undefined' ? supabaseClient : null);
                                 
-                                console.log('[refreshMtrBalance] 🔄 Llamando a add-credits:', {
-                                    url: addCreditsUrl,
-                                    method: 'POST',
-                                    body: addCreditsBody
+                                if (!supabase) {
+                                    console.error('[refreshMtrBalance] ❌ Supabase client no disponible');
+                                    if (typeof showToast === 'function') {
+                                        showToast('Error: Supabase no disponible para conversión automática', 'error');
+                                    }
+                                    return;
+                                }
+                                
+                                console.log('[refreshMtrBalance] 🔄 Llamando a increment_user_credits RPC...');
+                                
+                                // Llamar directamente a la función RPC de Supabase
+                                const { error: rpcError } = await supabase.rpc('increment_user_credits', {
+                                    user_id_param: userId,
+                                    credits_to_add: creditsToAdd
                                 });
                                 
-                                const addCreditsResponse = await fetch(addCreditsUrl, {
-                                    method: 'POST',
-                                    headers: { 'Content-Type': 'application/json' },
-                                    body: JSON.stringify(addCreditsBody)
-                                });
-                                
-                                console.log('[refreshMtrBalance] 🔄 Respuesta de add-credits:', {
-                                    ok: addCreditsResponse.ok,
-                                    status: addCreditsResponse.status,
-                                    statusText: addCreditsResponse.statusText,
-                                    headers: Object.fromEntries(addCreditsResponse.headers.entries())
-                                });
-                                
-                                if (addCreditsResponse.ok) {
-                                    const addData = await addCreditsResponse.json();
-                                    console.log('[refreshMtrBalance] ✅✅✅ Créditos agregados automáticamente desde MTR:', addData);
-                                    console.log('[refreshMtrBalance] ✅ Datos devueltos por el backend:', {
-                                        credits: addData.credits,
-                                        newBalance: addData.newBalance,
-                                        success: addData.success
+                                if (rpcError) {
+                                    console.error('[refreshMtrBalance] ❌❌❌ Error al agregar créditos vía RPC:', {
+                                        error: rpcError,
+                                        userId: userId,
+                                        creditsToAdd: creditsToAdd
                                     });
                                     
-                                    // CRÍTICO: Esperar un momento para que el backend procese la transacción
-                                    await new Promise(resolve => setTimeout(resolve, 500));
-                                    
-                                    // Recargar balance después de la conversión
-                                    console.log('[refreshMtrBalance] 🔄 Recargando balance después de conversión...');
-                                    await window.CreditsSystem.loadBalance(walletAddress);
-                                    
-                                    // CRÍTICO: Forzar actualización del display múltiples veces para asegurar que se refleje
-                                    if (typeof window.CreditsSystem.updateCreditsDisplay === 'function') {
-                                        window.CreditsSystem.updateCreditsDisplay();
-                                    }
-                                    
-                                    // Actualizar también el display del GameEngine
-                                    if (typeof window.GameEngine !== 'undefined' && typeof window.GameEngine.updateBalanceDisplay === 'function') {
-                                        setTimeout(() => {
-                                            window.GameEngine.updateBalanceDisplay();
-                                        }, 100);
-                                        setTimeout(() => {
-                                            window.GameEngine.updateBalanceDisplay();
-                                        }, 500);
-                                    }
-                                    
-                                    // Verificar que los créditos se cargaron correctamente
-                                    const reloadedCredits = window.CreditsSystem?.currentCredits || 0;
-                                    console.log('[refreshMtrBalance] ✅✅✅ Balance recargado después de conversión:', {
-                                        creditsAdded: creditsToAdd,
-                                        reloadedCredits: reloadedCredits,
-                                        success: reloadedCredits > 0
-                                    });
-                                    
-                                    // Mostrar notificación de éxito
                                     if (typeof showToast === 'function') {
                                         showToast(
-                                            `✅ Convertidos ${creditsToAdd.toFixed(2)} créditos desde tu MTR on-chain automáticamente.`,
-                                            'success'
-                                        );
-                                    }
-                                } else {
-                                    const errorText = await addCreditsResponse.text();
-                                    console.error('[refreshMtrBalance] ❌❌❌ Error al agregar créditos:', {
-                                        status: addCreditsResponse.status,
-                                        statusText: addCreditsResponse.statusText,
-                                        errorText: errorText,
-                                        url: addCreditsUrl,
-                                        body: addCreditsBody
-                                    });
-                                    
-                                    // Mostrar error al usuario para que sepa qué pasó
-                                    if (typeof showToast === 'function') {
-                                        showToast(
-                                            `⚠️ No se pudieron convertir créditos automáticamente. Error: ${addCreditsResponse.status} ${addCreditsResponse.statusText}`,
+                                            `⚠️ Error al convertir créditos: ${rpcError.message || 'Error desconocido'}`,
                                             'error'
                                         );
                                     }
+                                    return;
+                                }
+                                
+                                console.log('[refreshMtrBalance] ✅✅✅ Créditos agregados automáticamente desde MTR vía Supabase RPC');
+                                
+                                // CRÍTICO: Esperar un momento para que Supabase procese la transacción
+                                await new Promise(resolve => setTimeout(resolve, 500));
+                                
+                                // Recargar balance después de la conversión
+                                console.log('[refreshMtrBalance] 🔄 Recargando balance después de conversión...');
+                                await window.CreditsSystem.loadBalance(walletAddress);
+                                
+                                // CRÍTICO: Forzar actualización del display múltiples veces para asegurar que se refleje
+                                if (typeof window.CreditsSystem.updateCreditsDisplay === 'function') {
+                                    window.CreditsSystem.updateCreditsDisplay();
+                                }
+                                
+                                // Actualizar también el display del GameEngine
+                                if (typeof window.GameEngine !== 'undefined' && typeof window.GameEngine.updateBalanceDisplay === 'function') {
+                                    setTimeout(() => {
+                                        window.GameEngine.updateBalanceDisplay();
+                                    }, 100);
+                                    setTimeout(() => {
+                                        window.GameEngine.updateBalanceDisplay();
+                                    }, 500);
+                                }
+                                
+                                // Verificar que los créditos se cargaron correctamente
+                                const reloadedCredits = window.CreditsSystem?.currentCredits || 0;
+                                console.log('[refreshMtrBalance] ✅✅✅ Balance recargado después de conversión:', {
+                                    creditsAdded: creditsToAdd,
+                                    reloadedCredits: reloadedCredits,
+                                    success: reloadedCredits > 0
+                                });
+                                
+                                // Mostrar notificación de éxito
+                                if (typeof showToast === 'function') {
+                                    showToast(
+                                        `✅ Convertidos ${creditsToAdd.toFixed(2)} créditos desde tu MTR on-chain automáticamente.`,
+                                        'success'
+                                    );
                                 }
                             } catch (conversionError) {
                                 const isCorsError = conversionError && (

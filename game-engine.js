@@ -1248,42 +1248,49 @@ const GameEngine = {
                         const userIdForConversion = await window.CreditsSystem.getUserId(walletAddress);
                         
                         if (userIdForConversion) {
-                            // Convertir MTR a créditos (asumiendo 1:1 por ahora)
-                            const mtrToUsdcRate = 1; // TODO: Obtener precio real de MTR/USDC
-                            const mtrToConvert = missingCredits / mtrToUsdcRate;
+                            // CRÍTICO: Usar Supabase RPC directamente en lugar del backend que no tiene el endpoint
+                            const supabase = window.supabaseClient || (typeof supabaseClient !== 'undefined' ? supabaseClient : null);
                             
-                            const addCreditsResponse = await fetch(`${backendUrl}/api/user/add-credits`, {
-                                method: 'POST',
-                                headers: { 'Content-Type': 'application/json' },
-                                body: JSON.stringify({
-                                    userId: userIdForConversion,
-                                    credits: missingCredits,
-                                    reason: 'mtr_conversion',
-                                    mtrAmount: mtrToConvert,
-                                    note: `Conversión automática de ${mtrToConvert.toFixed(4)} MTR a ${missingCredits} créditos USDC`
-                                })
-                            });
-                            
-                            if (addCreditsResponse.ok) {
-                                const addData = await addCreditsResponse.json();
-                                console.log('[acceptSocialChallenge] ✅ Créditos agregados automáticamente desde MTR:', addData);
-                                
-                                // Recargar balance después de la conversión
-                                await window.CreditsSystem.loadBalance(walletAddress);
-                                
-                                showToast(
-                                    `✅ Convertidos ${missingCredits.toFixed(2)} créditos desde tu MTR on-chain automáticamente.`,
-                                    'success'
-                                );
-                            } else {
-                                const errorText = await addCreditsResponse.text();
-                                console.error('[acceptSocialChallenge] ❌ Error al convertir MTR a créditos:', errorText);
+                            if (!supabase) {
+                                console.error('[acceptSocialChallenge] ❌ Supabase client no disponible');
                                 showToast(
                                     `Créditos insuficientes. Tienes ${userCredits.toFixed(2)} créditos, necesitas ${normalizedBet}. ` +
                                     `Debes recargar ${missingCredits.toFixed(2)} créditos más para ejecutar este desafío.`,
                                     'error'
                                 );
+                                return;
                             }
+                            
+                            console.log('[acceptSocialChallenge] 🔄 Convirtiendo MTR a créditos usando Supabase RPC...');
+                            
+                            // Llamar directamente a la función RPC de Supabase
+                            const { error: rpcError } = await supabase.rpc('increment_user_credits', {
+                                user_id_param: userIdForConversion,
+                                credits_to_add: missingCredits
+                            });
+                            
+                            if (rpcError) {
+                                console.error('[acceptSocialChallenge] ❌ Error al convertir MTR a créditos vía RPC:', rpcError);
+                                showToast(
+                                    `Créditos insuficientes. Tienes ${userCredits.toFixed(2)} créditos, necesitas ${normalizedBet}. ` +
+                                    `Debes recargar ${missingCredits.toFixed(2)} créditos más para ejecutar este desafío.`,
+                                    'error'
+                                );
+                                return;
+                            }
+                            
+                            console.log('[acceptSocialChallenge] ✅ Créditos agregados automáticamente desde MTR vía Supabase RPC');
+                            
+                            // Esperar un momento para que Supabase procese
+                            await new Promise(resolve => setTimeout(resolve, 500));
+                            
+                            // Recargar balance después de la conversión
+                            await window.CreditsSystem.loadBalance(walletAddress);
+                            
+                            showToast(
+                                `✅ Convertidos ${missingCredits.toFixed(2)} créditos desde tu MTR on-chain automáticamente.`,
+                                'success'
+                            );
                         } else {
                             console.warn('[acceptSocialChallenge] ⚠️ No se pudo obtener userId para conversión');
                             showToast(
@@ -4053,24 +4060,28 @@ const GameEngine = {
             const userId = await window.CreditsSystem.getUserId(walletAddress);
             
             if (userId) {
-                // Add credits via backend
-                const response = await fetch(`${backendUrl}/api/user/add-credits`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        userId,
-                        credits: credits,
-                        reason: 'match_win',
-                        matchId: matchId
-                    })
-                });
-
-                if (!response.ok) {
-                    const errorText = await response.text();
-                    console.error('[game-engine] Error adding credits:', errorText);
+                // CRÍTICO: Usar Supabase RPC directamente en lugar del backend que no tiene el endpoint
+                const supabase = window.supabaseClient || (typeof supabaseClient !== 'undefined' ? supabaseClient : null);
+                
+                if (!supabase) {
+                    console.error('[game-engine] ❌ Supabase client no disponible');
                     showToast('Error al otorgar créditos. Contacta soporte.', 'error');
                     return;
                 }
+                
+                // Llamar directamente a la función RPC de Supabase
+                const { error: rpcError } = await supabase.rpc('increment_user_credits', {
+                    user_id_param: userId,
+                    credits_to_add: credits
+                });
+
+                if (rpcError) {
+                    console.error('[game-engine] ❌ Error agregando créditos vía RPC:', rpcError);
+                    showToast('Error al otorgar créditos. Contacta soporte.', 'error');
+                    return;
+                }
+                
+                console.log('[game-engine] ✅ Créditos agregados vía Supabase RPC:', credits);
 
                 // Record win in database
                 const { data: { session } } = await supabaseClient.auth.getSession();
@@ -4375,40 +4386,39 @@ const GameEngine = {
                                             endpoint: `${backendUrl}/api/user/add-credits`
                                         });
                                         
-                                        // Intentar agregar créditos equivalentes al MTR que el usuario tiene
-                                        // NOTA: Esto es una solución temporal. Idealmente deberíamos hacer un swap real de MTR a USDC
-                                        const addCreditsResponse = await fetch(`${backendUrl}/api/user/add-credits`, {
-                                            method: 'POST',
-                                            headers: { 'Content-Type': 'application/json' },
-                                            body: JSON.stringify({
-                                                userId,
-                                                credits: creditsNeeded,
-                                                reason: 'mtr_conversion',
-                                                mtrAmount: mtrToConvert,
-                                                note: `Conversión automática de ${mtrToConvert.toFixed(4)} MTR a ${creditsNeeded} créditos USDC`
-                                            })
+                                        // CRÍTICO: Usar Supabase RPC directamente en lugar del backend que no tiene el endpoint
+                                        const supabase = window.supabaseClient || (typeof supabaseClient !== 'undefined' ? supabaseClient : null);
+                                        
+                                        if (!supabase) {
+                                            console.error('[updateBalance] ❌ Supabase client no disponible');
+                                            return false;
+                                        }
+                                        
+                                        console.log('[updateBalance] 🔄 Convirtiendo MTR a créditos usando Supabase RPC...');
+                                        
+                                        // Llamar directamente a la función RPC de Supabase
+                                        const { error: rpcError } = await supabase.rpc('increment_user_credits', {
+                                            user_id_param: userId,
+                                            credits_to_add: creditsNeeded
                                         });
                                         
-                                        console.log('[updateBalance] Respuesta de add-credits:', {
-                                            ok: addCreditsResponse.ok,
-                                            status: addCreditsResponse.status,
-                                            statusText: addCreditsResponse.statusText
-                                        });
+                                        if (rpcError) {
+                                            console.error('[updateBalance] ❌ Error al agregar créditos vía RPC:', rpcError);
+                                            return false;
+                                        }
                                         
-                                        if (addCreditsResponse.ok) {
-                                            const addData = await addCreditsResponse.json();
-                                            console.log('[updateBalance] ✅ Créditos agregados automáticamente desde MTR:', addData);
-                                            
-                                            // Esperar un momento para que la base de datos se actualice
-                                            await new Promise(resolve => setTimeout(resolve, 500));
-                                            
-                                            // Recargar balance antes de intentar descontar
-                                            await window.CreditsSystem.loadBalance(walletAddress);
-                                            
-                                            console.log('[updateBalance] 🔄 Intentando descontar créditos después de conversión...');
-                                            
-                                            // Ahora intentar descontar nuevamente
-                                            const retryResponse = await fetch(`${backendUrl}/api/user/deduct-credits`, {
+                                        console.log('[updateBalance] ✅ Créditos agregados automáticamente desde MTR vía Supabase RPC');
+                                        
+                                        // Esperar un momento para que la base de datos se actualice
+                                        await new Promise(resolve => setTimeout(resolve, 500));
+                                        
+                                        // Recargar balance antes de intentar descontar
+                                        await window.CreditsSystem.loadBalance(walletAddress);
+                                        
+                                        console.log('[updateBalance] 🔄 Intentando descontar créditos después de conversión...');
+                                        
+                                        // Ahora intentar descontar nuevamente
+                                        const retryResponse = await fetch(`${backendUrl}/api/user/deduct-credits`, {
                                                 method: 'POST',
                                                 headers: { 'Content-Type': 'application/json' },
                                                 body: JSON.stringify({
