@@ -347,7 +347,31 @@
                 window.currentMode = mode || null;
                 if (modeSelector) modeSelector.classList.add('hidden');
                 if (songSelection) songSelection.classList.remove('hidden');
+                // CRÍTICO: Verificar si hay un desafío pendiente para actualizar título
+                var isAcceptingChallenge = window.pendingChallengeId && window.pendingChallengeId !== null;
+                var challengeInfo = window.pendingChallengeInfo || null;
+                
+                var titles = { 
+                    quick: 'Modo Rápido', 
+                    private: 'Sala Privada', 
+                    practice: 'Modo Práctica', 
+                    tournament: 'Modo Torneo', 
+                    social: (isAcceptingChallenge && challengeInfo) ? 'Aceptar Desafío Social' : 'Desafío Social'
+                };
+                
                 if (modeTitle) modeTitle.textContent = titles[mode] || 'Modo de Juego';
+                
+                // Actualizar subtítulo si es modo social
+                if (mode === 'social') {
+                    var subtitleEl = document.getElementById('socialChallengeSubtitle');
+                    if (subtitleEl) {
+                        if (isAcceptingChallenge && challengeInfo) {
+                            subtitleEl.textContent = 'Elige tu canción para aceptar el desafío de ' + (challengeInfo.challenger_song_name || 'otro usuario');
+                        } else {
+                            subtitleEl.textContent = 'Elige tu canción y realiza tu apuesta';
+                        }
+                    }
+                }
                 
                 // En móvil, hacer scroll automático al selector de canciones
                 if (typeof isMobileDevice === 'function' && isMobileDevice()) {
@@ -697,7 +721,7 @@
                 <button type="button" onclick="backToModes()" class="px-4 py-2 rounded-lg text-sm font-medium bg-white/5 border border-white/10 text-gray-300 hover:text-white hover:border-white/20 transition cursor-pointer">← Volver</button>
                 <div>
                     <h2 class="text-2xl font-bold text-white" id="modeTitle">Modo Rápido</h2>
-                    <p class="text-gray-400 text-sm">Elige tu canción y realiza tu apuesta</p>
+                    <p class="text-gray-400 text-sm" id="socialChallengeSubtitle">Elige tu canción y realiza tu apuesta</p>
                 </div>
             </div>
             <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
@@ -1989,6 +2013,9 @@
                 }
                 var challengeParam = urlParams.get('challenge');
                 if (challengeParam) {
+                    // Cargar información del desafío
+                    await loadChallengeInfo(challengeParam);
+                    
                     // Mostrar UI para aceptar desafío
                     if (session) {
                         selectMode('social');
@@ -2250,8 +2277,54 @@
             window.currentMode = mode;
             document.getElementById('modeSelector').classList.add('hidden');
             document.getElementById('songSelection').classList.remove('hidden');
-            var titles = { quick: 'Modo Rápido', private: 'Sala Privada', practice: 'Modo Práctica', tournament: 'Modo Torneo', social: 'Desafío Social' };
+            // CRÍTICO: Verificar si hay un desafío pendiente para actualizar título
+            var isAcceptingChallenge = window.pendingChallengeId && window.pendingChallengeId !== null;
+            var challengeInfo = window.pendingChallengeInfo || null;
+            
+            var titles = { 
+                quick: 'Modo Rápido', 
+                private: 'Sala Privada', 
+                practice: 'Modo Práctica', 
+                tournament: 'Modo Torneo', 
+                social: (isAcceptingChallenge && challengeInfo) ? 'Aceptar Desafío Social' : 'Desafío Social'
+            };
+            
+            var subtitles = {
+                quick: 'Elige tu canción y realiza tu apuesta',
+                private: 'Crea o únete a una sala privada',
+                practice: 'Practica sin riesgo con saldo demo',
+                tournament: 'Participa en torneos',
+                social: (isAcceptingChallenge && challengeInfo) 
+                    ? 'Elige tu canción para aceptar el desafío de ' + (challengeInfo.challenger_song_name || 'otro usuario')
+                    : 'Elige tu canción y realiza tu apuesta'
+            };
+            // CRÍTICO: Verificar si hay un desafío pendiente para actualizar título y subtítulo
+            var isAcceptingChallenge = window.pendingChallengeId && window.pendingChallengeId !== null;
+            var challengeInfo = window.pendingChallengeInfo || null;
+            
+            var titles = { 
+                quick: 'Modo Rápido', 
+                private: 'Sala Privada', 
+                practice: 'Modo Práctica', 
+                tournament: 'Modo Torneo', 
+                social: (isAcceptingChallenge && challengeInfo) ? 'Aceptar Desafío Social' : 'Desafío Social'
+            };
+            
+            var subtitles = {
+                quick: 'Elige tu canción y realiza tu apuesta',
+                private: 'Crea o únete a una sala privada',
+                practice: 'Practica sin riesgo con saldo demo',
+                tournament: 'Participa en torneos',
+                social: (isAcceptingChallenge && challengeInfo) 
+                    ? 'Elige tu canción para aceptar el desafío de ' + (challengeInfo.challenger_song_name || 'otro usuario')
+                    : 'Elige tu canción y realiza tu apuesta'
+            };
+            
             document.getElementById('modeTitle').textContent = titles[mode] || 'Modo de Juego';
+            var subtitleEl = document.getElementById('socialChallengeSubtitle');
+            if (subtitleEl && mode === 'social') {
+                subtitleEl.textContent = subtitles[mode] || 'Elige tu canción y realiza tu apuesta';
+            }
             updateActionButtons(mode);
             
             // Actualizar display de balance según el modo
@@ -2593,13 +2666,69 @@
                     }
                 }
                 
+                // CRÍTICO: Verificar si hay un desafío pendiente de aceptar
+                var isAcceptingChallenge = window.pendingChallengeId && window.pendingChallengeId !== null;
+                var challengeBetAmount = window.pendingChallengeBetAmount || null;
+                var challengeInfo = window.pendingChallengeInfo || null;
+                
+                // Actualizar título y subtítulo según el contexto
+                var titleEl = document.getElementById('socialChallengeTitle');
+                var subtitleEl = document.getElementById('socialChallengeSubtitle');
+                if (isAcceptingChallenge && challengeInfo) {
+                    if (titleEl) titleEl.textContent = 'Aceptar Desafío Social';
+                    if (subtitleEl) subtitleEl.textContent = 'Elige tu canción para aceptar el desafío de ' + (challengeInfo.challenger_song_name || 'otro usuario');
+                } else {
+                    if (titleEl) titleEl.textContent = 'Desafío Social';
+                    if (subtitleEl) subtitleEl.textContent = 'Elige tu canción y realiza tu apuesta';
+                }
+                
+                // Si hay un desafío pendiente, configurar UI para aceptar
+                if (isAcceptingChallenge && challengeBetAmount) {
+                    // Hacer el campo de apuesta readonly y mostrar el betAmount del desafío
+                    var betAmountInput = document.getElementById('betAmount');
+                    if (betAmountInput) {
+                        betAmountInput.value = String(challengeBetAmount);
+                        betAmountInput.readOnly = true;
+                        betAmountInput.style.backgroundColor = 'rgba(0, 0, 0, 0.6)';
+                        betAmountInput.style.cursor = 'not-allowed';
+                        betAmountInput.title = 'La apuesta está fijada por el retador: ' + challengeBetAmount + ' créditos';
+                    }
+                    
+                    // Ocultar botones de apuesta rápida
+                    var betAmountButtons = document.getElementById('betAmountButtons');
+                    if (betAmountButtons) {
+                        betAmountButtons.style.display = 'none';
+                    }
+                } else {
+                    // Si no hay desafío pendiente, permitir editar apuesta
+                    var betAmountInput = document.getElementById('betAmount');
+                    if (betAmountInput) {
+                        betAmountInput.readOnly = false;
+                        betAmountInput.style.backgroundColor = '';
+                        betAmountInput.style.cursor = '';
+                        betAmountInput.title = '';
+                    }
+                    
+                    // Mostrar botones de apuesta rápida
+                    var betAmountButtons = document.getElementById('betAmountButtons');
+                    if (betAmountButtons) {
+                        betAmountButtons.style.display = 'flex';
+                    }
+                }
+                
                 // Crear botón y configurar listener ANTES de insertar en DOM
                 var btn = document.createElement('button');
                 btn.type = 'button';
                 btn.className = btnPrimary;
                 btn.id = 'createSocialBtn';
                 btn.disabled = true;
-                btn.textContent = '⚔️ Crear Desafío';
+                
+                // CRÍTICO: Cambiar texto del botón según si está aceptando o creando
+                if (isAcceptingChallenge) {
+                    btn.textContent = '✅ Aceptar e Iniciar Desafío';
+                } else {
+                    btn.textContent = '⚔️ Crear Desafío';
+                }
                 
                 // Agregar listener ANTES de insertar
                 var logFn = window.__originalLog || console.log;
@@ -2615,6 +2744,19 @@
                     e.preventDefault();
                     e.stopPropagation();
                     e.stopImmediatePropagation();
+                    
+                    // CRÍTICO: Si hay un desafío pendiente, aceptar en lugar de crear
+                    if (window.pendingChallengeId && window.currentMode === 'social') {
+                        logFn('[createSocialBtn] 🔗 Aceptando desafío pendiente:', window.pendingChallengeId);
+                        if (window.selectedSong && typeof handleSocialChallengeAccept === 'function') {
+                            handleSocialChallengeAccept();
+                        } else {
+                            if (typeof showToast === 'function') {
+                                showToast('Selecciona una canción primero para aceptar el desafío', 'info');
+                            }
+                        }
+                        return;
+                    }
                     
                     logFn('[createSocialBtn] Verificando funciones...');
                     logFn('[createSocialBtn] window.createSocialChallenge:', typeof window.createSocialChallenge);
@@ -2666,6 +2808,19 @@
                     logFn('[createSocialBtn] ✅ CLICK DETECTADO (onclick fallback)');
                     e.preventDefault();
                     e.stopPropagation();
+                    
+                    // CRÍTICO: Si hay un desafío pendiente, aceptar en lugar de crear
+                    if (window.pendingChallengeId && window.currentMode === 'social') {
+                        if (window.selectedSong && typeof handleSocialChallengeAccept === 'function') {
+                            handleSocialChallengeAccept();
+                        } else {
+                            if (typeof showToast === 'function') {
+                                showToast('Selecciona una canción primero para aceptar el desafío', 'info');
+                            }
+                        }
+                        return;
+                    }
+                    
                     if (typeof window.createSocialChallenge === 'function') {
                         window.createSocialChallenge();
                     }
@@ -3213,13 +3368,65 @@
             }
         }
 
+        // Cargar información del desafío desde la base de datos
+        async function loadChallengeInfo(challengeId) {
+            try {
+                if (typeof supabaseClient === 'undefined') {
+                    console.warn('[loadChallengeInfo] Supabase client no disponible');
+                    return;
+                }
+                
+                const { data: challenge, error } = await supabaseClient
+                    .from('social_challenges')
+                    .select('*')
+                    .eq('challenge_id', challengeId)
+                    .eq('status', 'pending')
+                    .single();
+                
+                if (error || !challenge) {
+                    console.error('[loadChallengeInfo] Error cargando desafío:', error);
+                    if (typeof showToast === 'function') {
+                        showToast('Desafío no encontrado o ya fue aceptado', 'error');
+                    }
+                    return;
+                }
+                
+                // Guardar información del desafío
+                window.pendingChallengeBetAmount = challenge.bet_amount;
+                window.pendingChallengeInfo = challenge;
+                
+                console.log('[loadChallengeInfo] ✅ Desafío cargado:', {
+                    challengeId: challengeId,
+                    betAmount: challenge.bet_amount,
+                    challengerSong: challenge.challenger_song_name
+                });
+                
+                // Actualizar UI si ya estamos en modo social
+                if (window.currentMode === 'social') {
+                    updateActionButtons('social');
+                }
+                
+            } catch (error) {
+                console.error('[loadChallengeInfo] Error:', error);
+            }
+        }
+        
         // Manejar aceptación de desafío cuando se selecciona canción
         async function handleSocialChallengeAccept() {
             if (window.pendingChallengeId && selectedSong) {
-                var bet = parseFloat(document.getElementById('betAmount').value) || 5;
+                // CRÍTICO: Usar el betAmount del desafío, no el del input
+                var bet = window.pendingChallengeBetAmount || parseFloat(document.getElementById('betAmount').value) || 5;
+                console.log('[handleSocialChallengeAccept] Aceptando desafío con apuesta:', bet);
+                
                 if (typeof GameEngine !== 'undefined' && typeof GameEngine.acceptSocialChallenge === 'function') {
                     await GameEngine.acceptSocialChallenge(window.pendingChallengeId, selectedSong, bet);
                     window.pendingChallengeId = null; // Limpiar después de aceptar
+                    window.pendingChallengeBetAmount = null;
+                    window.pendingChallengeInfo = null;
+                }
+            } else {
+                if (typeof showToast === 'function') {
+                    showToast('Selecciona una canción primero para aceptar el desafío', 'info');
                 }
             }
         }
