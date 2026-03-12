@@ -137,8 +137,20 @@ BEGIN
     IF credits_record.total_credits < 100 THEN
         RAISE NOTICE '';
         RAISE NOTICE 'PASO 5: Agregando créditos de prueba...';
-        INSERT INTO user_credits (user_id, credits, reason, created_at)
-        VALUES (user_id_found, credits_to_add, 'testing_treasury_setup', NOW());
+        -- Verificar si la columna reason existe antes de usarla
+        IF EXISTS (
+            SELECT 1 FROM information_schema.columns 
+            WHERE table_name = 'user_credits' 
+            AND column_name = 'reason'
+        ) THEN
+            -- Si existe la columna reason, usarla
+            INSERT INTO user_credits (user_id, credits, reason, created_at)
+            VALUES (user_id_found, credits_to_add, 'testing_treasury_setup', NOW());
+        ELSE
+            -- Si NO existe la columna reason, insertar sin ella
+            INSERT INTO user_credits (user_id, credits, created_at)
+            VALUES (user_id_found, credits_to_add, NOW());
+        END IF;
         RAISE NOTICE '✅ Agregados % créditos de prueba', credits_to_add;
         RAISE NOTICE '   Nuevo total: % créditos', credits_record.total_credits + credits_to_add;
     ELSE
