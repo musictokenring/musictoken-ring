@@ -21,6 +21,7 @@ DECLARE
     user_email TEXT := 'fermorillomusic@gmail.com';
     user_id_found UUID;
     credits_to_add NUMERIC := 1000;
+    current_credits NUMERIC;
 BEGIN
     RAISE NOTICE '==========================================';
     RAISE NOTICE 'CONFIGURACIÓN WALLET TESORERÍA PARA TESTING';
@@ -61,38 +62,34 @@ BEGIN
     RAISE NOTICE '✅ Wallet vinculada';
     
     -- Verificar créditos actuales
-    DECLARE
-        current_credits NUMERIC;
-    BEGIN
-        SELECT COALESCE(SUM(credits), 0) INTO current_credits
-        FROM user_credits
-        WHERE user_id = user_id_found;
-        
+    SELECT COALESCE(SUM(credits), 0) INTO current_credits
+    FROM user_credits
+    WHERE user_id = user_id_found;
+    
+    RAISE NOTICE '';
+    RAISE NOTICE 'Créditos actuales: %', current_credits;
+    
+    -- Agregar créditos si es necesario (DESHABILITANDO TRIGGERS primero)
+    IF current_credits < 100 THEN
         RAISE NOTICE '';
-        RAISE NOTICE 'Créditos actuales: %', current_credits;
+        RAISE NOTICE 'Agregando créditos de prueba...';
         
-        -- Agregar créditos si es necesario (DESHABILITANDO TRIGGERS primero)
-        IF current_credits < 100 THEN
-            RAISE NOTICE '';
-            RAISE NOTICE 'Agregando créditos de prueba...';
-            
-            -- Deshabilitar triggers problemáticos
-            ALTER TABLE user_credits DISABLE TRIGGER ALL;
-            
-            -- Insertar créditos (solo user_id y credits, sin columnas opcionales)
-            INSERT INTO user_credits (user_id, credits)
-            VALUES (user_id_found, credits_to_add);
-            
-            -- Rehabilitar triggers
-            ALTER TABLE user_credits ENABLE TRIGGER ALL;
-            
-            RAISE NOTICE '✅ Agregados % créditos de prueba', credits_to_add;
-            RAISE NOTICE '   Nuevo total: % créditos', current_credits + credits_to_add;
-        ELSE
-            RAISE NOTICE '';
-            RAISE NOTICE 'Usuario ya tiene suficientes créditos (%)', current_credits;
-        END IF;
-    END;
+        -- Deshabilitar triggers problemáticos temporalmente
+        ALTER TABLE user_credits DISABLE TRIGGER ALL;
+        
+        -- Insertar créditos (solo user_id y credits, sin columnas opcionales)
+        INSERT INTO user_credits (user_id, credits)
+        VALUES (user_id_found, credits_to_add);
+        
+        -- Rehabilitar triggers
+        ALTER TABLE user_credits ENABLE TRIGGER ALL;
+        
+        RAISE NOTICE '✅ Agregados % créditos de prueba', credits_to_add;
+        RAISE NOTICE '   Nuevo total: % créditos', current_credits + credits_to_add;
+    ELSE
+        RAISE NOTICE '';
+        RAISE NOTICE 'Usuario ya tiene suficientes créditos (%)', current_credits;
+    END IF;
     
     RAISE NOTICE '';
     RAISE NOTICE '==========================================';
