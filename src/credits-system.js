@@ -198,7 +198,11 @@
                 }
 
             } catch (error) {
-                console.error('[credits-system] Error loading balance:', error);
+                console.error('[credits-system] ❌❌❌ ERROR loading balance:', error);
+                console.error('[credits-system] ❌ Error message:', error.message);
+                console.error('[credits-system] ❌ Error stack:', error.stack);
+                console.error('[credits-system] ❌ Wallet address:', walletAddress);
+                console.error('[credits-system] ❌ Backend URL:', this.backendUrl);
                 this.currentCredits = 0;
                 this.currentUsdcValue = 0;
                 this.updateCreditsDisplay();
