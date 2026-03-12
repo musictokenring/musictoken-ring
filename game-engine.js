@@ -3356,10 +3356,13 @@ const GameEngine = {
         
         // Procesar premios
         if (match.match_type !== 'practice') {
+            // CRÍTICO: Determinar el userId del ganador basado en el match, no en la wallet del usuario actual
+            const winnerUserId = winner === 1 ? match.player1_id : match.player2_id;
+            
             if (userWon) {
                 // Award credits instead of MTR directly
                 const creditsWon = payouts.winnerPayout; // Credits amount (ya con fee descontado)
-                await this.awardCredits(creditsWon, match.id);
+                await this.awardCredits(creditsWon, match.id, winnerUserId);
                 // NO llamar updateBalance aquí para evitar duplicación
             }
             // Enviar fee de apuesta (2%) al vault
@@ -4282,28 +4285,39 @@ const GameEngine = {
     /**
      * Award credits to user (for wins)
      * NUEVO: Los créditos otorgados ya tienen el fee del 2% descontado del pozo
+     * @param {number} credits - Cantidad de créditos a otorgar
+     * @param {string} matchId - ID del match
+     * @param {string} winnerUserId - ID del usuario ganador (opcional, si no se proporciona usa el usuario actual)
      */
-    async awardCredits(credits, matchId = null) {
+    async awardCredits(credits, matchId = null, winnerUserId = null) {
         try {
-            const walletAddress = this.connectedWallet || localStorage.getItem('mtr_wallet');
-            if (!walletAddress || !window.CreditsSystem) {
-                console.warn('[game-engine] Cannot award credits: wallet or CreditsSystem not available');
+            const supabase = window.supabaseClient || (typeof supabaseClient !== 'undefined' ? supabaseClient : null);
+            if (!supabase) {
+                console.error('[game-engine] ❌ Supabase client no disponible');
+                showToast('Error al otorgar créditos. Contacta soporte.', 'error');
                 return;
             }
-
-            // Update credits via backend API
-            const backendUrl = window.CONFIG?.BACKEND_API || window.CreditsSystem?.backendUrl || 'https://musictoken-ring.onrender.com';
-            const userId = await window.CreditsSystem.getUserId(walletAddress);
             
-            if (userId) {
-                // CRÍTICO: Usar Supabase RPC directamente en lugar del backend que no tiene el endpoint
-                const supabase = window.supabaseClient || (typeof supabaseClient !== 'undefined' ? supabaseClient : null);
-                
-                if (!supabase) {
-                    console.error('[game-engine] ❌ Supabase client no disponible');
-                    showToast('Error al otorgar créditos. Contacta soporte.', 'error');
+            // CRÍTICO: Si se proporciona winnerUserId, usarlo directamente
+            // Si no, obtener el userId del usuario actual como fallback
+            let userId = winnerUserId;
+            
+            if (!userId) {
+                // Fallback: obtener userId del usuario actual
+                const walletAddress = this.connectedWallet || localStorage.getItem('mtr_wallet');
+                if (!walletAddress || !window.CreditsSystem) {
+                    console.warn('[game-engine] Cannot award credits: wallet or CreditsSystem not available');
                     return;
                 }
+                userId = await window.CreditsSystem.getUserId(walletAddress);
+            }
+            
+            if (userId) {
+                console.log('[awardCredits] 🎯 Otorgando créditos al ganador:', {
+                    winnerUserId: userId,
+                    credits: credits,
+                    matchId: matchId
+                });
                 
                 // CRÍTICO: Verificar que el usuario esté autenticado antes de llamar a RPC
                 const { data: { session }, error: sessionError } = await supabase.auth.getSession();
@@ -4330,31 +4344,36 @@ const GameEngine = {
                 
                 console.log('[game-engine] ✅ Créditos agregados vía Supabase RPC:', credits);
 
-                // Record win in database (reutilizar session ya obtenida arriba)
-                if (session?.user?.id) {
-                    // CRÍTICO: Registrar victoria en match_wins
-                    const { error: winError } = await supabaseClient
-                        .from('match_wins')
-                        .insert([{
-                            user_id: session.user.id,
-                            match_id: matchId,
-                            credits_won: credits,
-                            created_at: new Date().toISOString()
-                        }]);
-                    
-                    if (winError) {
-                        console.error('[awardCredits] ❌ Error registrando victoria:', winError);
-                    } else {
-                        console.log('[awardCredits] ✅ Victoria registrada en match_wins');
-                    }
-                    
-                    // CRÍTICO: Actualizar estadísticas del usuario
-                    await this.updateUserStats(session.user.id, true, credits, matchId);
+                // CRÍTICO: Registrar victoria usando el winnerUserId, no session.user.id
+                // Record win in database
+                const { error: winError } = await supabaseClient
+                    .from('match_wins')
+                    .insert([{
+                        user_id: userId, // Usar winnerUserId, no session.user.id
+                        match_id: matchId,
+                        credits_won: credits,
+                        created_at: new Date().toISOString()
+                    }]);
+                
+                if (winError) {
+                    console.error('[awardCredits] ❌ Error registrando victoria:', winError);
+                } else {
+                    console.log('[awardCredits] ✅ Victoria registrada en match_wins para usuario:', userId);
                 }
-
-                // Reload credits balance
-                await window.CreditsSystem.loadBalance(walletAddress);
-                showToast(`¡Ganaste ${credits.toFixed(2)} créditos (estables)!`, 'success');
+                
+                // CRÍTICO: Actualizar estadísticas del ganador (no del usuario actual)
+                await this.updateUserStats(userId, true, credits, matchId);
+                
+                // CRÍTICO: Recargar balance solo si el ganador es el usuario actual
+                if (session?.user?.id === userId) {
+                    const walletAddress = this.connectedWallet || localStorage.getItem('mtr_wallet');
+                    if (walletAddress && window.CreditsSystem) {
+                        await window.CreditsSystem.loadBalance(walletAddress);
+                        showToast(`¡Ganaste ${credits.toFixed(2)} créditos (estables)!`, 'success');
+                    }
+                } else {
+                    console.log('[awardCredits] ℹ️ El ganador no es el usuario actual, no se muestra toast');
+                }
             }
         } catch (error) {
             console.error('[game-engine] Error awarding credits:', error);
