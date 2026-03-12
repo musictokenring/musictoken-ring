@@ -556,24 +556,21 @@
             pointer-events: none; /* No interfiere con clics */
         }
         
-        /* Bordes laterales usando elementos adicionales creados dinámicamente */
+        /* Bordes laterales usando border-left y border-right */
         .challenge-section-active {
-            box-shadow: 
-                0 0 0 5px rgba(0, 243, 255, 0.5) inset,
-                0 0 0 5px rgba(0, 243, 255, 0.5);
+            border-left: 5px solid rgba(0, 243, 255, 0.5);
+            border-right: 5px solid rgba(0, 243, 255, 0.5);
             animation: borderSideGlow 2s ease-in-out infinite;
         }
         
         @keyframes borderSideGlow {
             0%, 100% {
-                box-shadow: 
-                    0 0 0 5px rgba(0, 243, 255, 0.4) inset,
-                    0 0 0 5px rgba(0, 243, 255, 0.4);
+                border-left-color: rgba(0, 243, 255, 0.4);
+                border-right-color: rgba(0, 243, 255, 0.4);
             }
             50% {
-                box-shadow: 
-                    0 0 0 5px rgba(236, 72, 153, 0.7) inset,
-                    0 0 0 5px rgba(236, 72, 153, 0.7);
+                border-left-color: rgba(236, 72, 153, 0.7);
+                border-right-color: rgba(236, 72, 153, 0.7);
             }
         }
         
