@@ -2,13 +2,13 @@
 -- CONFIGURAR WALLET DE TESORERÍA PARA TESTING
 -- ==========================================
 -- Este script configura la wallet de tesorería para que pueda usarse en testing
--- Vincula la wallet de tesorería al usuario de Google (FerMorilloMusic.com)
+-- Vincula la wallet de tesorería al usuario de Google (fermorillomusic@gmail.com)
 -- y verifica/crea créditos si es necesario
 
 DO $$
 DECLARE
     treasury_wallet TEXT := '0x75376BC58830f27415402875D26B73A6BE8E2253';
-    user_email TEXT := 'fermorillomusic.com'; -- Buscará usuarios con este email
+    user_email TEXT := 'fermorillomusic@gmail.com'; -- Buscará usuarios con este email
     user_record RECORD;
     wallet_record RECORD;
     credits_record RECORD;
