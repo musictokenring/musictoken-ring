@@ -2745,28 +2745,47 @@
                 
                 // Si hay un desafío pendiente, configurar UI para aceptar
                 if (isAcceptingChallenge && challengeBetAmount) {
+                    console.log('[updateActionButtons] ✅ Configurando UI para ACEPTAR desafío:', {
+                        challengeBetAmount: challengeBetAmount,
+                        challengeInfo: challengeInfo
+                    });
+                    
                     // Hacer el campo de apuesta readonly y mostrar el betAmount del desafío
                     var betAmountInput = document.getElementById('betAmount');
                     if (betAmountInput) {
                         betAmountInput.value = String(challengeBetAmount);
                         betAmountInput.readOnly = true;
+                        betAmountInput.disabled = false; // Asegurar que no esté disabled
                         betAmountInput.style.backgroundColor = 'rgba(0, 0, 0, 0.6)';
                         betAmountInput.style.cursor = 'not-allowed';
+                        betAmountInput.style.opacity = '0.7';
                         betAmountInput.title = 'La apuesta está fijada por el retador: ' + challengeBetAmount + ' créditos';
+                        console.log('[updateActionButtons] ✅ Campo de apuesta configurado como readonly con valor:', challengeBetAmount);
+                    } else {
+                        console.error('[updateActionButtons] ❌ Campo betAmount NO encontrado');
                     }
                     
                     // Ocultar botones de apuesta rápida
                     var betAmountButtons = document.getElementById('betAmountButtons');
                     if (betAmountButtons) {
                         betAmountButtons.style.display = 'none';
+                        console.log('[updateActionButtons] ✅ Botones de apuesta rápida ocultos');
+                    } else {
+                        console.warn('[updateActionButtons] ⚠️ Botones de apuesta rápida NO encontrados');
                     }
                 } else {
+                    console.log('[updateActionButtons] ⚠️ NO hay desafío pendiente o betAmount no disponible:', {
+                        isAcceptingChallenge: isAcceptingChallenge,
+                        challengeBetAmount: challengeBetAmount
+                    });
+                    
                     // Si no hay desafío pendiente, permitir editar apuesta
                     var betAmountInput = document.getElementById('betAmount');
                     if (betAmountInput) {
                         betAmountInput.readOnly = false;
                         betAmountInput.style.backgroundColor = '';
                         betAmountInput.style.cursor = '';
+                        betAmountInput.style.opacity = '';
                         betAmountInput.title = '';
                     }
                     
