@@ -4015,17 +4015,32 @@
                 if (!gameEngineAvailable) {
                     console.log('[handleSocialChallengeAccept] ⏳ GameEngine no disponible, esperando...');
                     console.log('[handleSocialChallengeAccept] Verificando window.GameEngine:', typeof window.GameEngine);
+                    console.log('[handleSocialChallengeAccept] window.GameEngine completo:', window.GameEngine);
                     
-                    // Esperar hasta 5 segundos (aumentado de 3) con múltiples intentos
-                    for (let i = 0; i < 25; i++) {
+                    // CRÍTICO: Verificar si hay errores de sintaxis que impiden la carga
+                    const gameEngineScript = document.querySelector('script[src*="game-engine"]');
+                    if (gameEngineScript) {
+                        console.log('[handleSocialChallengeAccept] 📜 Script de GameEngine encontrado:', gameEngineScript.src);
+                        console.log('[handleSocialChallengeAccept] Script completo:', gameEngineScript.complete);
+                        console.log('[handleSocialChallengeAccept] Script readyState:', gameEngineScript.readyState);
+                    } else {
+                        console.error('[handleSocialChallengeAccept] ❌ Script de GameEngine NO encontrado en el DOM!');
+                    }
+                    
+                    // Esperar hasta 8 segundos con múltiples intentos
+                    for (let i = 0; i < 40; i++) {
                         await new Promise(resolve => setTimeout(resolve, 200));
                         gameEngineAvailable = typeof window.GameEngine !== 'undefined' && typeof window.GameEngine.acceptSocialChallenge === 'function';
                         if (gameEngineAvailable) {
                             console.log('[handleSocialChallengeAccept] ✅ GameEngine disponible después de', (i + 1) * 200, 'ms');
                             break;
                         }
-                        if (i === 0 || i === 4 || i === 9 || i === 14 || i === 19) {
-                            console.log('[handleSocialChallengeAccept] ⏳ Esperando GameEngine... Intento', i + 1, '/25');
+                        if (i === 0 || i === 4 || i === 9 || i === 14 || i === 19 || i === 24 || i === 29 || i === 34) {
+                            console.log('[handleSocialChallengeAccept] ⏳ Esperando GameEngine... Intento', i + 1, '/40');
+                            console.log('[handleSocialChallengeAccept] Estado actual - window.GameEngine:', typeof window.GameEngine);
+                            if (typeof window.GameEngine !== 'undefined') {
+                                console.log('[handleSocialChallengeAccept] Métodos disponibles:', Object.keys(window.GameEngine || {}));
+                            }
                         }
                     }
                     
@@ -4033,6 +4048,8 @@
                     if (!gameEngineAvailable && typeof window.GameEngine !== 'undefined') {
                         console.warn('[handleSocialChallengeAccept] ⚠️ GameEngine existe pero acceptSocialChallenge no está disponible');
                         console.warn('[handleSocialChallengeAccept] Métodos disponibles:', Object.keys(window.GameEngine || {}));
+                        console.warn('[handleSocialChallengeAccept] Tipo de GameEngine:', typeof window.GameEngine);
+                        console.warn('[handleSocialChallengeAccept] GameEngine completo:', window.GameEngine);
                         
                         // Intentar inicializar GameEngine si existe pero no está completo
                         if (typeof window.GameEngine.init === 'function') {
@@ -4049,14 +4066,11 @@
                         }
                     }
                     
-                    // Si aún no está disponible, verificar si el script se está cargando
+                    // Si aún no está disponible después de todo, intentar recargar el script
                     if (!gameEngineAvailable) {
-                        const gameEngineScript = document.querySelector('script[src*="game-engine"]');
-                        if (gameEngineScript && !gameEngineScript.complete) {
-                            console.log('[handleSocialChallengeAccept] ⏳ Script de GameEngine aún cargando, esperando adicional...');
-                            await new Promise(resolve => setTimeout(resolve, 2000));
-                            gameEngineAvailable = typeof window.GameEngine !== 'undefined' && typeof window.GameEngine.acceptSocialChallenge === 'function';
-                        }
+                        console.error('[handleSocialChallengeAccept] ❌❌❌ GameEngine NO disponible después de esperar 8 segundos');
+                        console.error('[handleSocialChallengeAccept] Esto puede indicar un error de sintaxis en game-engine.js');
+                        console.error('[handleSocialChallengeAccept] Verifica la consola para errores de sintaxis');
                     }
                 }
                 

@@ -1389,7 +1389,7 @@ const GameEngine = {
                 .eq('id', challenge.id);
             
             // CRÍTICO: Recargar saldo DESPUÉS de crear el match para reflejar la deducción
-            const walletAddress = this.connectedWallet || localStorage.getItem('mtr_wallet');
+            // CRÍTICO: Usar walletAddress ya declarado arriba, no redeclarar
             if (walletAddress && window.CreditsSystem) {
                 console.log('[acceptSocialChallenge] 🔄 Recargando saldo después de crear match...');
                 await new Promise(resolve => setTimeout(resolve, 500));
@@ -1418,7 +1418,7 @@ const GameEngine = {
             showToast('Error al aceptar desafío', 'error');
             
             // CRÍTICO: Recargar saldo incluso si hay error para asegurar sincronización
-            const walletAddress = this.connectedWallet || localStorage.getItem('mtr_wallet');
+            // CRÍTICO: Usar walletAddress ya declarado arriba, no redeclarar
             if (walletAddress && window.CreditsSystem) {
                 console.log('[acceptSocialChallenge] 🔄 Recargando saldo después de error...');
                 await window.CreditsSystem.loadBalance(walletAddress);
