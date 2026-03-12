@@ -501,14 +501,23 @@ const GameEngine = {
         // ESPECIFICACIÓN REFINADA: Mostrar SOLO créditos estables como "MTR créditos jugables"
         // NO mostrar MTR nativo como saldo jugable - solo se maneja en backend
         // Obtener créditos estables del sistema de créditos
-        // CRÍTICO: Esperar a que CreditsSystem haya cargado los créditos antes de mostrar
-        let creditsBalance = 0;
+        // CRÍTICO: NO sobrescribir el saldo si CreditsSystem no está disponible - mantener el valor actual del DOM
+        let creditsBalance = null;
         if (window.CreditsSystem && window.CreditsSystem.currentCredits !== undefined) {
             creditsBalance = Number(window.CreditsSystem.currentCredits || 0);
             console.log('[updateBalanceDisplay] 🔄 Créditos obtenidos de CreditsSystem:', creditsBalance);
         } else {
             console.warn('[updateBalanceDisplay] ⚠️ CreditsSystem no disponible o créditos no cargados aún');
-            // Si CreditsSystem no está disponible, no actualizar para evitar mostrar 0 incorrectamente
+            // CRÍTICO: Si CreditsSystem no está disponible, leer el valor actual del DOM para NO borrarlo
+            const currentBalanceEl = document.getElementById('userBalance');
+            if (currentBalanceEl && currentBalanceEl.textContent && currentBalanceEl.textContent !== '0') {
+                const currentValue = parseFloat(currentBalanceEl.textContent) || 0;
+                console.log('[updateBalanceDisplay] ⚠️ Manteniendo valor actual del DOM:', currentValue);
+                // NO actualizar - mantener el valor actual para evitar borrar el saldo
+                return;
+            }
+            // Solo retornar si el valor actual es 0 o no existe
+            console.warn('[updateBalanceDisplay] ⚠️ CreditsSystem no disponible y no hay valor en DOM, no actualizando');
             return;
         }
         

@@ -1412,15 +1412,23 @@
                         logFn('[selectSongForBattle] ⚠️ No se pudo establecer selectedSong local:', e);
                     }
                     
-                    // CRÍTICO: Actualizar UI de créditos después de recargar saldo
+                    // CRÍTICO: Actualizar UI de créditos SOLO si CreditsSystem tiene créditos cargados
+                    // NO llamar a GameEngine.updateBalanceDisplay aquí porque puede sobrescribir el saldo
                     if (window.CreditsSystem && typeof window.CreditsSystem.updateCreditsDisplay === 'function') {
                         try {
-                            window.CreditsSystem.updateCreditsDisplay();
-                            logFn('[selectSongForBattle] ✅ UI de créditos actualizada');
+                            // Solo actualizar si hay créditos cargados para evitar borrar el saldo
+                            if (window.CreditsSystem.currentCredits !== undefined && window.CreditsSystem.currentCredits !== null) {
+                                window.CreditsSystem.updateCreditsDisplay();
+                                logFn('[selectSongForBattle] ✅ UI de créditos actualizada');
+                            } else {
+                                logFn('[selectSongForBattle] ⚠️ CreditsSystem no tiene créditos cargados, NO actualizando UI para evitar borrar saldo');
+                            }
                         } catch (uiError) {
                             console.error('[selectSongForBattle] ❌ Error actualizando UI de créditos:', uiError);
                         }
                     }
+                    
+                    // CRÍTICO: NO llamar a GameEngine.updateBalanceDisplay aquí porque puede sobrescribir el saldo con 0
                     
                     // CRÍTICO: Si hay un desafío pendiente, intentar aceptarlo DESPUÉS de establecer selectedSong
                     if (window.pendingChallengeId && window.currentMode === 'social') {
