@@ -4315,15 +4315,16 @@
                         const creditsToAdd = numericBalance; // 1 MTR = 1 crédito por ahora
                         
                         // Obtener userId y walletAddress
-                        const walletAddress = address;
+                        // CRÍTICO: Usar nombre diferente para evitar conflictos con otras variables walletAddress
+                        const conversionWalletAddress = address;
                         
                         // CRÍTICO: Intentar conversión en background sin bloquear el flujo principal
                         // Usar una función async inmediata para no bloquear
                         (async () => {
                             try {
-                                const authUserId = await window.CreditsSystem.getUserId(walletAddress);
+                                const authUserId = await window.CreditsSystem.getUserId(conversionWalletAddress);
                                 
-                                if (!authUserId || !walletAddress) {
+                                if (!authUserId || !conversionWalletAddress) {
                                     console.warn('[refreshMtrBalance] ⚠️ No se pudo obtener userId o walletAddress - conversión cancelada');
                                     return; // No bloquear, solo cancelar conversión
                                 }
@@ -4355,7 +4356,7 @@
                                     const { data: existingUser, error: findError } = await supabase
                                         .from('users')
                                         .select('id')
-                                        .ilike('wallet_address', walletAddress) // Case-insensitive search
+                                        .ilike('wallet_address', conversionWalletAddress) // Case-insensitive search
                                         .maybeSingle();
                                     
                                     if (existingUser && !findError) {
@@ -4363,10 +4364,10 @@
                                         console.log('[refreshMtrBalance] ✅ Usuario encontrado en public.users:', publicUserId);
                                     } else {
                                         // Crear nuevo registro en public.users
-                                        console.log('[refreshMtrBalance] 🔄 Creando registro en public.users para wallet:', walletAddress);
+                                        console.log('[refreshMtrBalance] 🔄 Creando registro en public.users para wallet:', conversionWalletAddress);
                                         const { data: newUser, error: insertError } = await supabase
                                             .from('users')
-                                            .insert([{ wallet_address: walletAddress }])
+                                            .insert([{ wallet_address: conversionWalletAddress }])
                                             .select('id')
                                             .single();
                                         
@@ -4379,7 +4380,7 @@
                                             const { data: retryUser } = await supabase
                                                 .from('users')
                                                 .select('id')
-                                                .ilike('wallet_address', walletAddress) // Case-insensitive
+                                                .ilike('wallet_address', conversionWalletAddress) // Case-insensitive
                                                 .maybeSingle();
                                             
                                             if (retryUser) {
@@ -4404,7 +4405,7 @@
                                 console.log('[refreshMtrBalance] 🔄 Convirtiendo MTR a créditos automáticamente usando Supabase RPC...', {
                                     authUserId: authUserId,
                                     publicUserId: publicUserId,
-                                    walletAddress: walletAddress,
+                                    walletAddress: conversionWalletAddress,
                                     creditsToAdd: creditsToAdd,
                                     mtrAmount: numericBalance
                                 });
