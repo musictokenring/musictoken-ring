@@ -501,9 +501,15 @@ const GameEngine = {
         // ESPECIFICACIÓN REFINADA: Mostrar SOLO créditos estables como "MTR créditos jugables"
         // NO mostrar MTR nativo como saldo jugable - solo se maneja en backend
         // Obtener créditos estables del sistema de créditos
+        // CRÍTICO: Esperar a que CreditsSystem haya cargado los créditos antes de mostrar
         let creditsBalance = 0;
         if (window.CreditsSystem && window.CreditsSystem.currentCredits !== undefined) {
             creditsBalance = Number(window.CreditsSystem.currentCredits || 0);
+            console.log('[updateBalanceDisplay] 🔄 Créditos obtenidos de CreditsSystem:', creditsBalance);
+        } else {
+            console.warn('[updateBalanceDisplay] ⚠️ CreditsSystem no disponible o créditos no cargados aún');
+            // Si CreditsSystem no está disponible, no actualizar para evitar mostrar 0 incorrectamente
+            return;
         }
         
         const balanceEl = document.getElementById('appBalanceDisplay');

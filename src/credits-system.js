@@ -319,6 +319,10 @@
             const playableCreditsEl = document.getElementById('userBalance');
             if (playableCreditsEl) {
                 playableCreditsEl.textContent = this.currentCredits.toFixed(2);
+                // Asegurar que el elemento tenga el estilo correcto
+                playableCreditsEl.style.color = '';
+                playableCreditsEl.style.fontWeight = '';
+                playableCreditsEl.title = 'MTR créditos jugables: Fichas estables que valen siempre $1 cada una';
                 if (shouldLog) {
                     console.log('[updateCreditsDisplay] ✅ userBalance (Fichas jugables) actualizado:', this.currentCredits.toFixed(2));
                 }
@@ -332,9 +336,23 @@
             const appBalanceDisplay = document.getElementById('appBalanceDisplay');
             if (appBalanceDisplay) {
                 appBalanceDisplay.textContent = `Fichas jugables: ${this.currentCredits.toFixed(2)} MTR créditos`;
+                appBalanceDisplay.style.color = '';
+                appBalanceDisplay.title = 'MTR créditos jugables: Fichas estables que valen siempre $1 cada una';
                 if (shouldLog) {
                     console.log('[updateCreditsDisplay] ✅ appBalanceDisplay actualizado');
                 }
+            }
+            
+            // CRÍTICO: Forzar actualización de GameEngine también para mantener sincronización
+            // Pero solo si GameEngine está disponible y CreditsSystem tiene créditos cargados
+            if (typeof window.GameEngine !== 'undefined' && typeof window.GameEngine.updateBalanceDisplay === 'function') {
+                // Usar setTimeout para evitar loops infinitos
+                setTimeout(() => {
+                    if (this.currentCredits > 0) {
+                        console.log('[updateCreditsDisplay] 🔄 Forzando actualización de GameEngine para sincronizar...');
+                        window.GameEngine.updateBalanceDisplay();
+                    }
+                }, 50);
             }
 
             // Update bet eligibility
