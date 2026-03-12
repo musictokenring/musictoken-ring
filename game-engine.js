@@ -4486,11 +4486,6 @@ const GameEngine = {
                                 }
                                 return false;
                             }
-                            } else {
-                                // Error diferente a "Insufficient credits", retornar false
-                                console.error('[updateBalance] ❌ Error diferente a créditos insuficientes');
-                                return false;
-                            }
                         } else {
                             // Response OK - procesar respuesta exitosa
                             const responseData = await response.json();

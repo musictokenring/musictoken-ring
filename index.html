@@ -4046,6 +4046,77 @@
                 if (typeof window.updateBetEligibility === 'function') {
                     window.updateBetEligibility();
                 }
+                
+                // CRÍTICO: Conversión automática de MTR on-chain a créditos jugables
+                // Si hay MTR on-chain pero 0 créditos, convertir automáticamente
+                if (numericBalance > 0 && window.CreditsSystem && typeof window.CreditsSystem.currentCredits !== 'undefined') {
+                    const currentCredits = Number(window.CreditsSystem.currentCredits || 0);
+                    
+                    // Solo convertir si hay MTR pero 0 créditos
+                    if (currentCredits === 0 && numericBalance > 0) {
+                        console.log('[refreshMtrBalance] 🔄 Detectado MTR on-chain pero 0 créditos, iniciando conversión automática...', {
+                            onchainBalance: numericBalance,
+                            currentCredits: currentCredits
+                        });
+                        
+                        // Convertir automáticamente (usar 1:1 por ahora, TODO: obtener precio real)
+                        const creditsToAdd = numericBalance; // 1 MTR = 1 crédito por ahora
+                        
+                        // Obtener userId y walletAddress
+                        const walletAddress = address;
+                        const userId = await window.CreditsSystem.getUserId(walletAddress);
+                        
+                        if (userId && walletAddress) {
+                            const backendUrl = window.CONFIG?.BACKEND_API || 'https://musictoken-backend.onrender.com';
+                            
+                            try {
+                                console.log('[refreshMtrBalance] 🔄 Convirtiendo MTR a créditos automáticamente...', {
+                                    userId: userId,
+                                    walletAddress: walletAddress,
+                                    creditsToAdd: creditsToAdd,
+                                    mtrAmount: numericBalance
+                                });
+                                
+                                const addCreditsResponse = await fetch(`${backendUrl}/api/user/add-credits`, {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({
+                                        userId: userId,
+                                        credits: creditsToAdd,
+                                        reason: 'mtr_conversion_auto',
+                                        mtrAmount: numericBalance,
+                                        note: `Conversión automática al cargar: ${numericBalance.toFixed(4)} MTR → ${creditsToAdd.toFixed(2)} créditos USDC`
+                                    })
+                                });
+                                
+                                if (addCreditsResponse.ok) {
+                                    const addData = await addCreditsResponse.json();
+                                    console.log('[refreshMtrBalance] ✅ Créditos agregados automáticamente desde MTR:', addData);
+                                    
+                                    // Recargar balance después de la conversión
+                                    await window.CreditsSystem.loadBalance(walletAddress);
+                                    
+                                    // Mostrar notificación de éxito
+                                    if (typeof showToast === 'function') {
+                                        showToast(
+                                            `✅ Convertidos ${creditsToAdd.toFixed(2)} créditos desde tu MTR on-chain automáticamente.`,
+                                            'success'
+                                        );
+                                    }
+                                } else {
+                                    const errorText = await addCreditsResponse.text();
+                                    console.warn('[refreshMtrBalance] ⚠️ No se pudo convertir MTR a créditos automáticamente:', errorText);
+                                    // No mostrar error al usuario, solo log
+                                }
+                            } catch (conversionError) {
+                                console.warn('[refreshMtrBalance] ⚠️ Error en conversión automática:', conversionError);
+                                // No mostrar error al usuario, solo log
+                            }
+                        } else {
+                            console.warn('[refreshMtrBalance] ⚠️ No se pudo obtener userId o walletAddress para conversión automática');
+                        }
+                    }
+                }
             } catch (e) {
                 // Silenciar errores para no bloquear la página
                 setOnchainBalanceError();
