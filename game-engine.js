@@ -1214,6 +1214,17 @@ const GameEngine = {
                 console.warn('[acceptSocialChallenge] ⚠️ No se pudo vincular wallet (puede estar ya vinculada)');
             }
             
+            // CRÍTICO: Actualizar balance on-chain ANTES de recargar créditos
+            if (typeof window.refreshMtrBalance === 'function') {
+                console.log('[acceptSocialChallenge] 🔄 Actualizando balance on-chain antes de verificar créditos...');
+                try {
+                    await window.refreshMtrBalance(walletAddress);
+                    await new Promise(resolve => setTimeout(resolve, 300));
+                } catch (onchainError) {
+                    console.error('[acceptSocialChallenge] ❌ Error actualizando balance on-chain:', onchainError);
+                }
+            }
+            
             // CRÍTICO: Recargar balance ANTES de verificar créditos
             // Esto asegura que tenemos los datos más recientes del backend
             console.log('[acceptSocialChallenge] 🔄 Recargando balance antes de verificar créditos...');

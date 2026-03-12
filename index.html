@@ -1329,8 +1329,20 @@
                         return;
                     }
                     
-                    // CRÍTICO: Recargar saldo ANTES de actualizar variables para mostrar saldos correctos
+                    // CRÍTICO: Actualizar balance on-chain ANTES de recargar créditos
                     const walletAddress = window.connectedAddress || localStorage.getItem('mtr_wallet');
+                    if (walletAddress && typeof window.refreshMtrBalance === 'function') {
+                        logFn('[selectSongForBattle] 🔄 Actualizando balance on-chain antes de verificar créditos...');
+                        try {
+                            await window.refreshMtrBalance(walletAddress);
+                            await new Promise(resolve => setTimeout(resolve, 300));
+                            logFn('[selectSongForBattle] ✅ Balance on-chain actualizado');
+                        } catch (onchainError) {
+                            console.error('[selectSongForBattle] ❌ Error actualizando balance on-chain:', onchainError);
+                        }
+                    }
+                    
+                    // CRÍTICO: Recargar saldo ANTES de actualizar variables para mostrar saldos correctos
                     if (walletAddress && window.CreditsSystem && typeof window.CreditsSystem.loadBalance === 'function') {
                         logFn('[selectSongForBattle] 🔄 Recargando saldo antes de seleccionar canción...');
                         try {
@@ -1338,6 +1350,44 @@
                             // Esperar un momento para que se actualice la UI
                             await new Promise(resolve => setTimeout(resolve, 200));
                             logFn('[selectSongForBattle] ✅ Saldo recargado correctamente');
+                            
+                            // CRÍTICO: Si hay un desafío pendiente y créditos insuficientes, intentar conversión automática
+                            if (window.pendingChallengeId && window.pendingChallengeBetAmount) {
+                                const currentCredits = window.CreditsSystem.currentCredits || 0;
+                                const requiredCredits = window.pendingChallengeBetAmount;
+                                const onchainBalance = Number(window.__mtrOnChainBalance || 0);
+                                
+                                if (currentCredits < requiredCredits && onchainBalance >= (requiredCredits - currentCredits)) {
+                                    logFn('[selectSongForBattle] 💰 Créditos insuficientes, intentando conversión automática...');
+                                    const missingCredits = requiredCredits - currentCredits;
+                                    
+                                    try {
+                                        const userId = await window.CreditsSystem.getUserId(walletAddress);
+                                        if (userId && window.supabaseClient) {
+                                            const { data: { session } } = await window.supabaseClient.auth.getSession();
+                                            if (session) {
+                                                const { error: rpcError } = await window.supabaseClient.rpc('increment_user_credits', {
+                                                    user_id_param: userId,
+                                                    credits_to_add: missingCredits
+                                                });
+                                                
+                                                if (!rpcError) {
+                                                    logFn('[selectSongForBattle] ✅ Conversión automática exitosa');
+                                                    await new Promise(resolve => setTimeout(resolve, 500));
+                                                    await window.CreditsSystem.loadBalance(walletAddress);
+                                                    if (typeof showToast === 'function') {
+                                                        showToast(`✅ Convertidos ${missingCredits.toFixed(2)} créditos automáticamente`, 'success');
+                                                    }
+                                                } else {
+                                                    console.error('[selectSongForBattle] ❌ Error en conversión automática:', rpcError);
+                                                }
+                                            }
+                                        }
+                                    } catch (conversionError) {
+                                        console.error('[selectSongForBattle] ❌ Error en conversión automática:', conversionError);
+                                    }
+                                }
+                            }
                         } catch (balanceError) {
                             console.error('[selectSongForBattle] ❌ Error recargando saldo:', balanceError);
                         }
@@ -3856,6 +3906,30 @@
                 }
                 
                 console.log('[loadChallengeInfo] ✅ Supabase disponible, consultando desafío...');
+                
+                // CRÍTICO: Actualizar balance on-chain antes de cargar el desafío
+                const walletAddress = window.connectedAddress || localStorage.getItem('mtr_wallet');
+                if (walletAddress && typeof window.refreshMtrBalance === 'function') {
+                    console.log('[loadChallengeInfo] 🔄 Actualizando balance on-chain...');
+                    try {
+                        await window.refreshMtrBalance(walletAddress);
+                        await new Promise(resolve => setTimeout(resolve, 300));
+                    } catch (onchainError) {
+                        console.error('[loadChallengeInfo] ❌ Error actualizando balance on-chain:', onchainError);
+                    }
+                }
+                
+                // CRÍTICO: Recargar créditos antes de cargar el desafío
+                if (walletAddress && window.CreditsSystem && typeof window.CreditsSystem.loadBalance === 'function') {
+                    console.log('[loadChallengeInfo] 🔄 Recargando créditos...');
+                    try {
+                        await window.CreditsSystem.loadBalance(walletAddress);
+                        await new Promise(resolve => setTimeout(resolve, 200));
+                    } catch (creditsError) {
+                        console.error('[loadChallengeInfo] ❌ Error recargando créditos:', creditsError);
+                    }
+                }
+                
                 const { data: challenge, error } = await supabase
                     .from('social_challenges')
                     .select('*')
