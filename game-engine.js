@@ -4468,26 +4468,16 @@ const GameEngine = {
                                                 statusText: retryResponse.statusText
                                             });
                                             
-                                            if (retryResponse.ok) {
-                                                const retryData = await retryResponse.json();
-                                                console.log('[updateBalance] ✅✅✅ Créditos descontados exitosamente después de conversión:', retryData);
-                                                await window.CreditsSystem.loadBalance(walletAddress);
-                                                return true;
-                                            } else {
-                                                const retryErrorText = await retryResponse.text();
-                                                console.error('[updateBalance] ❌ Error al descontar después de conversión:', {
-                                                    status: retryResponse.status,
-                                                    errorText: retryErrorText
-                                                });
-                                                // Retornar false en lugar de lanzar error
-                                                return false;
-                                            }
+                                        if (retryResponse.ok) {
+                                            const retryData = await retryResponse.json();
+                                            console.log('[updateBalance] ✅✅✅ Créditos descontados exitosamente después de conversión:', retryData);
+                                            await window.CreditsSystem.loadBalance(walletAddress);
+                                            return true;
                                         } else {
-                                            const addErrorText = await addCreditsResponse.text();
-                                            console.error('[updateBalance] ❌ Error al agregar créditos desde MTR:', {
-                                                status: addCreditsResponse.status,
-                                                statusText: addCreditsResponse.statusText,
-                                                errorText: addErrorText
+                                            const retryErrorText = await retryResponse.text();
+                                            console.error('[updateBalance] ❌ Error al descontar después de conversión:', {
+                                                status: retryResponse.status,
+                                                errorText: retryErrorText
                                             });
                                             // Retornar false en lugar de lanzar error
                                             return false;
