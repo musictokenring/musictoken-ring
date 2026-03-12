@@ -3348,6 +3348,12 @@ const GameEngine = {
         const winnerSong = winner === 1 ? match.player1_song_preview : match.player2_song_preview;
         this.playVictorySong(winnerSong);
         
+        // CRÍTICO: Actualizar estadísticas del usuario ANTES de procesar premios
+        const { data: { session } } = await supabaseClient.auth.getSession();
+        if (session?.user?.id) {
+            await this.updateUserStats(session.user.id, userWon, userWon ? payouts.winnerPayout : 0, match.id);
+        }
+        
         // Procesar premios
         if (match.match_type !== 'practice') {
             if (userWon) {
@@ -4326,7 +4332,8 @@ const GameEngine = {
 
                 // Record win in database (reutilizar session ya obtenida arriba)
                 if (session?.user?.id) {
-                    await supabaseClient
+                    // CRÍTICO: Registrar victoria en match_wins
+                    const { error: winError } = await supabaseClient
                         .from('match_wins')
                         .insert([{
                             user_id: session.user.id,
@@ -4334,6 +4341,15 @@ const GameEngine = {
                             credits_won: credits,
                             created_at: new Date().toISOString()
                         }]);
+                    
+                    if (winError) {
+                        console.error('[awardCredits] ❌ Error registrando victoria:', winError);
+                    } else {
+                        console.log('[awardCredits] ✅ Victoria registrada en match_wins');
+                    }
+                    
+                    // CRÍTICO: Actualizar estadísticas del usuario
+                    await this.updateUserStats(session.user.id, true, credits, matchId);
                 }
 
                 // Reload credits balance
@@ -4346,6 +4362,89 @@ const GameEngine = {
         }
     },
 
+    /**
+     * Actualizar estadísticas del usuario después de una partida
+     */
+    async updateUserStats(userId, won, creditsWon, matchId) {
+        try {
+            console.log('[updateUserStats] 🔄 Actualizando estadísticas del usuario:', {
+                userId: userId,
+                won: won,
+                creditsWon: creditsWon,
+                matchId: matchId
+            });
+            
+            const supabase = window.supabaseClient || (typeof supabaseClient !== 'undefined' ? supabaseClient : null);
+            if (!supabase) {
+                console.error('[updateUserStats] ❌ Supabase client no disponible');
+                return;
+            }
+            
+            // CRÍTICO: Obtener estadísticas actuales del usuario
+            const { data: currentStats, error: statsError } = await supabase
+                .from('users')
+                .select('total_matches, total_wins, total_losses, total_credits_won, total_streams')
+                .eq('id', userId)
+                .single();
+            
+            if (statsError && statsError.code !== 'PGRST116') { // PGRST116 = no rows returned
+                console.error('[updateUserStats] ❌ Error obteniendo estadísticas:', statsError);
+                return;
+            }
+            
+            // Calcular nuevas estadísticas
+            const currentMatches = currentStats?.total_matches || 0;
+            const currentWins = currentStats?.total_wins || 0;
+            const currentLosses = currentStats?.total_losses || 0;
+            const currentCreditsWon = parseFloat(currentStats?.total_credits_won || 0);
+            const currentStreams = currentStats?.total_streams || 0;
+            
+            // Obtener streams totales del match
+            const { data: matchData } = await supabase
+                .from('matches')
+                .select('player1_streams, player2_streams, player1_id, player2_id')
+                .eq('id', matchId)
+                .single();
+            
+            let userStreams = 0;
+            if (matchData) {
+                // Determinar cuántos streams tuvo el usuario en este match
+                if (matchData.player1_id === userId) {
+                    userStreams = matchData.player1_streams || 0;
+                } else if (matchData.player2_id === userId) {
+                    userStreams = matchData.player2_streams || 0;
+                }
+            }
+            
+            // Actualizar estadísticas
+            const updates = {
+                total_matches: currentMatches + 1,
+                total_wins: won ? currentWins + 1 : currentWins,
+                total_losses: won ? currentLosses : currentLosses + 1,
+                total_credits_won: currentCreditsWon + (won ? creditsWon : 0),
+                total_streams: currentStreams + userStreams,
+                updated_at: new Date().toISOString()
+            };
+            
+            console.log('[updateUserStats] 📊 Estadísticas a actualizar:', updates);
+            
+            const { error: updateError } = await supabase
+                .from('users')
+                .update(updates)
+                .eq('id', userId);
+            
+            if (updateError) {
+                console.error('[updateUserStats] ❌ Error actualizando estadísticas:', updateError);
+                console.error('[updateUserStats] Error completo:', JSON.stringify(updateError, null, 2));
+            } else {
+                console.log('[updateUserStats] ✅ Estadísticas actualizadas correctamente');
+            }
+        } catch (error) {
+            console.error('[updateUserStats] ❌ Error en updateUserStats:', error);
+            console.error('[updateUserStats] Stack:', error.stack);
+        }
+    },
+    
     /**
      * Send bet fee to vault (2% del pozo)
      */
