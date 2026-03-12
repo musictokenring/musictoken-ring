@@ -4131,6 +4131,7 @@
                 
                 // CRÍTICO: Conversión automática de MTR on-chain a créditos jugables
                 // Si hay MTR on-chain pero 0 créditos, convertir automáticamente
+                // IMPORTANTE: Esta conversión es opcional - no debe bloquear la visualización del saldo
                 if (numericBalance > 0 && window.CreditsSystem && typeof window.CreditsSystem.currentCredits !== 'undefined') {
                     const currentCredits = Number(window.CreditsSystem.currentCredits || 0);
                     
@@ -4146,126 +4147,123 @@
                         
                         // Obtener userId y walletAddress
                         const walletAddress = address;
-                        const authUserId = await window.CreditsSystem.getUserId(walletAddress);
                         
-                        if (!authUserId || !walletAddress) {
-                            console.warn('[refreshMtrBalance] ⚠️ No se pudo obtener userId o walletAddress');
-                            return;
-                        }
-                        
-                        // CRÍTICO: Usar Supabase RPC directamente en lugar del backend que no tiene el endpoint
-                        const supabase = window.supabaseClient || (typeof supabaseClient !== 'undefined' ? supabaseClient : null);
-                        
-                        if (!supabase) {
-                            console.error('[refreshMtrBalance] ❌ Supabase client no disponible');
-                            if (typeof showToast === 'function') {
-                                showToast('Error: Supabase no disponible para conversión automática', 'error');
-                            }
-                            return;
-                        }
-                        
-                        // CRÍTICO: Verificar que el usuario esté autenticado antes de llamar a RPC
-                        const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-                        
-                        if (sessionError || !session) {
-                            console.warn('[refreshMtrBalance] ⚠️ Usuario no autenticado');
-                            if (typeof showToast === 'function') {
-                                showToast('Por favor, inicia sesión para convertir tus créditos automáticamente', 'warning');
-                            }
-                            return;
-                        }
-                        
-                        console.log('[refreshMtrBalance] ✅ Usuario autenticado:', session.user.id);
-                        
-                        // CRÍTICO: Asegurar que existe un registro en public.users para esta wallet
-                        // Buscar o crear registro en public.users
-                        let publicUserId = null;
-                        
-                        try {
-                            // Buscar si ya existe un usuario con esta wallet
-                            const { data: existingUser, error: findError } = await supabase
-                                .from('users')
-                                .select('id')
-                                .eq('wallet_address', walletAddress)
-                                .single();
-                            
-                            if (existingUser && !findError) {
-                                publicUserId = existingUser.id;
-                                console.log('[refreshMtrBalance] ✅ Usuario encontrado en public.users:', publicUserId);
-                            } else {
-                                // Crear nuevo registro en public.users
-                                console.log('[refreshMtrBalance] 🔄 Creando registro en public.users para wallet:', walletAddress);
-                                const { data: newUser, error: insertError } = await supabase
-                                    .from('users')
-                                    .insert([{ wallet_address: walletAddress }])
-                                    .select('id')
-                                    .single();
+                        // CRÍTICO: Intentar conversión en background sin bloquear el flujo principal
+                        // Usar una función async inmediata para no bloquear
+                        (async () => {
+                            try {
+                                const authUserId = await window.CreditsSystem.getUserId(walletAddress);
                                 
-                                if (newUser && !insertError) {
-                                    publicUserId = newUser.id;
-                                    console.log('[refreshMtrBalance] ✅ Usuario creado en public.users:', publicUserId);
-                                } else {
-                                    console.error('[refreshMtrBalance] ❌ Error creando usuario en public.users:', insertError);
-                                    // Intentar buscar de nuevo por si acaso se creó en otro momento
-                                    const { data: retryUser } = await supabase
+                                if (!authUserId || !walletAddress) {
+                                    console.warn('[refreshMtrBalance] ⚠️ No se pudo obtener userId o walletAddress - conversión cancelada');
+                                    return; // No bloquear, solo cancelar conversión
+                                }
+                                
+                                // CRÍTICO: Usar Supabase RPC directamente en lugar del backend que no tiene el endpoint
+                                const supabase = window.supabaseClient || (typeof supabaseClient !== 'undefined' ? supabaseClient : null);
+                                
+                                if (!supabase) {
+                                    console.error('[refreshMtrBalance] ❌ Supabase client no disponible - conversión cancelada');
+                                    return; // No bloquear, solo cancelar conversión
+                                }
+                                
+                                // CRÍTICO: Verificar que el usuario esté autenticado antes de llamar a RPC
+                                const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+                                
+                                if (sessionError || !session) {
+                                    console.warn('[refreshMtrBalance] ⚠️ Usuario no autenticado - conversión cancelada');
+                                    return; // No bloquear, solo cancelar conversión
+                                }
+                                
+                                console.log('[refreshMtrBalance] ✅ Usuario autenticado:', session.user.id);
+                                
+                                // CRÍTICO: Asegurar que existe un registro en public.users para esta wallet
+                                // Buscar o crear registro en public.users
+                                let publicUserId = null;
+                                
+                                try {
+                                    // Buscar si ya existe un usuario con esta wallet
+                                    const { data: existingUser, error: findError } = await supabase
                                         .from('users')
                                         .select('id')
                                         .eq('wallet_address', walletAddress)
                                         .single();
                                     
-                                    if (retryUser) {
-                                        publicUserId = retryUser.id;
-                                        console.log('[refreshMtrBalance] ✅ Usuario encontrado en segundo intento:', publicUserId);
+                                    if (existingUser && !findError) {
+                                        publicUserId = existingUser.id;
+                                        console.log('[refreshMtrBalance] ✅ Usuario encontrado en public.users:', publicUserId);
                                     } else {
-                                        throw new Error('No se pudo crear ni encontrar usuario en public.users');
+                                        // Crear nuevo registro en public.users
+                                        console.log('[refreshMtrBalance] 🔄 Creando registro en public.users para wallet:', walletAddress);
+                                        const { data: newUser, error: insertError } = await supabase
+                                            .from('users')
+                                            .insert([{ wallet_address: walletAddress }])
+                                            .select('id')
+                                            .single();
+                                        
+                                        if (newUser && !insertError) {
+                                            publicUserId = newUser.id;
+                                            console.log('[refreshMtrBalance] ✅ Usuario creado en public.users:', publicUserId);
+                                        } else {
+                                            console.error('[refreshMtrBalance] ❌ Error creando usuario en public.users:', insertError);
+                                            // Intentar buscar de nuevo por si acaso se creó en otro momento
+                                            const { data: retryUser } = await supabase
+                                                .from('users')
+                                                .select('id')
+                                                .eq('wallet_address', walletAddress)
+                                                .single();
+                                            
+                                            if (retryUser) {
+                                                publicUserId = retryUser.id;
+                                                console.log('[refreshMtrBalance] ✅ Usuario encontrado en segundo intento:', publicUserId);
+                                            } else {
+                                                console.warn('[refreshMtrBalance] ⚠️ No se pudo crear ni encontrar usuario - conversión cancelada');
+                                                return; // No bloquear, solo cancelar conversión
+                                            }
+                                        }
                                     }
+                                } catch (userError) {
+                                    console.error('[refreshMtrBalance] ❌ Error manejando usuario en public.users:', userError);
+                                    return; // No bloquear, solo cancelar conversión
                                 }
-                            }
-                        } catch (userError) {
-                            console.error('[refreshMtrBalance] ❌ Error manejando usuario en public.users:', userError);
-                            if (typeof showToast === 'function') {
-                                showToast('Error al vincular wallet. Por favor, recarga la página.', 'error');
-                            }
-                            return;
-                        }
-                        
-                        if (!publicUserId) {
-                            console.error('[refreshMtrBalance] ❌ No se pudo obtener publicUserId');
-                            return;
-                        }
-                        
-                        try {
-                            console.log('[refreshMtrBalance] 🔄 Convirtiendo MTR a créditos automáticamente usando Supabase RPC...', {
-                                authUserId: authUserId,
-                                publicUserId: publicUserId,
-                                walletAddress: walletAddress,
-                                creditsToAdd: creditsToAdd,
-                                mtrAmount: numericBalance
-                            });
-                            
-                            console.log('[refreshMtrBalance] 🔄 Llamando a increment_user_credits RPC con publicUserId:', publicUserId);
-                            
-                            // CRÍTICO: Usar publicUserId (de public.users) no authUserId (de auth.users)
-                            const { error: rpcError } = await supabase.rpc('increment_user_credits', {
-                                user_id_param: publicUserId,
-                                credits_to_add: creditsToAdd
-                            });
                                 
-                                if (rpcError) {
-                                    console.error('[refreshMtrBalance] ❌❌❌ Error al agregar créditos vía RPC:', {
-                                        error: rpcError,
-                                        userId: userId,
-                                        creditsToAdd: creditsToAdd
+                                if (!publicUserId) {
+                                    console.warn('[refreshMtrBalance] ⚠️ No se pudo obtener publicUserId - conversión cancelada');
+                                    return; // No bloquear, solo cancelar conversión
+                                }
+                        
+                                try {
+                                    console.log('[refreshMtrBalance] 🔄 Convirtiendo MTR a créditos automáticamente usando Supabase RPC...', {
+                                        authUserId: authUserId,
+                                        publicUserId: publicUserId,
+                                        walletAddress: walletAddress,
+                                        creditsToAdd: creditsToAdd,
+                                        mtrAmount: numericBalance
                                     });
                                     
-                                    if (typeof showToast === 'function') {
-                                        showToast(
-                                            `⚠️ Error al convertir créditos: ${rpcError.message || 'Error desconocido'}`,
-                                            'error'
-                                        );
+                                    console.log('[refreshMtrBalance] 🔄 Llamando a increment_user_credits RPC con publicUserId:', publicUserId);
+                                    
+                                    // CRÍTICO: Usar publicUserId (de public.users) no authUserId (de auth.users)
+                                    const { error: rpcError } = await supabase.rpc('increment_user_credits', {
+                                        user_id_param: publicUserId,
+                                        credits_to_add: creditsToAdd
+                                    });
+                                    
+                                    if (rpcError) {
+                                        console.error('[refreshMtrBalance] ❌❌❌ Error al agregar créditos vía RPC:', {
+                                            error: rpcError,
+                                            publicUserId: publicUserId,
+                                            creditsToAdd: creditsToAdd
+                                        });
+                                        
+                                        if (typeof showToast === 'function') {
+                                            showToast(
+                                                `⚠️ Error al convertir créditos: ${rpcError.message || 'Error desconocido'}`,
+                                                'error'
+                                            );
+                                        }
+                                        return; // Solo cancelar conversión, no bloquear flujo principal
                                     }
-                                    return;
-                                }
                                 
                                 console.log('[refreshMtrBalance] ✅✅✅ Créditos agregados automáticamente desde MTR vía Supabase RPC');
                                 
