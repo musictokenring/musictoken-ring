@@ -119,6 +119,13 @@
 
                 const data = await response.json();
 
+                console.log('[credits-system] 🔍🔍🔍 RESPUESTA DEL BACKEND:', {
+                    data: data,
+                    credits: data.credits,
+                    userId: data.userId,
+                    walletAddress: walletAddress
+                });
+
                 this.currentCredits = data.credits || 0;
                 // NUEVO: 1 crédito = 1 USDC fijo siempre
                 this.currentUsdcValue = this.currentCredits; // 1:1 fijo
@@ -132,11 +139,12 @@
                     this.currentUserId = userIdFromWallet;
                 }
 
-                console.log('[credits-system] [MOBILE] Saldos cargados:', {
+                console.log('[credits-system] ✅✅✅ Saldos cargados y actualizados:', {
                     credits: this.currentCredits,
                     usdcValue: this.currentUsdcValue,
                     userId: this.currentUserId,
-                    isWalletBrowser
+                    isWalletBrowser,
+                    willUpdateDisplay: true
                 });
 
                 // Update UI - Asegurar que se actualice después de cargar
@@ -144,8 +152,23 @@
                 
                 // Forzar actualización adicional después de un pequeño delay para asegurar que el DOM esté listo
                 setTimeout(() => {
+                    console.log('[credits-system] 🔄 Actualizando display (delay 100ms)...');
                     this.updateCreditsDisplay();
                 }, 100);
+                
+                // Forzar actualización adicional después de más tiempo para asegurar que el backend haya procesado
+                setTimeout(() => {
+                    console.log('[credits-system] 🔄 Actualizando display (delay 500ms)...');
+                    this.updateCreditsDisplay();
+                }, 500);
+                
+                // También actualizar GameEngine si está disponible
+                if (typeof window.GameEngine !== 'undefined' && typeof window.GameEngine.updateBalanceDisplay === 'function') {
+                    setTimeout(() => {
+                        console.log('[credits-system] 🔄 Actualizando GameEngine display...');
+                        window.GameEngine.updateBalanceDisplay();
+                    }, 200);
+                }
 
             } catch (error) {
                 console.error('[credits-system] Error loading balance:', error);
@@ -159,7 +182,12 @@
          * Update credits display in UI
          */
         updateCreditsDisplay() {
-            // SIN LOGS - Esta función se ejecuta frecuentemente
+            // Logs para debugging cuando hay créditos pero no se muestran
+            const shouldLog = this.currentCredits > 0;
+            
+            if (shouldLog) {
+                console.log('[updateCreditsDisplay] 🔄 Actualizando display con créditos:', this.currentCredits);
+            }
             
             // Update combined display FIRST (this contains the child elements) - DESKTOP
             // ESPECIFICACIÓN REFINADA: Mostrar créditos estables como "MTR créditos jugables" (alias gráfico)
@@ -178,6 +206,13 @@
                 if (this.currentCredits > 0) {
                     combinedDisplay.classList.remove('hidden');
                     combinedDisplay.classList.add('sm:inline');
+                    if (shouldLog) {
+                        console.log('[updateCreditsDisplay] ✅ Combined display actualizado y visible');
+                    }
+                } else {
+                    if (shouldLog) {
+                        console.warn('[updateCreditsDisplay] ⚠️ Créditos > 0 pero no se están mostrando');
+                    }
                 }
                 
                 // Ahora actualizar los elementos individuales si existen (pueden estar en otros lugares)
