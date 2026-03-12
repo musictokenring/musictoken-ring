@@ -459,11 +459,16 @@ async function loadPlayerProfile(user) {
 
     const runLoad = async () => {
     try {
-        const { data: balanceData } = await supabaseClient
-            .from('user_balances')
-            .select('balance')
+        // CRÍTICO: Usar user_credits en lugar de user_balances para obtener el saldo REAL
+        // El perfil SIEMPRE debe mostrar créditos reales, nunca el saldo de práctica
+        const { data: creditsData } = await supabaseClient
+            .from('user_credits')
+            .select('credits')
             .eq('user_id', user.id)
             .maybeSingle();
+        
+        // Obtener balance real (créditos estables)
+        const realBalance = creditsData?.credits || 0;
 
         let matchesData = [];
         let matchesError = null;
@@ -511,7 +516,16 @@ async function loadPlayerProfile(user) {
             return;
         }
 
-        setProfileValue('profileBalance', `${Math.round(balanceData?.balance || 0)} MTR`);
+        // CRÍTICO: Mostrar siempre el saldo REAL de user_credits, nunca el saldo de práctica
+        // Asegurar que nunca se muestre practiceDemoBalance en el perfil
+        const displayBalance = realBalance;
+        
+        // Verificar que no estamos mostrando el saldo de práctica por error
+        if (typeof window.GameEngine !== 'undefined' && window.GameEngine.practiceDemoBalance) {
+            console.log('[loadPlayerProfile] ⚠️ Detectado practiceDemoBalance, asegurando que no se use en perfil');
+        }
+        
+        setProfileValue('profileBalance', `${Math.round(displayBalance)} MTR`);
         setProfileValue('profileMatches', `${totalMatches}`);
         setProfileValue('profileWins', `${wins}`);
         setProfileValue('profileLosses', `${losses}`);
