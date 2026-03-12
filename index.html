@@ -474,13 +474,22 @@
             }
         }
         
-        /* Animación de haz de luz recorriendo el borde usando conic-gradient */
-        @keyframes rotateLightBeam {
+        /* Animación de haz de luz recorriendo el perímetro completo */
+        @keyframes lightBeamPerimeter {
             0% {
-                transform: rotate(0deg);
+                background-position: 0% 0%, 100% 0%, 100% 100%, 0% 100%;
+            }
+            25% {
+                background-position: 100% 0%, 100% 0%, 100% 100%, 0% 100%;
+            }
+            50% {
+                background-position: 100% 0%, 100% 100%, 100% 100%, 0% 100%;
+            }
+            75% {
+                background-position: 100% 0%, 100% 100%, 0% 100%, 0% 100%;
             }
             100% {
-                transform: rotate(360deg);
+                background-position: 0% 0%, 100% 0%, 100% 100%, 0% 100%;
             }
         }
         
@@ -489,54 +498,49 @@
             position: relative;
             border-radius: 1.5rem;
             overflow: visible;
+            padding: 4px;
+            background: 
+                linear-gradient(90deg, transparent 0%, rgba(0, 243, 255, 0.8) 20%, rgba(236, 72, 153, 0.8) 50%, rgba(0, 243, 255, 0.8) 80%, transparent 100%) 0% 0% / 200% 4px,
+                linear-gradient(180deg, transparent 0%, rgba(0, 243, 255, 0.8) 20%, rgba(236, 72, 153, 0.8) 50%, rgba(0, 243, 255, 0.8) 80%, transparent 100%) 100% 0% / 4px 200%,
+                linear-gradient(270deg, transparent 0%, rgba(0, 243, 255, 0.8) 20%, rgba(236, 72, 153, 0.8) 50%, rgba(0, 243, 255, 0.8) 80%, transparent 100%) 100% 100% / 200% 4px,
+                linear-gradient(0deg, transparent 0%, rgba(0, 243, 255, 0.8) 20%, rgba(236, 72, 153, 0.8) 50%, rgba(0, 243, 255, 0.8) 80%, transparent 100%) 0% 100% / 4px 200%;
+            background-repeat: no-repeat;
+            animation: lightBeamPerimeter 3s linear infinite;
+            filter: blur(1px);
         }
         
+        .challenge-section-active > * {
+            position: relative;
+            z-index: 1;
+            background: inherit;
+            border-radius: calc(1.5rem - 4px);
+        }
+        
+        /* Capa adicional de brillo suave */
         .challenge-section-active::before {
             content: '';
             position: absolute;
-            top: -4px;
-            left: -4px;
-            right: -4px;
-            bottom: -4px;
-            background: conic-gradient(
-                from 0deg at 50% 50%,
-                transparent 0deg,
-                transparent 60deg,
-                rgba(0, 243, 255, 0.9) 80deg,
-                rgba(236, 72, 153, 0.9) 100deg,
-                rgba(0, 243, 255, 0.9) 120deg,
-                transparent 140deg,
-                transparent 360deg
-            );
+            top: -2px;
+            left: -2px;
+            right: -2px;
+            bottom: -2px;
             border-radius: 1.5rem;
+            background: linear-gradient(135deg, rgba(0, 243, 255, 0.1), rgba(236, 72, 153, 0.1));
             z-index: -1;
-            animation: rotateLightBeam 3s linear infinite;
-            filter: blur(2px);
-            opacity: 0.95;
+            filter: blur(8px);
+            opacity: 0.6;
+            animation: borderGlow 2s ease-in-out infinite;
         }
         
-        .challenge-section-active::after {
-            content: '';
-            position: absolute;
-            top: -6px;
-            left: -6px;
-            right: -6px;
-            bottom: -6px;
-            background: conic-gradient(
-                from 180deg at 50% 50%,
-                transparent 0deg,
-                transparent 50deg,
-                rgba(236, 72, 153, 0.6) 70deg,
-                rgba(0, 243, 255, 0.6) 90deg,
-                rgba(236, 72, 153, 0.6) 110deg,
-                transparent 130deg,
-                transparent 360deg
-            );
-            border-radius: 1.5rem;
-            z-index: -2;
-            animation: rotateLightBeam 4s linear infinite reverse;
-            filter: blur(4px);
-            opacity: 0.7;
+        @keyframes borderGlow {
+            0%, 100% {
+                opacity: 0.4;
+                transform: scale(1);
+            }
+            50% {
+                opacity: 0.8;
+                transform: scale(1.01);
+            }
         }
         
         .challenge-song-selector-active {
