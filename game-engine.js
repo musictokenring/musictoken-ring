@@ -2281,7 +2281,7 @@ const GameEngine = {
                 return;
             }
             
-            const { data: match } = await supabaseClient
+            const { data: match, error: matchError } = await supabaseClient
                 .from('matches')
                 .insert([{
                     match_type: type,
@@ -2304,6 +2304,23 @@ const GameEngine = {
                 }])
                 .select()
                 .single();
+            
+            // CRÍTICO: Verificar que el match se creó correctamente
+            if (matchError || !match || !match.id) {
+                console.error('[createMatch] ❌ Error creando match:', matchError);
+                console.error('[createMatch] ❌ Match data:', match);
+                
+                // Si la deducción fue exitosa pero falló crear el match, reembolsar créditos
+                if (deductionSuccess) {
+                    console.warn('[createMatch] ⚠️ Reembolsando créditos porque falló crear el match');
+                    await this.updateBalance(bet1, 'refund', null);
+                }
+                
+                showToast('Error al crear la partida. Los créditos han sido reembolsados.', 'error');
+                return;
+            }
+            
+            console.log('[createMatch] ✅ Match creado exitosamente:', match.id);
             
             // Actualizar matchId en la transacción de créditos si es necesario
             if (match && match.id && window.CreditsSystem) {
