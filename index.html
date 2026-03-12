@@ -4209,22 +4209,61 @@
                                 
                                 console.log('[refreshMtrBalance] ✅✅✅ Créditos agregados automáticamente desde MTR vía Supabase RPC');
                                 
-                                // CRÍTICO: Esperar más tiempo para que Supabase procese la transacción completamente
-                                console.log('[refreshMtrBalance] ⏳ Esperando 1 segundo para que Supabase procese...');
-                                await new Promise(resolve => setTimeout(resolve, 1000));
+                                // CRÍTICO: Leer créditos DIRECTAMENTE desde Supabase después de agregarlos
+                                // Esto evita depender del backend que puede no reflejar los créditos inmediatamente
+                                console.log('[refreshMtrBalance] 🔄 Leyendo créditos directamente desde Supabase...');
                                 
-                                // CRÍTICO: Recargar balance múltiples veces para asegurar que se refleje
-                                console.log('[refreshMtrBalance] 🔄 Primera recarga de balance...');
+                                try {
+                                    // Leer créditos directamente desde Supabase usando el userId
+                                    const { data: creditsData, error: creditsError } = await supabase
+                                        .from('user_credits')
+                                        .select('credits')
+                                        .eq('user_id', userId)
+                                        .single();
+                                    
+                                    if (!creditsError && creditsData) {
+                                        const directCredits = Number(creditsData.credits || 0);
+                                        console.log('[refreshMtrBalance] ✅✅✅ Créditos leídos directamente desde Supabase:', directCredits);
+                                        
+                                        // Actualizar CreditsSystem directamente sin depender del backend
+                                        if (window.CreditsSystem) {
+                                            window.CreditsSystem.currentCredits = directCredits;
+                                            window.CreditsSystem.currentUsdcValue = directCredits; // 1:1 fijo
+                                            
+                                            console.log('[refreshMtrBalance] ✅ CreditsSystem actualizado directamente:', {
+                                                currentCredits: window.CreditsSystem.currentCredits,
+                                                currentUsdcValue: window.CreditsSystem.currentUsdcValue
+                                            });
+                                            
+                                            // Actualizar UI inmediatamente
+                                            if (typeof window.CreditsSystem.updateCreditsDisplay === 'function') {
+                                                window.CreditsSystem.updateCreditsDisplay();
+                                            }
+                                            
+                                            // Actualizar GameEngine también
+                                            if (typeof window.GameEngine !== 'undefined' && typeof window.GameEngine.updateBalanceDisplay === 'function') {
+                                                window.GameEngine.updateBalanceDisplay();
+                                            }
+                                        }
+                                    } else {
+                                        console.warn('[refreshMtrBalance] ⚠️ No se pudieron leer créditos directamente desde Supabase:', creditsError);
+                                        // Fallback: intentar con loadBalance del backend
+                                        await window.CreditsSystem.loadBalance(walletAddress);
+                                    }
+                                } catch (directReadError) {
+                                    console.error('[refreshMtrBalance] ❌ Error leyendo créditos directamente:', directReadError);
+                                    // Fallback: intentar con loadBalance del backend
+                                    await window.CreditsSystem.loadBalance(walletAddress);
+                                }
+                                
+                                // CRÍTICO: También intentar recargar desde el backend como respaldo
+                                console.log('[refreshMtrBalance] 🔄 Recargando también desde backend como respaldo...');
+                                await new Promise(resolve => setTimeout(resolve, 500));
                                 await window.CreditsSystem.loadBalance(walletAddress);
                                 
                                 // Esperar un poco más y recargar de nuevo
                                 await new Promise(resolve => setTimeout(resolve, 500));
-                                console.log('[refreshMtrBalance] 🔄 Segunda recarga de balance...');
-                                await window.CreditsSystem.loadBalance(walletAddress);
-                                
-                                // Esperar un poco más y recargar una tercera vez
-                                await new Promise(resolve => setTimeout(resolve, 500));
-                                console.log('[refreshMtrBalance] 🔄 Tercera recarga de balance...');
+                                console.log('[refreshMtrBalance] 🔄 Segunda recarga desde backend...');
                                 await window.CreditsSystem.loadBalance(walletAddress);
                                 
                                 // CRÍTICO: Forzar actualización del display múltiples veces con delays
