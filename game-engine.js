@@ -2355,18 +2355,42 @@ const GameEngine = {
             }
             
             if (!deductionSuccess) {
-                console.error('[game-engine] Failed to deduct credits, aborting match creation');
+                console.error('[createMatch] ❌ Deducción falló, verificando si hay créditos suficientes...');
                 const currentCredits = window.CreditsSystem?.currentCredits || 0;
                 
                 // CRÍTICO: Verificar si realmente hay suficientes créditos o si es un error del backend
                 if (currentCredits >= bet1) {
-                    // Hay suficientes créditos pero el backend rechazó - problema del backend
-                    console.error('[game-engine] ⚠️⚠️⚠️ ERROR DEL BACKEND: Hay suficientes créditos pero la deducción fue rechazada');
-                    showToast(
-                        `Error del servidor al procesar la apuesta. Tienes ${currentCredits.toFixed(2)} créditos disponibles. ` +
-                        `Por favor, recarga la página e intenta nuevamente.`,
-                        'error'
-                    );
+                    // Hay suficientes créditos pero el backend rechazó - usar fallback RPC directamente
+                    console.error('[createMatch] ⚠️⚠️⚠️ ERROR DEL BACKEND: Hay suficientes créditos pero la deducción fue rechazada');
+                    console.log('[createMatch] 🔄 Intentando deducción usando fallback RPC...');
+                    
+                    // CRÍTICO: Usar fallback RPC directamente
+                    const userId = await window.CreditsSystem.getUserId(walletAddress);
+                    if (userId && typeof this.tryRpcFallback === 'function') {
+                        const rpcSuccess = await this.tryRpcFallback(walletAddress, userId, bet1);
+                        if (rpcSuccess) {
+                            console.log('[createMatch] ✅ Deducción exitosa usando fallback RPC');
+                            deductionSuccess = true;
+                            // Recargar balance después de deducción RPC
+                            await window.CreditsSystem.loadBalance(walletAddress);
+                        } else {
+                            console.error('[createMatch] ❌ Fallback RPC también falló');
+                            showToast(
+                                `Error del servidor al procesar la apuesta. Tienes ${currentCredits.toFixed(2)} créditos disponibles. ` +
+                                `Por favor, recarga la página e intenta nuevamente.`,
+                                'error'
+                            );
+                            return;
+                        }
+                    } else {
+                        console.error('[createMatch] ❌ No se puede usar fallback RPC - userId o función no disponible');
+                        showToast(
+                            `Error del servidor al procesar la apuesta. Tienes ${currentCredits.toFixed(2)} créditos disponibles. ` +
+                            `Por favor, recarga la página e intenta nuevamente.`,
+                            'error'
+                        );
+                        return;
+                    }
                 } else {
                     // Realmente no hay suficientes créditos
                     const missingCredits = bet1 - currentCredits;
@@ -2375,10 +2399,23 @@ const GameEngine = {
                         `Debes recargar ${missingCredits.toFixed(2)} créditos más para ejecutar este match.`,
                         'error'
                     );
+                    return;
                 }
+            }
+            
+            // CRÍTICO: Verificar sesión antes de crear match
+            const { data: { session: matchSession }, error: sessionError } = await supabaseClient.auth.getSession();
+            if (sessionError || !matchSession) {
+                console.error('[createMatch] ❌ No hay sesión de usuario para crear match:', sessionError);
+                if (deductionSuccess) {
+                    console.warn('[createMatch] ⚠️ Reembolsando créditos porque no hay sesión');
+                    await this.updateBalance(bet1, 'refund', null);
+                }
+                showToast('Error: Debes iniciar sesión para crear una partida.', 'error');
                 return;
             }
             
+            console.log('[createMatch] 🔄 Creando match en Supabase...');
             const { data: match, error: matchError } = await supabaseClient
                 .from('matches')
                 .insert([{
@@ -2407,11 +2444,31 @@ const GameEngine = {
             if (matchError || !match || !match.id) {
                 console.error('[createMatch] ❌ Error creando match:', matchError);
                 console.error('[createMatch] ❌ Match data:', match);
+                console.error('[createMatch] ❌ Error completo:', JSON.stringify(matchError, null, 2));
+                console.error('[createMatch] ❌ Sesión de usuario:', matchSession?.user?.id);
+                console.error('[createMatch] ❌ Player IDs:', { player1Id, player2Id });
                 
                 // Si la deducción fue exitosa pero falló crear el match, reembolsar créditos
                 if (deductionSuccess) {
                     console.warn('[createMatch] ⚠️ Reembolsando créditos porque falló crear el match');
-                    await this.updateBalance(bet1, 'refund', null);
+                    // Intentar reembolsar usando RPC si el backend falla
+                    const userId = await window.CreditsSystem.getUserId(walletAddress);
+                    if (userId && window.supabaseClient) {
+                        try {
+                            const { error: refundError } = await window.supabaseClient.rpc('increment_user_credits', {
+                                user_id_param: userId,
+                                credits_to_add: bet1
+                            });
+                            if (refundError) {
+                                console.error('[createMatch] ❌ Error reembolsando créditos:', refundError);
+                            } else {
+                                console.log('[createMatch] ✅ Créditos reembolsados vía RPC');
+                                await window.CreditsSystem.loadBalance(walletAddress);
+                            }
+                        } catch (refundErr) {
+                            console.error('[createMatch] ❌ Error en reembolso:', refundErr);
+                        }
+                    }
                 }
                 
                 showToast('Error al crear la partida. Los créditos han sido reembolsados.', 'error');
