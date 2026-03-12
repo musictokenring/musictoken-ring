@@ -499,19 +499,19 @@
         .challenge-section-active {
             position: relative;
             border-radius: 1.5rem;
-            overflow: visible;
+            overflow: hidden; /* Cambiar a hidden para que las esquinas estén perfectas */
             padding: 0; /* Sin padding para que el contenido no se mueva */
             background: transparent !important; /* Contenido claro sin degradado */
         }
         
-        /* Borde superior animado - SOLO en el borde */
+        /* Borde superior animado - SOLO en el borde, más grueso */
         .challenge-section-active::before {
             content: '';
             position: absolute;
-            top: -3px;
-            left: -3px;
-            right: -3px;
-            height: 3px; /* SOLO altura del borde */
+            top: -5px;
+            left: -5px;
+            right: -5px;
+            height: 5px; /* Borde más grueso: 5px en lugar de 3px */
             background: linear-gradient(
                 90deg,
                 transparent 0%,
@@ -523,21 +523,22 @@
                 transparent 100%
             );
             background-size: 200% 100%;
-            border-radius: 1.5rem 1.5rem 0 0;
+            border-radius: calc(1.5rem + 5px); /* Ajustar border-radius para esquinas perfectas */
             z-index: 0;
             animation: lightBeamTop 2s linear infinite;
             filter: blur(0.5px);
             pointer-events: none; /* No interfiere con clics */
+            clip-path: inset(0 0 calc(100% - 5px) 0); /* Asegurar que solo se vea el borde superior */
         }
         
-        /* Borde inferior animado - SOLO en el borde */
+        /* Borde inferior animado - SOLO en el borde, más grueso */
         .challenge-section-active::after {
             content: '';
             position: absolute;
-            bottom: -3px;
-            left: -3px;
-            right: -3px;
-            height: 3px; /* SOLO altura del borde */
+            bottom: -5px;
+            left: -5px;
+            right: -5px;
+            height: 5px; /* Borde más grueso: 5px en lugar de 3px */
             background: linear-gradient(
                 270deg,
                 transparent 0%,
@@ -549,31 +550,32 @@
                 transparent 100%
             );
             background-size: 200% 100%;
-            border-radius: 0 0 1.5rem 1.5rem;
+            border-radius: calc(1.5rem + 5px); /* Ajustar border-radius para esquinas perfectas */
             z-index: 0;
             animation: lightBeamBottom 2s linear infinite;
             filter: blur(0.5px);
             pointer-events: none; /* No interfiere con clics */
+            clip-path: inset(calc(100% - 5px) 0 0 0); /* Asegurar que solo se vea el borde inferior */
         }
         
-        /* Bordes laterales usando box-shadow - SOLO en los bordes */
+        /* Bordes laterales usando box-shadow - SOLO en los bordes, más gruesos */
         .challenge-section-active {
             box-shadow: 
-                -3px 0 0 0 rgba(0, 243, 255, 0.5),
-                3px 0 0 0 rgba(0, 243, 255, 0.5);
+                -5px 0 0 0 rgba(0, 243, 255, 0.5),
+                5px 0 0 0 rgba(0, 243, 255, 0.5);
             animation: borderSideGlow 2s ease-in-out infinite;
         }
         
         @keyframes borderSideGlow {
             0%, 100% {
                 box-shadow: 
-                    -3px 0 0 0 rgba(0, 243, 255, 0.4),
-                    3px 0 0 0 rgba(0, 243, 255, 0.4);
+                    -5px 0 0 0 rgba(0, 243, 255, 0.4),
+                    5px 0 0 0 rgba(0, 243, 255, 0.4);
             }
             50% {
                 box-shadow: 
-                    -3px 0 0 0 rgba(236, 72, 153, 0.7),
-                    3px 0 0 0 rgba(236, 72, 153, 0.7);
+                    -5px 0 0 0 rgba(236, 72, 153, 0.7),
+                    5px 0 0 0 rgba(236, 72, 153, 0.7);
             }
         }
         
@@ -4019,16 +4021,16 @@
                     console.log('[handleSocialChallengeAccept] ⏳ GameEngine no disponible, esperando...');
                     console.log('[handleSocialChallengeAccept] Verificando window.GameEngine:', typeof window.GameEngine);
                     
-                    // Esperar hasta 3 segundos con múltiples intentos
-                    for (let i = 0; i < 15; i++) {
+                    // Esperar hasta 5 segundos (aumentado de 3) con múltiples intentos
+                    for (let i = 0; i < 25; i++) {
                         await new Promise(resolve => setTimeout(resolve, 200));
                         gameEngineAvailable = typeof window.GameEngine !== 'undefined' && typeof window.GameEngine.acceptSocialChallenge === 'function';
                         if (gameEngineAvailable) {
                             console.log('[handleSocialChallengeAccept] ✅ GameEngine disponible después de', (i + 1) * 200, 'ms');
                             break;
                         }
-                        if (i === 0 || i === 4 || i === 9) {
-                            console.log('[handleSocialChallengeAccept] ⏳ Esperando GameEngine... Intento', i + 1, '/15');
+                        if (i === 0 || i === 4 || i === 9 || i === 14 || i === 19) {
+                            console.log('[handleSocialChallengeAccept] ⏳ Esperando GameEngine... Intento', i + 1, '/25');
                         }
                     }
                     
@@ -4036,6 +4038,30 @@
                     if (!gameEngineAvailable && typeof window.GameEngine !== 'undefined') {
                         console.warn('[handleSocialChallengeAccept] ⚠️ GameEngine existe pero acceptSocialChallenge no está disponible');
                         console.warn('[handleSocialChallengeAccept] Métodos disponibles:', Object.keys(window.GameEngine || {}));
+                        
+                        // Intentar inicializar GameEngine si existe pero no está completo
+                        if (typeof window.GameEngine.init === 'function') {
+                            console.log('[handleSocialChallengeAccept] 🔄 Intentando inicializar GameEngine...');
+                            try {
+                                await window.GameEngine.init();
+                                gameEngineAvailable = typeof window.GameEngine.acceptSocialChallenge === 'function';
+                                if (gameEngineAvailable) {
+                                    console.log('[handleSocialChallengeAccept] ✅ GameEngine inicializado correctamente');
+                                }
+                            } catch (initError) {
+                                console.error('[handleSocialChallengeAccept] ❌ Error inicializando GameEngine:', initError);
+                            }
+                        }
+                    }
+                    
+                    // Si aún no está disponible, verificar si el script se está cargando
+                    if (!gameEngineAvailable) {
+                        const gameEngineScript = document.querySelector('script[src*="game-engine"]');
+                        if (gameEngineScript && !gameEngineScript.complete) {
+                            console.log('[handleSocialChallengeAccept] ⏳ Script de GameEngine aún cargando, esperando adicional...');
+                            await new Promise(resolve => setTimeout(resolve, 2000));
+                            gameEngineAvailable = typeof window.GameEngine !== 'undefined' && typeof window.GameEngine.acceptSocialChallenge === 'function';
+                        }
                     }
                 }
                 
