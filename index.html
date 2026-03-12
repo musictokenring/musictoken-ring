@@ -4231,39 +4231,38 @@
                                     console.warn('[refreshMtrBalance] ⚠️ No se pudo obtener publicUserId - conversión cancelada');
                                     return; // No bloquear, solo cancelar conversión
                                 }
-                        
-                                try {
-                                    console.log('[refreshMtrBalance] 🔄 Convirtiendo MTR a créditos automáticamente usando Supabase RPC...', {
-                                        authUserId: authUserId,
+                                
+                                console.log('[refreshMtrBalance] 🔄 Convirtiendo MTR a créditos automáticamente usando Supabase RPC...', {
+                                    authUserId: authUserId,
+                                    publicUserId: publicUserId,
+                                    walletAddress: walletAddress,
+                                    creditsToAdd: creditsToAdd,
+                                    mtrAmount: numericBalance
+                                });
+                                
+                                console.log('[refreshMtrBalance] 🔄 Llamando a increment_user_credits RPC con publicUserId:', publicUserId);
+                                
+                                // CRÍTICO: Usar publicUserId (de public.users) no authUserId (de auth.users)
+                                const { error: rpcError } = await supabase.rpc('increment_user_credits', {
+                                    user_id_param: publicUserId,
+                                    credits_to_add: creditsToAdd
+                                });
+                                
+                                if (rpcError) {
+                                    console.error('[refreshMtrBalance] ❌❌❌ Error al agregar créditos vía RPC:', {
+                                        error: rpcError,
                                         publicUserId: publicUserId,
-                                        walletAddress: walletAddress,
-                                        creditsToAdd: creditsToAdd,
-                                        mtrAmount: numericBalance
+                                        creditsToAdd: creditsToAdd
                                     });
                                     
-                                    console.log('[refreshMtrBalance] 🔄 Llamando a increment_user_credits RPC con publicUserId:', publicUserId);
-                                    
-                                    // CRÍTICO: Usar publicUserId (de public.users) no authUserId (de auth.users)
-                                    const { error: rpcError } = await supabase.rpc('increment_user_credits', {
-                                        user_id_param: publicUserId,
-                                        credits_to_add: creditsToAdd
-                                    });
-                                    
-                                    if (rpcError) {
-                                        console.error('[refreshMtrBalance] ❌❌❌ Error al agregar créditos vía RPC:', {
-                                            error: rpcError,
-                                            publicUserId: publicUserId,
-                                            creditsToAdd: creditsToAdd
-                                        });
-                                        
-                                        if (typeof showToast === 'function') {
-                                            showToast(
-                                                `⚠️ Error al convertir créditos: ${rpcError.message || 'Error desconocido'}`,
-                                                'error'
-                                            );
-                                        }
-                                        return; // Solo cancelar conversión, no bloquear flujo principal
+                                    if (typeof showToast === 'function') {
+                                        showToast(
+                                            `⚠️ Error al convertir créditos: ${rpcError.message || 'Error desconocido'}`,
+                                            'error'
+                                        );
                                     }
+                                    return; // Solo cancelar conversión, no bloquear flujo principal
+                                }
                                 
                                 console.log('[refreshMtrBalance] ✅✅✅ Créditos agregados automáticamente desde MTR vía Supabase RPC');
                                 
@@ -4402,9 +4401,7 @@
                                 }
                                 // No mostrar error al usuario, solo log
                             }
-                        } else {
-                            console.warn('[refreshMtrBalance] ⚠️ No se pudo obtener userId o walletAddress para conversión automática');
-                        }
+                        })(); // Ejecutar función async inmediatamente sin bloquear
                     }
                 }
             } catch (e) {
