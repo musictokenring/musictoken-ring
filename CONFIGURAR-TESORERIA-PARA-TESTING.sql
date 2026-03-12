@@ -82,18 +82,40 @@ BEGIN
         AND LOWER(wallet_address) = LOWER(treasury_wallet)
     ) THEN
         RAISE NOTICE '⚠️ Wallet NO está vinculada, vinculando...';
-        INSERT INTO user_wallets (user_id, wallet_address, linked_via, linked_at, network)
-        VALUES (
-            user_id_found, 
-            treasury_wallet, 
-            'manual', 
-            NOW(), 
-            'base'
-        )
-        ON CONFLICT (wallet_address) DO UPDATE SET 
-            user_id = user_id_found,
-            linked_via = 'manual',
-            linked_at = NOW();
+        -- Verificar si la columna network existe antes de usarla
+        IF EXISTS (
+            SELECT 1 FROM information_schema.columns 
+            WHERE table_name = 'user_wallets' 
+            AND column_name = 'network'
+        ) THEN
+            -- Si existe la columna network, usarla
+            INSERT INTO user_wallets (user_id, wallet_address, linked_via, linked_at, network)
+            VALUES (
+                user_id_found, 
+                treasury_wallet, 
+                'manual', 
+                NOW(), 
+                'base'
+            )
+            ON CONFLICT (wallet_address) DO UPDATE SET 
+                user_id = user_id_found,
+                linked_via = 'manual',
+                linked_at = NOW(),
+                network = 'base';
+        ELSE
+            -- Si NO existe la columna network, insertar sin ella
+            INSERT INTO user_wallets (user_id, wallet_address, linked_via, linked_at)
+            VALUES (
+                user_id_found, 
+                treasury_wallet, 
+                'manual', 
+                NOW()
+            )
+            ON CONFLICT (wallet_address) DO UPDATE SET 
+                user_id = user_id_found,
+                linked_via = 'manual',
+                linked_at = NOW();
+        END IF;
         RAISE NOTICE '✅ Wallet vinculada exitosamente';
     ELSE
         RAISE NOTICE '✅ Wallet ya está vinculada';
