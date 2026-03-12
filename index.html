@@ -493,43 +493,33 @@
             }
         }
         
-        /* Efecto de haz de luz en el borde del contenedor */
+        /* Efecto de haz de luz solo en los bordes del contenedor */
         .challenge-section-active {
             position: relative;
             border-radius: 1.5rem;
             overflow: visible;
-            padding: 4px;
-            background: 
-                linear-gradient(90deg, transparent 0%, rgba(0, 243, 255, 0.8) 20%, rgba(236, 72, 153, 0.8) 50%, rgba(0, 243, 255, 0.8) 80%, transparent 100%) 0% 0% / 200% 4px,
-                linear-gradient(180deg, transparent 0%, rgba(0, 243, 255, 0.8) 20%, rgba(236, 72, 153, 0.8) 50%, rgba(0, 243, 255, 0.8) 80%, transparent 100%) 100% 0% / 4px 200%,
-                linear-gradient(270deg, transparent 0%, rgba(0, 243, 255, 0.8) 20%, rgba(236, 72, 153, 0.8) 50%, rgba(0, 243, 255, 0.8) 80%, transparent 100%) 100% 100% / 200% 4px,
-                linear-gradient(0deg, transparent 0%, rgba(0, 243, 255, 0.8) 20%, rgba(236, 72, 153, 0.8) 50%, rgba(0, 243, 255, 0.8) 80%, transparent 100%) 0% 100% / 4px 200%;
-            background-repeat: no-repeat;
+            padding: 0; /* Sin padding para que el borde sea visible */
+            background: transparent; /* Sin fondo degradado */
+            border: 3px solid transparent; /* Borde inicial transparente para animación */
+        }
+        
+        /* Animación del borde usando border-image */
+        .challenge-section-active {
+            border-image: 
+                linear-gradient(90deg, transparent 0%, rgba(0, 243, 255, 0.9) 20%, rgba(236, 72, 153, 0.9) 50%, rgba(0, 243, 255, 0.9) 80%, transparent 100%) 0% 0% / 200% 3px,
+                linear-gradient(180deg, transparent 0%, rgba(0, 243, 255, 0.9) 20%, rgba(236, 72, 153, 0.9) 50%, rgba(0, 243, 255, 0.9) 80%, transparent 100%) 100% 0% / 3px 200%,
+                linear-gradient(270deg, transparent 0%, rgba(0, 243, 255, 0.9) 20%, rgba(236, 72, 153, 0.9) 50%, rgba(0, 243, 255, 0.9) 80%, transparent 100%) 100% 100% / 200% 3px,
+                linear-gradient(0deg, transparent 0%, rgba(0, 243, 255, 0.9) 20%, rgba(236, 72, 153, 0.9) 50%, rgba(0, 243, 255, 0.9) 80%, transparent 100%) 0% 100% / 3px 200%;
+            border-image-slice: 1;
+            border-image-repeat: no-repeat;
             animation: lightBeamPerimeter 3s linear infinite;
-            filter: blur(1px);
         }
         
         .challenge-section-active > * {
             position: relative;
             z-index: 1;
-            background: inherit;
-            border-radius: calc(1.5rem - 4px);
-        }
-        
-        /* Capa adicional de brillo suave */
-        .challenge-section-active::before {
-            content: '';
-            position: absolute;
-            top: -2px;
-            left: -2px;
-            right: -2px;
-            bottom: -2px;
-            border-radius: 1.5rem;
-            background: linear-gradient(135deg, rgba(0, 243, 255, 0.1), rgba(236, 72, 153, 0.1));
-            z-index: -1;
-            filter: blur(8px);
-            opacity: 0.6;
-            animation: borderGlow 2s ease-in-out infinite;
+            background: transparent; /* Contenido claro */
+            border-radius: calc(1.5rem - 3px);
         }
         
         @keyframes borderGlow {
