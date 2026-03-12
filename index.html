@@ -4135,8 +4135,35 @@
                                     const addData = await addCreditsResponse.json();
                                     console.log('[refreshMtrBalance] ✅ Créditos agregados automáticamente desde MTR:', addData);
                                     
+                                    // CRÍTICO: Esperar un momento para que el backend procese la transacción
+                                    await new Promise(resolve => setTimeout(resolve, 500));
+                                    
                                     // Recargar balance después de la conversión
+                                    console.log('[refreshMtrBalance] 🔄 Recargando balance después de conversión...');
                                     await window.CreditsSystem.loadBalance(walletAddress);
+                                    
+                                    // CRÍTICO: Forzar actualización del display múltiples veces para asegurar que se refleje
+                                    if (typeof window.CreditsSystem.updateCreditsDisplay === 'function') {
+                                        window.CreditsSystem.updateCreditsDisplay();
+                                    }
+                                    
+                                    // Actualizar también el display del GameEngine
+                                    if (typeof window.GameEngine !== 'undefined' && typeof window.GameEngine.updateBalanceDisplay === 'function') {
+                                        setTimeout(() => {
+                                            window.GameEngine.updateBalanceDisplay();
+                                        }, 100);
+                                        setTimeout(() => {
+                                            window.GameEngine.updateBalanceDisplay();
+                                        }, 500);
+                                    }
+                                    
+                                    // Verificar que los créditos se cargaron correctamente
+                                    const reloadedCredits = window.CreditsSystem?.currentCredits || 0;
+                                    console.log('[refreshMtrBalance] ✅✅✅ Balance recargado después de conversión:', {
+                                        creditsAdded: creditsToAdd,
+                                        reloadedCredits: reloadedCredits,
+                                        success: reloadedCredits > 0
+                                    });
                                     
                                     // Mostrar notificación de éxito
                                     if (typeof showToast === 'function') {
