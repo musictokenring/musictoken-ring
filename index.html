@@ -1946,6 +1946,24 @@
                 
                 if (session || hasLinkedWallet) {
                     showModeSelector();
+                    
+                    // CRÍTICO: Cargar créditos inmediatamente si hay wallet conectada
+                    const connectedWallet = window.__mtrConnectedWallet || localStorage.getItem('mtr_wallet') || connectedAddress;
+                    if (connectedWallet && window.CreditsSystem && typeof window.CreditsSystem.loadBalance === 'function') {
+                        console.log('[init] 🔄 Cargando créditos para wallet conectada:', connectedWallet);
+                        window.CreditsSystem.loadBalance(connectedWallet).then(() => {
+                            console.log('[init] ✅ Créditos cargados inicialmente');
+                            // Actualizar display después de cargar
+                            if (typeof window.GameEngine !== 'undefined' && typeof window.GameEngine.updateBalanceDisplay === 'function') {
+                                setTimeout(() => {
+                                    window.GameEngine.updateBalanceDisplay();
+                                }, 200);
+                            }
+                        }).catch(err => {
+                            console.error('[init] ❌ Error cargando créditos inicialmente:', err);
+                        });
+                    }
+                    
                     if (typeof window.GameEngine !== 'undefined') {
                         // Inicializar GameEngine sin bloquear
                         window.GameEngine.init().catch(function(initError) {
