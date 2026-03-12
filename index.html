@@ -3783,7 +3783,23 @@
                     bet: bet
                 });
 
-                if (typeof GameEngine !== 'undefined' && typeof GameEngine.acceptSocialChallenge === 'function') {
+                // CRÍTICO: Verificar que GameEngine esté disponible, esperar si es necesario
+                let gameEngineAvailable = typeof window.GameEngine !== 'undefined' && typeof window.GameEngine.acceptSocialChallenge === 'function';
+                
+                // Si no está disponible, esperar un poco y reintentar
+                if (!gameEngineAvailable) {
+                    console.log('[handleSocialChallengeAccept] ⏳ GameEngine no disponible, esperando...');
+                    for (let i = 0; i < 5; i++) {
+                        await new Promise(resolve => setTimeout(resolve, 200));
+                        gameEngineAvailable = typeof window.GameEngine !== 'undefined' && typeof window.GameEngine.acceptSocialChallenge === 'function';
+                        if (gameEngineAvailable) {
+                            console.log('[handleSocialChallengeAccept] ✅ GameEngine disponible después de esperar');
+                            break;
+                        }
+                    }
+                }
+                
+                if (gameEngineAvailable) {
                     // CRÍTICO: Recargar saldo ANTES de aceptar para asegurar sincronización
                     const walletAddress = window.connectedAddress || localStorage.getItem('mtr_wallet');
                     if (walletAddress && window.CreditsSystem) {
@@ -3797,7 +3813,7 @@
                         window.selectedSong = songToUse;
                     }
                     
-                    await GameEngine.acceptSocialChallenge(window.pendingChallengeId, songToUse, bet);
+                    await window.GameEngine.acceptSocialChallenge(window.pendingChallengeId, songToUse, bet);
                     
                     // CRÍTICO: Recargar saldo DESPUÉS de aceptar para reflejar la deducción
                     if (walletAddress && window.CreditsSystem) {
@@ -3811,9 +3827,9 @@
                     window.pendingChallengeInfo = null;
                     window.selectedSong = null; // Limpiar también la canción seleccionada
                 } else {
-                    console.error('[handleSocialChallengeAccept] ❌ GameEngine o acceptSocialChallenge no disponible');
+                    console.error('[handleSocialChallengeAccept] ❌ GameEngine o acceptSocialChallenge no disponible después de esperar');
                     if (typeof showToast === 'function') {
-                        showToast('Error: Sistema de juego no disponible', 'error');
+                        showToast('Error: Sistema de juego no disponible. Por favor, recarga la página.', 'error');
                     }
                 }
             } else {
