@@ -1261,6 +1261,20 @@ const GameEngine = {
                                 return;
                             }
                             
+                            // CRÍTICO: Verificar que el usuario esté autenticado antes de llamar a RPC
+                            const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+                            
+                            if (sessionError || !session) {
+                                console.error('[acceptSocialChallenge] ❌ Usuario no autenticado, no se pueden convertir créditos');
+                                showToast(
+                                    `Créditos insuficientes. Tienes ${userCredits.toFixed(2)} créditos, necesitas ${normalizedBet}. ` +
+                                    `Por favor, inicia sesión para convertir créditos automáticamente.`,
+                                    'error'
+                                );
+                                return;
+                            }
+                            
+                            console.log('[acceptSocialChallenge] ✅ Usuario autenticado:', session.user.id);
                             console.log('[acceptSocialChallenge] 🔄 Convirtiendo MTR a créditos usando Supabase RPC...');
                             
                             // Llamar directamente a la función RPC de Supabase
@@ -4069,6 +4083,17 @@ const GameEngine = {
                     return;
                 }
                 
+                // CRÍTICO: Verificar que el usuario esté autenticado antes de llamar a RPC
+                const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+                
+                if (sessionError || !session) {
+                    console.error('[game-engine] ❌ Usuario no autenticado, no se pueden otorgar créditos');
+                    showToast('Error al otorgar créditos. Por favor, inicia sesión.', 'error');
+                    return;
+                }
+                
+                console.log('[game-engine] ✅ Usuario autenticado:', session.user.id);
+                
                 // Llamar directamente a la función RPC de Supabase
                 const { error: rpcError } = await supabase.rpc('increment_user_credits', {
                     user_id_param: userId,
@@ -4394,6 +4419,15 @@ const GameEngine = {
                                             return false;
                                         }
                                         
+                                        // CRÍTICO: Verificar que el usuario esté autenticado antes de llamar a RPC
+                                        const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+                                        
+                                        if (sessionError || !session) {
+                                            console.error('[updateBalance] ❌ Usuario no autenticado, no se pueden convertir créditos');
+                                            return false;
+                                        }
+                                        
+                                        console.log('[updateBalance] ✅ Usuario autenticado:', session.user.id);
                                         console.log('[updateBalance] 🔄 Convirtiendo MTR a créditos usando Supabase RPC...');
                                         
                                         // Llamar directamente a la función RPC de Supabase

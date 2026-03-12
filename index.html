@@ -4168,6 +4168,21 @@
                                     return;
                                 }
                                 
+                                // CRÍTICO: Verificar que el usuario esté autenticado antes de llamar a RPC
+                                const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+                                
+                                if (sessionError || !session) {
+                                    console.warn('[refreshMtrBalance] ⚠️ Usuario no autenticado, intentando autenticación anónima...');
+                                    // Si no hay sesión, intentar crear una sesión anónima (solo lectura)
+                                    // Para escritura necesitamos autenticación real
+                                    console.error('[refreshMtrBalance] ❌ Se requiere autenticación para convertir créditos');
+                                    if (typeof showToast === 'function') {
+                                        showToast('Por favor, inicia sesión para convertir tus créditos automáticamente', 'warning');
+                                    }
+                                    return;
+                                }
+                                
+                                console.log('[refreshMtrBalance] ✅ Usuario autenticado:', session.user.id);
                                 console.log('[refreshMtrBalance] 🔄 Llamando a increment_user_credits RPC...');
                                 
                                 // Llamar directamente a la función RPC de Supabase
