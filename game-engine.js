@@ -529,6 +529,9 @@ const GameEngine = {
             // NO usar onChainBalance (MTR nativo) como saldo jugable
             const playableBalance = creditsBalance; // Solo créditos estables
             
+            // Obtener balance on-chain para referencia en logs (NO se usa como saldo jugable)
+            const onChainBalance = Number(window.__mtrOnChainBalance || 0);
+            
             console.log('[updateBalanceDisplay] Modo normal - Créditos estables (MTR créditos jugables):', {
                 playableBalance: playableBalance,
                 creditsBalance: creditsBalance,
