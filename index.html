@@ -3704,6 +3704,16 @@
 
                 // CRÍTICO: Actualizar modal del reto con información visual
                 updateChallengeModal(challenge);
+                
+                // CRÍTICO: Mostrar modal del reto automáticamente si no hay sesión o si el usuario no está en modo social
+                const { data: { session } } = await supabase.auth.getSession();
+                if (!session || window.currentMode !== 'social') {
+                    const challengeModal = document.getElementById('challengeModal');
+                    if (challengeModal) {
+                        challengeModal.classList.remove('hidden');
+                        console.log('[loadChallengeInfo] ✅ Modal del reto mostrado automáticamente');
+                    }
+                }
 
                 // CRÍTICO: Actualizar UI inmediatamente después de cargar
                 if (window.currentMode === 'social') {
