@@ -1388,6 +1388,22 @@ const GameEngine = {
                 })
                 .eq('id', challenge.id);
             
+            // CRÍTICO: Recargar saldo DESPUÉS de crear el match para reflejar la deducción
+            const walletAddress = this.connectedWallet || localStorage.getItem('mtr_wallet');
+            if (walletAddress && window.CreditsSystem) {
+                console.log('[acceptSocialChallenge] 🔄 Recargando saldo después de crear match...');
+                await new Promise(resolve => setTimeout(resolve, 500));
+                await window.CreditsSystem.loadBalance(walletAddress);
+                
+                // Forzar actualización de UI
+                if (typeof window.CreditsSystem.updateCreditsDisplay === 'function') {
+                    window.CreditsSystem.updateCreditsDisplay();
+                }
+                if (typeof window.GameEngine !== 'undefined' && typeof window.GameEngine.updateBalanceDisplay === 'function') {
+                    window.GameEngine.updateBalanceDisplay();
+                }
+            }
+            
             // Limpiar parámetro de URL
             if (window.history && window.history.replaceState) {
                 const url = new URL(window.location);
@@ -1400,6 +1416,13 @@ const GameEngine = {
         } catch (error) {
             console.error('Error accepting social challenge:', error);
             showToast('Error al aceptar desafío', 'error');
+            
+            // CRÍTICO: Recargar saldo incluso si hay error para asegurar sincronización
+            const walletAddress = this.connectedWallet || localStorage.getItem('mtr_wallet');
+            if (walletAddress && window.CreditsSystem) {
+                console.log('[acceptSocialChallenge] 🔄 Recargando saldo después de error...');
+                await window.CreditsSystem.loadBalance(walletAddress);
+            }
         }
     },
     

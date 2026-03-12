@@ -1029,9 +1029,21 @@
     <!-- Challenge Modal -->
     <div id="challengeModal" class="hidden fixed inset-0 z-[100] flex items-center justify-center p-4">
         <div class="modal-overlay" onclick="closeChallengeModal()"></div>
-        <div class="modal-box text-center">
+        <div class="modal-box text-center max-w-md">
             <button type="button" onclick="closeChallengeModal()" class="absolute top-4 right-4 text-gray-400 hover:text-white text-2xl leading-none cursor-pointer">×</button>
-            <h2 class="text-2xl font-bold text-white mb-2">⚔️ Reto Rápido</h2>
+            <h2 class="text-2xl font-bold text-white mb-4">⚔️ Reto Social</h2>
+            
+            <!-- Información del reto con animación -->
+            <div id="challengeSongInfo" class="mb-6 animate-pulse">
+                <div class="relative inline-block mb-4">
+                    <img id="challengeSongImage" src="" alt="Canción del reto" class="w-32 h-32 rounded-xl object-cover shadow-lg shadow-cyan-500/25 border-2 border-cyan-500/30 animate-bounce" style="animation-duration: 2s;">
+                    <div class="absolute inset-0 rounded-xl bg-gradient-to-t from-cyan-500/20 to-transparent pointer-events-none"></div>
+                </div>
+                <h3 id="challengeSongName" class="text-xl font-bold text-white mb-1">-</h3>
+                <p id="challengeSongArtist" class="text-gray-400 text-sm mb-2">-</p>
+                <p id="challengeBetAmount" class="text-cyan-400 font-semibold">Apuesta: <span id="challengeBetValue">-</span> créditos</p>
+            </div>
+            
             <p id="challengeDetails" class="text-gray-400 text-sm mb-6">Tienes un reto pendiente</p>
             <div class="flex gap-3">
                 <button type="button" onclick="acceptChallenge()" class="flex-1 py-3 rounded-lg text-sm font-bold bg-gradient-to-r from-cyan-500 to-fuchsia-500 text-white hover:opacity-90 transition cursor-pointer">Aceptar</button>
@@ -3680,21 +3692,25 @@
                 // Guardar información del desafío
                 window.pendingChallengeBetAmount = challenge.bet_amount;
                 window.pendingChallengeInfo = challenge;
-                
+
                 console.log('[loadChallengeInfo] ✅✅✅ Desafío cargado EXITOSAMENTE:', {
                     challengeId: challengeId,
                     betAmount: challenge.bet_amount,
                     challengerSong: challenge.challenger_song_name,
+                    challengerSongImage: challenge.challenger_song_image,
                     pendingChallengeBetAmount: window.pendingChallengeBetAmount,
                     pendingChallengeInfo: window.pendingChallengeInfo
                 });
-                
+
+                // CRÍTICO: Actualizar modal del reto con información visual
+                updateChallengeModal(challenge);
+
                 // CRÍTICO: Actualizar UI inmediatamente después de cargar
                 if (window.currentMode === 'social') {
                     console.log('[loadChallengeInfo] 🔄 Actualizando UI porque ya estamos en modo social');
                     updateActionButtons('social');
                 }
-                
+
                 return true;
             } catch (error) {
                 console.error('[loadChallengeInfo] ❌❌❌ ERROR CRÍTICO:', error);
@@ -3703,15 +3719,62 @@
             }
         }
         
+        // Actualizar modal del reto con información visual
+        function updateChallengeModal(challenge) {
+            try {
+                const songImageEl = document.getElementById('challengeSongImage');
+                const songNameEl = document.getElementById('challengeSongName');
+                const songArtistEl = document.getElementById('challengeSongArtist');
+                const betValueEl = document.getElementById('challengeBetValue');
+                
+                if (songImageEl && challenge.challenger_song_image) {
+                    songImageEl.src = challenge.challenger_song_image;
+                    songImageEl.alt = challenge.challenger_song_name || 'Canción del reto';
+                }
+                
+                if (songNameEl) {
+                    songNameEl.textContent = challenge.challenger_song_name || 'Canción desconocida';
+                }
+                
+                if (songArtistEl) {
+                    songArtistEl.textContent = challenge.challenger_song_artist || 'Artista desconocido';
+                }
+                
+                if (betValueEl && challenge.bet_amount) {
+                    betValueEl.textContent = challenge.bet_amount.toLocaleString('es-ES');
+                }
+                
+                console.log('[updateChallengeModal] ✅ Modal actualizado con información del reto');
+            } catch (error) {
+                console.error('[updateChallengeModal] ❌ Error actualizando modal:', error);
+            }
+        }
+
         // Manejar aceptación de desafío cuando se selecciona canción
         async function handleSocialChallengeAccept() {
             if (window.pendingChallengeId && selectedSong) {
                 // CRÍTICO: Usar el betAmount del desafío, no el del input
                 var bet = window.pendingChallengeBetAmount || parseFloat(document.getElementById('betAmount').value) || 5;
                 console.log('[handleSocialChallengeAccept] Aceptando desafío con apuesta:', bet);
-                
+
                 if (typeof GameEngine !== 'undefined' && typeof GameEngine.acceptSocialChallenge === 'function') {
+                    // CRÍTICO: Recargar saldo ANTES de aceptar para asegurar sincronización
+                    const walletAddress = window.connectedAddress || localStorage.getItem('mtr_wallet');
+                    if (walletAddress && window.CreditsSystem) {
+                        console.log('[handleSocialChallengeAccept] 🔄 Recargando saldo antes de aceptar...');
+                        await window.CreditsSystem.loadBalance(walletAddress);
+                        await new Promise(resolve => setTimeout(resolve, 300));
+                    }
+                    
                     await GameEngine.acceptSocialChallenge(window.pendingChallengeId, selectedSong, bet);
+                    
+                    // CRÍTICO: Recargar saldo DESPUÉS de aceptar para reflejar la deducción
+                    if (walletAddress && window.CreditsSystem) {
+                        console.log('[handleSocialChallengeAccept] 🔄 Recargando saldo después de aceptar...');
+                        await new Promise(resolve => setTimeout(resolve, 500));
+                        await window.CreditsSystem.loadBalance(walletAddress);
+                    }
+                    
                     window.pendingChallengeId = null; // Limpiar después de aceptar
                     window.pendingChallengeBetAmount = null;
                     window.pendingChallengeInfo = null;
@@ -3755,7 +3818,31 @@
             modal.classList.remove('hidden');
         }
         function closeChallengeModal() { document.getElementById('challengeModal').classList.add('hidden'); }
-        function acceptChallenge() { closeChallengeModal(); selectMode('quick'); showToast('Reto aceptado. Selecciona tu canción.', 'success'); }
+        async function acceptChallenge() {
+            closeChallengeModal();
+            
+            // CRÍTICO: Si hay un reto social pendiente, usar la función correcta
+            if (window.pendingChallengeId && window.pendingChallengeInfo) {
+                console.log('[acceptChallenge] ✅ Aceptando reto social:', window.pendingChallengeId);
+                
+                // Cambiar a modo social para aceptar el reto
+                selectMode('social');
+                
+                // Mostrar mensaje de que debe seleccionar canción
+                if (typeof showToast === 'function') {
+                    showToast('Selecciona tu canción para aceptar el desafío', 'info');
+                }
+                
+                // La función handleSocialChallengeAccept se llamará cuando seleccione la canción
+                return;
+            }
+            
+            // Fallback para retos rápidos antiguos
+            selectMode('quick');
+            if (typeof showToast === 'function') {
+                showToast('Reto aceptado. Selecciona tu canción.', 'success');
+            }
+        }
         function rejectChallenge() {
             if (typeof GameEngine !== 'undefined') GameEngine.pendingChallenge = null;
             closeChallengeModal(); showToast('Reto rechazado', 'info');
