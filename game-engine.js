@@ -1214,7 +1214,7 @@ const GameEngine = {
             await window.CreditsSystem.loadBalance(walletAddress);
             
             // Verificar créditos directamente con el backend antes de proceder
-            const backendUrl = window.CONFIG?.BACKEND_API || 'https://musictoken-backend.onrender.com';
+            const backendUrl = window.CONFIG?.BACKEND_API || window.CreditsSystem?.backendUrl || 'https://musictoken-ring.onrender.com';
             const creditsResponse = await fetch(`${backendUrl}/api/user/credits/${walletAddress}`);
             
             let userCredits = 0;
@@ -4049,7 +4049,7 @@ const GameEngine = {
             }
 
             // Update credits via backend API
-            const backendUrl = window.CONFIG?.BACKEND_API || 'https://musictoken-backend.onrender.com';
+            const backendUrl = window.CONFIG?.BACKEND_API || window.CreditsSystem?.backendUrl || 'https://musictoken-ring.onrender.com';
             const userId = await window.CreditsSystem.getUserId(walletAddress);
             
             if (userId) {
@@ -4100,7 +4100,7 @@ const GameEngine = {
      */
     async sendBetFeeToVault(feeAmount, matchId) {
         try {
-            const backendUrl = window.CONFIG?.BACKEND_API || 'https://musictoken-backend.onrender.com';
+            const backendUrl = window.CONFIG?.BACKEND_API || window.CreditsSystem?.backendUrl || 'https://musictoken-ring.onrender.com';
             
             // Registrar fee en backend para que se envíe al vault
             const response = await fetch(`${backendUrl}/api/vault/add-fee`, {
@@ -4141,7 +4141,7 @@ const GameEngine = {
                 
                 if (walletAddress) {
                     // Deduct credits via backend
-                    const backendUrl = window.CONFIG?.BACKEND_API || 'https://musictoken-backend.onrender.com';
+                    const backendUrl = window.CONFIG?.BACKEND_API || window.CreditsSystem?.backendUrl || 'https://musictoken-ring.onrender.com';
                     console.log('[updateBalance] 🔍 Obteniendo userId para wallet:', walletAddress);
                     console.log('[updateBalance] 🔍 Backend URL:', backendUrl);
                     

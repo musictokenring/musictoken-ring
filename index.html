@@ -4109,7 +4109,7 @@
                         const userId = await window.CreditsSystem.getUserId(walletAddress);
                         
                         if (userId && walletAddress) {
-                            const backendUrl = window.CONFIG?.BACKEND_API || 'https://musictoken-backend.onrender.com';
+                            const backendUrl = window.CONFIG?.BACKEND_API || window.CreditsSystem?.backendUrl || 'https://musictoken-ring.onrender.com';
                             
                             try {
                                 console.log('[refreshMtrBalance] 🔄 Convirtiendo MTR a créditos automáticamente...', {
