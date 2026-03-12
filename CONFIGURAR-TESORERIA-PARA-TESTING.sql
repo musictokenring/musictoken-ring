@@ -137,20 +137,43 @@ BEGIN
     IF credits_record.total_credits < 100 THEN
         RAISE NOTICE '';
         RAISE NOTICE 'PASO 5: Agregando créditos de prueba...';
-        -- Verificar si la columna reason existe antes de usarla
-        IF EXISTS (
-            SELECT 1 FROM information_schema.columns 
-            WHERE table_name = 'user_credits' 
-            AND column_name = 'reason'
-        ) THEN
-            -- Si existe la columna reason, usarla
-            INSERT INTO user_credits (user_id, credits, reason, created_at)
-            VALUES (user_id_found, credits_to_add, 'testing_treasury_setup', NOW());
-        ELSE
-            -- Si NO existe la columna reason, insertar sin ella
-            INSERT INTO user_credits (user_id, credits, created_at)
-            VALUES (user_id_found, credits_to_add, NOW());
-        END IF;
+        -- Verificar qué columnas existen en user_credits
+        DECLARE
+            has_reason BOOLEAN;
+            has_created_at BOOLEAN;
+            insert_cols TEXT;
+            insert_vals TEXT;
+        BEGIN
+            -- Verificar si reason existe
+            SELECT EXISTS (
+                SELECT 1 FROM information_schema.columns 
+                WHERE table_name = 'user_credits' 
+                AND column_name = 'reason'
+            ) INTO has_reason;
+            
+            -- Verificar si created_at existe
+            SELECT EXISTS (
+                SELECT 1 FROM information_schema.columns 
+                WHERE table_name = 'user_credits' 
+                AND column_name = 'created_at'
+            ) INTO has_created_at;
+            
+            -- Construir INSERT dinámicamente según las columnas disponibles
+            IF has_reason AND has_created_at THEN
+                INSERT INTO user_credits (user_id, credits, reason, created_at)
+                VALUES (user_id_found, credits_to_add, 'testing_treasury_setup', NOW());
+            ELSIF has_reason THEN
+                INSERT INTO user_credits (user_id, credits, reason)
+                VALUES (user_id_found, credits_to_add, 'testing_treasury_setup');
+            ELSIF has_created_at THEN
+                INSERT INTO user_credits (user_id, credits, created_at)
+                VALUES (user_id_found, credits_to_add, NOW());
+            ELSE
+                -- Solo user_id y credits (mínimo requerido)
+                INSERT INTO user_credits (user_id, credits)
+                VALUES (user_id_found, credits_to_add);
+            END IF;
+        END;
         RAISE NOTICE '✅ Agregados % créditos de prueba', credits_to_add;
         RAISE NOTICE '   Nuevo total: % créditos', credits_record.total_credits + credits_to_add;
     ELSE
