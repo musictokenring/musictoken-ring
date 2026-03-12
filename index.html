@@ -474,22 +474,13 @@
             }
         }
         
-        /* Animación de haz de luz recorriendo el borde en sentido horario */
-        @keyframes lightBeamBorder {
+        /* Animación de haz de luz recorriendo el borde usando conic-gradient */
+        @keyframes rotateLightBeam {
             0% {
-                background-position: 0% 0%, 0% 100%, 0% 100%, 0% 0%;
-            }
-            25% {
-                background-position: 100% 0%, 0% 0%, 0% 100%, 0% 100%;
-            }
-            50% {
-                background-position: 100% 100%, 100% 0%, 0% 0%, 0% 100%;
-            }
-            75% {
-                background-position: 0% 100%, 100% 100%, 100% 0%, 0% 0%;
+                transform: rotate(0deg);
             }
             100% {
-                background-position: 0% 0%, 0% 100%, 0% 100%, 0% 0%;
+                transform: rotate(360deg);
             }
         }
         
@@ -498,7 +489,6 @@
             position: relative;
             border-radius: 1.5rem;
             overflow: visible;
-            padding: 2px; /* Espacio para el borde animado */
         }
         
         .challenge-section-active::before {
@@ -508,17 +498,21 @@
             left: -4px;
             right: -4px;
             bottom: -4px;
-            background: 
-                linear-gradient(90deg, transparent 0%, rgba(0, 243, 255, 0.9) 15%, rgba(236, 72, 153, 0.9) 50%, rgba(0, 243, 255, 0.9) 85%, transparent 100%) 0% 0% / 200% 4px,
-                linear-gradient(180deg, transparent 0%, rgba(0, 243, 255, 0.9) 15%, rgba(236, 72, 153, 0.9) 50%, rgba(0, 243, 255, 0.9) 85%, transparent 100%) 100% 0% / 4px 200%,
-                linear-gradient(270deg, transparent 0%, rgba(0, 243, 255, 0.9) 15%, rgba(236, 72, 153, 0.9) 50%, rgba(0, 243, 255, 0.9) 85%, transparent 100%) 100% 100% / 200% 4px,
-                linear-gradient(0deg, transparent 0%, rgba(0, 243, 255, 0.9) 15%, rgba(236, 72, 153, 0.9) 50%, rgba(0, 243, 255, 0.9) 85%, transparent 100%) 0% 100% / 4px 200%;
-            background-repeat: no-repeat;
+            background: conic-gradient(
+                from 0deg at 50% 50%,
+                transparent 0deg,
+                transparent 60deg,
+                rgba(0, 243, 255, 0.9) 80deg,
+                rgba(236, 72, 153, 0.9) 100deg,
+                rgba(0, 243, 255, 0.9) 120deg,
+                transparent 140deg,
+                transparent 360deg
+            );
             border-radius: 1.5rem;
             z-index: -1;
-            animation: lightBeamBorder 3s linear infinite;
-            filter: blur(1.5px);
-            opacity: 1;
+            animation: rotateLightBeam 3s linear infinite;
+            filter: blur(2px);
+            opacity: 0.95;
         }
         
         .challenge-section-active::after {
@@ -528,17 +522,21 @@
             left: -6px;
             right: -6px;
             bottom: -6px;
-            background: 
-                linear-gradient(90deg, transparent 0%, rgba(0, 243, 255, 0.5) 20%, rgba(236, 72, 153, 0.5) 50%, rgba(0, 243, 255, 0.5) 80%, transparent 100%) 0% 0% / 200% 6px,
-                linear-gradient(180deg, transparent 0%, rgba(0, 243, 255, 0.5) 20%, rgba(236, 72, 153, 0.5) 50%, rgba(0, 243, 255, 0.5) 80%, transparent 100%) 100% 0% / 6px 200%,
-                linear-gradient(270deg, transparent 0%, rgba(0, 243, 255, 0.5) 20%, rgba(236, 72, 153, 0.5) 50%, rgba(0, 243, 255, 0.5) 80%, transparent 100%) 100% 100% / 200% 6px,
-                linear-gradient(0deg, transparent 0%, rgba(0, 243, 255, 0.5) 20%, rgba(236, 72, 153, 0.5) 50%, rgba(0, 243, 255, 0.5) 80%, transparent 100%) 0% 100% / 6px 200%;
-            background-repeat: no-repeat;
+            background: conic-gradient(
+                from 180deg at 50% 50%,
+                transparent 0deg,
+                transparent 50deg,
+                rgba(236, 72, 153, 0.6) 70deg,
+                rgba(0, 243, 255, 0.6) 90deg,
+                rgba(236, 72, 153, 0.6) 110deg,
+                transparent 130deg,
+                transparent 360deg
+            );
             border-radius: 1.5rem;
             z-index: -2;
-            animation: lightBeamBorder 4s linear infinite reverse;
-            filter: blur(3px);
-            opacity: 0.8;
+            animation: rotateLightBeam 4s linear infinite reverse;
+            filter: blur(4px);
+            opacity: 0.7;
         }
         
         .challenge-song-selector-active {
