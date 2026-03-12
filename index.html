@@ -509,8 +509,8 @@
             content: '';
             position: absolute;
             top: -5px;
-            left: -5px;
-            right: -5px;
+            left: 0;
+            right: 0;
             height: 5px; /* Borde más grueso: 5px */
             background: linear-gradient(
                 90deg,
@@ -528,8 +528,8 @@
             animation: lightBeamTop 2s linear infinite;
             filter: blur(0.5px);
             pointer-events: none; /* No interfiere con clics */
-            mask: linear-gradient(to bottom, black 0%, black 100%);
-            -webkit-mask: linear-gradient(to bottom, black 0%, black 100%);
+            /* Asegurar que respete las esquinas del contenedor */
+            clip-path: polygon(0 0, 100% 0, 100% 100%, 0 100%);
         }
         
         /* Borde inferior animado - SOLO en el borde, más grueso */
@@ -537,8 +537,8 @@
             content: '';
             position: absolute;
             bottom: -5px;
-            left: -5px;
-            right: -5px;
+            left: 0;
+            right: 0;
             height: 5px; /* Borde más grueso: 5px */
             background: linear-gradient(
                 270deg,
@@ -556,8 +556,8 @@
             animation: lightBeamBottom 2s linear infinite;
             filter: blur(0.5px);
             pointer-events: none; /* No interfiere con clics */
-            mask: linear-gradient(to top, black 0%, black 100%);
-            -webkit-mask: linear-gradient(to top, black 0%, black 100%);
+            /* Asegurar que respete las esquinas del contenedor */
+            clip-path: polygon(0 0, 100% 0, 100% 100%, 0 100%);
         }
         
         /* Bordes laterales usando box-shadow - SOLO en los bordes, más gruesos */
