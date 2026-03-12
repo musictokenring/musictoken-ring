@@ -4141,15 +4141,23 @@
                     const lastConversion = sessionStorage.getItem(conversionKey);
                     const now = Date.now();
                     
-                    // Solo convertir si:
-                    // 1. Hay MTR pero 0 créditos
-                    // 2. NO se ha convertido recientemente (últimos 30 segundos) para esta wallet y balance
-                    const shouldConvert = currentCredits === 0 && numericBalance > 0;
-                    const recentlyConverted = lastConversion && (now - Number(lastConversion)) < 30000; // 30 segundos
+                    // CRÍTICO: Solo convertir si:
+                    // 1. Hay MTR pero créditos son significativamente menores (menos del 80% del balance on-chain)
+                    // 2. NO se ha convertido recientemente (últimos 60 segundos) para esta wallet y balance
+                    // 3. No hay una conversión en progreso
+                    const conversionInProgress = sessionStorage.getItem(`mtr_conversion_in_progress_${address}`);
+                    const shouldConvert = numericBalance > 0 && currentCredits < (numericBalance * 0.8); // Solo si créditos < 80% del balance on-chain
+                    const recentlyConverted = lastConversion && (now - Number(lastConversion)) < 60000; // 60 segundos
                     
-                    if (shouldConvert && !recentlyConverted) {
+                    if (shouldConvert && !recentlyConverted && !conversionInProgress) {
                         // Marcar que estamos convirtiendo para evitar duplicados
                         sessionStorage.setItem(conversionKey, String(now));
+                        sessionStorage.setItem(`mtr_conversion_in_progress_${address}`, 'true');
+                        
+                        // Limpiar el flag de progreso después de 2 minutos (por si acaso se queda colgado)
+                        setTimeout(() => {
+                            sessionStorage.removeItem(`mtr_conversion_in_progress_${address}`);
+                        }, 120000);
                         
                         console.log('[refreshMtrBalance] 🔄 Detectado MTR on-chain pero 0 créditos, iniciando conversión automática...', {
                             onchainBalance: numericBalance,
@@ -4198,12 +4206,12 @@
                                 let publicUserId = null;
                                 
                                 try {
-                                    // Buscar si ya existe un usuario con esta wallet
+                                    // CRÍTICO: Buscar si ya existe un usuario con esta wallet (case-insensitive)
                                     const { data: existingUser, error: findError } = await supabase
                                         .from('users')
                                         .select('id')
-                                        .eq('wallet_address', walletAddress)
-                                        .single();
+                                        .ilike('wallet_address', walletAddress) // Case-insensitive search
+                                        .maybeSingle();
                                     
                                     if (existingUser && !findError) {
                                         publicUserId = existingUser.id;
@@ -4222,12 +4230,12 @@
                                             console.log('[refreshMtrBalance] ✅ Usuario creado en public.users:', publicUserId);
                                         } else {
                                             console.error('[refreshMtrBalance] ❌ Error creando usuario en public.users:', insertError);
-                                            // Intentar buscar de nuevo por si acaso se creó en otro momento
+                                            // CRÍTICO: Intentar buscar de nuevo con case-insensitive por si acaso se creó en otro momento
                                             const { data: retryUser } = await supabase
                                                 .from('users')
                                                 .select('id')
-                                                .eq('wallet_address', walletAddress)
-                                                .single();
+                                                .ilike('wallet_address', walletAddress) // Case-insensitive
+                                                .maybeSingle();
                                             
                                             if (retryUser) {
                                                 publicUserId = retryUser.id;
@@ -4271,6 +4279,9 @@
                                         creditsToAdd: creditsToAdd
                                     });
                                     
+                                    // CRÍTICO: Limpiar flag de conversión en progreso incluso si hay error
+                                    sessionStorage.removeItem(`mtr_conversion_in_progress_${address}`);
+                                    
                                     if (typeof showToast === 'function') {
                                         showToast(
                                             `⚠️ Error al convertir créditos: ${rpcError.message || 'Error desconocido'}`,
@@ -4281,6 +4292,9 @@
                                 }
                                 
                                 console.log('[refreshMtrBalance] ✅✅✅ Créditos agregados automáticamente desde MTR vía Supabase RPC');
+                                
+                                // CRÍTICO: Limpiar flag de conversión en progreso
+                                sessionStorage.removeItem(`mtr_conversion_in_progress_${address}`);
                                 
                                 // CRÍTICO: Leer créditos DIRECTAMENTE desde Supabase después de agregarlos
                                 // Esto evita depender del backend que puede no reflejar los créditos inmediatamente
@@ -4298,25 +4312,53 @@
                                         const directCredits = Number(creditsData.credits || 0);
                                         console.log('[refreshMtrBalance] ✅✅✅ Créditos leídos directamente desde Supabase:', directCredits);
                                         
-                                        // Actualizar CreditsSystem directamente sin depender del backend
-                                        if (window.CreditsSystem) {
-                                            window.CreditsSystem.currentCredits = directCredits;
-                                            window.CreditsSystem.currentUsdcValue = directCredits; // 1:1 fijo
-                                            
-                                            console.log('[refreshMtrBalance] ✅ CreditsSystem actualizado directamente:', {
-                                                currentCredits: window.CreditsSystem.currentCredits,
-                                                currentUsdcValue: window.CreditsSystem.currentUsdcValue
+                                        // CRÍTICO: Si los créditos son mayores que el balance on-chain, corregir
+                                        if (directCredits > numericBalance * 1.1) { // Más del 110% del balance on-chain
+                                            console.warn('[refreshMtrBalance] ⚠️⚠️⚠️ CRÉDITOS DUPLICADOS DETECTADOS! Corrigiendo...', {
+                                                directCredits: directCredits,
+                                                numericBalance: numericBalance,
+                                                ratio: directCredits / numericBalance
                                             });
                                             
-                                            // Actualizar UI inmediatamente
-                                            if (typeof window.CreditsSystem.updateCreditsDisplay === 'function') {
-                                                window.CreditsSystem.updateCreditsDisplay();
-                                            }
+                                            // Establecer créditos al valor correcto (1:1 con balance on-chain)
+                                            const { error: fixError } = await supabase.rpc('update_user_balance', {
+                                                p_user_id: publicUserId,
+                                                p_amount: numericBalance,
+                                                p_type: 'set'
+                                            });
                                             
-                                            // Actualizar GameEngine también
-                                            if (typeof window.GameEngine !== 'undefined' && typeof window.GameEngine.updateBalanceDisplay === 'function') {
-                                                window.GameEngine.updateBalanceDisplay();
+                                            if (!fixError) {
+                                                console.log('[refreshMtrBalance] ✅ Créditos corregidos a:', numericBalance);
+                                                // Actualizar con el valor corregido
+                                                if (window.CreditsSystem) {
+                                                    window.CreditsSystem.currentCredits = numericBalance;
+                                                    window.CreditsSystem.currentUsdcValue = numericBalance;
+                                                }
+                                            } else {
+                                                console.error('[refreshMtrBalance] ❌ Error corrigiendo créditos duplicados:', fixError);
                                             }
+                                        } else {
+                                            // Actualizar CreditsSystem directamente sin depender del backend
+                                            if (window.CreditsSystem) {
+                                                window.CreditsSystem.currentCredits = directCredits;
+                                                window.CreditsSystem.currentUsdcValue = directCredits; // 1:1 fijo
+                                                
+                                                console.log('[refreshMtrBalance] ✅ CreditsSystem actualizado directamente:', {
+                                                    currentCredits: window.CreditsSystem.currentCredits,
+                                                    currentUsdcValue: window.CreditsSystem.currentUsdcValue
+                                                });
+                                            }
+                                        }
+                                        
+                                        // Actualizar UI inmediatamente
+                                        if (window.CreditsSystem && typeof window.CreditsSystem.updateCreditsDisplay === 'function') {
+                                            window.CreditsSystem.updateCreditsDisplay();
+                                        }
+                                        
+                                        // Actualizar GameEngine también
+                                        if (typeof window.GameEngine !== 'undefined' && typeof window.GameEngine.updateBalanceDisplay === 'function') {
+                                            window.GameEngine.updateBalanceDisplay();
+                                        }
                                         }
                                     } else {
                                         console.warn('[refreshMtrBalance] ⚠️ No se pudieron leer créditos directamente desde Supabase:', creditsError);
