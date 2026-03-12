@@ -1281,6 +1281,13 @@
                         cardDiv.innerHTML = '<img src="' + (song.image || '') + '" alt="' + (song.name || '') + '" class="w-16 h-16 rounded-lg object-cover">' +
                             '<div class="ml-4"><h4 class="text-white font-bold">' + (song.name || 'Sin nombre') + '</h4><p class="text-gray-400 text-sm">' + (song.artist || 'Artista desconocido') + '</p></div>';
                         cardDiv.className = 'p-6 rounded-2xl border border-cyan-500/20 bg-cyan-500/5 flex items-center';
+                        
+                        // CRÍTICO: Si hay un reto pendiente, mantener el efecto visual activo
+                        if (window.pendingChallengeId) {
+                            cardDiv.classList.add('challenge-song-selector-active');
+                        } else {
+                            cardDiv.classList.remove('challenge-song-selector-active');
+                        }
                     }
                     
                     // DETENER TODOS LOS PREVIEWS DE AUDIO - FORZADO Y MÚLTIPLES MÉTODOS
@@ -1793,6 +1800,13 @@
                 cardDiv.innerHTML = '<img src="' + (song.image || '') + '" alt="' + (song.name || '') + '" class="w-16 h-16 rounded-lg object-cover">' +
                     '<div class="ml-4"><h4 class="text-white font-bold">' + (song.name || 'Sin nombre') + '</h4><p class="text-gray-400 text-sm">' + (song.artist || 'Artista desconocido') + '</p></div>';
                 cardDiv.className = 'p-6 rounded-2xl border border-cyan-500/20 bg-cyan-500/5 flex items-center';
+                
+                // CRÍTICO: Si hay un reto pendiente, mantener el efecto visual activo
+                if (window.pendingChallengeId) {
+                    cardDiv.classList.add('challenge-song-selector-active');
+                } else {
+                    cardDiv.classList.remove('challenge-song-selector-active');
+                }
             } else {
                 console.warn('[selectSong] selectedSongCard no encontrado');
             }
@@ -4003,9 +4017,14 @@
                 // Cambiar a modo social para aceptar el reto
                 selectMode('social');
                 
+                // CRÍTICO: Activar efecto visual después de cambiar a modo social
+                setTimeout(function() {
+                    activateChallengeSongSelector();
+                }, 300);
+                
                 // Mostrar mensaje de que debe seleccionar canción
                 if (typeof showToast === 'function') {
-                    showToast('Selecciona tu canción para aceptar el desafío', 'info');
+                    showToast('✨ Selecciona tu canción para aceptar el desafío ✨', 'info');
                 }
                 
                 // La función handleSocialChallengeAccept se llamará cuando seleccione la canción
