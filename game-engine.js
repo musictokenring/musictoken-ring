@@ -1421,18 +1421,18 @@ const GameEngine = {
                     // Esperar un momento para asegurar que todo esté sincronizado
                     await new Promise(resolve => setTimeout(resolve, 500));
                     
-                    // Iniciar la batalla usando el método estándar
-                    if (typeof this.startBattle === 'function') {
-                        await this.startBattle();
-                    } else if (typeof this.showBattleScreen === 'function') {
-                        await this.showBattleScreen();
+                    // CRÍTICO: Usar startMatch que es el método estándar para iniciar un match
+                    if (typeof this.startMatch === 'function') {
+                        console.log('[acceptSocialChallenge] ✅ Llamando startMatch con ID:', this.currentMatch.id);
+                        await this.startMatch(this.currentMatch.id);
                     } else {
                         // Fallback: recargar la página para iniciar el juego
-                        console.log('[acceptSocialChallenge] ⚠️ Métodos de inicio no disponibles, recargando página...');
+                        console.log('[acceptSocialChallenge] ⚠️ startMatch no disponible, recargando página...');
                         window.location.reload();
                     }
                 } catch (battleError) {
                     console.error('[acceptSocialChallenge] ❌ Error iniciando batalla:', battleError);
+                    console.error('[acceptSocialChallenge] Error stack:', battleError.stack);
                     // Si falla, intentar recargar la página como último recurso
                     showToast('Error iniciando batalla. Recargando...', 'error');
                     setTimeout(() => {
@@ -1441,6 +1441,7 @@ const GameEngine = {
                 }
             } else {
                 console.error('[acceptSocialChallenge] ❌ No hay match creado para iniciar');
+                console.error('[acceptSocialChallenge] currentMatch:', this.currentMatch);
                 showToast('Error: No se pudo crear el match. Por favor, intenta de nuevo.', 'error');
             }
             
