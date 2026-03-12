@@ -2829,24 +2829,30 @@
                     }
                 }
                 
-                // Si hay un desafío pendiente, configurar UI para aceptar
-                if (isAcceptingChallenge && challengeBetAmount) {
-                    console.log('[updateActionButtons] ✅ Configurando UI para ACEPTAR desafío:', {
+                // CRÍTICO: Si hay un desafío pendiente, configurar UI para aceptar
+                // Verificar también si challengeBetAmount está disponible desde challengeInfo
+                var finalBetAmount = challengeBetAmount || (challengeInfo && challengeInfo.bet_amount) || null;
+                var shouldAcceptChallenge = isAcceptingChallenge && finalBetAmount;
+                
+                if (shouldAcceptChallenge) {
+                    console.log('[updateActionButtons] ✅✅✅ Configurando UI para ACEPTAR desafío:', {
                         challengeBetAmount: challengeBetAmount,
-                        challengeInfo: challengeInfo
+                        finalBetAmount: finalBetAmount,
+                        challengeInfo: challengeInfo,
+                        isAcceptingChallenge: isAcceptingChallenge
                     });
                     
                     // Hacer el campo de apuesta readonly y mostrar el betAmount del desafío
                     var betAmountInput = document.getElementById('betAmount');
                     if (betAmountInput) {
-                        betAmountInput.value = String(challengeBetAmount);
+                        betAmountInput.value = String(finalBetAmount);
                         betAmountInput.readOnly = true;
                         betAmountInput.disabled = false; // Asegurar que no esté disabled
                         betAmountInput.style.backgroundColor = 'rgba(0, 0, 0, 0.6)';
                         betAmountInput.style.cursor = 'not-allowed';
                         betAmountInput.style.opacity = '0.7';
-                        betAmountInput.title = 'La apuesta está fijada por el retador: ' + challengeBetAmount + ' créditos';
-                        console.log('[updateActionButtons] ✅ Campo de apuesta configurado como readonly con valor:', challengeBetAmount);
+                        betAmountInput.title = 'La apuesta está fijada por el retador: ' + finalBetAmount + ' créditos';
+                        console.log('[updateActionButtons] ✅ Campo de apuesta configurado como readonly con valor:', finalBetAmount);
                     } else {
                         console.error('[updateActionButtons] ❌ Campo betAmount NO encontrado');
                     }
@@ -2862,7 +2868,9 @@
                 } else {
                     console.log('[updateActionButtons] ⚠️ NO hay desafío pendiente o betAmount no disponible:', {
                         isAcceptingChallenge: isAcceptingChallenge,
-                        challengeBetAmount: challengeBetAmount
+                        challengeBetAmount: challengeBetAmount,
+                        finalBetAmount: finalBetAmount,
+                        challengeInfo: challengeInfo ? '✅ Existe' : '❌ No existe'
                     });
                     
                     // Si no hay desafío pendiente, permitir editar apuesta
@@ -2890,10 +2898,14 @@
                 btn.disabled = true;
                 
                 // CRÍTICO: Cambiar texto del botón según si está aceptando o creando
-                if (isAcceptingChallenge) {
+                // Verificar también challengeInfo para asegurar que tenemos los datos
+                var finalIsAccepting = isAcceptingChallenge && (challengeBetAmount || (challengeInfo && challengeInfo.bet_amount));
+                if (finalIsAccepting) {
                     btn.textContent = '✅ Aceptar e Iniciar Desafío';
+                    console.log('[updateActionButtons] ✅ Botón configurado para ACEPTAR desafío');
                 } else {
                     btn.textContent = '⚔️ Crear Desafío';
+                    console.log('[updateActionButtons] ✅ Botón configurado para CREAR desafío');
                 }
                 
                 // Agregar listener ANTES de insertar
@@ -2912,8 +2924,15 @@
                     e.stopImmediatePropagation();
                     
                     // CRÍTICO: Si hay un desafío pendiente, aceptar en lugar de crear
-                    if (window.pendingChallengeId && window.currentMode === 'social') {
-                        logFn('[createSocialBtn] 🔗 Aceptando desafío pendiente:', window.pendingChallengeId);
+                    var hasPendingChallenge = window.pendingChallengeId && window.currentMode === 'social';
+                    var hasBetAmount = window.pendingChallengeBetAmount || (window.pendingChallengeInfo && window.pendingChallengeInfo.bet_amount);
+                    
+                    if (hasPendingChallenge && hasBetAmount) {
+                        logFn('[createSocialBtn] 🔗 Aceptando desafío pendiente:', {
+                            challengeId: window.pendingChallengeId,
+                            betAmount: window.pendingChallengeBetAmount,
+                            challengeInfo: window.pendingChallengeInfo
+                        });
                         if (window.selectedSong && typeof handleSocialChallengeAccept === 'function') {
                             handleSocialChallengeAccept();
                         } else {
@@ -4105,11 +4124,33 @@
                                     }
                                 } else {
                                     const errorText = await addCreditsResponse.text();
-                                    console.warn('[refreshMtrBalance] ⚠️ No se pudo convertir MTR a créditos automáticamente:', errorText);
+                                    const isCorsError = conversionError && (
+                                        conversionError.message?.includes('CORS') ||
+                                        conversionError.message?.includes('fetch') ||
+                                        conversionError.message?.includes('Failed to fetch')
+                                    );
+                                    
+                                    if (isCorsError) {
+                                        console.warn('[refreshMtrBalance] ⚠️ Error CORS bloqueando conversión automática. El backend debe configurar CORS correctamente.');
+                                        console.warn('[refreshMtrBalance] ⚠️ La conversión se intentará cuando el usuario intente aceptar un desafío.');
+                                    } else {
+                                        console.warn('[refreshMtrBalance] ⚠️ No se pudo convertir MTR a créditos automáticamente:', errorText);
+                                    }
                                     // No mostrar error al usuario, solo log
                                 }
                             } catch (conversionError) {
-                                console.warn('[refreshMtrBalance] ⚠️ Error en conversión automática:', conversionError);
+                                const isCorsError = conversionError && (
+                                    conversionError.message?.includes('CORS') ||
+                                    conversionError.message?.includes('fetch') ||
+                                    conversionError.message?.includes('Failed to fetch')
+                                );
+                                
+                                if (isCorsError) {
+                                    console.warn('[refreshMtrBalance] ⚠️ Error CORS bloqueando conversión automática. El backend debe configurar CORS correctamente.');
+                                    console.warn('[refreshMtrBalance] ⚠️ La conversión se intentará cuando el usuario intente aceptar un desafío.');
+                                } else {
+                                    console.warn('[refreshMtrBalance] ⚠️ Error en conversión automática:', conversionError);
+                                }
                                 // No mostrar error al usuario, solo log
                             }
                         } else {
