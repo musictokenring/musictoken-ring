@@ -4159,21 +4159,42 @@
                                     mtrAmount: numericBalance
                                 });
                                 
-                                const addCreditsResponse = await fetch(`${backendUrl}/api/user/add-credits`, {
+                                const addCreditsUrl = `${backendUrl}/api/user/add-credits`;
+                                const addCreditsBody = {
+                                    userId: userId,
+                                    credits: creditsToAdd,
+                                    reason: 'mtr_conversion_auto',
+                                    mtrAmount: numericBalance,
+                                    note: `Conversión automática al cargar: ${numericBalance.toFixed(4)} MTR → ${creditsToAdd.toFixed(2)} créditos USDC`
+                                };
+                                
+                                console.log('[refreshMtrBalance] 🔄 Llamando a add-credits:', {
+                                    url: addCreditsUrl,
+                                    method: 'POST',
+                                    body: addCreditsBody
+                                });
+                                
+                                const addCreditsResponse = await fetch(addCreditsUrl, {
                                     method: 'POST',
                                     headers: { 'Content-Type': 'application/json' },
-                                    body: JSON.stringify({
-                                        userId: userId,
-                                        credits: creditsToAdd,
-                                        reason: 'mtr_conversion_auto',
-                                        mtrAmount: numericBalance,
-                                        note: `Conversión automática al cargar: ${numericBalance.toFixed(4)} MTR → ${creditsToAdd.toFixed(2)} créditos USDC`
-                                    })
+                                    body: JSON.stringify(addCreditsBody)
+                                });
+                                
+                                console.log('[refreshMtrBalance] 🔄 Respuesta de add-credits:', {
+                                    ok: addCreditsResponse.ok,
+                                    status: addCreditsResponse.status,
+                                    statusText: addCreditsResponse.statusText,
+                                    headers: Object.fromEntries(addCreditsResponse.headers.entries())
                                 });
                                 
                                 if (addCreditsResponse.ok) {
                                     const addData = await addCreditsResponse.json();
-                                    console.log('[refreshMtrBalance] ✅ Créditos agregados automáticamente desde MTR:', addData);
+                                    console.log('[refreshMtrBalance] ✅✅✅ Créditos agregados automáticamente desde MTR:', addData);
+                                    console.log('[refreshMtrBalance] ✅ Datos devueltos por el backend:', {
+                                        credits: addData.credits,
+                                        newBalance: addData.newBalance,
+                                        success: addData.success
+                                    });
                                     
                                     // CRÍTICO: Esperar un momento para que el backend procese la transacción
                                     await new Promise(resolve => setTimeout(resolve, 500));
@@ -4214,19 +4235,21 @@
                                     }
                                 } else {
                                     const errorText = await addCreditsResponse.text();
-                                    const isCorsError = conversionError && (
-                                        conversionError.message?.includes('CORS') ||
-                                        conversionError.message?.includes('fetch') ||
-                                        conversionError.message?.includes('Failed to fetch')
-                                    );
+                                    console.error('[refreshMtrBalance] ❌❌❌ Error al agregar créditos:', {
+                                        status: addCreditsResponse.status,
+                                        statusText: addCreditsResponse.statusText,
+                                        errorText: errorText,
+                                        url: addCreditsUrl,
+                                        body: addCreditsBody
+                                    });
                                     
-                                    if (isCorsError) {
-                                        console.warn('[refreshMtrBalance] ⚠️ Error CORS bloqueando conversión automática. El backend debe configurar CORS correctamente.');
-                                        console.warn('[refreshMtrBalance] ⚠️ La conversión se intentará cuando el usuario intente aceptar un desafío.');
-                                    } else {
-                                        console.warn('[refreshMtrBalance] ⚠️ No se pudo convertir MTR a créditos automáticamente:', errorText);
+                                    // Mostrar error al usuario para que sepa qué pasó
+                                    if (typeof showToast === 'function') {
+                                        showToast(
+                                            `⚠️ No se pudieron convertir créditos automáticamente. Error: ${addCreditsResponse.status} ${addCreditsResponse.statusText}`,
+                                            'error'
+                                        );
                                     }
-                                    // No mostrar error al usuario, solo log
                                 }
                             } catch (conversionError) {
                                 const isCorsError = conversionError && (
