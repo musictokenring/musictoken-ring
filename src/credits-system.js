@@ -243,11 +243,38 @@
             if (mobileDisplay) {
                 const creditsMobile = document.getElementById('creditsDisplayMobile');
                 const usdcMobile = document.getElementById('usdcValueDisplayMobile');
-                if (creditsMobile) creditsMobile.textContent = this.currentCredits.toFixed(2);
+                if (creditsMobile) {
+                    creditsMobile.textContent = this.currentCredits.toFixed(2);
+                    if (shouldLog) {
+                        console.log('[updateCreditsDisplay] ✅ Mobile display actualizado:', this.currentCredits.toFixed(2));
+                    }
+                }
                 if (usdcMobile) usdcMobile.textContent = `$${this.currentUsdcValue.toFixed(2)}`;
                 // Mostrar si hay créditos o wallet conectada
                 if (this.currentCredits > 0 || window.connectedAddress) {
                     mobileDisplay.classList.remove('hidden');
+                }
+            }
+            
+            // CRÍTICO: También actualizar el elemento "Fichas jugables" en la sección de apuesta
+            const playableCreditsEl = document.getElementById('userBalance');
+            if (playableCreditsEl) {
+                playableCreditsEl.textContent = this.currentCredits.toFixed(2);
+                if (shouldLog) {
+                    console.log('[updateCreditsDisplay] ✅ userBalance (Fichas jugables) actualizado:', this.currentCredits.toFixed(2));
+                }
+            } else {
+                if (shouldLog) {
+                    console.warn('[updateCreditsDisplay] ⚠️ Elemento userBalance NO encontrado');
+                }
+            }
+            
+            // También actualizar appBalanceDisplay si existe
+            const appBalanceDisplay = document.getElementById('appBalanceDisplay');
+            if (appBalanceDisplay) {
+                appBalanceDisplay.textContent = `Fichas jugables: ${this.currentCredits.toFixed(2)} MTR créditos`;
+                if (shouldLog) {
+                    console.log('[updateCreditsDisplay] ✅ appBalanceDisplay actualizado');
                 }
             }
 
