@@ -2727,8 +2727,24 @@
                     pendingChallengeId: window.pendingChallengeId,
                     challengeBetAmount: challengeBetAmount,
                     challengeInfo: challengeInfo ? '✅ Existe' : '❌ No existe',
-                    mode: mode
+                    mode: mode,
+                    'window.pendingChallengeBetAmount': window.pendingChallengeBetAmount,
+                    'window.pendingChallengeInfo': window.pendingChallengeInfo ? '✅ Existe' : '❌ No existe'
                 });
+                
+                // CRÍTICO: Si estamos en modo social pero no detectamos el desafío, intentar recargarlo
+                if (mode === 'social' && !isAcceptingChallenge && window.pendingChallengeId) {
+                    console.warn('[updateActionButtons] ⚠️ Desafío pendiente detectado pero datos no cargados, intentando recargar...');
+                    // Intentar recargar la información del desafío
+                    if (typeof loadChallengeInfo === 'function') {
+                        loadChallengeInfo(window.pendingChallengeId).then(() => {
+                            // Después de recargar, actualizar UI nuevamente
+                            setTimeout(() => {
+                                updateActionButtons('social');
+                            }, 200);
+                        });
+                    }
+                }
                 
                 // Actualizar título y subtítulo según el contexto
                 // CRÍTICO: Usar modeTitle y buscar/crear socialChallengeSubtitle
