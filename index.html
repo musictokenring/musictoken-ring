@@ -1344,7 +1344,21 @@
                     
                     // CRÍTICO: NO recargar saldo al seleccionar canción - esto puede causar errores que borren el saldo
                     // Solo verificar el saldo actual sin recargarlo para evitar borrar el saldo por errores temporales
-                    logFn('[selectSongForBattle] ✅ Verificando saldo actual sin recargar:', window.CreditsSystem?.currentCredits || 0);
+                    const currentCreditsValue = window.CreditsSystem?.currentCredits ?? 
+                                                (() => {
+                                                    const userBalanceEl = document.getElementById('userBalance');
+                                                    return userBalanceEl ? parseFloat(userBalanceEl.textContent) || 0 : 0;
+                                                })();
+                    logFn('[selectSongForBattle] ✅ Verificando saldo actual sin recargar:', currentCreditsValue);
+                    
+                    // CRÍTICO: Si CreditsSystem no tiene créditos pero el DOM sí, preservar el valor del DOM
+                    if ((!window.CreditsSystem || window.CreditsSystem.currentCredits === undefined || window.CreditsSystem.currentCredits === null) && currentCreditsValue > 0) {
+                        logFn('[selectSongForBattle] ⚠️ CreditsSystem no tiene créditos pero DOM sí, preservando valor del DOM:', currentCreditsValue);
+                        if (window.CreditsSystem) {
+                            window.CreditsSystem.currentCredits = currentCreditsValue;
+                            window.CreditsSystem.currentUsdcValue = currentCreditsValue;
+                        }
+                    }
                     
                     // CRÍTICO: Si hay un desafío pendiente y créditos insuficientes, intentar conversión automática
                     if (window.pendingChallengeId && window.pendingChallengeBetAmount) {
