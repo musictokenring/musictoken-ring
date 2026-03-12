@@ -4209,35 +4209,79 @@
                                 
                                 console.log('[refreshMtrBalance] ✅✅✅ Créditos agregados automáticamente desde MTR vía Supabase RPC');
                                 
-                                // CRÍTICO: Esperar un momento para que Supabase procese la transacción
-                                await new Promise(resolve => setTimeout(resolve, 500));
+                                // CRÍTICO: Esperar más tiempo para que Supabase procese la transacción completamente
+                                console.log('[refreshMtrBalance] ⏳ Esperando 1 segundo para que Supabase procese...');
+                                await new Promise(resolve => setTimeout(resolve, 1000));
                                 
-                                // Recargar balance después de la conversión
-                                console.log('[refreshMtrBalance] 🔄 Recargando balance después de conversión...');
+                                // CRÍTICO: Recargar balance múltiples veces para asegurar que se refleje
+                                console.log('[refreshMtrBalance] 🔄 Primera recarga de balance...');
                                 await window.CreditsSystem.loadBalance(walletAddress);
                                 
-                                // CRÍTICO: Forzar actualización del display múltiples veces para asegurar que se refleje
+                                // Esperar un poco más y recargar de nuevo
+                                await new Promise(resolve => setTimeout(resolve, 500));
+                                console.log('[refreshMtrBalance] 🔄 Segunda recarga de balance...');
+                                await window.CreditsSystem.loadBalance(walletAddress);
+                                
+                                // Esperar un poco más y recargar una tercera vez
+                                await new Promise(resolve => setTimeout(resolve, 500));
+                                console.log('[refreshMtrBalance] 🔄 Tercera recarga de balance...');
+                                await window.CreditsSystem.loadBalance(walletAddress);
+                                
+                                // CRÍTICO: Forzar actualización del display múltiples veces con delays
+                                console.log('[refreshMtrBalance] 🔄 Actualizando display de créditos...');
                                 if (typeof window.CreditsSystem.updateCreditsDisplay === 'function') {
                                     window.CreditsSystem.updateCreditsDisplay();
+                                    setTimeout(() => {
+                                        window.CreditsSystem.updateCreditsDisplay();
+                                    }, 200);
+                                    setTimeout(() => {
+                                        window.CreditsSystem.updateCreditsDisplay();
+                                    }, 500);
+                                    setTimeout(() => {
+                                        window.CreditsSystem.updateCreditsDisplay();
+                                    }, 1000);
                                 }
                                 
-                                // Actualizar también el display del GameEngine
+                                // Actualizar también el display del GameEngine múltiples veces
                                 if (typeof window.GameEngine !== 'undefined' && typeof window.GameEngine.updateBalanceDisplay === 'function') {
+                                    window.GameEngine.updateBalanceDisplay();
                                     setTimeout(() => {
                                         window.GameEngine.updateBalanceDisplay();
                                     }, 100);
                                     setTimeout(() => {
                                         window.GameEngine.updateBalanceDisplay();
-                                    }, 500);
+                                    }, 300);
+                                    setTimeout(() => {
+                                        window.GameEngine.updateBalanceDisplay();
+                                    }, 600);
+                                    setTimeout(() => {
+                                        window.GameEngine.updateBalanceDisplay();
+                                    }, 1000);
                                 }
                                 
-                                // Verificar que los créditos se cargaron correctamente
+                                // Verificar que los créditos se cargaron correctamente después de todas las recargas
+                                await new Promise(resolve => setTimeout(resolve, 500));
                                 const reloadedCredits = window.CreditsSystem?.currentCredits || 0;
-                                console.log('[refreshMtrBalance] ✅✅✅ Balance recargado después de conversión:', {
+                                console.log('[refreshMtrBalance] ✅✅✅ Balance final después de conversión:', {
                                     creditsAdded: creditsToAdd,
                                     reloadedCredits: reloadedCredits,
-                                    success: reloadedCredits > 0
+                                    success: reloadedCredits > 0,
+                                    currentCredits: window.CreditsSystem?.currentCredits,
+                                    currentUsdcValue: window.CreditsSystem?.currentUsdcValue
                                 });
+                                
+                                // Si aún no se reflejan los créditos, intentar una última recarga
+                                if (reloadedCredits === 0) {
+                                    console.warn('[refreshMtrBalance] ⚠️ Los créditos aún no se reflejan, intentando recarga final...');
+                                    await new Promise(resolve => setTimeout(resolve, 1000));
+                                    await window.CreditsSystem.loadBalance(walletAddress);
+                                    if (typeof window.CreditsSystem.updateCreditsDisplay === 'function') {
+                                        window.CreditsSystem.updateCreditsDisplay();
+                                    }
+                                    if (typeof window.GameEngine !== 'undefined' && typeof window.GameEngine.updateBalanceDisplay === 'function') {
+                                        window.GameEngine.updateBalanceDisplay();
+                                    }
+                                }
                                 
                                 // Mostrar notificación de éxito
                                 if (typeof showToast === 'function') {
