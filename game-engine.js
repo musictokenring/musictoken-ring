@@ -379,13 +379,22 @@ const GameEngine = {
                 }
             }
             
-            // OCULTAR onchainMtrBalance - MTR nativo NO se muestra como saldo jugable
+            // OCULTAR onchainMtrBalance en sección de juego - MTR nativo NO se muestra como saldo jugable
+            // PERO el balance on-chain SÍ se muestra en el header (onchainBalanceDisplay)
             if (onchainEl) {
-                onchainEl.style.display = 'none'; // Ocultar MTR nativo
+                onchainEl.style.display = 'none'; // Ocultar MTR nativo en sección de juego
                 const balanceLabelEl = document.getElementById('balanceLabel');
                 if (balanceLabelEl) {
                     balanceLabelEl.style.display = 'none'; // Ocultar label también
                 }
+            }
+            
+            // CRÍTICO: Asegurar que el badge del header muestre el balance on-chain
+            const headerBadge = document.getElementById('onchainBalanceDisplay');
+            if (headerBadge && window.__mtrOnChainBalance !== undefined) {
+                const formatted = Number(window.__mtrOnChainBalance || 0).toLocaleString('es-ES', { maximumFractionDigits: 4 });
+                headerBadge.textContent = 'On-chain: ' + formatted;
+                headerBadge.style.display = ''; // Asegurar que esté visible
             }
             
             // Actualizar label y unidad para mostrar "MTR créditos jugables"

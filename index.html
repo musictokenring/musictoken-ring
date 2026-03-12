@@ -4017,9 +4017,14 @@
                 // En todos los demás modos, mostrar saldo REAL
                 const isPracticeMode = typeof window !== 'undefined' && window.currentMode === 'practice';
                 
-                // ESPECIFICACIÓN REFINADA: NO mostrar MTR nativo en el header
-                // Solo mostrar créditos estables como "MTR créditos jugables"
-                // if (badge) badge.textContent = 'Tu MTR: ' + formatted; // OCULTADO - MTR nativo no se muestra
+                // CRÍTICO: Actualizar badge del header con balance on-chain REAL siempre
+                if (badge) {
+                    badge.textContent = 'On-chain: ' + formatted;
+                    badge.style.display = ''; // Asegurar que esté visible
+                    console.log('[refreshMtrBalance] Badge header actualizado:', formatted);
+                }
+                
+                // Actualizar elemento onchainMtrBalance en sección de juego (solo si no es modo práctica)
                 if (onchain && !isPracticeMode) {
                     onchain.textContent = formatted;
                     console.log('[refreshMtrBalance] Balance actualizado en UI:', formatted);
