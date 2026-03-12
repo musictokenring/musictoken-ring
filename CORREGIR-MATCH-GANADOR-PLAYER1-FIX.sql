@@ -22,11 +22,17 @@ BEGIN
     
     IF NOT user_exists THEN
         RAISE NOTICE '⚠️ El usuario perdedor no existe en la tabla users, creándolo...';
-        -- Crear el usuario perdedor si no existe (usar un wallet temporal si no tiene)
+        -- Crear el usuario perdedor si no existe (usar wallet temporal única basada en UUID)
+        -- Generar wallet temporal: 0x + primeros 40 caracteres del UUID sin guiones
         INSERT INTO users (id, wallet_address, created_at, updated_at)
-        VALUES (user_perdedor, '0x' || REPLACE(user_perdedor::text, '-', ''), NOW(), NOW())
+        VALUES (
+            user_perdedor, 
+            '0x' || SUBSTRING(REPLACE(user_perdedor::text, '-', ''), 1, 40), 
+            NOW(), 
+            NOW()
+        )
         ON CONFLICT (id) DO NOTHING;
-        RAISE NOTICE '✅ Usuario perdedor creado';
+        RAISE NOTICE '✅ Usuario perdedor creado con wallet temporal';
         
         -- Crear registro inicial en user_credits
         INSERT INTO user_credits (user_id, credits, updated_at)
