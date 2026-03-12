@@ -4108,8 +4108,7 @@ const GameEngine = {
                 
                 console.log('[game-engine] ✅ Créditos agregados vía Supabase RPC:', credits);
 
-                // Record win in database
-                const { data: { session } } = await supabaseClient.auth.getSession();
+                // Record win in database (reutilizar session ya obtenida arriba)
                 if (session?.user?.id) {
                     await supabaseClient
                         .from('match_wins')
