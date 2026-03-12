@@ -4359,11 +4359,12 @@
                                         if (typeof window.GameEngine !== 'undefined' && typeof window.GameEngine.updateBalanceDisplay === 'function') {
                                             window.GameEngine.updateBalanceDisplay();
                                         }
-                                        }
                                     } else {
                                         console.warn('[refreshMtrBalance] ⚠️ No se pudieron leer créditos directamente desde Supabase:', creditsError);
                                         // Fallback: intentar con loadBalance del backend
-                                        await window.CreditsSystem.loadBalance(walletAddress);
+                                        if (window.CreditsSystem && typeof window.CreditsSystem.loadBalance === 'function') {
+                                            await window.CreditsSystem.loadBalance(walletAddress);
+                                        }
                                     }
                                 } catch (directReadError) {
                                     console.error('[refreshMtrBalance] ❌ Error leyendo créditos directamente:', directReadError);
