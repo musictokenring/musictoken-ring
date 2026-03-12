@@ -2416,6 +2416,31 @@ const GameEngine = {
             }
             
             console.log('[createMatch] 🔄 Creando match en Supabase...');
+            console.log('[createMatch] 🔍 Tipo de match:', type);
+            console.log('[createMatch] 🔍 Tipos permitidos: quick, private, practice, tournament, social');
+            
+            // CRÍTICO: Validar que el tipo sea uno de los permitidos
+            const validMatchTypes = ['quick', 'private', 'practice', 'tournament', 'social'];
+            if (!validMatchTypes.includes(type)) {
+                console.error('[createMatch] ❌ Tipo de match inválido:', type);
+                console.error('[createMatch] ❌ Tipos válidos:', validMatchTypes);
+                if (deductionSuccess) {
+                    // Reembolsar créditos
+                    const userId = await window.CreditsSystem.getUserId(walletAddress);
+                    if (userId && window.supabaseClient) {
+                        try {
+                            await window.supabaseClient.rpc('increment_user_credits', {
+                                user_id_param: userId,
+                                credits_to_add: bet1
+                            });
+                            await window.CreditsSystem.loadBalance(walletAddress);
+                        } catch (e) {}
+                    }
+                }
+                showToast('Error: Tipo de partida inválido. Por favor, recarga la página.', 'error');
+                return;
+            }
+            
             const { data: match, error: matchError } = await supabaseClient
                 .from('matches')
                 .insert([{
