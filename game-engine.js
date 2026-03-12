@@ -1148,14 +1148,23 @@ const GameEngine = {
             let walletAddress = this.connectedWallet || localStorage.getItem('mtr_wallet');
             
             // CRÍTICO: Verificar que NO sea la wallet de tesorería del sistema
+            // PERMITIR durante testing si es el propietario de la plataforma
             const TREASURY_WALLET = '0x75376BC58830f27415402875D26B73A6BE8E2253';
+            const ALLOW_TREASURY_FOR_TESTING = true; // Cambiar a false en producción
+            
             if (walletAddress && walletAddress.toLowerCase() === TREASURY_WALLET.toLowerCase()) {
-                console.error('[acceptSocialChallenge] ❌❌❌ ERROR: Usuario intentando usar wallet de tesorería!');
-                showToast('Error: No puedes usar la wallet de tesorería del sistema. Conecta tu wallet personal.', 'error');
-                if (typeof renderWallet === 'function') {
-                    renderWallet();
+                if (!ALLOW_TREASURY_FOR_TESTING) {
+                    console.error('[acceptSocialChallenge] ❌❌❌ ERROR: Usuario intentando usar wallet de tesorería!');
+                    showToast('Error: No puedes usar la wallet de tesorería del sistema. Conecta tu wallet personal.', 'error');
+                    if (typeof renderWallet === 'function') {
+                        renderWallet();
+                    }
+                    return;
+                } else {
+                    console.warn('[acceptSocialChallenge] ⚠️⚠️⚠️ ADVERTENCIA: Usando wallet de tesorería para TESTING');
+                    console.warn('[acceptSocialChallenge] ⚠️ Esto solo debe usarse durante desarrollo/testing');
+                    showToast('⚠️ Modo TESTING: Usando wallet de tesorería. Solo para desarrollo.', 'warning');
                 }
-                return;
             }
             
             // Si no tiene wallet conectada, pedirle que la conecte
