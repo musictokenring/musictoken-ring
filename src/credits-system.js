@@ -125,16 +125,35 @@
                 
                 const creditsUrl = `${this.backendUrl}/api/user/credits/${walletAddress}`;
                 console.log('[credits-system] 🔄 Llamando al backend:', creditsUrl);
+                console.log('[credits-system] 🔄 Backend URL completa:', creditsUrl);
+                console.log('[credits-system] 🔄 Wallet address:', walletAddress);
                 
                 // CRÍTICO: Agregar timeout para evitar que la promise quede colgada
-                const fetchPromise = fetch(creditsUrl);
-                const timeoutPromise = new Promise((_, reject) => 
-                    setTimeout(() => reject(new Error('Timeout: Backend no respondió después de 10 segundos')), 10000)
-                );
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => {
+                    console.error('[credits-system] ❌ TIMEOUT: Backend no respondió después de 8 segundos');
+                    controller.abort();
+                }, 8000);
                 
-                console.log('[credits-system] 🔄 Esperando respuesta del backend (timeout: 10s)...');
+                console.log('[credits-system] 🔄 Iniciando fetch con timeout de 8 segundos...');
                 
-                const response = await Promise.race([fetchPromise, timeoutPromise]);
+                let response;
+                try {
+                    response = await fetch(creditsUrl, {
+                        signal: controller.signal,
+                        method: 'GET',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        }
+                    });
+                    clearTimeout(timeoutId);
+                } catch (fetchError) {
+                    clearTimeout(timeoutId);
+                    if (fetchError.name === 'AbortError') {
+                        throw new Error('Timeout: Backend no respondió después de 8 segundos. URL: ' + creditsUrl);
+                    }
+                    throw fetchError;
+                }
                 
                 console.log('[credits-system] 🔄 Respuesta del backend recibida:', {
                     ok: response.ok,
