@@ -2253,12 +2253,25 @@ const GameEngine = {
             if (!deductionSuccess) {
                 console.error('[game-engine] Failed to deduct credits, aborting match creation');
                 const currentCredits = window.CreditsSystem?.currentCredits || 0;
-                const missingCredits = bet1 - currentCredits;
-                showToast(
-                    `No tienes créditos suficientes. Tienes ${currentCredits.toFixed(2)} créditos, necesitas ${bet1}. ` +
-                    `Debes recargar ${missingCredits.toFixed(2)} créditos más para ejecutar este match.`,
-                    'error'
-                );
+                
+                // CRÍTICO: Verificar si realmente hay suficientes créditos o si es un error del backend
+                if (currentCredits >= bet1) {
+                    // Hay suficientes créditos pero el backend rechazó - problema del backend
+                    console.error('[game-engine] ⚠️⚠️⚠️ ERROR DEL BACKEND: Hay suficientes créditos pero la deducción fue rechazada');
+                    showToast(
+                        `Error del servidor al procesar la apuesta. Tienes ${currentCredits.toFixed(2)} créditos disponibles. ` +
+                        `Por favor, recarga la página e intenta nuevamente.`,
+                        'error'
+                    );
+                } else {
+                    // Realmente no hay suficientes créditos
+                    const missingCredits = bet1 - currentCredits;
+                    showToast(
+                        `No tienes créditos suficientes. Tienes ${currentCredits.toFixed(2)} créditos, necesitas ${bet1}. ` +
+                        `Debes recargar ${missingCredits.toFixed(2)} créditos más para ejecutar este match.`,
+                        'error'
+                    );
+                }
                 return;
             }
             
@@ -4317,6 +4330,33 @@ const GameEngine = {
                                             refreshedCredits: refreshedCredits,
                                             creditsToDeduct: creditsToDeduct
                                         });
+                                        
+                                        // CRÍTICO: Si el backend sigue rechazando pero hay suficientes créditos,
+                                        // intentar usar Supabase RPC directamente como fallback
+                                        if (refreshedCredits >= creditsToDeduct && retryResponse.status === 400) {
+                                            console.warn('[updateBalance] ⚠️ Backend rechazó pero hay créditos suficientes. Intentando deducción directa vía Supabase RPC...');
+                                            
+                                            try {
+                                                const supabase = window.supabaseClient || (typeof supabaseClient !== 'undefined' ? supabaseClient : null);
+                                                if (supabase && userId) {
+                                                    const { error: rpcError } = await supabase.rpc('decrement_user_credits', {
+                                                        user_id_param: userId,
+                                                        credits_to_subtract: creditsToDeduct
+                                                    });
+                                                    
+                                                    if (!rpcError) {
+                                                        console.log('[updateBalance] ✅✅✅ Créditos descontados exitosamente vía Supabase RPC (fallback)');
+                                                        await window.CreditsSystem.loadBalance(walletAddress);
+                                                        return true;
+                                                    } else {
+                                                        console.error('[updateBalance] ❌ Error en RPC fallback:', rpcError);
+                                                    }
+                                                }
+                                            } catch (rpcFallbackError) {
+                                                console.error('[updateBalance] ❌ Error ejecutando RPC fallback:', rpcFallbackError);
+                                            }
+                                        }
+                                        
                                         // Si el backend sigue rechazando después de recargar y hay suficientes créditos,
                                         // puede ser un problema del backend. Retornar false para que el usuario vea el error.
                                         // NO intentar conversión MTR porque había suficientes créditos inicialmente
