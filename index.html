@@ -474,27 +474,84 @@
             }
         }
         
-        .challenge-song-selector-active {
-            background: linear-gradient(135deg, rgba(0, 243, 255, 0.15) 0%, rgba(236, 72, 153, 0.15) 50%, rgba(0, 243, 255, 0.15) 100%);
-            background-size: 200% 200%;
-            animation: gradientGlow 3s ease infinite;
-            border: 2px solid rgba(0, 243, 255, 0.5) !important;
-            position: relative;
+        /* Animación de haz de luz recorriendo el borde */
+        @keyframes lightBeam {
+            0% {
+                background-position: 0% 0%;
+            }
+            25% {
+                background-position: 100% 0%;
+            }
+            50% {
+                background-position: 100% 100%;
+            }
+            75% {
+                background-position: 0% 100%;
+            }
+            100% {
+                background-position: 0% 0%;
+            }
         }
         
-        .challenge-song-selector-active::before {
+        /* Efecto de haz de luz en el borde del contenedor */
+        .challenge-section-active {
+            position: relative;
+            border-radius: 1.5rem;
+            overflow: visible;
+        }
+        
+        .challenge-section-active::before {
+            content: '';
+            position: absolute;
+            top: -3px;
+            left: -3px;
+            right: -3px;
+            bottom: -3px;
+            background: linear-gradient(
+                90deg,
+                transparent 0%,
+                rgba(0, 243, 255, 0.8) 20%,
+                rgba(236, 72, 153, 0.8) 50%,
+                rgba(0, 243, 255, 0.8) 80%,
+                transparent 100%
+            );
+            background-size: 200% 200%;
+            border-radius: 1.5rem;
+            z-index: -1;
+            animation: lightBeam 4s linear infinite;
+            filter: blur(2px);
+            opacity: 0.9;
+        }
+        
+        .challenge-section-active::after {
             content: '';
             position: absolute;
             top: -2px;
             left: -2px;
             right: -2px;
             bottom: -2px;
-            background: linear-gradient(45deg, rgba(0, 243, 255, 0.5), rgba(236, 72, 153, 0.5), rgba(0, 243, 255, 0.5));
-            background-size: 200% 200%;
-            animation: gradientGlow 2s ease infinite;
-            border-radius: 1rem;
+            background: linear-gradient(
+                90deg,
+                transparent 0%,
+                rgba(0, 243, 255, 0.6) 25%,
+                rgba(236, 72, 153, 0.6) 50%,
+                rgba(0, 243, 255, 0.6) 75%,
+                transparent 100%
+            );
+            background-size: 300% 300%;
+            border-radius: 1.5rem;
             z-index: -1;
-            filter: blur(8px);
+            animation: lightBeam 3s linear infinite reverse;
+            filter: blur(4px);
+            opacity: 0.7;
+        }
+        
+        .challenge-song-selector-active {
+            background: linear-gradient(135deg, rgba(0, 243, 255, 0.15) 0%, rgba(236, 72, 153, 0.15) 50%, rgba(0, 243, 255, 0.15) 100%);
+            background-size: 200% 200%;
+            animation: gradientGlow 3s ease infinite;
+            border: 2px solid rgba(0, 243, 255, 0.5) !important;
+            position: relative;
         }
         
         .challenge-song-selector-active .text-gray-500 {
@@ -3833,6 +3890,13 @@
         // Activar efecto visual animado en el selector de canción cuando hay un reto pendiente
         function activateChallengeSongSelector() {
             try {
+                // CRÍTICO: Activar efecto en toda la sección de selección de canción
+                const songSelection = document.getElementById('songSelection');
+                if (songSelection && window.pendingChallengeId) {
+                    songSelection.classList.add('challenge-section-active');
+                    console.log('[activateChallengeSongSelector] ✅ Efecto de haz de luz activado en sección completa');
+                }
+                
                 const selectedSongCard = document.getElementById('selectedSongCard');
                 if (selectedSongCard && window.pendingChallengeId) {
                     // Agregar clase para activar el efecto de gradiente animado
@@ -3854,20 +3918,34 @@
                                 if (window.pendingChallengeId && !selectedSongCard.classList.contains('challenge-song-selector-active')) {
                                     selectedSongCard.classList.add('challenge-song-selector-active');
                                 }
+                                if (window.pendingChallengeId && songSelection && !songSelection.classList.contains('challenge-section-active')) {
+                                    songSelection.classList.add('challenge-section-active');
+                                }
                             }
                         });
                     });
                     
-                    observer.observe(selectedSongCard, {
-                        attributes: true,
-                        attributeFilter: ['class']
-                    });
+                    if (selectedSongCard) {
+                        observer.observe(selectedSongCard, {
+                            attributes: true,
+                            attributeFilter: ['class']
+                        });
+                    }
+                    if (songSelection) {
+                        observer.observe(songSelection, {
+                            attributes: true,
+                            attributeFilter: ['class']
+                        });
+                    }
                     
                     // Limpiar observer cuando se acepte el reto
                     setTimeout(function() {
                         if (!window.pendingChallengeId) {
                             observer.disconnect();
                             selectedSongCard.classList.remove('challenge-song-selector-active');
+                            if (songSelection) {
+                                songSelection.classList.remove('challenge-section-active');
+                            }
                         }
                     }, 30000); // Limpiar después de 30 segundos si no se acepta
                 }
@@ -3949,8 +4027,13 @@
                     
                     // CRÍTICO: Desactivar efecto visual después de aceptar
                     const selectedSongCard = document.getElementById('selectedSongCard');
+                    const songSelection = document.getElementById('songSelection');
+                    
                     if (selectedSongCard) {
                         selectedSongCard.classList.remove('challenge-song-selector-active');
+                    }
+                    if (songSelection) {
+                        songSelection.classList.remove('challenge-section-active');
                     }
                     
                     window.pendingChallengeId = null; // Limpiar después de aceptar
