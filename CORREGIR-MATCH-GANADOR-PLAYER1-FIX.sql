@@ -22,9 +22,9 @@ BEGIN
     
     IF NOT user_exists THEN
         RAISE NOTICE '⚠️ El usuario perdedor no existe en la tabla users, creándolo...';
-        -- Crear el usuario perdedor si no existe
+        -- Crear el usuario perdedor si no existe (usar un wallet temporal si no tiene)
         INSERT INTO users (id, wallet_address, created_at, updated_at)
-        VALUES (user_perdedor, NULL, NOW(), NOW())
+        VALUES (user_perdedor, '0x' || REPLACE(user_perdedor::text, '-', ''), NOW(), NOW())
         ON CONFLICT (id) DO NOTHING;
         RAISE NOTICE '✅ Usuario perdedor creado';
         
