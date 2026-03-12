@@ -56,6 +56,12 @@
          * Now supports wallet-based authentication for internal wallet browsers (MOBILE ONLY)
          */
         async loadBalance(walletAddress) {
+            console.log('[credits-system] 🔄🔄🔄 INICIANDO loadBalance:', {
+                walletAddress: walletAddress,
+                backendUrl: this.backendUrl,
+                timestamp: new Date().toISOString()
+            });
+            
             try {
                 // 🔗 NUEVO: Try to get userId from wallet link if no Supabase session (MOBILE ONLY)
                 let userIdFromWallet = null;
@@ -68,6 +74,12 @@
                        navigator.userAgent.toLowerCase().includes('mmsb') ||
                        navigator.userAgent.toLowerCase().includes('trust') ||
                        navigator.userAgent.toLowerCase().includes('binance'));
+                
+                console.log('[credits-system] 🔄 Verificando wallet link...', {
+                    isMobile: isMobile,
+                    isWalletBrowser: isWalletBrowser,
+                    hasSupabaseClient: typeof supabaseClient !== 'undefined'
+                });
                 
                 // En navegador interno de wallet, SIEMPRE verificar wallet link primero
                 if (isMobile && (isWalletBrowser || typeof supabaseClient === 'undefined')) {
@@ -111,10 +123,25 @@
                     console.log('[credits-system] ⚠️ Wallet de tesorería detectada - cargando créditos para testing');
                 }
                 
-                const response = await fetch(`${this.backendUrl}/api/user/credits/${walletAddress}`);
+                const creditsUrl = `${this.backendUrl}/api/user/credits/${walletAddress}`;
+                console.log('[credits-system] 🔄 Llamando al backend:', creditsUrl);
+                
+                const response = await fetch(creditsUrl);
+                
+                console.log('[credits-system] 🔄 Respuesta del backend recibida:', {
+                    ok: response.ok,
+                    status: response.status,
+                    statusText: response.statusText
+                });
 
                 if (!response.ok) {
-                    throw new Error(`HTTP ${response.status}`);
+                    const errorText = await response.text();
+                    console.error('[credits-system] ❌ Error del backend:', {
+                        status: response.status,
+                        statusText: response.statusText,
+                        errorText: errorText
+                    });
+                    throw new Error(`HTTP ${response.status}: ${errorText}`);
                 }
 
                 const data = await response.json();
