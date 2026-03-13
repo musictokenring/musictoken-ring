@@ -15,6 +15,7 @@ const { VaultService } = require('./vault-service');
 const { DepositSyncService } = require('./deposit-sync-service');
 const { LiquidityManager } = require('./liquidity-manager');
 const { WalletLinkService } = require('./wallet-link-service');
+const { TradingFundService } = require('./trading-fund-service');
 const { createClient } = require('@supabase/supabase-js');
 
 const app = express();
@@ -82,6 +83,7 @@ let vaultService;
 let depositSyncService;
 let liquidityManager;
 let walletLinkService;
+let tradingFundService;
 
 // 🔒 SEGURIDAD: Validar variables de entorno críticas
 function validateEnvironmentVariables() {
@@ -215,14 +217,14 @@ async function initializeServices() {
             // Non-critical - continue without it
         }
 
-        // Initialize Wallet Link Service
+        // Initialize Trading Fund Service (for fee distribution)
         try {
-            walletLinkService = new WalletLinkService();
-            console.log('[server] ✅ Wallet Link Service initialized');
-        } catch (walletLinkError) {
-            console.error('[server] ⚠️ Error initializing wallet link service:', walletLinkError);
-            console.log('[server] Continuing without wallet link service...');
-            // Non-critical - continue without it
+            tradingFundService = new TradingFundService();
+            console.log('[server] ✅ Trading Fund Service initialized');
+        } catch (tradingFundError) {
+            console.error('[server] ⚠️ Error initializing trading fund service:', tradingFundError);
+            console.log('[server] Continuing without trading fund service (fees will go to vault only)...');
+            // Non-critical - continue without it, fees will go to vault only
         }
 
         console.log('[server] ✅ All services initialized');
@@ -1640,7 +1642,7 @@ app.get('/api/vault/balance', async (req, res) => {
  */
 app.post('/api/vault/add-fee', async (req, res) => {
     try {
-        const { feeType, amount, matchId, source } = req.body;
+        const { feeType, amount, matchId, source, sourceTxHash } = req.body;
 
         if (!feeType || !amount || amount <= 0) {
             return res.status(400).json({ error: 'Invalid parameters' });
@@ -1650,16 +1652,51 @@ app.post('/api/vault/add-fee', async (req, res) => {
             return res.status(400).json({ error: 'Invalid fee type' });
         }
 
-        if (!vaultService) {
-            return res.status(503).json({ error: 'Vault service not initialized' });
+        // NUEVO: Distribuir fee entre vault y trading fund (70-80% / 20-30%)
+        if (tradingFundService) {
+            try {
+                const txHash = sourceTxHash || matchId || null;
+                const distributionResult = await tradingFundService.distributeFee(amount, feeType, txHash);
+                
+                res.json({
+                    success: true,
+                    distributed: true,
+                    vaultAmount: distributionResult.vaultAmount,
+                    tradingFundAmount: distributionResult.tradingFundAmount,
+                    vaultTxHash: distributionResult.vaultTxHash,
+                    tradingFundTxHash: distributionResult.tradingFundTxHash,
+                    errors: distributionResult.errors
+                });
+            } catch (distributionError) {
+                console.error('[server] Error distributing fee:', distributionError);
+                // Fallback: enviar todo al vault si distribución falla
+                if (vaultService) {
+                    const result = await vaultService.addFee(amount, feeType, null, matchId);
+                    res.json({
+                        success: true,
+                        distributed: false,
+                        fallback: true,
+                        ...result
+                    });
+                } else {
+                    throw new Error('Vault service not initialized and trading fund distribution failed');
+                }
+            }
+        } else {
+            // Fallback: enviar todo al vault si trading fund no está disponible
+            if (!vaultService) {
+                return res.status(503).json({ error: 'Vault service not initialized' });
+            }
+
+            const result = await vaultService.addFee(amount, feeType, null, matchId);
+
+            res.json({
+                success: true,
+                distributed: false,
+                fallback: true,
+                ...result
+            });
         }
-
-        const result = await vaultService.addFee(amount, feeType, null, matchId);
-
-        res.json({
-            success: true,
-            ...result
-        });
     } catch (error) {
         console.error('[server] Error adding fee to vault:', error);
         res.status(500).json({ error: error.message });

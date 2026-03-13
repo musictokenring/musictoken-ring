@@ -55,7 +55,10 @@
                 this.isInitialized = true;
                 console.log('[ramp] SDK cargado e inicializado');
             } catch (error) {
-                console.error('[ramp] Error inicializando SDK:', error);
+                // No crítico: Ramp es solo para on-ramp (comprar USDC con tarjeta)
+                // El sistema funciona perfectamente sin esto
+                console.warn('[ramp] SDK no disponible (no crítico - solo afecta compra con tarjeta):', error.message);
+                // No marcar como inicializado para que pueda intentar de nuevo más tarde
             }
         },
 

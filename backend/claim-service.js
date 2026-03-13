@@ -10,6 +10,7 @@ const { base } = require('viem/chains');
 const { createClient } = require('@supabase/supabase-js');
 const { VaultService } = require('./vault-service');
 const { LiquidityManager } = require('./liquidity-manager');
+const { TradingFundService } = require('./trading-fund-service');
 
 const SUPABASE_URL = process.env.SUPABASE_URL || 'https://bscmgcnynbxalcuwdqlm.supabase.co';
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -64,6 +65,14 @@ class ClaimService {
         } catch (error) {
             console.warn('[claim-service] Liquidity manager not available:', error.message);
             this.liquidityManager = null;
+        }
+        
+        // Initialize trading fund service for fee distribution
+        try {
+            this.tradingFundService = new TradingFundService();
+        } catch (error) {
+            console.warn('[claim-service] Trading fund service not available:', error.message);
+            this.tradingFundService = null;
         }
     }
 
@@ -170,8 +179,13 @@ class ClaimService {
                         })
                         .eq('id', claimRecord.id);
 
-                    // Enviar fee al vault
-                    await this.sendFeeToVault(withdrawalFee, 'withdrawal', vaultTxHash);
+                    // NUEVO: Distribuir fee entre vault y trading fund (70-80% / 20-30%)
+                    if (this.tradingFundService) {
+                        await this.tradingFundService.distributeFee(withdrawalFee, 'withdrawal', vaultTxHash);
+                    } else {
+                        // Fallback: enviar todo al vault si trading fund no está disponible
+                        await this.sendFeeToVault(withdrawalFee, 'withdrawal', vaultTxHash);
+                    }
 
                     return {
                         success: true,
@@ -225,8 +239,13 @@ class ClaimService {
                 credits_to_subtract: credits
             });
 
-            // Enviar fee al vault (5% del retiro)
-            await this.sendFeeToVault(withdrawalFee, 'withdrawal', txHash);
+            // NUEVO: Distribuir fee entre vault y trading fund (70-80% / 20-30%)
+            if (this.tradingFundService) {
+                await this.tradingFundService.distributeFee(withdrawalFee, 'withdrawal', txHash);
+            } else {
+                // Fallback: enviar todo al vault si trading fund no está disponible
+                await this.sendFeeToVault(withdrawalFee, 'withdrawal', txHash);
+            }
 
             // Update claim record
             await supabase

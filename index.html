@@ -77,7 +77,7 @@
             
             window.updateBetEligibility = function() {
                 // SIN LOGS - Esta función se ejecuta frecuentemente
-                var btn = document.getElementById('createSocialBtn');
+                var btn = document.getElementById('createSocialBtn') || (window.findCreateSocialBtn ? window.findCreateSocialBtn() : null);
                 if (btn && window.currentMode === 'social') {
                     var betInput = document.getElementById('betAmount');
                     var bet = betInput ? parseFloat(betInput.value || '0') : 0;
@@ -752,35 +752,80 @@
             </div>
         </section>
 
-        <!-- PURCHASE CARD (SINGLE) -->
+        <!-- DEPOSIT CARD (USDC Directo + MTR Opcional) -->
         <section class="mb-16">
             <div class="max-w-2xl mx-auto p-6 sm:p-8 rounded-2xl border border-cyan-500/15 bg-gradient-to-br from-gray-900/80 to-indigo-950/40 neon-border-cyan">
-                <h3 class="text-xl font-bold text-cyan-400 neon-text-cyan mb-2">Comprar MTR</h3>
-                <p class="text-gray-400 text-sm mb-6">Compra MTR en Aerodrome (Base) y acredita tu saldo con el hash de la transacción.</p>
-                <div class="flex flex-wrap gap-3 mb-6">
-                    <a href="https://aerodrome.finance/swap?from=ETH&to=0x99cd1eb32846c9027ed9cb8710066fa08791c33b" target="_blank" rel="noopener noreferrer"
-
-                    <a href="https://aerodrome.finance/swap?from=ETH&to=0x99cd1eb32846c9027ed9cb8710066fa08791c33b" target="_blank" rel="noopener noreferrer"
-                       class="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg text-sm font-semibold bg-cyan-500/15 border border-cyan-500/30 text-cyan-400 hover:bg-cyan-500/25 transition-all">
-                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/></svg>
-                        Swap en Aerodrome
-                    </a>
-                    <a href="https://basescan.org/token/0x99cd1eb32846c9027ed9cb8710066fa08791c33b" target="_blank" rel="noopener noreferrer"
-
-                    <a href="https://basescan.org/token/0x99cd1eb32846c9027ed9cb8710066fa08791c33b" target="_blank" rel="noopener noreferrer"
-                       class="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg text-sm font-semibold bg-white/5 border border-white/10 text-gray-300 hover:text-white hover:border-white/20 transition-all">
-                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/></svg>
-                        Ver en Basescan
-                    </a>
+                <h3 class="text-xl font-bold text-cyan-400 neon-text-cyan mb-2">Depositar Créditos</h3>
+                <p class="text-gray-400 text-sm mb-4">Envía USDC directo para obtener créditos MTR nominales respaldados 1:1 por USDC real.</p>
+                
+                <!-- Explicación de Créditos Nominales -->
+                <div class="mb-6 p-4 rounded-lg bg-green-500/10 border border-green-500/20">
+                    <div class="flex items-start gap-2">
+                        <span class="text-green-400 text-lg">✓</span>
+                        <div class="flex-1">
+                            <p class="text-green-400 text-sm font-semibold mb-1">Créditos MTR Nominales</p>
+                            <p class="text-gray-300 text-xs">Estas fichas valen siempre $1 cada una (1:1 USDC estable). No fluctúan como el token MTR nativo. Respaldadas por USDC real en vault.</p>
+                        </div>
+                    </div>
                 </div>
-                <div class="flex flex-col sm:flex-row gap-3">
-                    <input id="depositTxHash" type="text" placeholder="Pega hash de compra en Base (0x...)" autocomplete="off"
-                           class="flex-1 px-4 py-3 rounded-lg bg-black/40 border border-white/10 text-white placeholder-gray-500 text-sm focus:outline-none focus:border-cyan-500/50 focus:ring-1 focus:ring-cyan-500/20 transition">
-                    <button type="button" id="creditPurchaseBtn" onclick="verifyPurchasedMtrTx()"
-                            class="px-6 py-3 rounded-lg text-sm font-bold bg-gradient-to-r from-cyan-500 to-cyan-600 text-white hover:opacity-90 transition-all shadow-lg shadow-cyan-500/20 cursor-pointer whitespace-nowrap">
-                        🔎 Acreditar Compra
-                    </button>
+
+                <!-- Opción Principal: USDC Directo -->
+                <div class="mb-6 p-4 rounded-lg bg-cyan-500/10 border border-cyan-500/30">
+                    <div class="flex items-center gap-2 mb-3">
+                        <span class="text-cyan-400 text-lg font-bold">1️⃣</span>
+                        <h4 class="text-cyan-400 font-bold text-base">Depositar USDC Directo (Recomendado)</h4>
+                    </div>
+                    <p class="text-gray-300 text-sm mb-3">Envía USDC directamente a la wallet de la plataforma. Recibirás créditos nominales 1:1 (menos fee 5%).</p>
+                    <div class="flex flex-wrap gap-2 mb-3">
+                        <span class="text-xs px-2 py-1 rounded-full bg-cyan-500/20 text-cyan-300 border border-cyan-500/30">💰 USDC Estable</span>
+                        <span class="text-xs px-2 py-1 rounded-full bg-cyan-500/20 text-cyan-300 border border-cyan-500/30">1:1 Respaldado</span>
+                        <span class="text-xs px-2 py-1 rounded-full bg-cyan-500/20 text-cyan-300 border border-cyan-500/30">Sin Volatilidad</span>
+                    </div>
+                    <p class="text-xs text-gray-400 mt-2">
+                        <strong>Wallet de depósito:</strong> <span class="font-mono text-cyan-300">0x75376BC58830f27415402875D26B73A6BE8E2253</span>
+                    </p>
+                    <p class="text-xs text-gray-400 mt-1">
+                        <strong>Ejemplo:</strong> Envías 100 USDC → Recibes 95 créditos nominales (5% fee)
+                    </p>
                 </div>
+
+                <!-- Opción Secundaria: MTR Opcional -->
+                <div class="mb-6 p-4 rounded-lg bg-white/5 border border-white/10">
+                    <div class="flex items-center gap-2 mb-3">
+                        <span class="text-gray-400 text-lg font-bold">2️⃣</span>
+                        <h4 class="text-gray-300 font-semibold text-base">Convertir MTR a Créditos (Opcional)</h4>
+                    </div>
+                    <p class="text-gray-400 text-sm mb-3">Si tienes MTR, se convertirá automáticamente a USDC al precio de mercado y recibirás créditos nominales 1:1.</p>
+                    <div class="flex flex-wrap gap-3">
+                        <a href="https://aerodrome.finance/swap?from=ETH&to=0x99cd1eb32846c9027ed9cb8710066fa08791c33b" target="_blank" rel="noopener noreferrer"
+                           class="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-semibold bg-white/5 border border-white/10 text-gray-300 hover:text-white hover:border-white/20 transition-all">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/></svg>
+                            Swap MTR en Aerodrome
+                        </a>
+                        <a href="https://basescan.org/token/0x99cd1eb32846c9027ed9cb8710066fa08791c33b" target="_blank" rel="noopener noreferrer"
+                           class="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-semibold bg-white/5 border border-white/10 text-gray-300 hover:text-white hover:border-white/20 transition-all">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/></svg>
+                            Ver en Basescan
+                        </a>
+                    </div>
+                    <div class="mt-3 flex flex-col sm:flex-row gap-3">
+                        <input id="depositTxHash" type="text" placeholder="Pega hash de transacción MTR (0x...)" autocomplete="off"
+                               class="flex-1 px-4 py-3 rounded-lg bg-black/40 border border-white/10 text-white placeholder-gray-500 text-sm focus:outline-none focus:border-cyan-500/50 focus:ring-1 focus:ring-cyan-500/20 transition">
+                        <button type="button" id="creditPurchaseBtn" onclick="verifyPurchasedMtrTx()"
+                                class="px-6 py-3 rounded-lg text-sm font-bold bg-gradient-to-r from-gray-600 to-gray-700 text-white hover:opacity-90 transition-all shadow-lg shadow-gray-500/20 cursor-pointer whitespace-nowrap">
+                            🔎 Acreditar MTR
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Información de Fees -->
+                <div class="mt-4 p-3 rounded-lg bg-yellow-500/10 border border-yellow-500/20">
+                    <p class="text-yellow-400 text-xs">
+                        <strong>Fees:</strong> Depósito 5% | Apuesta 2% | Retiro 5% | 
+                        <span class="text-gray-400">Créditos nominales respaldados por USDC real en vault</span>
+                    </p>
+                </div>
+
                 <p id="tokenConfigError" class="hidden text-red-400 text-sm mt-3"></p>
             </div>
         </section>
@@ -945,15 +990,38 @@
         <!-- CASHOUT CARD -->
         <section class="mb-16">
             <div class="max-w-2xl mx-auto p-6 sm:p-8 rounded-2xl border border-fuchsia-500/15 bg-gradient-to-br from-gray-900/80 to-purple-950/30 neon-border-magenta">
-                <h3 class="text-xl font-bold text-fuchsia-400 neon-text-magenta mb-2">Liquidación de ganancias</h3>
-                <p class="text-gray-400 text-sm mb-6">Solicita retiro cuando tengas saldo. Cotizamos con referencia USD y registramos comisión.</p>
+                <h3 class="text-xl font-bold text-fuchsia-400 neon-text-magenta mb-2">Retirar Créditos</h3>
+                <p class="text-gray-400 text-sm mb-4">Retira tus créditos nominales y recibe USDC real. Conversión 1:1 respaldada por vault.</p>
+                
+                <!-- Explicación de Retiro -->
+                <div class="mb-6 p-4 rounded-lg bg-blue-500/10 border border-blue-500/20">
+                    <div class="flex items-start gap-2">
+                        <span class="text-blue-400 text-lg">💸</span>
+                        <div class="flex-1">
+                            <p class="text-blue-400 text-sm font-semibold mb-1">Retiro en USDC Real</p>
+                            <p class="text-gray-300 text-xs">Tus créditos nominales se convierten a USDC real (1:1). Fee de retiro: 5%.</p>
+                            <p class="text-gray-400 text-xs mt-1">Ejemplo: Retiras 100 créditos → Recibes 95 USDC</p>
+                        </div>
+                    </div>
+                </div>
                 <div class="flex flex-col sm:flex-row gap-3 mb-4">
-                    <input id="cashoutAmount" type="number" min="1" placeholder="MTR a retirar"
+                    <input id="cashoutAmount" type="number" min="1" placeholder="Créditos nominales a retirar"
                            class="flex-1 px-4 py-3 rounded-lg bg-black/40 border border-white/10 text-white placeholder-gray-500 text-sm focus:outline-none focus:border-fuchsia-500/50 focus:ring-1 focus:ring-fuchsia-500/20 transition">
-                    <button type="button" onclick="quoteCashout()" class="px-6 py-3 rounded-lg text-sm font-bold bg-fuchsia-500/15 border border-fuchsia-500/30 text-fuchsia-400 hover:bg-fuchsia-500/25 transition cursor-pointer whitespace-nowrap">📊 Cotizar en USD</button>
+                    <button type="button" onclick="quoteCashout()" class="px-6 py-3 rounded-lg text-sm font-bold bg-fuchsia-500/15 border border-fuchsia-500/30 text-fuchsia-400 hover:bg-fuchsia-500/25 transition cursor-pointer whitespace-nowrap">📊 Cotizar en USDC</button>
+                </div>
+                <div class="mb-4 p-3 rounded-lg bg-blue-500/10 border border-blue-500/20">
+                    <p class="text-blue-400 text-xs mb-2">
+                        <strong>💡 Conversión:</strong> Retiras créditos nominales → Recibes USDC real
+                    </p>
+                    <p class="text-gray-300 text-xs">
+                        <strong>Ejemplo:</strong> Retiras 100 créditos nominales → Recibes 95 USDC (5% fee)
+                    </p>
+                    <p class="text-gray-400 text-xs mt-1">
+                        Los créditos nominales están respaldados 1:1 por USDC real en vault.
+                    </p>
                 </div>
                 <p id="cashoutQuote" class="text-gray-400 text-sm mb-4">Sin cotización aún.</p>
-                <button type="button" onclick="requestCashout()" class="px-6 py-3 rounded-lg text-sm font-bold bg-gradient-to-r from-fuchsia-500 to-purple-600 text-white hover:opacity-90 transition-all shadow-lg shadow-fuchsia-500/20 cursor-pointer">💸 Solicitar retiro</button>
+                <button type="button" onclick="requestCashout()" class="px-6 py-3 rounded-lg text-sm font-bold bg-gradient-to-r from-fuchsia-500 to-purple-600 text-white hover:opacity-90 transition-all shadow-lg shadow-fuchsia-500/20 cursor-pointer">💸 Solicitar Retiro (USDC)</button>
             </div>
         </section>
 
@@ -1374,8 +1442,36 @@
                         });
                         
                         if (currentCredits < requiredCredits && onchainBalance >= (requiredCredits - currentCredits)) {
-                            logFn('[selectSongForBattle] 💰 Créditos insuficientes, intentando conversión automática...');
+                            // CRÍTICO: Protección múltiple contra conversiones duplicadas
+                            const conversionKey = `selectSong_conversion_${walletAddress}_${window.pendingChallengeId}`;
+                            const conversionInProgressKey = `mtr_conversion_in_progress_${walletAddress}`;
+                            const lastConversion = sessionStorage.getItem(conversionKey);
+                            const conversionInProgress = sessionStorage.getItem(conversionInProgressKey);
+                            const now = Date.now();
+                            const recentlyConverted = lastConversion && (now - Number(lastConversion)) < 10000; // 10 segundos cooldown
+                            
+                            // CRÍTICO: Verificar múltiples condiciones antes de convertir
+                            if (recentlyConverted) {
+                                logFn('[selectSongForBattle] ⚠️ Conversión reciente detectada, evitando duplicación');
+                                return; // No convertir de nuevo
+                            }
+                            
+                            if (conversionInProgress) {
+                                logFn('[selectSongForBattle] ⚠️ Conversión en progreso detectada, evitando duplicación');
+                                return; // No convertir si ya hay una en progreso
+                            }
+                            
+                            logFn('[selectSongForBattle] 💰 Créditos insuficientes para desafío, iniciando conversión automática...');
                             const missingCredits = requiredCredits - currentCredits;
+                            
+                            // CRÍTICO: Marcar que estamos convirtiendo (doble protección)
+                            sessionStorage.setItem(conversionKey, String(now));
+                            sessionStorage.setItem(conversionInProgressKey, 'true');
+                            
+                            // Limpiar flag después de 30 segundos (por si acaso se queda colgado)
+                            setTimeout(() => {
+                                sessionStorage.removeItem(conversionInProgressKey);
+                            }, 30000);
                             
                             try {
                                 const userId = await window.CreditsSystem.getUserId(walletAddress);
@@ -1388,20 +1484,38 @@
                                         });
                                         
                                         if (!rpcError) {
-                                            logFn('[selectSongForBattle] ✅ Conversión automática exitosa');
+                                            logFn('[selectSongForBattle] ✅ Conversión automática exitosa (solo créditos faltantes)');
+                                            // CRÍTICO: Limpiar flags inmediatamente después de éxito
+                                            sessionStorage.removeItem(conversionKey);
+                                            sessionStorage.removeItem(conversionInProgressKey);
+                                            
                                             // Solo recargar después de conversión exitosa
                                             await new Promise(resolve => setTimeout(resolve, 500));
                                             await window.CreditsSystem.loadBalance(walletAddress);
                                             if (typeof showToast === 'function') {
-                                                showToast(`✅ Convertidos ${missingCredits.toFixed(2)} créditos automáticamente`, 'success');
+                                                showToast(`✅ Convertidos ${missingCredits.toFixed(2)} créditos automáticamente para desafío`, 'success');
                                             }
                                         } else {
                                             console.error('[selectSongForBattle] ❌ Error en conversión automática:', rpcError);
+                                            // Limpiar flags en caso de error
+                                            sessionStorage.removeItem(conversionKey);
+                                            sessionStorage.removeItem(conversionInProgressKey);
                                         }
+                                    } else {
+                                        logFn('[selectSongForBattle] ⚠️ No hay sesión Supabase, cancelando conversión');
+                                        sessionStorage.removeItem(conversionKey);
+                                        sessionStorage.removeItem(conversionInProgressKey);
                                     }
+                                } else {
+                                    logFn('[selectSongForBattle] ⚠️ No se pudo obtener userId o supabaseClient, cancelando conversión');
+                                    sessionStorage.removeItem(conversionKey);
+                                    sessionStorage.removeItem(conversionInProgressKey);
                                 }
                             } catch (conversionError) {
                                 console.error('[selectSongForBattle] ❌ Error en conversión automática:', conversionError);
+                                // Limpiar flags en caso de error
+                                sessionStorage.removeItem(conversionKey);
+                                sessionStorage.removeItem(conversionInProgressKey);
                             }
                         }
                     }
@@ -4387,6 +4501,41 @@
         } else {
             warnFn('[ASSIGN] ⚠️ createSocialChallenge local no está definida');
         }
+        
+        // CRÍTICO: Función para encontrar createSocialBtn después de que se cree dinámicamente
+        window.findCreateSocialBtn = function() {
+            var btn = document.getElementById('createSocialBtn');
+            if (!btn) {
+                // Buscar por texto también
+                var buttons = document.querySelectorAll('button');
+                for (var i = 0; i < buttons.length; i++) {
+                    var btnText = buttons[i].textContent || buttons[i].innerText || '';
+                    if (btnText.includes('Crear Desafío') || btnText.includes('Desafiar') || btnText.includes('Aceptar e Iniciar')) {
+                        buttons[i].id = 'createSocialBtn';
+                        btn = buttons[i];
+                        logFn('[findCreateSocialBtn] ✅ Botón encontrado por texto y asignado ID');
+                        break;
+                    }
+                }
+            }
+            return btn;
+        };
+        
+        // Intentar encontrar el botón periódicamente si no existe (solo en modo social)
+        var btnCheckInterval = setInterval(function() {
+            if (window.currentMode === 'social') {
+                var btn = window.findCreateSocialBtn();
+                if (btn) {
+                    clearInterval(btnCheckInterval);
+                    logFn('[ASSIGN] ✅ createSocialBtn encontrado después de búsqueda periódica');
+                }
+            }
+        }, 500);
+        
+        // Limpiar intervalo después de 30 segundos
+        setTimeout(function() {
+            clearInterval(btnCheckInterval);
+        }, 30000);
         // Solo asignar updateBetEligibility si está definida localmente, sino mantener la función global temprana
         if (typeof updateBetEligibility === 'function') {
             window.updateBetEligibility = updateBetEligibility;
@@ -4684,9 +4833,17 @@
                     window.updateBetEligibility();
                 }
                 
-                // CRÍTICO: Conversión automática de MTR on-chain a créditos jugables
-                // Si hay MTR on-chain pero 0 créditos, convertir automáticamente
-                // IMPORTANTE: Esta conversión es opcional - no debe bloquear la visualización del saldo
+                // ⚠️⚠️⚠️ CONVERSIÓN AUTOMÁTICA COMPLETAMENTE DESHABILITADA ⚠️⚠️⚠️
+                // Esta conversión estaba causando que los saldos se duplicaran cada vez que se cargaba el balance
+                // La conversión ahora solo ocurre cuando el usuario realmente la necesita (al aceptar un desafío)
+                // NO ejecutar conversión automática aquí para evitar duplicación de saldos
+                // CRÍTICO: NO EJECUTAR NINGUNA CONVERSIÓN AUTOMÁTICA EN refreshMtrBalance
+
+                // CÓDIGO COMPLETAMENTE DESHABILITADO - NO EJECUTAR NUNCA:
+                return; // SALIR INMEDIATAMENTE - NO EJECUTAR NINGUNA CONVERSIÓN
+
+                // CÓDIGO COMENTADO PARA REFERENCIA (NO EJECUTAR):
+                /*
                 if (numericBalance > 0 && window.CreditsSystem && typeof window.CreditsSystem.currentCredits !== 'undefined') {
                     const currentCredits = Number(window.CreditsSystem.currentCredits || 0);
                     
@@ -4704,7 +4861,7 @@
                     const shouldConvert = numericBalance > 0 && currentCredits < (numericBalance * 0.8); // Solo si créditos < 80% del balance on-chain
                     const recentlyConverted = lastConversion && (now - Number(lastConversion)) < 60000; // 60 segundos
                     
-                    if (shouldConvert && !recentlyConverted && !conversionInProgress) {
+                    if (false && shouldConvert && !recentlyConverted && !conversionInProgress) { // DESHABILITADO
                         // Marcar que estamos convirtiendo para evitar duplicados
                         sessionStorage.setItem(conversionKey, String(now));
                         sessionStorage.setItem(`mtr_conversion_in_progress_${address}`, 'true');
@@ -5032,6 +5189,7 @@
                         })(); // Ejecutar función async inmediatamente sin bloquear
                     }
                 }
+                */
             } catch (e) {
                 // Silenciar errores para no bloquear la página
                 setOnchainBalanceError();

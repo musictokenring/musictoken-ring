@@ -181,7 +181,230 @@
                     walletAddress: walletAddress
                 });
 
-                this.currentCredits = data.credits || 0;
+                // CRÍTICO: Obtener saldo on-chain para referencia (NO para limitar créditos)
+                const onchainBalance = Number(window.__mtrOnChainBalance || 0);
+                
+                // CRÍTICO: SIEMPRE consultar Supabase primero si tenemos userId
+                // El backend puede tener bugs que multipliquen el saldo
+                let rawCredits = 0;
+                let usarBackend = false;
+                
+                // Intentar obtener userId para consultar Supabase
+                let userId = this.currentUserId;
+                if (!userId && walletAddress) {
+                    userId = await this.getUserId(walletAddress);
+                }
+                
+                // CRÍTICO: Consultar Supabase PRIMERO (fuente de verdad)
+                if (typeof supabaseClient !== 'undefined' && userId) {
+                    try {
+                        console.log('[credits-system] 🔄🔴 CONSULTANDO SUPABASE PRIMERO (fuente de verdad)...', {
+                            userId: userId,
+                            onchainBalance: onchainBalance
+                        });
+                        const { data: supabaseCredits, error: supabaseError } = await supabaseClient
+                            .from('user_credits')
+                            .select('credits')
+                            .eq('user_id', userId)
+                            .maybeSingle();
+                        
+                        console.log('[credits-system] 🔍 Resultado de Supabase:', {
+                            supabaseCredits: supabaseCredits,
+                            supabaseError: supabaseError,
+                            credits: supabaseCredits?.credits
+                        });
+                        
+                        if (!supabaseError && supabaseCredits) {
+                            const supabaseValue = supabaseCredits.credits || 0;
+                            
+                            // CRÍTICO: Los créditos pueden ser diferentes al on-chain porque se ganan/perden en batallas
+                            // Solo validar contra valores ABSOLUTOS sospechosos (más de 10 millones)
+                            rawCredits = supabaseValue;
+                            console.log('[credits-system] ✅✅✅ Saldo obtenido desde Supabase (fuente de verdad):', rawCredits);
+                        } else {
+                            console.warn('[credits-system] ⚠️ Error consultando Supabase, usando backend como fallback:', supabaseError);
+                            usarBackend = true;
+                        }
+                    } catch (supabaseError) {
+                        console.error('[credits-system] ❌ Error consultando Supabase:', supabaseError);
+                        console.warn('[credits-system] ⚠️ Usando backend como fallback');
+                        usarBackend = true;
+                    }
+                } else {
+                    console.warn('[credits-system] ⚠️ No se pudo consultar Supabase:', {
+                        tieneSupabase: typeof supabaseClient !== 'undefined',
+                        tieneUserId: !!userId,
+                        userId: userId
+                    });
+                    usarBackend = true;
+                }
+                
+                // Solo usar backend si Supabase falló
+                if (usarBackend) {
+                    rawCredits = data.credits || 0;
+                    
+                    // Convertir a número si es string
+                    if (typeof rawCredits === 'string') {
+                        rawCredits = parseFloat(rawCredits) || 0;
+                    }
+                    
+                    // Validar que sea un número válido
+                    if (isNaN(rawCredits) || !isFinite(rawCredits)) {
+                        console.error('[credits-system] ❌ Valor de créditos inválido del backend:', rawCredits);
+                        rawCredits = 0;
+                    }
+                } else {
+                    // Ya tenemos el valor de Supabase, solo validar formato
+                    if (typeof rawCredits === 'string') {
+                        rawCredits = parseFloat(rawCredits) || 0;
+                    }
+                    
+                    if (isNaN(rawCredits) || !isFinite(rawCredits)) {
+                        console.error('[credits-system] ❌ Valor de créditos inválido de Supabase:', rawCredits);
+                        rawCredits = 0;
+                    }
+                }
+                
+                // PROTECCIÓN CRÍTICA: Validar contra valores ABSOLUTOS sospechosos
+                // Los créditos pueden ser diferentes al on-chain porque se ganan/perden en batallas
+                // IMPORTANTE: Los créditos NO están limitados por el on-chain - pueden ser mayores o menores
+                
+                // PROTECCIÓN: Limitar créditos a un máximo razonable (10 millones)
+                // Si un usuario tiene más de 10 millones, es sospechoso (posible bug)
+                const MAX_REASONABLE_CREDITS = 10000000; // 10 millones máximo
+                let valorSospechoso = false;
+                
+                // CRÍTICO: Validar solo contra valores ABSOLUTOS sospechosos
+                // NO validar contra on-chain porque los créditos se ganan/perden en batallas
+                if (rawCredits > MAX_REASONABLE_CREDITS) {
+                    valorSospechoso = true;
+                    console.error('[credits-system] ⚠️⚠️⚠️ VALOR SOSPECHOSO DEL BACKEND RECHAZADO:', {
+                        valorRecibido: rawCredits,
+                        maximoRazonable: MAX_REASONABLE_CREDITS,
+                        valorAnterior: this.currentCredits || 0,
+                        accion: 'OBLIGATORIO: Consultar Supabase directamente, NUNCA usar valor anterior sospechoso'
+                    });
+                    
+                    // CRÍTICO: SIEMPRE consultar Supabase cuando hay valor sospechoso
+                    // NUNCA usar el valor anterior si también es sospechoso
+                    rawCredits = 0; // Establecer 0 por defecto
+                    
+                    try {
+                        if (typeof supabaseClient !== 'undefined') {
+                            // Intentar obtener userId si no lo tenemos
+                            let userId = this.currentUserId;
+                            if (!userId && walletAddress) {
+                                userId = await this.getUserId(walletAddress);
+                            }
+                            
+                            if (userId) {
+                                console.log('[credits-system] 🔄 Obteniendo saldo REAL desde Supabase (obligatorio)...');
+                                const { data: supabaseCredits, error: supabaseError } = await supabaseClient
+                                    .from('user_credits')
+                                    .select('credits')
+                                    .eq('user_id', userId)
+                                    .maybeSingle();
+                                
+                                if (!supabaseError && supabaseCredits) {
+                                    const supabaseValue = supabaseCredits.credits || 0;
+                                    const finalOnchainCheck = Number(window.__mtrOnChainBalance || 0);
+                                    
+                                    // CRÍTICO: Validar que Supabase tenga un valor razonable Y que NO exceda on-chain
+                                    if (supabaseValue <= MAX_REASONABLE_CREDITS) {
+                                        // CRÍTICO: Validar también contra on-chain - NUNCA exceder on-chain
+                                        if (finalOnchainCheck > 0 && supabaseValue > finalOnchainCheck) {
+                                            console.error('[credits-system] ❌❌❌ Supabase excede saldo on-chain - RECHAZADO:', {
+                                                supabaseValue: supabaseValue,
+                                                onchainBalance: finalOnchainCheck,
+                                                diferencia: supabaseValue - finalOnchainCheck
+                                            });
+                                            // Usar saldo on-chain como máximo (NO multiplicar)
+                                            rawCredits = finalOnchainCheck;
+                                            console.log('[credits-system] ⚠️ Usando saldo on-chain como máximo permitido:', rawCredits);
+                                        } else {
+                                            rawCredits = supabaseValue;
+                                            console.log('[credits-system] ✅✅✅ Saldo REAL obtenido desde Supabase:', rawCredits);
+                                        }
+                                    } else {
+                                        console.error('[credits-system] ❌❌❌ Supabase también tiene valor sospechoso:', supabaseValue);
+                                        // Si Supabase está mal pero tenemos on-chain, usar on-chain como máximo
+                                        if (finalOnchainCheck > 0) {
+                                            rawCredits = finalOnchainCheck; // Usar on-chain directamente, NO multiplicar
+                                            console.log('[credits-system] ⚠️ Usando saldo on-chain como máximo permitido:', rawCredits);
+                                        } else {
+                                            rawCredits = 0; // Forzar 0 si todo está mal
+                                        }
+                                    }
+                                } else {
+                                    console.warn('[credits-system] ⚠️ Error consultando Supabase:', supabaseError);
+                                    rawCredits = 0;
+                                }
+                            } else {
+                                console.warn('[credits-system] ⚠️ No se pudo obtener userId para consultar Supabase');
+                                rawCredits = 0;
+                            }
+                        } else {
+                            console.warn('[credits-system] ⚠️ Supabase no disponible');
+                            rawCredits = 0;
+                        }
+                    } catch (supabaseFallbackError) {
+                        console.error('[credits-system] ❌ Error al obtener saldo desde Supabase:', supabaseFallbackError);
+                        rawCredits = 0; // Siempre usar 0 si hay error
+                    }
+                    
+                    // NO recargar automáticamente porque podría entrar en loop infinito
+                    // El usuario puede recargar manualmente si es necesario
+                }
+                
+                // Asegurar que no sea negativo
+                rawCredits = Math.max(0, rawCredits);
+                
+                // VALIDACIÓN FINAL: Solo validar contra valores absolutos sospechosos
+                // Los créditos pueden ser diferentes al on-chain (se ganan/perden en batallas)
+                if (rawCredits > MAX_REASONABLE_CREDITS) {
+                    console.error('[credits-system] ❌❌❌ VALIDACIÓN FINAL FALLIDA: Valor aún sospechoso después de todas las validaciones:', rawCredits);
+                    
+                    // CRÍTICO: Si el valor excede el máximo razonable, usar el saldo on-chain como límite máximo
+                    const onchainBalance = Number(window.__mtrOnChainBalance || 0);
+                    if (onchainBalance > 0 && onchainBalance <= MAX_REASONABLE_CREDITS) {
+                        console.warn('[credits-system] ⚠️ Usando saldo on-chain como límite máximo:', onchainBalance);
+                        rawCredits = onchainBalance; // Usar on-chain como máximo
+                    } else {
+                        // Si el valor es sospechosamente alto, consultar Supabase una vez más
+                        if (typeof supabaseClient !== 'undefined' && userId) {
+                            try {
+                                const { data: supabaseCredits } = await supabaseClient
+                                    .from('user_credits')
+                                    .select('credits')
+                                    .eq('user_id', userId)
+                                    .maybeSingle();
+                                
+                                if (supabaseCredits && supabaseCredits.credits <= MAX_REASONABLE_CREDITS) {
+                                    rawCredits = supabaseCredits.credits;
+                                    console.log('[credits-system] ✅ Valor corregido desde Supabase:', rawCredits);
+                                } else {
+                                    // Si Supabase también está mal, usar on-chain o 0
+                                    rawCredits = onchainBalance > 0 ? onchainBalance : 0;
+                                    console.warn('[credits-system] ⚠️ Supabase también tiene valor sospechoso, usando on-chain o 0:', rawCredits);
+                                }
+                            } catch (e) {
+                                rawCredits = onchainBalance > 0 ? onchainBalance : 0;
+                            }
+                        } else {
+                            rawCredits = onchainBalance > 0 ? onchainBalance : 0; // Usar on-chain o 0
+                        }
+                    }
+                }
+                
+                // CRÍTICO: Log final antes de establecer el valor
+                console.log('[credits-system] 🔴🔴🔴 VALOR FINAL A ESTABLECER:', {
+                    rawCredits: rawCredits,
+                    onchainBalance: onchainBalance,
+                    excedeOnchain: onchainBalance > 0 && rawCredits > onchainBalance,
+                    fuente: usarBackend ? 'BACKEND' : 'SUPABASE'
+                });
+                
+                this.currentCredits = rawCredits;
                 // NUEVO: 1 crédito = 1 USDC fijo siempre
                 this.currentUsdcValue = this.currentCredits; // 1:1 fijo
                 this.currentRate = null; // Ya no se usa rate variable
@@ -192,12 +415,16 @@
                     this.currentUserId = data.userId;
                 } else if (userIdFromWallet) {
                     this.currentUserId = userIdFromWallet;
+                } else if (userId) {
+                    this.currentUserId = userId;
                 }
 
                 console.log('[credits-system] ✅✅✅ Saldos cargados y actualizados:', {
                     credits: this.currentCredits,
                     usdcValue: this.currentUsdcValue,
                     userId: this.currentUserId,
+                    onchainBalance: onchainBalance,
+                    fuente: usarBackend ? 'BACKEND' : 'SUPABASE',
                     isWalletBrowser,
                     willUpdateDisplay: true
                 });
@@ -337,15 +564,12 @@
                 }
             }
             
-            // También actualizar appBalanceDisplay si existe
+            // También actualizar appBalanceDisplay si existe (pero solo si el usuario quiere ver ambos)
             const appBalanceDisplay = document.getElementById('appBalanceDisplay');
-            if (appBalanceDisplay) {
+            if (appBalanceDisplay && !appBalanceDisplay.classList.contains('hidden')) {
                 appBalanceDisplay.textContent = `Fichas jugables: ${this.currentCredits.toFixed(2)} MTR créditos`;
                 appBalanceDisplay.style.color = '';
                 appBalanceDisplay.title = 'MTR créditos jugables: Fichas estables que valen siempre $1 cada una';
-                if (shouldLog) {
-                    console.log('[updateCreditsDisplay] ✅ appBalanceDisplay actualizado');
-                }
             }
             
             // CRÍTICO: Forzar actualización de GameEngine también para mantener sincronización
@@ -411,6 +635,23 @@
          */
         async claimCredits(credits, walletAddress) {
             try {
+                // CRÍTICO: Validar contra valores absolutos sospechosos ANTES de permitir reclamar
+                // Los créditos pueden ser diferentes al on-chain porque se ganan/perden en batallas
+                const MAX_REASONABLE_CREDITS = 10000000; // 10 millones máximo
+                
+                if (this.currentCredits > MAX_REASONABLE_CREDITS) {
+                    console.error('[claimCredits] ⚠️⚠️⚠️ BLOQUEADO: Créditos sospechosamente altos:', {
+                        creditsDisponibles: this.currentCredits,
+                        maximoRazonable: MAX_REASONABLE_CREDITS,
+                        accion: 'RECLAMACIÓN BLOQUEADA - Valor sospechoso detectado'
+                    });
+                    
+                    if (typeof showToast === 'function') {
+                        showToast('Error: Saldo inválido detectado. Por favor, recarga la página y contacta soporte si el problema persiste.', 'error');
+                    }
+                    return null;
+                }
+                
                 if (!credits || credits < minClaim) {
                     if (typeof showToast === 'function') {
                         showToast('Mínimo 5 créditos para reclamar', 'error');
@@ -421,6 +662,19 @@
                 if (credits > this.currentCredits) {
                     if (typeof showToast === 'function') {
                         showToast('Créditos insuficientes', 'error');
+                    }
+                    return null;
+                }
+                
+                // CRÍTICO: Validar también el monto a reclamar contra valores absolutos sospechosos
+                if (credits > MAX_REASONABLE_CREDITS) {
+                    console.error('[claimCredits] ⚠️⚠️⚠️ BLOQUEADO: Monto a reclamar sospechosamente alto:', {
+                        creditsAReclamar: credits,
+                        maximoRazonable: MAX_REASONABLE_CREDITS
+                    });
+                    
+                    if (typeof showToast === 'function') {
+                        showToast('Error: El monto a reclamar es inválido. Por favor, verifica tu saldo.', 'error');
                     }
                     return null;
                 }

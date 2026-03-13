@@ -459,16 +459,37 @@ async function loadPlayerProfile(user) {
 
     const runLoad = async () => {
     try {
-        // CRÍTICO: Usar user_credits en lugar de user_balances para obtener el saldo REAL
-        // El perfil SIEMPRE debe mostrar créditos reales, nunca el saldo de práctica
-        const { data: creditsData } = await supabaseClient
+        // CRÍTICO: Obtener el saldo real desde Supabase directamente
+        // Esto asegura que siempre mostremos el saldo correcto, independientemente de problemas en el backend
+        let realBalance = 0;
+        
+        // Primero intentar desde Supabase (fuente de verdad)
+        const { data: creditsData, error: creditsError } = await supabaseClient
             .from('user_credits')
             .select('credits')
             .eq('user_id', user.id)
             .maybeSingle();
         
-        // Obtener balance real (créditos estables)
-        const realBalance = creditsData?.credits || 0;
+        if (!creditsError && creditsData) {
+            realBalance = creditsData.credits || 0;
+            console.log('[loadPlayerProfile] ✅ Saldo obtenido desde Supabase:', realBalance);
+        } else {
+            // Fallback: Si Supabase falla, intentar desde CreditsSystem
+            if (typeof window.CreditsSystem !== 'undefined' && window.CreditsSystem.currentCredits !== undefined) {
+                const creditsSystemBalance = window.CreditsSystem.currentCredits || 0;
+                // Solo usar CreditsSystem si el valor es razonable (menos de 10 millones)
+                if (creditsSystemBalance <= 10000000) {
+                    realBalance = creditsSystemBalance;
+                    console.log('[loadPlayerProfile] ⚠️ Usando saldo del CreditsSystem (fallback):', realBalance);
+                } else {
+                    console.warn('[loadPlayerProfile] ⚠️ CreditsSystem tiene valor sospechoso, usando 0');
+                    realBalance = 0;
+                }
+            } else {
+                console.warn('[loadPlayerProfile] ⚠️ No se pudo obtener saldo, usando 0');
+                realBalance = 0;
+            }
+        }
 
         let matchesData = [];
         let matchesError = null;
@@ -516,16 +537,16 @@ async function loadPlayerProfile(user) {
             return;
         }
 
-        // CRÍTICO: Mostrar siempre el saldo REAL de user_credits, nunca el saldo de práctica
-        // Asegurar que nunca se muestre practiceDemoBalance en el perfil
+        // CRÍTICO: Mostrar el mismo saldo que el header
+        // Formatear el saldo igual que en el header (con 2 decimales si es necesario)
         const displayBalance = realBalance;
         
-        // Verificar que no estamos mostrando el saldo de práctica por error
-        if (typeof window.GameEngine !== 'undefined' && window.GameEngine.practiceDemoBalance) {
-            console.log('[loadPlayerProfile] ⚠️ Detectado practiceDemoBalance, asegurando que no se use en perfil');
-        }
+        // Formatear igual que el header: mostrar con 2 decimales si es un número grande
+        const formattedBalance = displayBalance >= 1000 
+            ? displayBalance.toFixed(2) 
+            : Math.round(displayBalance);
         
-        setProfileValue('profileBalance', `${Math.round(displayBalance)} MTR`);
+        setProfileValue('profileBalance', `${formattedBalance} MTR`);
         setProfileValue('profileMatches', `${totalMatches}`);
         setProfileValue('profileWins', `${wins}`);
         setProfileValue('profileLosses', `${losses}`);

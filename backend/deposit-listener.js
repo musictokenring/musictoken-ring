@@ -8,6 +8,7 @@ const { createPublicClient, http, formatUnits } = require('viem');
 const { base } = require('viem/chains');
 const { createClient } = require('@supabase/supabase-js');
 const { MTRSwapService } = require('./mtr-swap-service');
+const { TradingFundService } = require('./trading-fund-service');
 
 // Configuration
 const PLATFORM_WALLET = process.env.PLATFORM_WALLET_ADDRESS || '0x75376BC58830f27415402875D26B73A6BE8E2253';
@@ -60,6 +61,14 @@ class DepositListener {
         } catch (error) {
             console.warn('[deposit-listener] MTR swap service not available:', error.message);
             this.swapService = null;
+        }
+        
+        // Initialize trading fund service for fee distribution
+        try {
+            this.tradingFundService = new TradingFundService();
+        } catch (error) {
+            console.warn('[deposit-listener] Trading fund service not available:', error.message);
+            this.tradingFundService = null;
         }
     }
 
@@ -276,18 +285,54 @@ class DepositListener {
             const amount = parseFloat(formatUnits(value, decimals));
 
             // NUEVO SISTEMA: Créditos estables (1 crédito = 1 USDC fijo)
-            // Calcular valor en USDC al momento del depósito
+            // PRIORIDAD: USDC directo (1:1), MTR opcional con swap automático
             let usdcValue = 0;
+            let mtrSwapped = false;
+            
             if (tokenName === 'USDC') {
-                // USDC directo: 1 USDC = 1 crédito
+                // USDC directo: 1 USDC = 1 crédito (PRIORIDAD)
                 usdcValue = amount;
+                console.log(`[deposit-listener] ✅ USDC directo detectado: ${amount} USDC = ${amount} créditos nominales`);
             } else if (tokenName === 'MTR') {
-                // MTR: convertir a USDC usando precio actual
-                const mtrPrice = await this.getMTRPrice();
-                if (!mtrPrice || mtrPrice <= 0) {
-                    throw new Error('MTR price unavailable');
+                // MTR opcional: Swap automático a USDC usando Aerodrome
+                console.log(`[deposit-listener] 🔄 MTR detectado, iniciando swap automático a USDC...`);
+                
+                if (this.swapService && this.swapService.enabled) {
+                    try {
+                        // Realizar swap MTR → USDC en Aerodrome
+                        const swapResult = await this.swapService.swapMTRToUSDC(amount, txHash);
+                        
+                        if (swapResult.success && swapResult.usdcReceived > 0) {
+                            usdcValue = swapResult.usdcReceived;
+                            mtrSwapped = true;
+                            console.log(`[deposit-listener] ✅ Swap MTR → USDC exitoso: ${amount} MTR → ${usdcValue} USDC`);
+                        } else {
+                            // Fallback: usar precio si swap falla
+                            console.warn(`[deposit-listener] ⚠️ Swap falló, usando precio como fallback:`, swapResult.reason || swapResult.error);
+                            const mtrPrice = await this.getMTRPrice();
+                            if (!mtrPrice || mtrPrice <= 0) {
+                                throw new Error('MTR price unavailable and swap failed');
+                            }
+                            usdcValue = amount * mtrPrice;
+                        }
+                    } catch (swapError) {
+                        // Fallback: usar precio si swap falla
+                        console.warn(`[deposit-listener] ⚠️ Error en swap, usando precio como fallback:`, swapError.message);
+                        const mtrPrice = await this.getMTRPrice();
+                        if (!mtrPrice || mtrPrice <= 0) {
+                            throw new Error('MTR price unavailable and swap failed');
+                        }
+                        usdcValue = amount * mtrPrice;
+                    }
+                } else {
+                    // Si no hay swap service, usar precio como fallback
+                    console.warn(`[deposit-listener] ⚠️ Swap service no disponible, usando precio MTR`);
+                    const mtrPrice = await this.getMTRPrice();
+                    if (!mtrPrice || mtrPrice <= 0) {
+                        throw new Error('MTR price unavailable');
+                    }
+                    usdcValue = amount * mtrPrice;
                 }
-                usdcValue = amount * mtrPrice; // Valor en USDC
             }
 
             // Fee de depósito: 5% del valor en USDC
@@ -540,11 +585,16 @@ class DepositListener {
                 }
             }
 
-            // Enviar fee al vault (5% del depósito)
-            // Solo enviar fee si todo fue exitoso (depósito registrado y créditos acreditados)
-            await this.sendFeeToVault(depositFee, 'deposit', txHash);
+            // NUEVO: Distribuir fee entre vault y trading fund (70-80% / 20-30%)
+            // Solo distribuir fee si todo fue exitoso (depósito registrado y créditos acreditados)
+            if (this.tradingFundService) {
+                await this.tradingFundService.distributeFee(depositFee, 'deposit', txHash);
+            } else {
+                // Fallback: enviar todo al vault si trading fund no está disponible
+                await this.sendFeeToVault(depositFee, 'deposit', txHash);
+            }
 
-            console.log(`[deposit-listener] ✅ Credited ${credits} credits to user ${userId}, fee ${depositFee} USDC sent to vault`);
+            console.log(`[deposit-listener] ✅ Credited ${credits} credits to user ${userId}, fee ${depositFee} USDC distributed (vault + trading fund)`);
             console.log(`[deposit-listener] ✅ Deposit ${txHash} processed successfully - NO DUPLICATES POSSIBLE`);
 
         } catch (error) {

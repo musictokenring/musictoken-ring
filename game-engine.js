@@ -4368,6 +4368,9 @@ const GameEngine = {
                 if (session?.user?.id === userId) {
                     const walletAddress = this.connectedWallet || localStorage.getItem('mtr_wallet');
                     if (walletAddress && window.CreditsSystem) {
+                        // CRÍTICO: Esperar un momento antes de recargar para asegurar que Supabase se actualizó
+                        await new Promise(resolve => setTimeout(resolve, 500));
+                        // Recargar balance (ahora siempre consulta Supabase primero)
                         await window.CreditsSystem.loadBalance(walletAddress);
                         showToast(`¡Ganaste ${credits.toFixed(2)} créditos (estables)!`, 'success');
                     }
