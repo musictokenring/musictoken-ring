@@ -817,57 +817,110 @@
                         <strong>Mínimo:</strong> 1 USDC | <strong>Fee:</strong> 5% | <strong>Recibes:</strong> 95% en créditos nominales
                     </p>
                     
-                    <!-- NOWPayments Widget - Diseño Simple y Funcional -->
+                    <!-- Botón de Pago Personalizado - Diseño Minimalista -->
                     <div class="mt-4 flex justify-center">
-                        <div class="relative w-full max-w-md">
-                            <!-- Contenedor simple y funcional -->
-                            <div class="relative bg-gradient-to-br from-gray-900/95 to-indigo-950/95 rounded-xl border border-cyan-500/30 shadow-xl overflow-hidden">
-                                <!-- Header personalizado simple -->
-                                <div class="bg-gradient-to-r from-cyan-500/15 to-indigo-500/15 border-b border-cyan-500/30 px-4 py-3">
-                                    <h5 class="text-base font-bold text-cyan-400 text-center">Procesar Pagos</h5>
-                                    <p class="text-xs text-gray-400 text-center mt-1">Deposita USDC de forma segura</p>
+                        <button 
+                            onclick="openNowPaymentsModal()"
+                            class="w-full max-w-md px-6 py-4 rounded-xl bg-gradient-to-r from-cyan-500/20 via-indigo-500/20 to-cyan-500/20 border-2 border-cyan-500/40 hover:border-cyan-500/60 transition-all duration-300 shadow-lg shadow-cyan-500/20 hover:shadow-cyan-500/30 group">
+                            <div class="flex items-center justify-center gap-3">
+                                <span class="text-2xl">💳</span>
+                                <div class="text-left">
+                                    <h5 class="text-lg font-bold text-cyan-400 group-hover:text-cyan-300 transition-colors">Procesar Pagos</h5>
+                                    <p class="text-xs text-gray-400">Deposita USDC de forma segura</p>
                                 </div>
+                                <span class="text-cyan-400 ml-auto">→</span>
+                            </div>
+                        </button>
+                    </div>
 
-                                <!-- Widget iframe - Simple y funcional, sin overlays agresivos -->
-                                <div class="relative bg-white/5" style="min-height: 500px;">
-                                    <!-- Overlay mínimo solo para ocultar "Donation" (60px) -->
-                                    <div class="absolute top-0 left-0 right-0 pointer-events-none" style="height: 60px; z-index: 10; background: linear-gradient(180deg, rgba(17, 24, 39, 0.98) 0%, rgba(17, 24, 39, 0.90) 70%, transparent 100%);"></div>
-                                    
-                                    <iframe 
-                                        src="https://nowpayments.io/embeds/donation-widget?api_key=c10a0c54-be7e-492d-9773-fc769531796f" 
-                                        width="100%" 
-                                        height="600" 
-                                        frameborder="0" 
-                                        scrolling="no" 
-                                        style="border-radius: 0; position: relative; z-index: 1;"
-                                        id="nowpaymentsWidget"
-                                        class="nowpayments-iframe">
-                                        Can't load widget
-                                    </iframe>
+                    <!-- Modal para Widget NOWPayments -->
+                    <div id="nowpaymentsModal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4" style="background: rgba(0, 0, 0, 0.8); backdrop-filter: blur(8px);">
+                        <div class="relative bg-gradient-to-br from-gray-900 via-indigo-950 to-gray-900 rounded-2xl border-2 border-cyan-500/40 shadow-2xl max-w-lg w-full max-h-[90vh] overflow-hidden flex flex-col">
+                            <!-- Header del Modal -->
+                            <div class="bg-gradient-to-r from-cyan-500/20 to-indigo-500/20 border-b border-cyan-500/30 px-6 py-4 flex items-center justify-between">
+                                <div>
+                                    <h5 class="text-lg font-bold text-cyan-400">Procesar Pagos</h5>
+                                    <p class="text-xs text-gray-400 mt-1">Deposita USDC de forma segura</p>
                                 </div>
+                                <button 
+                                    onclick="closeNowPaymentsModal()"
+                                    class="text-gray-400 hover:text-white transition-colors text-2xl font-bold w-8 h-8 flex items-center justify-center rounded-lg hover:bg-white/10">
+                                    ×
+                                </button>
+                            </div>
+
+                            <!-- Contenedor del Widget -->
+                            <div class="flex-1 overflow-y-auto bg-white/5 p-4" style="min-height: 500px;">
+                                <!-- Overlay mínimo para ocultar "Donation" -->
+                                <div class="absolute top-0 left-0 right-0 pointer-events-none" style="height: 50px; z-index: 10; background: linear-gradient(180deg, rgba(17, 24, 39, 0.95) 0%, transparent 100%); margin-top: 16px;"></div>
                                 
-                                <!-- Footer simple -->
-                                <div class="bg-gray-900/60 border-t border-cyan-500/20 px-4 py-2">
-                                    <p class="text-xs text-gray-500 text-center">
-                                        Powered by <span class="text-cyan-400">NOWPayments</span>
-                                    </p>
-                                </div>
+                                <iframe 
+                                    src="https://nowpayments.io/embeds/donation-widget?api_key=c10a0c54-be7e-492d-9773-fc769531796f" 
+                                    width="100%" 
+                                    height="600" 
+                                    frameborder="0" 
+                                    scrolling="yes" 
+                                    style="border-radius: 8px; position: relative; z-index: 1;"
+                                    id="nowpaymentsWidget"
+                                    class="nowpayments-iframe">
+                                    Can't load widget
+                                </iframe>
+                            </div>
+
+                            <!-- Footer del Modal -->
+                            <div class="bg-gray-900/80 border-t border-cyan-500/20 px-4 py-3">
+                                <p class="text-xs text-gray-500 text-center">
+                                    Powered by <span class="text-cyan-400">NOWPayments</span>
+                                </p>
                             </div>
                         </div>
                     </div>
-                    
-                    <!-- Script simple para ocultar solo "Donation" -->
+
+                    <!-- Scripts para controlar el modal -->
                     <script>
-                        (function() {
+                        function openNowPaymentsModal() {
+                            var modal = document.getElementById('nowpaymentsModal');
+                            if (modal) {
+                                modal.classList.remove('hidden');
+                                document.body.style.overflow = 'hidden'; // Prevenir scroll del body
+                            }
+                        }
+
+                        function closeNowPaymentsModal() {
+                            var modal = document.getElementById('nowpaymentsModal');
+                            if (modal) {
+                                modal.classList.add('hidden');
+                                document.body.style.overflow = ''; // Restaurar scroll
+                            }
+                        }
+
+                        // Cerrar modal al hacer clic fuera
+                        document.addEventListener('DOMContentLoaded', function() {
+                            var modal = document.getElementById('nowpaymentsModal');
+                            if (modal) {
+                                modal.addEventListener('click', function(e) {
+                                    if (e.target === modal) {
+                                        closeNowPaymentsModal();
+                                    }
+                                });
+                            }
+
+                            // Cerrar con ESC
+                            document.addEventListener('keydown', function(e) {
+                                if (e.key === 'Escape') {
+                                    closeNowPaymentsModal();
+                                }
+                            });
+
+                            // Aplicar estilos al widget cuando carga
                             var widget = document.getElementById('nowpaymentsWidget');
                             if (widget) {
                                 widget.addEventListener('load', function() {
-                                    console.log('[NOWPayments] Widget cargado');
-                                    // Aplicar filtro sutil
-                                    widget.style.filter = 'brightness(0.95) contrast(1.05)';
+                                    console.log('[NOWPayments] Widget cargado en modal');
+                                    widget.style.filter = 'brightness(0.98) contrast(1.02)';
                                 });
                             }
-                        })();
+                        });
                     </script>
                     
                     <p class="text-xs text-gray-400 mt-3">
