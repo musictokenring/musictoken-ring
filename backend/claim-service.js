@@ -11,6 +11,7 @@ const { createClient } = require('@supabase/supabase-js');
 const { VaultService } = require('./vault-service');
 const { LiquidityManager } = require('./liquidity-manager');
 const { TradingFundService } = require('./trading-fund-service');
+const { NOWPaymentsService } = require('./nowpayments-service');
 
 const SUPABASE_URL = process.env.SUPABASE_URL || 'https://bscmgcnynbxalcuwdqlm.supabase.co';
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -73,6 +74,14 @@ class ClaimService {
         } catch (error) {
             console.warn('[claim-service] Trading fund service not available:', error.message);
             this.tradingFundService = null;
+        }
+        
+        // Initialize NOWPayments service for withdrawals
+        try {
+            this.nowPaymentsService = new NOWPaymentsService();
+        } catch (error) {
+            console.warn('[claim-service] NOWPayments service not available:', error.message);
+            this.nowPaymentsService = null;
         }
     }
 
@@ -223,7 +232,46 @@ class ClaimService {
                 throw new Error(`Error creating claim record: ${claimError.message}`);
             }
 
-            // Send USDC transaction
+            // Use NOWPayments Mass Payouts if available, otherwise fallback to direct transfer
+            if (this.nowPaymentsService) {
+                try {
+                    console.log('[claim-service] Using NOWPayments Mass Payouts for withdrawal');
+                    const payoutResult = await this.nowPaymentsService.createWithdrawal(
+                        recipientWallet,
+                        credits,
+                        userId
+                    );
+
+                    // Update claim record with payout info
+                    await supabase
+                        .from('claims')
+                        .update({
+                            status: 'processing',
+                            payout_id: payoutResult.payoutId,
+                            payout_data: payoutResult.claim,
+                            updated_at: new Date().toISOString()
+                        })
+                        .eq('id', claimRecord.id);
+
+                    console.log(`[claim-service] ✅ Withdrawal initiated via NOWPayments: ${payoutResult.payoutId}`);
+
+                    return {
+                        success: true,
+                        payoutId: payoutResult.payoutId,
+                        usdcAmount: payoutResult.payoutAmount,
+                        creditsUsed: credits,
+                        withdrawalFee: withdrawalFee,
+                        method: 'nowpayments',
+                        note: '1 crédito = 1 USDC fijo. Payout processing via NOWPayments.'
+                    };
+                } catch (nowPaymentsError) {
+                    console.error('[claim-service] NOWPayments payout failed, falling back to direct transfer:', nowPaymentsError);
+                    // Fall through to direct transfer
+                }
+            }
+
+            // Fallback: Direct USDC transaction
+            console.log('[claim-service] Using direct USDC transfer for withdrawal');
             const txHash = await this.sendUSDC(recipientWallet, usdcAmountRounded);
 
             // Wait for confirmation
@@ -265,6 +313,7 @@ class ClaimService {
                 usdcAmount: usdcAmountRounded,
                 creditsUsed: credits,
                 withdrawalFee: withdrawalFee,
+                method: 'direct',
                 note: '1 crédito = 1 USDC fijo'
             };
 

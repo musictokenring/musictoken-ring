@@ -84,7 +84,7 @@
                     // ESPECIFICACIÓN REFINADA: Solo usar créditos estables para validar apuestas
                     // MTR nativo se convierte automáticamente a créditos estables en el backend
                     var credits = window.CreditsSystem ? (window.CreditsSystem.currentCredits || 0) : 0;
-                    var minBet = 5;
+                    var minBet = 1;
                     var canCover = bet >= minBet && credits >= bet; // Solo créditos estables
                     var hasSong = !!window.selectedSong;
                     btn.disabled = !canCover || !hasSong;
@@ -96,7 +96,7 @@
                     }
                     // Establecer tooltip correcto
                     if (!canCover && bet > 0) {
-                        btn.title = bet < minBet ? 'Apuesta mínima: ' + minBet + ' MTR créditos' : 'MTR créditos jugables insuficientes (necesitas ' + bet + ', tienes ' + credits.toFixed(2) + ')';
+                        btn.title = bet < minBet ? 'Apuesta mínima: ' + minBet + ' crédito' + (minBet > 1 ? 's' : '') : 'Créditos insuficientes (necesitas ' + bet + ', tienes ' + credits.toFixed(2) + ')';
                     } else {
                         btn.title = '';
                     }
@@ -173,9 +173,10 @@
                         // Establecer tooltip correcto inmediatamente
                         var betInput = document.getElementById('betAmount');
                         var bet = betInput ? parseFloat(betInput.value || '0') : 0;
-                        var minBet = 5;
+                        var minBet = 1;
                         if (bet > 0 && bet < minBet) {
-                            btn.title = 'Apuesta mínima: ' + minBet + ' créditos';
+                            const creditText = minBet === 1 ? 'crédito' : 'créditos';
+                            btn.title = 'Apuesta mínima: ' + minBet + ' ' + creditText;
                         } else {
                             btn.title = '';
                         }
@@ -248,7 +249,7 @@
                     btn.removeAttribute('title');
                 }
                 if (!canCover && bet > 0) {
-                    btn.title = bet < 5 ? 'Apuesta mínima: 5 créditos' : 'Créditos y saldo MTR insuficientes';
+                    btn.title = bet < 1 ? 'Apuesta mínima: 1 crédito' : 'Créditos insuficientes';
                 } else {
                     btn.title = '';
                 }
@@ -633,7 +634,7 @@
                         btn.removeAttribute('title');
                     }
                     if (!canCover && bet > 0) {
-                        btn.title = bet < 5 ? 'Apuesta mínima: 5 créditos' : 'Créditos y saldo MTR insuficientes';
+                        btn.title = bet < 1 ? 'Apuesta mínima: 1 crédito' : 'Créditos insuficientes';
                     } else {
                         btn.title = '';
                     }
@@ -769,18 +770,54 @@
                     </div>
                 </div>
 
-                <!-- Opción Principal: USDC Directo -->
+                <!-- Opción Principal: NOWPayments Widget -->
                 <div class="mb-6 p-4 rounded-lg bg-cyan-500/10 border border-cyan-500/30">
                     <div class="flex items-center gap-2 mb-3">
                         <span class="text-cyan-400 text-lg font-bold">1️⃣</span>
-                        <h4 class="text-cyan-400 font-bold text-base">Depositar USDC Directo (Recomendado)</h4>
+                        <h4 class="text-cyan-400 font-bold text-base">Depositar USDC con NOWPayments</h4>
                     </div>
-                    <p class="text-gray-300 text-sm mb-3">Envía USDC directamente a la wallet de la plataforma. Recibirás créditos nominales 1:1 (menos fee 5%).</p>
+                    <p class="text-gray-300 text-sm mb-3">Deposita USDC usando múltiples métodos de pago (tarjeta, cripto, etc.). Recibirás créditos nominales 1:1 (menos fee 5%).</p>
                     <div class="flex flex-wrap gap-2 mb-3">
+                        <span class="text-xs px-2 py-1 rounded-full bg-cyan-500/20 text-cyan-300 border border-cyan-500/30">💳 Múltiples Métodos</span>
                         <span class="text-xs px-2 py-1 rounded-full bg-cyan-500/20 text-cyan-300 border border-cyan-500/30">💰 USDC Estable</span>
-                        <span class="text-xs px-2 py-1 rounded-full bg-cyan-500/20 text-cyan-300 border border-cyan-500/30">1:1 Respaldado</span>
-                        <span class="text-xs px-2 py-1 rounded-full bg-cyan-500/20 text-cyan-300 border border-cyan-500/30">Sin Volatilidad</span>
+                        <span class="text-xs px-2 py-1 rounded-full bg-cyan-500/20 text-cyan-300 border border-cyan-500/30">⚡ Instantáneo</span>
                     </div>
+                    <p class="text-xs text-yellow-400 mb-3">
+                        <strong>Mínimo:</strong> 1 USDC | <strong>Fee:</strong> 5% | <strong>Recibes:</strong> 95% en créditos nominales
+                    </p>
+                    
+                    <!-- NOWPayments Widget -->
+                    <div class="mt-4 flex justify-center">
+                        <div class="relative">
+                            <iframe 
+                                src="https://nowpayments.io/embeds/donation-widget?api_key=c10a0c54-be7e-492d-9773-fc769531796f" 
+                                width="346" 
+                                height="623" 
+                                frameborder="0" 
+                                scrolling="no" 
+                                style="overflow-y: hidden; border-radius: 12px;"
+                                id="nowpaymentsWidget">
+                                Can't load widget
+                            </iframe>
+                            <!-- Overlay para cambiar textos del widget -->
+                            <div id="nowpaymentsOverlay" class="absolute inset-0 pointer-events-none" style="display: none;">
+                                <!-- Este overlay se puede usar para mostrar textos personalizados si es necesario -->
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <p class="text-xs text-gray-400 mt-3">
+                        <strong>Nota:</strong> Asegúrate de incluir tu email o wallet en el campo de comentarios del widget para recibir tus créditos correctamente.
+                    </p>
+                </div>
+
+                <!-- Opción Secundaria: USDC Directo Manual -->
+                <div class="mb-6 p-4 rounded-lg bg-white/5 border border-white/10">
+                    <div class="flex items-center gap-2 mb-3">
+                        <span class="text-gray-400 text-lg font-bold">2️⃣</span>
+                        <h4 class="text-gray-300 font-semibold text-base">Depositar USDC Directo Manual (Alternativa)</h4>
+                    </div>
+                    <p class="text-gray-400 text-sm mb-3">Si prefieres enviar USDC directamente desde tu wallet, usa esta opción.</p>
                     <p class="text-xs text-gray-400 mt-2">
                         <strong>Wallet de depósito:</strong> <span class="font-mono text-cyan-300">0x75376BC58830f27415402875D26B73A6BE8E2253</span>
                     </p>
@@ -863,7 +900,7 @@
                 <div class="group p-6 rounded-2xl border border-orange-500/15 bg-gray-900/50 transition-all duration-300 card-glow-orange cursor-pointer" onclick="selectMode('social')">
                     <div class="text-4xl mb-4">⚔️</div>
                     <h3 class="text-lg font-bold text-white mb-2 group-hover:text-orange-400 transition-colors">Desafío Social</h3>
-                    <p class="text-gray-400 text-sm mb-4">Desafía a un amigo por redes sociales. Mínimo 5 créditos (~$5).</p>
+                    <p class="text-gray-400 text-sm mb-4">Desafía a un amigo por redes sociales. Mínimo 1 crédito (~$1).</p>
                     <div class="flex flex-wrap gap-1.5 mb-5">
                         <span class="text-xs px-2 py-1 rounded-full bg-orange-500/10 text-orange-400 border border-orange-500/20">📱 Redes</span>
                         <span class="text-xs px-2 py-1 rounded-full bg-orange-500/10 text-orange-400 border border-orange-500/20">💯 100+</span>
@@ -928,9 +965,9 @@
                         <div class="grid grid-cols-2 gap-3 text-sm text-gray-400 mb-4">
                             <span class="hidden"><span id="balanceLabel">Tu MTR (on-chain)</span>: <strong id="onchainMtrBalance" class="text-white">--</strong></span>
                             <span><span id="playableLabel">Fichas jugables</span>: <strong id="userBalance" class="text-white">0</strong> <span id="balanceUnit">MTR créditos</span> <span class="text-xs text-green-400 cursor-help" title="Estas fichas valen siempre $1 cada una. No fluctúan como el token MTR nativo. 1 MTR crédito jugable = $1 USDC estable (1:1 fijo – sin volatilidad)">✓</span></span>
-                            <span>Mínimo: <strong id="minBet" class="text-white">5</strong> créditos</span>
+                            <span>Mínimo: <strong id="minBet" class="text-white">1</strong> crédito</span>
                         </div>
-                        <input type="number" id="betAmount" placeholder="5" min="5"
+                        <input type="number" id="betAmount" placeholder="1" min="1"
                                class="w-full px-4 py-3 rounded-lg bg-black/40 border border-white/10 text-white placeholder-gray-500 text-sm focus:outline-none focus:border-cyan-500/50 focus:ring-1 focus:ring-cyan-500/20 transition mb-3"
                                oninput="if(typeof window.updateBetEligibility === 'function') window.updateBetEligibility();"
                                onchange="if(typeof window.updateBetEligibility === 'function') window.updateBetEligibility();">
@@ -1270,7 +1307,7 @@
     <!-- Scripts que pueden cargarse después del render inicial -->
     <script src="./src/streams-realtime.js?v=v2.7" defer></script>
     <script src="./src/deposit-ui.js?v=v2.7" defer></script>
-    <script src="./src/ramp-integration.js?v=v2.7" defer></script>
+    <!-- Ramp Network removido - ya no se usa -->
     <script src="./src/claim-ui.js?v=v2.7" defer></script>
     <script src="./game-engine.js?v=v2.7"></script>
     <script>window.MTR_INLINE_TOP_STREAMS_ACTIVE = true;</script>
@@ -3147,8 +3184,8 @@
                 // Asegurar que el campo de apuesta tenga un valor por defecto
                 var betAmountInput = document.getElementById('betAmount');
                 if (betAmountInput && !betAmountInput.value) {
-                    // Usar mínimo dinámico desde GameEngine si está disponible, sino 5
-                    const minBet = (typeof window.GameEngine !== 'undefined' && window.GameEngine.minBet) ? window.GameEngine.minBet : 5;
+                    // Usar mínimo dinámico desde GameEngine si está disponible, sino 1
+                    const minBet = (typeof window.GameEngine !== 'undefined' && window.GameEngine.minBet) ? window.GameEngine.minBet : 1;
                     betAmountInput.value = String(minBet);
                 }
                 
@@ -3662,8 +3699,8 @@
             }
             
             // Para desafíos sociales, verificar créditos y mínimo dinámico
-            // FORZAR mínimo a 5 para social mode - NUNCA usar 100
-            const minBetAmount = 5; // SIEMPRE 5 para social mode
+            // Mínimo 1 crédito para todos los modos
+            const minBetAmount = 1; // Mínimo 1 crédito para todos los modos
             if (createSocialBtn) {
                 // CRÍTICO: Obtener onchainBalance correctamente
                 var onchainBalance = Number(window.__mtrOnChainBalance || 0);
@@ -3688,10 +3725,11 @@
                     createSocialBtn.removeAttribute('title');
                 }
                 
-                // Establecer tooltip correcto - SIEMPRE usar minBetAmount = 5
+                // Establecer tooltip correcto - Mínimo 1 crédito
                 if (!canCoverSocialBet && bet > 0) {
                     if (bet < minBetAmount) {
-                        createSocialBtn.title = 'Apuesta mínima: ' + minBetAmount + ' créditos';
+                        const creditText = minBetAmount === 1 ? 'crédito' : 'créditos';
+                        createSocialBtn.title = 'Apuesta mínima: ' + minBetAmount + ' ' + creditText;
                     } else {
                         createSocialBtn.title = `MTR créditos jugables insuficientes (necesitas ${bet}, tienes ${credits.toFixed(2)})`;
                     }
@@ -3761,7 +3799,7 @@
                 console.error('[startQuickMatch] ❌ No hay canción seleccionada');
                 return;
             }
-            const minBetAmount = (typeof GameEngine !== 'undefined' && GameEngine.minBet) ? GameEngine.minBet : 5;
+            const minBetAmount = (typeof GameEngine !== 'undefined' && GameEngine.minBet) ? GameEngine.minBet : 1;
             var bet = parseInt(document.getElementById('betAmount').value) || minBetAmount;
             // ESPECIFICACIÓN REFINADA: Solo validar con créditos estables
             var credits = window.CreditsSystem ? (window.CreditsSystem.currentCredits || 0) : 0;
@@ -3783,7 +3821,7 @@
         window.startQuickMatch = startQuickMatch;
         async function createRoom() {
             if (!selectedSong) return;
-            const minBetAmount = (typeof GameEngine !== 'undefined' && GameEngine.minBet) ? GameEngine.minBet : 5;
+            const minBetAmount = (typeof GameEngine !== 'undefined' && GameEngine.minBet) ? GameEngine.minBet : 1;
             var bet = parseInt(document.getElementById('betAmount').value) || minBetAmount;
             if (typeof GameEngine !== 'undefined') await GameEngine.createPrivateRoom(selectedSong, bet);
             else showToast('GameEngine no está cargado', 'error');
@@ -3791,7 +3829,7 @@
         async function joinRoom() {
             if (!selectedSong) return;
             var roomCode = document.getElementById('joinRoomCode').value.toUpperCase();
-            const minBetAmount = (typeof GameEngine !== 'undefined' && GameEngine.minBet) ? GameEngine.minBet : 5;
+            const minBetAmount = (typeof GameEngine !== 'undefined' && GameEngine.minBet) ? GameEngine.minBet : 1;
             var bet = parseInt(document.getElementById('betAmount').value) || minBetAmount;
             if (typeof window.GameEngine !== 'undefined') await window.GameEngine.joinPrivateRoom(roomCode, selectedSong, bet);
             else showToast('GameEngine no está cargado', 'error');
@@ -3892,8 +3930,8 @@
                 return; 
             }
             
-            // FORZAR mínimo a 5 para social mode - NUNCA usar GameEngine.minBet que puede ser 100
-            const SOCIAL_CHALLENGE_MIN_BET = 5; // SIEMPRE 5 para social challenges
+            // Mínimo 1 crédito para todos los modos
+            const SOCIAL_CHALLENGE_MIN_BET = 1; // Mínimo 1 crédito para social challenges
             var betInput = document.getElementById('betAmount');
             if (!betInput) {
                 console.error('[createSocialChallenge] ❌ Campo betAmount no encontrado');
@@ -6846,7 +6884,9 @@
                                 btn.removeAttribute('title');
                             }
                             if (!canCover && bet > 0) {
-                                btn.title = bet < 5 ? 'Apuesta mínima: 5 MTR créditos' : `MTR créditos jugables insuficientes (necesitas ${bet}, tienes ${credits.toFixed(2)})`;
+                                const minBetVal = 1;
+                                const creditText = minBetVal === 1 ? 'crédito' : 'créditos';
+                                btn.title = bet < minBetVal ? `Apuesta mínima: ${minBetVal} ${creditText}` : `Créditos insuficientes (necesitas ${bet}, tienes ${credits.toFixed(2)})`;
                             } else {
                                 btn.title = '';
                             }

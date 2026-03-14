@@ -4,8 +4,8 @@
 // =========================================
 
 // Constante global para mínimo de apuesta (aplica a todos los modos con apuesta real)
-const MIN_BET_AMOUNT = 5; // créditos (~$5 USDC, ya que créditos son estables 1:1)
-const MIN_BET_TORNEO = 5; // mismo mínimo para Torneo (puede ajustarse después si se desea)
+const MIN_BET_AMOUNT = 1; // créditos (1 crédito = 1 USDC estable)
+const MIN_BET_TORNEO = 1; // mismo mínimo para Torneo
 
 const GameEngine = {
     currentMatch: null,
@@ -466,16 +466,16 @@ const GameEngine = {
                 // No usar min_bet de la base de datos que puede ser 100
                 // Solo usar min_bet de la base de datos para otros modos (Quick Match, Sala Privada, Torneo)
                 const dbMinBet = data.min_bet || MIN_BET_AMOUNT;
-                // Si el valor de la BD es mayor a 5, usar 5 como mínimo para evitar problemas
-                // Los desafíos sociales siempre usarán SOCIAL_CHALLENGE_MIN_BET = 5 directamente
-                this.minBet = dbMinBet;
+                // Si el valor de la BD es mayor a 1, usar 1 como mínimo
+                // Todos los modos ahora usan mínimo 1 crédito
+                this.minBet = Math.max(1, dbMinBet); // Asegurar mínimo 1
                 this.battleDuration = data.battle_duration;
                 this.victoryAudioDuration = data.victory_audio_duration;
                 if (data.platform_fee_rate) this.platformFeeRate = data.platform_fee_rate;
                 if (data.jackpot_rate) this.jackpotRate = data.jackpot_rate;
                 if (data.platform_revenue_target) this.platformRevenueTarget = data.platform_revenue_target;
                 
-                console.log('[loadGameConfig] minBet cargado desde BD:', this.minBet, '(Nota: Desafíos sociales siempre usan 5)');
+                console.log('[loadGameConfig] minBet cargado desde BD:', this.minBet, '(Mínimo: 1 crédito para todos los modos)');
             }
         } catch (error) {
             console.error('Error loading config:', error);
@@ -687,7 +687,8 @@ const GameEngine = {
         // Validate minimum bet (MIN_BET_AMOUNT créditos)
         const normalizedBet = Math.max(this.minBet, Math.round(betAmount || this.minBet));
         if (normalizedBet < this.minBet) {
-            showToast(`Apuesta mínima: ${this.minBet} créditos`, 'error');
+            const creditText = this.minBet === 1 ? 'crédito' : 'créditos';
+            showToast(`Apuesta mínima: ${this.minBet} ${creditText}`, 'error');
             return;
         }
         
@@ -890,9 +891,8 @@ const GameEngine = {
     // ==========================================
     
     async createSocialChallenge(song, betAmount) {
-        // CRÍTICO: Desafíos sociales SIEMPRE tienen mínimo de 5 créditos, independientemente de game_config
-        // NO usar this.minBet ni MIN_BET_AMOUNT que pueden venir de la base de datos con valor 100
-        const SOCIAL_CHALLENGE_MIN_BET = 5;
+        // Mínimo 1 crédito para todos los modos (incluyendo desafíos sociales)
+        const SOCIAL_CHALLENGE_MIN_BET = 1;
         
         console.log('[createSocialChallenge] Validando apuesta - betAmount recibido:', betAmount, 'mínimo requerido:', SOCIAL_CHALLENGE_MIN_BET);
         
@@ -900,7 +900,7 @@ const GameEngine = {
         
         if (normalizedBet < SOCIAL_CHALLENGE_MIN_BET) {
             console.error('[createSocialChallenge] ❌ Apuesta rechazada - normalizedBet:', normalizedBet, '< mínimo:', SOCIAL_CHALLENGE_MIN_BET);
-            showToast(`La apuesta mínima para desafíos sociales es ${SOCIAL_CHALLENGE_MIN_BET} créditos`, 'error');
+            showToast(`La apuesta mínima es ${SOCIAL_CHALLENGE_MIN_BET} crédito`, 'error');
             return;
         }
         
@@ -1544,7 +1544,8 @@ const GameEngine = {
         // Validate minimum bet (MIN_BET_AMOUNT créditos)
         const normalizedBet = Math.max(this.minBet, Math.round(betAmount || this.minBet));
         if (normalizedBet < this.minBet) {
-            showToast(`Apuesta mínima: ${this.minBet} créditos`, 'error');
+            const creditText = this.minBet === 1 ? 'crédito' : 'créditos';
+            showToast(`Apuesta mínima: ${this.minBet} ${creditText}`, 'error');
             return;
         }
 

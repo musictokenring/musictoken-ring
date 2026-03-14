@@ -45,44 +45,7 @@
                     <h3 class="text-2xl font-bold text-white mb-4">💰 Depositar Créditos</h3>
                     <p class="text-gray-400 mb-6">Envía MTR o USDC a la dirección de la plataforma. Los créditos se acreditarán automáticamente.</p>
                     
-                    <!-- Ramp Network On-Ramp -->
-                    <div id="rampOnRampSection" class="mb-6 p-4 rounded-lg bg-gradient-to-r from-purple-500/10 to-pink-500/10 border border-purple-500/20">
-                        <div class="flex items-start justify-between mb-3">
-                            <div>
-                                <h4 class="text-lg font-bold text-white mb-1">💳 Comprar USDC con Tarjeta o PSE</h4>
-                                <p class="text-sm text-gray-400">Compra USDC directamente con tarjeta de crédito, PSE, Apple Pay o Google Pay. Sin salir del sitio.</p>
-                            </div>
-                            <span class="text-2xl">🚀</span>
-                        </div>
-                        
-                        <div class="flex flex-wrap gap-2 mb-3">
-                            <button onclick="RampIntegration.buyWithPreset(10)" 
-                                    class="px-4 py-2 rounded-lg text-sm font-semibold bg-purple-500/20 border border-purple-500/30 text-purple-300 hover:bg-purple-500/30 transition cursor-pointer">
-                                $10 USD
-                            </button>
-                            <button onclick="RampIntegration.buyWithPreset(20)" 
-                                    class="px-4 py-2 rounded-lg text-sm font-semibold bg-purple-500/20 border border-purple-500/30 text-purple-300 hover:bg-purple-500/30 transition cursor-pointer">
-                                $20 USD
-                            </button>
-                            <button onclick="RampIntegration.buyWithPreset(50)" 
-                                    class="px-4 py-2 rounded-lg text-sm font-semibold bg-purple-500/20 border border-purple-500/30 text-purple-300 hover:bg-purple-500/30 transition cursor-pointer">
-                                $50 USD
-                            </button>
-                            <button onclick="RampIntegration.buyForColombia()" 
-                                    class="px-4 py-2 rounded-lg text-sm font-semibold bg-pink-500/20 border border-pink-500/30 text-pink-300 hover:bg-pink-500/30 transition cursor-pointer">
-                                🇨🇴 Colombia (COP)
-                            </button>
-                        </div>
-                        
-                        <button id="rampBuyButton" onclick="RampIntegration.showWidget()" 
-                                class="w-full px-6 py-3 rounded-lg text-sm font-bold bg-gradient-to-r from-purple-500 to-pink-500 text-white hover:opacity-90 transition-all shadow-lg shadow-purple-500/20 cursor-pointer">
-                            💳 Comprar USDC con Ramp Network
-                        </button>
-                        
-                        <p class="text-xs text-gray-500 mt-3">
-                            ⚠️ Requiere wallet conectada. Los USDC se enviarán directamente a tu wallet en Base.
-                        </p>
-                    </div>
+                    <!-- Ramp Network removido - se implementará nueva pasarela de pagos -->
                     
                     <!-- Verificar Depósito No Procesado -->
                     <div id="verifyDepositSection" class="mb-6 p-4 rounded-lg bg-yellow-500/10 border border-yellow-500/20">

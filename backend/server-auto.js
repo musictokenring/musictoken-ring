@@ -16,6 +16,7 @@ const { DepositSyncService } = require('./deposit-sync-service');
 const { LiquidityManager } = require('./liquidity-manager');
 const { WalletLinkService } = require('./wallet-link-service');
 const { TradingFundService } = require('./trading-fund-service');
+const { NOWPaymentsService } = require('./nowpayments-service');
 const { createClient } = require('@supabase/supabase-js');
 
 const app = express();
@@ -66,6 +67,9 @@ const corsOptions = {
 app.use(cors(corsOptions));
 app.use(express.json());
 
+// Middleware para webhook de NOWPayments (necesita raw body)
+app.use('/webhook/nowpayments', express.raw({ type: 'application/json' }));
+
 // Handle preflight requests
 app.options('*', cors(corsOptions));
 
@@ -84,6 +88,7 @@ let depositSyncService;
 let liquidityManager;
 let walletLinkService;
 let tradingFundService;
+let nowPaymentsService;
 
 // 🔒 SEGURIDAD: Validar variables de entorno críticas
 function validateEnvironmentVariables() {
@@ -220,6 +225,7 @@ async function initializeServices() {
         // Initialize Trading Fund Service (for fee distribution)
         try {
             tradingFundService = new TradingFundService();
+    nowPaymentsService = new NOWPaymentsService();
             console.log('[server] ✅ Trading Fund Service initialized');
         } catch (tradingFundError) {
             console.error('[server] ⚠️ Error initializing trading fund service:', tradingFundError);
@@ -518,7 +524,7 @@ app.post('/api/claim', claimRateLimiter, async (req, res) => {
             });
         }
 
-        const MIN_CLAIM_AMOUNT = 5; // Mínimo para reclamar (mismo que apuesta mínima)
+        const MIN_CLAIM_AMOUNT = 1; // Mínimo para reclamar (mismo que apuesta mínima)
         if (credits < MIN_CLAIM_AMOUNT) {
             return res.status(400).json({ error: `Minimum claim: ${MIN_CLAIM_AMOUNT} credits` });
         }
@@ -1736,6 +1742,55 @@ app.get('/api/health', (req, res) => {
         timestamp: new Date().toISOString(),
         cors: 'enabled'
     });
+});
+
+/**
+ * NOWPayments Webhook Endpoint
+ * POST /webhook/nowpayments
+ * Receives IPN notifications from NOWPayments
+ * IMPORTANT: This endpoint needs raw body for signature verification
+ */
+app.post('/webhook/nowpayments', express.raw({ type: 'application/json' }), async (req, res) => {
+    try {
+        const signature = req.headers['x-nowpayments-sig'];
+        const rawBody = req.body.toString();
+
+        if (!signature) {
+            console.error('[nowpayments-webhook] Missing signature header');
+            return res.status(400).json({ error: 'Missing signature' });
+        }
+
+        // Verify signature
+        if (!nowPaymentsService.verifyIPNSignature(rawBody, signature)) {
+            console.error('[nowpayments-webhook] Invalid signature');
+            return res.status(401).json({ error: 'Invalid signature' });
+        }
+
+        const paymentData = JSON.parse(rawBody);
+        console.log('[nowpayments-webhook] Received payment notification:', {
+            payment_id: paymentData.payment_id,
+            status: paymentData.payment_status,
+            amount: paymentData.pay_amount
+        });
+
+        // Process deposit
+        const result = await nowPaymentsService.processDeposit(paymentData);
+
+        // Return 200 OK quickly (don't wait for full processing)
+        res.status(200).json({
+            received: true,
+            payment_id: paymentData.payment_id,
+            processed: result.processed
+        });
+
+    } catch (error) {
+        console.error('[nowpayments-webhook] Error processing webhook:', error);
+        // Still return 200 to prevent NOWPayments from retrying
+        res.status(200).json({
+            received: true,
+            error: error.message
+        });
+    }
 });
 
 /**
