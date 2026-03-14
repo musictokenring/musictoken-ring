@@ -610,34 +610,42 @@
         .neon-scrollbar::-webkit-scrollbar-thumb:hover { background: rgba(0,243,255,0.5); }
         .neon-scrollbar { scrollbar-width: thin; scrollbar-color: rgba(0,243,255,0.3) rgba(15,15,40,0.4); }
 
-        /* Estilos personalizados para NOWPayments Widget - Diseño Minimalista */
-        .nowpayments-wrapper {
-            position: relative;
+        /* Estilos para Botón Minimalista NOWPayments */
+        .nowpayments-btn-minimal {
+            font-family: 'Inter', system-ui, sans-serif;
+            cursor: pointer;
+            outline: none;
         }
         
-        .nowpayments-iframe-minimal {
-            filter: brightness(0.80) contrast(1.20) saturate(0.7);
+        .nowpayments-btn-minimal:focus {
+            outline: 2px solid rgba(6, 182, 212, 0.5);
+            outline-offset: 2px;
+        }
+        
+        /* Estilos para Widget iframe oscuro */
+        .nowpayments-iframe-dark {
+            filter: brightness(0.75) contrast(1.25) saturate(0.6);
             position: relative;
             z-index: 1;
         }
         
-        /* Responsive: Ajustar tamaño en móvil */
+        /* Responsive: Ajustar modal en móvil */
         @media (max-width: 640px) {
-            .nowpayments-wrapper {
-                max-width: 100% !important;
-                padding: 0 1rem;
+            #nowpaymentsModal .max-w-\\[320px\\] {
+                max-width: 95% !important;
+                margin: 1rem;
             }
             
-            .nowpayments-iframe-minimal {
-                transform: scale(0.75) !important;
-                width: 133.33% !important;
-                margin-left: -16.665% !important;
+            #nowpaymentsModal iframe {
+                transform: scale(0.85) !important;
+                width: 117.65% !important;
+                margin-left: -8.825% !important;
             }
         }
         
-        /* Asegurar que overlays estén por encima */
-        .nowpayments-text-overlay-top,
-        .nowpayments-text-overlay-bottom {
+        /* Asegurar que overlays dinámicos estén por encima */
+        .nowpayments-dynamic-overlay-top,
+        .nowpayments-dynamic-overlay-bottom {
             pointer-events: none;
         }
     </style>
@@ -816,77 +824,119 @@
                         <strong>Mínimo:</strong> 1 USDC | <strong>Fee:</strong> 5% | <strong>Recibes:</strong> 95% en créditos nominales
                     </p>
                     
-                    <!-- Widget NOWPayments - Diseño Minimalista e Integrado -->
+                    <!-- Botón Minimalista NOWPayments - Estilo PayPal pero con colores cyan/azul -->
                     <div class="mt-4 flex justify-center">
-                        <div class="nowpayments-wrapper relative w-full max-w-[300px] mx-auto">
-                            <!-- Contenedor con fondo oscuro y bordes sutiles -->
-                            <div class="relative bg-gradient-to-br from-gray-900/95 to-indigo-950/95 rounded-xl border border-cyan-500/20 overflow-hidden shadow-lg">
-                                <!-- Header personalizado - Reemplaza "Donation" -->
-                                <div class="bg-gradient-to-r from-cyan-500/15 to-indigo-500/15 border-b border-cyan-500/20 px-4 py-2.5">
-                                    <h5 class="text-sm font-semibold text-cyan-400 text-center">Depositar USDC</h5>
-                                </div>
+                        <button 
+                            onclick="openNowPaymentsModal()"
+                            class="nowpayments-btn-minimal px-6 py-3 rounded-full bg-gradient-to-r from-cyan-500/20 to-indigo-500/20 border-2 border-cyan-500/40 hover:border-cyan-500/60 hover:from-cyan-500/30 hover:to-indigo-500/30 transition-all duration-300 shadow-lg shadow-cyan-500/20 hover:shadow-cyan-500/30 group flex items-center gap-2">
+                            <span class="text-lg">💳</span>
+                            <span class="text-sm font-semibold text-cyan-400 group-hover:text-cyan-300">Depositar USDC</span>
+                        </button>
+                    </div>
 
-                                <!-- Contenedor del iframe con overlay para ocultar textos -->
-                                <div class="relative bg-gray-900/50" style="height: 500px; overflow: hidden;">
-                                    <!-- Overlay superior para ocultar "Donation" -->
-                                    <div class="absolute top-0 left-0 right-0 pointer-events-none z-20" style="height: 50px; background: linear-gradient(180deg, rgba(17, 24, 39, 1) 0%, rgba(17, 24, 39, 0.95) 80%, transparent 100%);"></div>
-                                    
-                                    <!-- Widget iframe - Compacto y estilizado -->
-                                    <iframe 
-                                        src="https://nowpayments.io/embeds/donation-widget?api_key=c10a0c54-be7e-492d-9773-fc769531796f" 
-                                        width="346" 
-                                        height="623" 
-                                        frameborder="0" 
-                                        scrolling="no" 
-                                        style="overflow-y: hidden; transform: scale(0.87); transform-origin: top center; width: 115%; margin-left: -7.5%; border-radius: 0;"
-                                        id="nowpaymentsWidget"
-                                        class="nowpayments-iframe-minimal">
-                                        Can't load widget
-                                    </iframe>
-                                    
-                                    <!-- Overlay inferior para ocultar "Powered by NOWPayments" -->
-                                    <div class="absolute bottom-0 left-0 right-0 pointer-events-none z-20" style="height: 40px; background: linear-gradient(0deg, rgba(17, 24, 39, 1) 0%, rgba(17, 24, 39, 0.95) 80%, transparent 100%);"></div>
-                                </div>
+                    <!-- Modal Minimalista para Widget NOWPayments -->
+                    <div id="nowpaymentsModal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4" style="background: rgba(3, 7, 18, 0.9); backdrop-filter: blur(12px);">
+                        <div class="relative bg-gradient-to-br from-gray-900 via-indigo-950 to-gray-900 rounded-2xl border-2 border-cyan-500/40 shadow-2xl max-w-[320px] w-full overflow-hidden flex flex-col">
+                            <!-- Header Minimalista -->
+                            <div class="bg-gradient-to-r from-cyan-500/20 to-indigo-500/20 border-b border-cyan-500/30 px-4 py-3 flex items-center justify-between">
+                                <h5 class="text-sm font-bold text-cyan-400">Depositar USDC</h5>
+                                <button 
+                                    onclick="closeNowPaymentsModal()"
+                                    class="text-gray-400 hover:text-white transition-colors text-xl font-bold w-6 h-6 flex items-center justify-center rounded hover:bg-white/10">
+                                    ×
+                                </button>
+                            </div>
+
+                            <!-- Contenedor del Widget con Overlays -->
+                            <div class="relative bg-gray-900/50" style="height: 520px; overflow: hidden;">
+                                <!-- Overlay superior para ocultar "Donación" -->
+                                <div class="absolute top-0 left-0 right-0 pointer-events-none z-30" style="height: 60px; background: linear-gradient(180deg, rgba(17, 24, 39, 1) 0%, rgba(17, 24, 39, 0.98) 70%, transparent 100%);"></div>
+                                
+                                <!-- Widget iframe - Compacto con parámetros USDC Base -->
+                                <iframe 
+                                    src="https://nowpayments.io/embeds/donation-widget?api_key=c10a0c54-be7e-492d-9773-fc769531796f&currency=USDC&chain=BASE" 
+                                    width="346" 
+                                    height="623" 
+                                    frameborder="0" 
+                                    scrolling="no" 
+                                    style="overflow-y: hidden; transform: scale(0.92); transform-origin: top center; width: 108.7%; margin-left: -4.35%; border-radius: 0;"
+                                    id="nowpaymentsWidget"
+                                    class="nowpayments-iframe-dark">
+                                    Can't load widget
+                                </iframe>
+                                
+                                <!-- Overlay inferior para ocultar "Powered by NOWPayments" -->
+                                <div class="absolute bottom-0 left-0 right-0 pointer-events-none z-30" style="height: 50px; background: linear-gradient(0deg, rgba(17, 24, 39, 1) 0%, rgba(17, 24, 39, 0.98) 70%, transparent 100%);"></div>
                             </div>
                         </div>
                     </div>
 
-                    <!-- Scripts para mejorar integración -->
+                    <!-- Scripts para controlar modal y aplicar estilos -->
                     <script>
-                        (function() {
-                            var widget = document.getElementById('nowpaymentsWidget');
-                            if (widget) {
-                                widget.addEventListener('load', function() {
-                                    console.log('[NOWPayments] Widget cargado, aplicando estilos minimalistas');
-                                    
-                                    // Aplicar filtros para oscurecer y ajustar colores
-                                    widget.style.filter = 'brightness(0.85) contrast(1.15) saturate(0.8)';
-                                    
-                                    // Intentar ajustar el contenido del iframe (limitado por CORS)
-                                    try {
-                                        // Crear overlay adicional dinámico para asegurar que cubra textos
-                                        setTimeout(function() {
-                                            var container = widget.parentElement;
-                                            if (container) {
-                                                // Overlay superior adicional
-                                                var topOverlay = document.createElement('div');
-                                                topOverlay.className = 'nowpayments-text-overlay-top';
-                                                topOverlay.style.cssText = 'position: absolute; top: 0; left: 0; right: 0; height: 55px; background: rgba(17, 24, 39, 0.98); pointer-events: none; z-index: 25;';
-                                                container.appendChild(topOverlay);
-                                                
-                                                // Overlay inferior para "Powered by"
-                                                var bottomOverlay = document.createElement('div');
-                                                bottomOverlay.className = 'nowpayments-text-overlay-bottom';
-                                                bottomOverlay.style.cssText = 'position: absolute; bottom: 0; left: 0; right: 0; height: 45px; background: rgba(17, 24, 39, 0.98); pointer-events: none; z-index: 25;';
-                                                container.appendChild(bottomOverlay);
-                                            }
-                                        }, 1000);
-                                    } catch(e) {
-                                        console.warn('[NOWPayments] No se pudo crear overlay adicional:', e);
+                        function openNowPaymentsModal() {
+                            var modal = document.getElementById('nowpaymentsModal');
+                            if (modal) {
+                                modal.classList.remove('hidden');
+                                document.body.style.overflow = 'hidden';
+                            }
+                        }
+
+                        function closeNowPaymentsModal() {
+                            var modal = document.getElementById('nowpaymentsModal');
+                            if (modal) {
+                                modal.classList.add('hidden');
+                                document.body.style.overflow = '';
+                            }
+                        }
+
+                        // Inicialización cuando el DOM está listo
+                        document.addEventListener('DOMContentLoaded', function() {
+                            // Cerrar modal al hacer clic fuera
+                            var modal = document.getElementById('nowpaymentsModal');
+                            if (modal) {
+                                modal.addEventListener('click', function(e) {
+                                    if (e.target === modal) {
+                                        closeNowPaymentsModal();
                                     }
                                 });
                             }
-                        })();
+
+                            // Cerrar con ESC
+                            document.addEventListener('keydown', function(e) {
+                                if (e.key === 'Escape') {
+                                    closeNowPaymentsModal();
+                                }
+                            });
+
+                            // Aplicar estilos oscuros al widget cuando carga
+                            var widget = document.getElementById('nowpaymentsWidget');
+                            if (widget) {
+                                widget.addEventListener('load', function() {
+                                    console.log('[NOWPayments] Widget cargado, aplicando estilos oscuros');
+                                    
+                                    // Filtros para oscurecer y ajustar colores a la paleta cyan/azul
+                                    widget.style.filter = 'brightness(0.75) contrast(1.25) saturate(0.6)';
+                                    
+                                    // Crear overlays adicionales dinámicos para asegurar cobertura
+                                    setTimeout(function() {
+                                        var container = widget.parentElement;
+                                        if (container) {
+                                            // Overlay superior adicional más grueso
+                                            var topOverlay = document.createElement('div');
+                                            topOverlay.className = 'nowpayments-dynamic-overlay-top';
+                                            topOverlay.style.cssText = 'position: absolute; top: 0; left: 0; right: 0; height: 65px; background: rgba(17, 24, 39, 0.99); pointer-events: none; z-index: 35;';
+                                            container.appendChild(topOverlay);
+                                            
+                                            // Overlay inferior adicional más grueso
+                                            var bottomOverlay = document.createElement('div');
+                                            bottomOverlay.className = 'nowpayments-dynamic-overlay-bottom';
+                                            bottomOverlay.style.cssText = 'position: absolute; bottom: 0; left: 0; right: 0; height: 55px; background: rgba(17, 24, 39, 0.99); pointer-events: none; z-index: 35;';
+                                            container.appendChild(bottomOverlay);
+                                        }
+                                    }, 1500);
+                                });
+                            }
+                        });
                     </script>
                     
                     <p class="text-xs text-gray-400 mt-3">
