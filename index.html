@@ -610,6 +610,37 @@
         .neon-scrollbar::-webkit-scrollbar-thumb:hover { background: rgba(0,243,255,0.5); }
         .neon-scrollbar { scrollbar-width: thin; scrollbar-color: rgba(0,243,255,0.3) rgba(15,15,40,0.4); }
 
+        /* Estilos personalizados para NOWPayments Widget - Overlay agresivo */
+        .nowpayments-iframe {
+            filter: brightness(0.90) contrast(1.10);
+            position: relative;
+            z-index: 1;
+        }
+        
+        /* Contenedor del widget */
+        .nowpayments-container {
+            position: relative;
+            overflow: hidden;
+        }
+        
+        /* Overlay superior MUY GRUESO para ocultar completamente "Donation" */
+        .nowpayments-header-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 100px;
+            background: linear-gradient(180deg, rgba(17, 24, 39, 1) 0%, rgba(17, 24, 39, 0.98) 60%, rgba(17, 24, 39, 0.95) 100%);
+            pointer-events: none;
+            z-index: 30;
+            border-radius: 12px 12px 0 0;
+        }
+        
+        /* Asegurar que el header personalizado esté por encima */
+        .nowpayments-custom-header {
+            position: relative;
+            z-index: 25;
+        }
     </style>
 </head>
 
@@ -786,25 +817,80 @@
                         <strong>Mínimo:</strong> 1 USDC | <strong>Fee:</strong> 5% | <strong>Recibes:</strong> 95% en créditos nominales
                     </p>
                     
-                    <!-- NOWPayments Widget -->
+                    <!-- NOWPayments Widget - Diseño Minimalista y Compacto -->
                     <div class="mt-4 flex justify-center">
-                        <div class="relative">
-                            <iframe 
-                                src="https://nowpayments.io/embeds/donation-widget?api_key=c10a0c54-be7e-492d-9773-fc769531796f" 
-                                width="346" 
-                                height="623" 
-                                frameborder="0" 
-                                scrolling="no" 
-                                style="overflow-y: hidden; border-radius: 12px;"
-                                id="nowpaymentsWidget">
-                                Can't load widget
-                            </iframe>
-                            <!-- Overlay para cambiar textos del widget -->
-                            <div id="nowpaymentsOverlay" class="absolute inset-0 pointer-events-none" style="display: none;">
-                                <!-- Este overlay se puede usar para mostrar textos personalizados si es necesario -->
+                        <div class="relative w-full max-w-lg">
+                            <!-- Contenedor del widget con diseño minimalista -->
+                            <div class="relative bg-gradient-to-br from-gray-900/95 via-indigo-950/95 to-gray-900/95 rounded-xl border border-cyan-500/30 shadow-2xl shadow-cyan-500/10 overflow-hidden">
+                                <!-- Header personalizado - Reemplaza completamente "Donation" -->
+                                <div class="bg-gradient-to-r from-cyan-500/15 via-indigo-500/15 to-cyan-500/15 border-b border-cyan-500/30 px-6 py-4" style="position: relative; z-index: 60;">
+                                    <h5 class="text-lg font-bold text-cyan-400 text-center tracking-tight">Procesar Pagos</h5>
+                                    <p class="text-xs text-gray-400 text-center mt-1">Deposita USDC de forma segura</p>
+                                </div>
+                                
+                                <!-- Widget iframe - Compacto con overlay MUY GRUESO para ocultar "Donation" -->
+                                <div class="relative bg-gray-900/50" style="height: 380px; overflow: hidden; position: relative;">
+                                    <!-- Overlay SUPERIOR MUY GRUESO - Ocultar completamente "Donation" (150px) -->
+                                    <div class="absolute top-0 left-0 right-0 pointer-events-none" style="height: 150px; z-index: 50; background: linear-gradient(180deg, rgba(17, 24, 39, 1) 0%, rgba(17, 24, 39, 1) 30%, rgba(17, 24, 39, 0.99) 60%, rgba(17, 24, 39, 0.95) 90%, transparent 100%);"></div>
+                                    
+                                    <iframe 
+                                        src="https://nowpayments.io/embeds/donation-widget?api_key=c10a0c54-be7e-492d-9773-fc769531796f" 
+                                        width="100%" 
+                                        height="500" 
+                                        frameborder="0" 
+                                        scrolling="no" 
+                                        style="overflow-y: hidden; border-radius: 0; transform: scale(0.75) translateY(-50px); transform-origin: top center; width: 133.33%; margin-left: -16.665%; position: relative; z-index: 1;"
+                                        id="nowpaymentsWidget"
+                                        class="nowpayments-iframe">
+                                        Can't load widget
+                                    </iframe>
+                                    
+                                    <!-- Overlay inferior para ocultar footer del widget -->
+                                    <div class="absolute bottom-0 left-0 right-0 h-20 bg-gray-900 pointer-events-none" style="z-index: 50; background: linear-gradient(0deg, rgba(17, 24, 39, 1) 0%, rgba(17, 24, 39, 0.99) 40%, rgba(17, 24, 39, 0.95) 80%, transparent 100%);"></div>
+                                </div>
+                                
+                                <!-- Footer personalizado minimalista -->
+                                <div class="bg-gray-900/60 border-t border-cyan-500/20 px-4 py-2.5">
+                                    <p class="text-xs text-gray-500 text-center">
+                                        Powered by <span class="text-cyan-400 font-medium">NOWPayments</span>
+                                    </p>
+                                </div>
                             </div>
                         </div>
                     </div>
+                    
+                    <!-- Script para mejorar integración del widget y asegurar overlay -->
+                    <script>
+                        (function() {
+                            var widget = document.getElementById('nowpaymentsWidget');
+                            if (widget) {
+                                widget.addEventListener('load', function() {
+                                    console.log('[NOWPayments] Widget cargado, aplicando overlay adicional');
+                                    
+                                    // Aplicar filtros al iframe
+                                    widget.style.filter = 'brightness(0.88) contrast(1.12)';
+                                    
+                                    // Crear overlay adicional dinámico para asegurar que cubra "Donation"
+                                    setTimeout(function() {
+                                        var container = widget.parentElement;
+                                        if (container) {
+                                            // Remover overlay anterior si existe
+                                            var existingOverlay = container.querySelector('.dynamic-donation-overlay');
+                                            if (existingOverlay) {
+                                                existingOverlay.remove();
+                                            }
+                                            
+                                            // Crear nuevo overlay más grueso (150px para asegurar que cubra "Donation")
+                                            var overlay = document.createElement('div');
+                                            overlay.className = 'dynamic-donation-overlay';
+                                            overlay.style.cssText = 'position: absolute; top: 0; left: 0; right: 0; height: 150px; background: linear-gradient(180deg, rgba(17, 24, 39, 1) 0%, rgba(17, 24, 39, 1) 30%, rgba(17, 24, 39, 0.99) 60%, rgba(17, 24, 39, 0.95) 90%, transparent 100%); pointer-events: none; z-index: 55;';
+                                            container.appendChild(overlay);
+                                        }
+                                    }, 1500);
+                                });
+                            }
+                        })();
+                    </script>
                     
                     <p class="text-xs text-gray-400 mt-3">
                         <strong>Nota:</strong> Asegúrate de incluir tu email o wallet en el campo de comentarios del widget para recibir tus créditos correctamente.
