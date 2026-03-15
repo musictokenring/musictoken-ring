@@ -17,6 +17,7 @@ const { LiquidityManager } = require('./liquidity-manager');
 const { WalletLinkService } = require('./wallet-link-service');
 const { TradingFundService } = require('./trading-fund-service');
 const { NOWPaymentsService } = require('./nowpayments-service');
+const { MoonPayService } = require('./moonpay-service');
 const { createClient } = require('@supabase/supabase-js');
 
 const app = express();
@@ -89,6 +90,7 @@ let liquidityManager;
 let walletLinkService;
 let tradingFundService;
 let nowPaymentsService;
+let moonPayService;
 
 // 🔒 SEGURIDAD: Validar variables de entorno críticas
 function validateEnvironmentVariables() {
@@ -226,6 +228,7 @@ async function initializeServices() {
         try {
             tradingFundService = new TradingFundService();
     nowPaymentsService = new NOWPaymentsService();
+    moonPayService = new MoonPayService();
             console.log('[server] ✅ Trading Fund Service initialized');
         } catch (tradingFundError) {
             console.error('[server] ⚠️ Error initializing trading fund service:', tradingFundError);
@@ -1786,6 +1789,56 @@ app.post('/webhook/nowpayments', express.raw({ type: 'application/json' }), asyn
     } catch (error) {
         console.error('[nowpayments-webhook] Error processing webhook:', error);
         // Still return 200 to prevent NOWPayments from retrying
+        res.status(200).json({
+            received: true,
+            error: error.message
+        });
+    }
+});
+
+/**
+ * MoonPay Webhook Endpoint
+ * POST /webhook/moonpay
+ * Receives webhook notifications from MoonPay
+ */
+app.post('/webhook/moonpay', express.raw({ type: 'application/json' }), async (req, res) => {
+    try {
+        const signature = req.headers['x-moonpay-signature'];
+        const rawBody = req.body.toString();
+
+        if (!signature && process.env.MOONPAY_SECRET_KEY) {
+            console.warn('[moonpay-webhook] Missing signature header');
+            // En sandbox puede no haber signature, continuar
+        }
+
+        // Verify signature if secret key is configured
+        if (process.env.MOONPAY_SECRET_KEY && signature) {
+            if (!moonPayService.verifyWebhookSignature(rawBody, signature)) {
+                console.error('[moonpay-webhook] Invalid signature');
+                return res.status(401).json({ error: 'Invalid signature' });
+            }
+        }
+
+        const transactionData = JSON.parse(rawBody);
+        console.log('[moonpay-webhook] Received transaction notification:', {
+            transaction_id: transactionData.id,
+            status: transactionData.status,
+            amount: transactionData.baseCurrencyAmount
+        });
+
+        // Process deposit
+        const result = await moonPayService.processDeposit(transactionData);
+
+        // Return 200 OK quickly
+        res.status(200).json({
+            received: true,
+            transaction_id: transactionData.id,
+            processed: result.processed
+        });
+
+    } catch (error) {
+        console.error('[moonpay-webhook] Error processing webhook:', error);
+        // Still return 200 to prevent MoonPay from retrying
         res.status(200).json({
             received: true,
             error: error.message

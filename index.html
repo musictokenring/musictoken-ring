@@ -610,16 +610,23 @@
         .neon-scrollbar::-webkit-scrollbar-thumb:hover { background: rgba(0,243,255,0.5); }
         .neon-scrollbar { scrollbar-width: thin; scrollbar-color: rgba(0,243,255,0.3) rgba(15,15,40,0.4); }
 
-        /* Estilos para Botón Minimalista NOWPayments */
-        .nowpayments-btn-minimal {
+        /* Estilos para Botones Minimalistas de Depósito */
+        .nowpayments-btn-minimal,
+        .moonpay-btn-minimal {
             font-family: 'Inter', system-ui, sans-serif;
             cursor: pointer;
             outline: none;
         }
         
-        .nowpayments-btn-minimal:focus {
+        .nowpayments-btn-minimal:focus,
+        .moonpay-btn-minimal:focus {
             outline: 2px solid rgba(6, 182, 212, 0.5);
             outline-offset: 2px;
+        }
+        
+        /* Estilos específicos para MoonPay widget overlay */
+        .moonpay-overlay {
+            z-index: 9999;
         }
         
         /* Estilos para Widget iframe oscuro */
@@ -824,13 +831,23 @@
                         <strong>Mínimo:</strong> 1 USDC | <strong>Fee:</strong> 5% | <strong>Recibes:</strong> 95% en créditos nominales
                     </p>
                     
-                    <!-- Botón Minimalista NOWPayments - Estilo PayPal pero con colores cyan/azul -->
-                    <div class="mt-4 flex justify-center">
+                    <!-- Botones de Depósito - NOWPayments y MoonPay -->
+                    <div class="mt-4 flex flex-col sm:flex-row gap-3 justify-center items-center">
+                        <!-- Botón MoonPay - Comprar con Fiat (Tarjeta/PSE/Nequi) -->
+                        <button 
+                            onclick="initMoonPay()"
+                            id="moonpay-deposit-btn"
+                            class="moonpay-btn-minimal px-6 py-3 rounded-full bg-gradient-to-r from-cyan-500/20 to-indigo-500/20 border-2 border-cyan-500/40 hover:border-cyan-500/60 hover:from-cyan-500/30 hover:to-indigo-500/30 transition-all duration-300 shadow-lg shadow-cyan-500/20 hover:shadow-cyan-500/30 group flex items-center gap-2">
+                            <span class="text-lg">💳</span>
+                            <span class="text-sm font-semibold text-cyan-400 group-hover:text-cyan-300">Comprar con Fiat</span>
+                        </button>
+                        
+                        <!-- Botón NOWPayments - Depositar con Cripto -->
                         <button 
                             onclick="openNowPaymentsModal()"
-                            class="nowpayments-btn-minimal px-6 py-3 rounded-full bg-gradient-to-r from-cyan-500/20 to-indigo-500/20 border-2 border-cyan-500/40 hover:border-cyan-500/60 hover:from-cyan-500/30 hover:to-indigo-500/30 transition-all duration-300 shadow-lg shadow-cyan-500/20 hover:shadow-cyan-500/30 group flex items-center gap-2">
-                            <span class="text-lg">💳</span>
-                            <span class="text-sm font-semibold text-cyan-400 group-hover:text-cyan-300">Depositar USDC</span>
+                            class="nowpayments-btn-minimal px-6 py-3 rounded-full bg-gradient-to-r from-indigo-500/20 to-purple-500/20 border-2 border-indigo-500/40 hover:border-indigo-500/60 hover:from-indigo-500/30 hover:to-purple-500/30 transition-all duration-300 shadow-lg shadow-indigo-500/20 hover:shadow-indigo-500/30 group flex items-center gap-2">
+                            <span class="text-lg">🪙</span>
+                            <span class="text-sm font-semibold text-indigo-400 group-hover:text-indigo-300">Depositar con Cripto</span>
                         </button>
                     </div>
 
@@ -871,7 +888,82 @@
                         </div>
                     </div>
 
-                    <!-- Scripts para controlar modal y aplicar estilos -->
+                    <!-- Scripts para MoonPay y controlar modales -->
+                    <script>
+                        // MoonPay Integration
+                        async function initMoonPay() {
+                            try {
+                                console.log('[MoonPay] Inicializando widget...');
+                                
+                                // Cargar MoonPay SDK dinámicamente
+                                const moonPayScript = document.createElement('script');
+                                moonPayScript.src = 'https://static.moonpay.com/web-sdk/v1/moonpay-web-sdk.js';
+                                moonPayScript.async = true;
+                                
+                                // Esperar a que cargue el script
+                                await new Promise((resolve, reject) => {
+                                    moonPayScript.onload = resolve;
+                                    moonPayScript.onerror = reject;
+                                    if (!document.querySelector('script[src*="moonpay-web-sdk"]')) {
+                                        document.head.appendChild(moonPayScript);
+                                    } else {
+                                        resolve(); // Ya está cargado
+                                    }
+                                });
+
+                                // Esperar un momento para que MoonPay esté disponible
+                                await new Promise(resolve => setTimeout(resolve, 500));
+
+                                // Verificar que MoonPay esté disponible
+                                if (typeof window.MoonPay === 'undefined') {
+                                    throw new Error('MoonPay SDK no está disponible');
+                                }
+
+                                // Configurar widget MoonPay
+                                const moonPaySdk = window.MoonPay.init({
+                                    flow: 'buy',
+                                    environment: 'sandbox', // Cambiar a 'production' cuando esté live
+                                    variant: 'overlay', // Overlay modal
+                                    params: {
+                                        apiKey: 'pk_test_ABC123DEF456GHI789JKL0MNOPQRSTUV', // Reemplazar con la real cuando llegue
+                                        theme: 'dark',
+                                        baseCurrencyCode: 'usd', // Puede cambiarse a 'cop' para pesos colombianos
+                                        baseCurrencyAmount: '10', // Monto inicial sugerido
+                                        defaultCurrencyCode: 'usdc',
+                                        network: 'base', // Fuerza USDC en Base
+                                        walletAddress: window.connectedAddress || null, // Wallet del usuario si está conectada
+                                        onTransactionCompleted: function(transaction) {
+                                            console.log('[MoonPay] Transacción completada:', transaction);
+                                            // El webhook de MoonPay manejará el depósito
+                                            // Aquí solo mostramos confirmación
+                                            if (typeof showToast === 'function') {
+                                                showToast('Depósito procesado. Los créditos se acreditarán automáticamente.', 'success');
+                                            }
+                                            // Recargar balance después de unos segundos
+                                            setTimeout(function() {
+                                                if (window.CreditsSystem && window.connectedAddress) {
+                                                    window.CreditsSystem.loadBalance(window.connectedAddress);
+                                                }
+                                            }, 3000);
+                                        }
+                                    }
+                                });
+                                
+                                // Mostrar widget
+                                moonPaySdk.show();
+                                
+                            } catch (error) {
+                                console.error('[MoonPay] Error inicializando widget:', error);
+                                if (typeof showToast === 'function') {
+                                    showToast('Error al cargar MoonPay. Por favor intenta más tarde.', 'error');
+                                }
+                            }
+                        }
+
+                        // Hacer función global
+                        window.initMoonPay = initMoonPay;
+                    </script>
+                    
                     <script>
                         function openNowPaymentsModal() {
                             var modal = document.getElementById('nowpaymentsModal');
