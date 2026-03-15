@@ -895,43 +895,48 @@
                             try {
                                 console.log('[MoonPay] Inicializando widget...');
                                 
-                                // Cargar MoonPay SDK dinámicamente
-                                const moonPayScript = document.createElement('script');
-                                moonPayScript.src = 'https://static.moonpay.com/web-sdk/v1/moonpay-web-sdk.js';
-                                moonPayScript.async = true;
-                                
-                                // Esperar a que cargue el script
-                                await new Promise((resolve, reject) => {
-                                    moonPayScript.onload = resolve;
-                                    moonPayScript.onerror = reject;
-                                    if (!document.querySelector('script[src*="moonpay-web-sdk"]')) {
-                                        document.head.appendChild(moonPayScript);
-                                    } else {
-                                        resolve(); // Ya está cargado
-                                    }
-                                });
-
-                                // Esperar un momento para que MoonPay esté disponible
-                                await new Promise(resolve => setTimeout(resolve, 500));
-
-                                // Verificar que MoonPay esté disponible
-                                if (typeof window.MoonPay === 'undefined') {
-                                    throw new Error('MoonPay SDK no está disponible');
+                                // Cargar MoonPay SDK dinámicamente si no está cargado
+                                if (!document.querySelector('script[src*="moonpay-web-sdk"]')) {
+                                    const moonPayScript = document.createElement('script');
+                                    moonPayScript.src = 'https://static.moonpay.com/web-sdk/v1/moonpay-web-sdk.min.js';
+                                    moonPayScript.defer = true;
+                                    document.head.appendChild(moonPayScript);
+                                    
+                                    // Esperar a que cargue
+                                    await new Promise((resolve, reject) => {
+                                        moonPayScript.onload = resolve;
+                                        moonPayScript.onerror = reject;
+                                        setTimeout(resolve, 3000); // Timeout de seguridad
+                                    });
                                 }
 
-                                // Configurar widget MoonPay
-                                const moonPaySdk = window.MoonPay.init({
-                                    flow: 'buy',
+                                // Esperar a que MoonPayWebSdk esté disponible
+                                let attempts = 0;
+                                while (typeof window.MoonPayWebSdk === 'undefined' && attempts < 10) {
+                                    await new Promise(resolve => setTimeout(resolve, 300));
+                                    attempts++;
+                                }
+
+                                if (typeof window.MoonPayWebSdk === 'undefined') {
+                                    throw new Error('MoonPay SDK no está disponible después de cargar');
+                                }
+
+                                // Configurar widget MoonPay usando la API correcta
+                                const moonPay = window.MoonPayWebSdk.init;
+                                const widget = moonPay({
+                                    flow: 'partnerTopup', // Flow para comprar crypto
                                     environment: 'sandbox', // Cambiar a 'production' cuando esté live
                                     variant: 'overlay', // Overlay modal
                                     params: {
                                         apiKey: 'pk_test_ABC123DEF456GHI789JKL0MNOPQRSTUV', // Reemplazar con la real cuando llegue
-                                        theme: 'dark',
+                                        walletAddress: window.connectedAddress || null, // Wallet del usuario si está conectada
+                                        currencyCode: 'usdc_base', // USDC en Base network
                                         baseCurrencyCode: 'usd', // Puede cambiarse a 'cop' para pesos colombianos
                                         baseCurrencyAmount: '10', // Monto inicial sugerido
-                                        defaultCurrencyCode: 'usdc',
-                                        network: 'base', // Fuerza USDC en Base
-                                        walletAddress: window.connectedAddress || null, // Wallet del usuario si está conectada
+                                        theme: 'dark', // Tema oscuro
+                                        onInitiateDeposit: function(data) {
+                                            console.log('[MoonPay] Depósito iniciado:', data);
+                                        },
                                         onTransactionCompleted: function(transaction) {
                                             console.log('[MoonPay] Transacción completada:', transaction);
                                             // El webhook de MoonPay manejará el depósito
@@ -944,13 +949,18 @@
                                                 if (window.CreditsSystem && window.connectedAddress) {
                                                     window.CreditsSystem.loadBalance(window.connectedAddress);
                                                 }
-                                            }, 3000);
+                                            }, 5000);
                                         }
                                     }
                                 });
                                 
                                 // Mostrar widget
-                                moonPaySdk.show();
+                                if (widget && typeof widget.show === 'function') {
+                                    widget.show();
+                                } else {
+                                    console.error('[MoonPay] Widget no se pudo inicializar correctamente');
+                                    throw new Error('Widget no disponible');
+                                }
                                 
                             } catch (error) {
                                 console.error('[MoonPay] Error inicializando widget:', error);
