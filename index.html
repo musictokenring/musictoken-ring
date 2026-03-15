@@ -865,7 +865,7 @@
                             </div>
 
                             <!-- Contenedor del Widget con Overlays -->
-                            <div class="relative bg-gray-900/50" style="height: 520px; overflow: hidden;">
+                            <div class="relative bg-gray-900/50" style="height: 560px; overflow: hidden;">
                                 <!-- Overlay superior para ocultar "Donación" -->
                                 <div class="absolute top-0 left-0 right-0 pointer-events-none z-30" style="height: 60px; background: linear-gradient(180deg, rgba(17, 24, 39, 1) 0%, rgba(17, 24, 39, 0.98) 70%, transparent 100%);"></div>
                                 
@@ -876,14 +876,14 @@
                                     height="623" 
                                     frameborder="0" 
                                     scrolling="no" 
-                                    style="overflow-y: hidden; transform: scale(0.92); transform-origin: top center; width: 108.7%; margin-left: -4.35%; border-radius: 0;"
+                                    style="overflow-y: hidden; transform: scale(0.90); transform-origin: top center; width: 111.11%; margin-left: -5.555%; border-radius: 0; margin-top: -10px;"
                                     id="nowpaymentsWidget"
                                     class="nowpayments-iframe-dark">
                                     Can't load widget
                                 </iframe>
                                 
-                                <!-- Overlay inferior para ocultar "Powered by NOWPayments" -->
-                                <div class="absolute bottom-0 left-0 right-0 pointer-events-none z-30" style="height: 50px; background: linear-gradient(0deg, rgba(17, 24, 39, 1) 0%, rgba(17, 24, 39, 0.98) 70%, transparent 100%);"></div>
+                                <!-- Overlay inferior REDUCIDO - Solo oculta "Powered by", NO el botón -->
+                                <div class="absolute bottom-0 left-0 right-0 pointer-events-none z-30" style="height: 25px; background: linear-gradient(0deg, rgba(17, 24, 39, 1) 0%, rgba(17, 24, 39, 0.95) 60%, transparent 100%);"></div>
                             </div>
                         </div>
                     </div>
@@ -1029,10 +1029,10 @@
                                             topOverlay.style.cssText = 'position: absolute; top: 0; left: 0; right: 0; height: 65px; background: rgba(17, 24, 39, 0.99); pointer-events: none; z-index: 35;';
                                             container.appendChild(topOverlay);
                                             
-                                            // Overlay inferior adicional más grueso
+                                            // Overlay inferior REDUCIDO - Solo oculta "Powered by", NO el botón
                                             var bottomOverlay = document.createElement('div');
                                             bottomOverlay.className = 'nowpayments-dynamic-overlay-bottom';
-                                            bottomOverlay.style.cssText = 'position: absolute; bottom: 0; left: 0; right: 0; height: 55px; background: rgba(17, 24, 39, 0.99); pointer-events: none; z-index: 35;';
+                                            bottomOverlay.style.cssText = 'position: absolute; bottom: 0; left: 0; right: 0; height: 30px; background: linear-gradient(0deg, rgba(17, 24, 39, 0.98) 0%, rgba(17, 24, 39, 0.90) 70%, transparent 100%); pointer-events: none; z-index: 35;';
                                             container.appendChild(bottomOverlay);
                                         }
                                     }, 1500);
