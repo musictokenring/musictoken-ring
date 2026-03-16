@@ -1999,10 +1999,38 @@ const path = require('path');
 
 app.get('/src/credits-system.js', (req, res) => {
     try {
-        const filePath = path.join(__dirname, '..', 'src', 'credits-system.js');
+        // CRÍTICO: Intentar múltiples rutas posibles para encontrar el archivo
+        // En Render, __dirname puede apuntar a diferentes lugares según cómo se despliegue
+        const possiblePaths = [
+            path.join(__dirname, '..', 'src', 'credits-system.js'), // Desarrollo local
+            path.join(process.cwd(), 'src', 'credits-system.js'), // Render desde raíz
+            path.join(__dirname, 'src', 'credits-system.js'), // Render desde backend/
+            path.join(process.cwd(), 'backend', '..', 'src', 'credits-system.js') // Render alternativo
+        ];
         
-        // Leer el archivo
-        const fileContent = fs.readFileSync(filePath, 'utf8');
+        let fileContent = null;
+        let filePath = null;
+        
+        for (const tryPath of possiblePaths) {
+            try {
+                if (fs.existsSync(tryPath)) {
+                    filePath = tryPath;
+                    fileContent = fs.readFileSync(tryPath, 'utf8');
+                    console.log('[server] ✅ credits-system.js encontrado en:', tryPath);
+                    break;
+                }
+            } catch (e) {
+                // Continuar con la siguiente ruta
+                continue;
+            }
+        }
+        
+        if (!fileContent) {
+            console.error('[server] ❌ credits-system.js no encontrado en ninguna ruta:', possiblePaths);
+            console.error('[server] __dirname:', __dirname);
+            console.error('[server] process.cwd():', process.cwd());
+            return res.status(404).send('// credits-system.js not found on server');
+        }
         
         // CRÍTICO: Headers para evitar caché completamente
         // NO incluir 'Expires' porque causa error CORS en preflight
@@ -2020,8 +2048,9 @@ app.get('/src/credits-system.js', (req, res) => {
         // Enviar el contenido
         res.send(fileContent);
     } catch (error) {
-        console.error('[server] Error sirviendo credits-system.js:', error);
-        res.status(500).send('// Error loading credits-system.js');
+        console.error('[server] ❌ Error sirviendo credits-system.js:', error);
+        console.error('[server] Error stack:', error.stack);
+        res.status(500).send('// Error loading credits-system.js: ' + error.message);
     }
 });
 

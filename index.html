@@ -721,7 +721,7 @@
                         <span class="sm:hidden">Wallet</span>
                     </button>
                     <div id="authButton" class="flex-shrink-0">
-                        <button type="button" onclick="if(typeof openAuthModal === 'function') { openAuthModal(); } else if(typeof window.openAuthModal === 'function') { window.openAuthModal(); } else { console.error('openAuthModal no disponible'); }" id="authButtonBtn" class="px-2 sm:px-2.5 sm:px-4 py-1.5 sm:py-2 rounded-lg text-[10px] sm:text-xs sm:text-sm font-semibold bg-fuchsia-500/10 border border-fuchsia-500/30 text-fuchsia-400 hover:bg-fuchsia-500/20 transition-all duration-200 cursor-pointer whitespace-nowrap">
+                        <button type="button" onclick="(function(){var fn = typeof openAuthModal === 'function' ? openAuthModal : (typeof window.openAuthModal === 'function' ? window.openAuthModal : null); if(fn) { fn(); } else { console.error('openAuthModal no disponible - intentando cargar auth-system.js...'); var script = document.createElement('script'); script.src = './auth-system.js?v=' + Date.now(); script.onload = function() { if(typeof openAuthModal === 'function') openAuthModal(); else if(typeof window.openAuthModal === 'function') window.openAuthModal(); }; document.head.appendChild(script); }})();" id="authButtonBtn" class="px-2 sm:px-2.5 sm:px-4 py-1.5 sm:py-2 rounded-lg text-[10px] sm:text-xs sm:text-sm font-semibold bg-fuchsia-500/10 border border-fuchsia-500/30 text-fuchsia-400 hover:bg-fuchsia-500/20 transition-all duration-200 cursor-pointer whitespace-nowrap">
                             <span class="hidden sm:inline">Iniciar Sesión</span>
                             <span class="sm:hidden">Login</span>
                         </button>
@@ -1849,7 +1849,8 @@
                 }
             }).catch(function(error) {
                 console.error('[CACHE-BUST] ❌ Error verificando/cargando desde servidor:', error);
-                console.error('[CACHE-BUST] ❌ Error details:', error.message, error.stack);
+                console.error('[CACHE-BUST] ❌ Error details:', error.message);
+                console.warn('[CACHE-BUST] ⚠️ El endpoint del servidor no está disponible, usando fallback local');
                 
                 // Fallback: Intentar desde el mismo dominio con múltiples parámetros de cache-busting
                 console.log('[CACHE-BUST] 🔄 Intentando método fallback (mismo dominio)...');
