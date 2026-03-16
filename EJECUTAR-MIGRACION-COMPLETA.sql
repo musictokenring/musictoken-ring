@@ -19,8 +19,14 @@ WHERE wallet_address IS NOT NULL;
 -- PASO 2: Agregar columnas nuevas si no existen
 DO $$
 BEGIN
-    -- Agregar columna email
-    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'users' AND column_name = 'email') THEN
+    -- Agregar columna email (CRÍTICO: debe crearse primero)
+    IF NOT EXISTS (
+        SELECT 1 
+        FROM information_schema.columns 
+        WHERE table_schema = 'public' 
+        AND table_name = 'users' 
+        AND column_name = 'email'
+    ) THEN
         ALTER TABLE users ADD COLUMN email TEXT;
         CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
         RAISE NOTICE '✅ Columna email agregada';
@@ -29,7 +35,13 @@ BEGIN
     END IF;
     
     -- Agregar columna saldo_fiat
-    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'users' AND column_name = 'saldo_fiat') THEN
+    IF NOT EXISTS (
+        SELECT 1 
+        FROM information_schema.columns 
+        WHERE table_schema = 'public' 
+        AND table_name = 'users' 
+        AND column_name = 'saldo_fiat'
+    ) THEN
         ALTER TABLE users ADD COLUMN saldo_fiat DECIMAL(20, 6) DEFAULT 0 NOT NULL;
         RAISE NOTICE '✅ Columna saldo_fiat agregada';
     ELSE
@@ -37,7 +49,13 @@ BEGIN
     END IF;
     
     -- Agregar columna saldo_onchain
-    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'users' AND column_name = 'saldo_onchain') THEN
+    IF NOT EXISTS (
+        SELECT 1 
+        FROM information_schema.columns 
+        WHERE table_schema = 'public' 
+        AND table_name = 'users' 
+        AND column_name = 'saldo_onchain'
+    ) THEN
         ALTER TABLE users ADD COLUMN saldo_onchain DECIMAL(20, 6) DEFAULT 0 NOT NULL;
         RAISE NOTICE '✅ Columna saldo_onchain agregada';
     ELSE
@@ -45,7 +63,13 @@ BEGIN
     END IF;
     
     -- Agregar columna auth_provider
-    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'users' AND column_name = 'auth_provider') THEN
+    IF NOT EXISTS (
+        SELECT 1 
+        FROM information_schema.columns 
+        WHERE table_schema = 'public' 
+        AND table_name = 'users' 
+        AND column_name = 'auth_provider'
+    ) THEN
         ALTER TABLE users ADD COLUMN auth_provider TEXT DEFAULT 'wallet';
         RAISE NOTICE '✅ Columna auth_provider agregada';
     ELSE
@@ -53,7 +77,13 @@ BEGIN
     END IF;
     
     -- Agregar columna phone_number
-    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'users' AND column_name = 'phone_number') THEN
+    IF NOT EXISTS (
+        SELECT 1 
+        FROM information_schema.columns 
+        WHERE table_schema = 'public' 
+        AND table_name = 'users' 
+        AND column_name = 'phone_number'
+    ) THEN
         ALTER TABLE users ADD COLUMN phone_number TEXT;
         RAISE NOTICE '✅ Columna phone_number agregada';
     ELSE
@@ -61,7 +91,13 @@ BEGIN
     END IF;
     
     -- Agregar columna verification_status
-    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'users' AND column_name = 'verification_status') THEN
+    IF NOT EXISTS (
+        SELECT 1 
+        FROM information_schema.columns 
+        WHERE table_schema = 'public' 
+        AND table_name = 'users' 
+        AND column_name = 'verification_status'
+    ) THEN
         ALTER TABLE users ADD COLUMN verification_status TEXT DEFAULT 'unverified';
         RAISE NOTICE '✅ Columna verification_status agregada';
     ELSE
@@ -143,27 +179,51 @@ GRANT EXECUTE ON FUNCTION increment_user_fiat_balance(UUID, DECIMAL) TO authenti
 GRANT EXECUTE ON FUNCTION decrement_user_fiat_balance(UUID, DECIMAL) TO authenticated, anon;
 
 -- PASO 7: Actualizar políticas RLS para permitir acceso por email
--- CRÍTICO: Solo crear la política si la columna email existe
+-- CRÍTICO: Esperar a que las columnas se creen antes de crear la política
+-- Primero verificar que las columnas existan
 DO $$
+DECLARE
+    email_exists BOOLEAN;
 BEGIN
-    -- Verificar si la columna email existe antes de crear la política
-    IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'users' AND column_name = 'email') THEN
-        DROP POLICY IF EXISTS "Users can view own data" ON users;
-        CREATE POLICY "Users can view own data" ON users
-            FOR SELECT
-            USING (
-                auth.uid() = id OR
-                (email IS NOT NULL AND email = (SELECT email FROM auth.users WHERE id = auth.uid()))
-            );
+    -- Verificar si la columna email existe DESPUÉS de que se haya creado en el PASO 2
+    SELECT EXISTS (
+        SELECT 1 
+        FROM information_schema.columns 
+        WHERE table_schema = 'public' 
+        AND table_name = 'users' 
+        AND column_name = 'email'
+    ) INTO email_exists;
+    
+    -- Eliminar política anterior si existe
+    DROP POLICY IF EXISTS "Users can view own data" ON users;
+    
+    -- Crear política según si email existe o no
+    IF email_exists THEN
+        -- Política con soporte para email
+        EXECUTE format('
+            CREATE POLICY "Users can view own data" ON users
+                FOR SELECT
+                USING (
+                    auth.uid() = id OR
+                    (email IS NOT NULL AND email = (SELECT email FROM auth.users WHERE id = auth.uid()))
+                )
+        ');
         RAISE NOTICE '✅ Política RLS creada con soporte para email';
     ELSE
-        -- Si email no existe, crear política básica sin email
+        -- Política básica sin email (fallback)
+        CREATE POLICY "Users can view own data" ON users
+            FOR SELECT
+            USING (auth.uid() = id);
+        RAISE NOTICE '⚠️ Política RLS creada sin soporte para email (columna no existe)';
+    END IF;
+EXCEPTION
+    WHEN OTHERS THEN
+        -- Si hay error, crear política básica como fallback
         DROP POLICY IF EXISTS "Users can view own data" ON users;
         CREATE POLICY "Users can view own data" ON users
             FOR SELECT
             USING (auth.uid() = id);
-        RAISE NOTICE '⚠️ Política RLS creada sin soporte para email (columna no existe aún)';
-    END IF;
+        RAISE NOTICE '⚠️ Error creando política con email, usando política básica: %', SQLERRM;
 END $$;
 
 -- PASO 8: Agregar comentarios para documentación (solo si las columnas existen)
