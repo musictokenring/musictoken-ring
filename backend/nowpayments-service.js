@@ -86,10 +86,11 @@ class NOWPaymentsService {
                 return { processed: false, reason: 'Already processed', deposit: existingDeposit };
             }
 
-            // Extract user email/wallet from payment metadata
-            // NOWPayments widget allows adding email/comment in the payment
-            const userEmail = paymentData.pay_currency_extra_id || paymentData.order_id || null;
-            const userWallet = paymentData.pay_currency_extra_id || null;
+            // CRÍTICO: Extract user identifiers from payment metadata
+            // NOWPayments widget passes email/wallet/order_id (user_id) in the payment
+            const userEmail = paymentData.email || paymentData.pay_currency_extra_id || null;
+            const userWallet = paymentData.wallet || paymentData.pay_currency_extra_id || null;
+            const userIdFromOrder = paymentData.order_id || null; // order_id contiene el user_id interno
 
             // Calculate amounts
             const depositAmount = parseFloat(paymentData.pay_amount || 0);
@@ -104,46 +105,88 @@ class NOWPaymentsService {
             const vaultFeeAmount = depositFee * (VAULT_FEE_PERCENTAGE / 100);
             const tradingFundFeeAmount = depositFee * (TRADING_FUND_FEE_PERCENTAGE / 100);
 
-            // Find or create user by email/wallet
+            // CRÍTICO: Find user by user_id (order_id), email, or wallet
+            // PRIORIDAD: user_id > email > wallet
             let userId = null;
-            if (userEmail) {
+            
+            // PRIORIDAD 1: Si viene user_id directamente (order_id), usarlo
+            if (userIdFromOrder) {
                 const { data: user } = await supabase
                     .from('users')
                     .select('id')
-                    .or(`email.ilike.${userEmail},wallet_address.ilike.${userWallet || ''}`)
+                    .eq('id', userIdFromOrder)
+                    .maybeSingle();
+                
+                if (user) {
+                    userId = user.id;
+                    console.log('[nowpayments] ✅ Usuario encontrado por user_id:', userId);
+                }
+            }
+            
+            // PRIORIDAD 2: Buscar por email si no se encontró por user_id
+            if (!userId && userEmail) {
+                const { data: user } = await supabase
+                    .from('users')
+                    .select('id')
+                    .ilike('email', userEmail)
                     .maybeSingle();
 
                 if (user) {
                     userId = user.id;
+                    console.log('[nowpayments] ✅ Usuario encontrado por email:', userEmail);
+                }
+            }
+            
+            // PRIORIDAD 3: Buscar por wallet si no se encontró por email
+            if (!userId && userWallet) {
+                const { data: user } = await supabase
+                    .from('users')
+                    .select('id')
+                    .ilike('wallet_address', userWallet)
+                    .maybeSingle();
+
+                if (user) {
+                    userId = user.id;
+                    console.log('[nowpayments] ✅ Usuario encontrado por wallet:', userWallet);
                 }
             }
 
-            // If no user found, we'll need to create a pending deposit record
-            // User can claim it later by linking wallet/email
+            // CRÍTICO: Si no se encuentra usuario, RECHAZAR el pago
+            // NO crear depósitos pendientes - el usuario DEBE estar autenticado antes de pagar
             if (!userId) {
-                console.log('[nowpayments] No user found, creating pending deposit');
-                // Store pending deposit for later claim
-                const { data: pendingDeposit } = await supabase
+                console.error('[nowpayments] ❌ PAGO RECHAZADO: Usuario no encontrado', {
+                    userEmail,
+                    userWallet,
+                    userIdFromOrder,
+                    payment_id: paymentData.payment_id
+                });
+                
+                // Registrar el rechazo para auditoría
+                await supabase
                     .from('deposits')
                     .insert({
                         tx_hash: paymentData.payment_id,
                         wallet_address: userWallet || null,
                         amount: depositAmount,
                         token: 'USDC',
-                        credits_awarded: creditsAwarded,
-                        status: 'pending_user_link',
+                        credits_awarded: 0,
+                        status: 'rejected_no_user',
                         payment_id: paymentData.payment_id,
-                        payment_data: paymentData,
+                        payment_data: {
+                            ...paymentData,
+                            rejection_reason: 'User not authenticated or not found in system',
+                            user_email: userEmail,
+                            user_wallet: userWallet,
+                            user_id_from_order: userIdFromOrder
+                        },
                         created_at: new Date().toISOString()
-                    })
-                    .select()
-                    .single();
+                    });
 
                 return {
                     processed: false,
-                    reason: 'Pending user link',
-                    pendingDeposit,
-                    message: 'Deposit recorded, waiting for user to link wallet/email'
+                    reason: 'User not authenticated',
+                    rejected: true,
+                    message: 'Payment rejected: User must be authenticated before making a deposit. Please contact support if you believe this is an error.'
                 };
             }
 

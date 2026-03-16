@@ -832,10 +832,25 @@
         </section>
 
         <!-- DEPOSIT CARD (USDC Directo + MTR Opcional) -->
-        <section class="mb-16">
+        <!-- CRÍTICO: Esta sección requiere autenticación - se oculta si no hay usuario -->
+        <section id="depositSectionMain" class="mb-16">
             <div class="max-w-2xl mx-auto p-6 sm:p-8 rounded-2xl border border-cyan-500/15 bg-gradient-to-br from-gray-900/80 to-indigo-950/40 neon-border-cyan">
                 <h3 class="text-xl font-bold text-cyan-400 neon-text-cyan mb-2">Depositar Créditos</h3>
                 <p class="text-gray-400 text-sm mb-4">Envía USDC directo para obtener créditos MTR nominales respaldados 1:1 por USDC real.</p>
+                
+                <!-- Mensaje de autenticación requerida (oculto por defecto, se muestra si no hay auth) -->
+                <div id="depositAuthRequired" class="hidden mb-6 p-4 rounded-lg bg-yellow-500/10 border border-yellow-500/20">
+                    <div class="flex items-center gap-2 mb-2">
+                        <span class="text-yellow-400 text-lg">⚠️</span>
+                        <h4 class="text-yellow-400 font-bold">Autenticación Requerida</h4>
+                    </div>
+                    <p class="text-gray-300 text-sm mb-3">Para realizar depósitos, debes iniciar sesión o conectar tu wallet primero.</p>
+                    <button
+                        onclick="if(typeof openAuthModal === 'function') { openAuthModal(); } else if(typeof window.openAuthModal === 'function') { window.openAuthModal(); }"
+                        class="px-4 py-2 rounded-lg bg-yellow-500/20 border border-yellow-500/30 text-yellow-300 hover:bg-yellow-500/30 transition cursor-pointer">
+                        Iniciar Sesión o Conectar Wallet
+                    </button>
+                </div>
                 
                 <!-- Explicación de Créditos Nominales -->
                 <div class="mb-6 p-4 rounded-lg bg-green-500/10 border border-green-500/20">
@@ -848,6 +863,8 @@
                     </div>
                 </div>
 
+                <!-- Contenido de depósitos (oculto si no hay auth) -->
+                <div class="deposit-content">
                 <!-- Opción Fiat: Mercado Pago (Sin Wallet) -->
                 <div id="fiatDepositSection" class="mb-6 p-4 rounded-lg bg-fuchsia-500/10 border border-fuchsia-500/30 hidden">
                     <div class="flex items-center gap-2 mb-3">
@@ -942,12 +959,13 @@
                                 <div class="absolute top-0 left-0 right-0 pointer-events-none z-30" style="height: 60px; background: linear-gradient(180deg, rgba(17, 24, 39, 1) 0%, rgba(17, 24, 39, 0.98) 70%, transparent 100%);"></div>
                                 
                                 <!-- Widget iframe - Compacto con parámetros USDC Base -->
-                                <iframe 
-                                    src="https://nowpayments.io/embeds/donation-widget?api_key=c10a0c54-be7e-492d-9773-fc769531796f&currency=USDC&chain=BASE" 
-                                    width="346" 
-                                    height="623" 
-                                    frameborder="0" 
-                                    scrolling="no" 
+                                <!-- CRÍTICO: La URL se actualizará dinámicamente con user_id/email cuando se abra el modal -->
+                                <iframe
+                                    src="https://nowpayments.io/embeds/donation-widget?api_key=c10a0c54-be7e-492d-9773-fc769531796f&currency=USDC&chain=BASE"
+                                    width="346"
+                                    height="623"
+                                    frameborder="0"
+                                    scrolling="no"
                                     style="overflow-y: hidden; transform: scale(0.90); transform-origin: top center; width: 111.11%; margin-left: -5.555%; border-radius: 0; margin-top: -10px;"
                                     id="nowpaymentsWidget"
                                     class="nowpayments-iframe-dark">
@@ -965,8 +983,41 @@
                         // MoonPay Integration
                         async function initMoonPay() {
                             try {
-                                console.log('[MoonPay] Inicializando widget...');
+                                // CRÍTICO: Verificar autenticación antes de permitir depósito
+                                let userId = null;
+                                let email = null;
+                                let walletAddress = null;
                                 
+                                if (typeof supabaseClient !== 'undefined') {
+                                    try {
+                                        const { data: { session } } = await supabaseClient.auth.getSession();
+                                        if (session && session.user) {
+                                            userId = session.user.id;
+                                            email = session.user.email;
+                                        }
+                                    } catch (e) {
+                                        console.error('[MoonPay] Error obteniendo sesión:', e);
+                                    }
+                                }
+                                
+                                // También verificar wallet conectada como alternativa
+                                if (!userId && (window.connectedAddress || localStorage.getItem('mtr_wallet'))) {
+                                    walletAddress = window.connectedAddress || localStorage.getItem('mtr_wallet');
+                                }
+                                
+                                // Si no hay autenticación ni wallet, bloquear acceso
+                                if (!userId && !walletAddress) {
+                                    if (typeof showToast === 'function') {
+                                        showToast('Por favor inicia sesión o conecta tu wallet primero', 'error');
+                                    }
+                                    if (typeof openAuthModal === 'function') {
+                                        openAuthModal();
+                                    }
+                                    return;
+                                }
+                                
+                                console.log('[MoonPay] Inicializando widget...', { userId, email, walletAddress });
+
                                 // Cargar MoonPay SDK dinámicamente si no está cargado
                                 if (!document.querySelector('script[src*="moonpay-web-sdk"]')) {
                                     const moonPayScript = document.createElement('script');
@@ -994,18 +1045,28 @@
                                 }
 
                                 // Configurar widget MoonPay usando la API correcta
+                                // CRÍTICO: Pasar email/wallet como metadata para asociación en webhook
                                 const moonPay = window.MoonPayWebSdk.init;
-                                const widget = moonPay({
+                                const widgetParams = {
                                     flow: 'partnerTopup', // Flow para comprar crypto
                                     environment: 'sandbox', // Cambiar a 'production' cuando esté live
                                     variant: 'overlay', // Overlay modal
                                     params: {
                                         apiKey: 'pk_test_ABC123DEF456GHI789JKL0MNOPQRSTUV', // Reemplazar con la real cuando llegue
-                                        walletAddress: window.connectedAddress || null, // Wallet del usuario si está conectada
+                                        walletAddress: walletAddress || window.connectedAddress || null, // Wallet del usuario si está conectada
                                         currencyCode: 'usdc_base', // USDC en Base network
                                         baseCurrencyCode: 'usd', // Puede cambiarse a 'cop' para pesos colombianos
                                         baseCurrencyAmount: '10', // Monto inicial sugerido
                                         theme: 'dark', // Tema oscuro
+                                        // CRÍTICO: Pasar identificadores del usuario para asociación en webhook
+                                        email: email || undefined, // Email si está disponible
+                                        externalCustomerId: userId || undefined, // User ID interno
+                                        metadata: userId || email || walletAddress ? JSON.stringify({
+                                            user_id: userId,
+                                            email: email,
+                                            wallet_address: walletAddress,
+                                            platform: 'musictoken-ring'
+                                        }) : undefined,
                                         onInitiateDeposit: function(data) {
                                             console.log('[MoonPay] Depósito iniciado:', data);
                                         },
@@ -1126,9 +1187,65 @@
                         // Hacer función global
                         window.initMercadoPagoDeposit = initMercadoPagoDeposit;
                     </script>
+                </div>
+                <!-- Fin de contenido de depósitos -->
                     
                     <script>
-                        function openNowPaymentsModal() {
+                        async function openNowPaymentsModal() {
+                            // CRÍTICO: Verificar autenticación antes de permitir depósito
+                            let userId = null;
+                            let email = null;
+                            let walletAddress = null;
+                            
+                            if (typeof supabaseClient !== 'undefined') {
+                                try {
+                                    const { data: { session } } = await supabaseClient.auth.getSession();
+                                    if (session && session.user) {
+                                        userId = session.user.id;
+                                        email = session.user.email;
+                                    }
+                                } catch (e) {
+                                    console.error('[NOWPayments] Error obteniendo sesión:', e);
+                                }
+                            }
+                            
+                            // También verificar wallet conectada como alternativa
+                            if (!userId && (window.connectedAddress || localStorage.getItem('mtr_wallet'))) {
+                                walletAddress = window.connectedAddress || localStorage.getItem('mtr_wallet');
+                            }
+                            
+                            // Si no hay autenticación ni wallet, bloquear acceso
+                            if (!userId && !walletAddress) {
+                                if (typeof showToast === 'function') {
+                                    showToast('Por favor inicia sesión o conecta tu wallet primero', 'error');
+                                }
+                                if (typeof openAuthModal === 'function') {
+                                    openAuthModal();
+                                }
+                                return;
+                            }
+                            
+                            // CRÍTICO: Actualizar iframe con parámetros de usuario para asociación en webhook
+                            const iframe = document.getElementById('nowpaymentsWidget');
+                            if (iframe) {
+                                // Construir URL con parámetros de usuario
+                                let widgetUrl = 'https://nowpayments.io/embeds/donation-widget?api_key=c10a0c54-be7e-492d-9773-fc769531796f&currency=USDC&chain=BASE';
+                                
+                                // Agregar identificadores del usuario
+                                if (email) {
+                                    widgetUrl += '&email=' + encodeURIComponent(email);
+                                }
+                                if (walletAddress) {
+                                    widgetUrl += '&wallet=' + encodeURIComponent(walletAddress);
+                                }
+                                if (userId) {
+                                    widgetUrl += '&order_id=' + encodeURIComponent(userId);
+                                }
+                                
+                                // Actualizar src del iframe
+                                iframe.src = widgetUrl;
+                            }
+                            
                             var modal = document.getElementById('nowpaymentsModal');
                             if (modal) {
                                 modal.classList.remove('hidden');

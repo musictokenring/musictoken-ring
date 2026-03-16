@@ -365,15 +365,32 @@ async function logout() {
 
 function updateAuthUI(session) {
     const authButton = document.getElementById('authButton');
-    
+
     if (!authButton) return;
-    
+
     if (session && session.user) {
         // Usuario logueado
         console.log('User logged in:', session.user.email);
 
         document.getElementById('loginWall')?.classList.add('hidden');
         document.getElementById('modeSelector')?.classList.remove('hidden');
+        
+        // CRÍTICO: Mostrar sección de depósitos solo si hay autenticación
+        const depositSection = document.getElementById('depositSectionMain');
+        const depositAuthRequired = document.getElementById('depositAuthRequired');
+        const depositContent = depositSection?.querySelector('.deposit-content');
+        
+        if (depositSection) {
+            depositSection.classList.remove('hidden');
+        }
+        if (depositAuthRequired) {
+            depositAuthRequired.classList.add('hidden');
+        }
+        
+        // Mostrar contenido de depósitos
+        if (depositContent) {
+            depositContent.style.display = 'block';
+        }
         
         const user = session.user;
         const displayName = user.user_metadata?.display_name || 
@@ -395,6 +412,21 @@ function updateAuthUI(session) {
                 Salir
             </button>
         `;
+    } else {
+        // Usuario NO logueado - mostrar mensaje de autenticación requerida
+        const depositSection = document.getElementById('depositSectionMain');
+        const depositAuthRequired = document.getElementById('depositAuthRequired');
+        const depositContent = depositSection?.querySelector('.deposit-content');
+        
+        if (depositSection && depositAuthRequired) {
+            depositSection.classList.remove('hidden'); // Mantener visible pero mostrar mensaje
+            depositAuthRequired.classList.remove('hidden');
+        }
+        
+        // Ocultar contenido de depósitos si existe
+        if (depositContent) {
+            depositContent.style.display = 'none';
+        }
 
         loadPlayerProfile(session.user);
         

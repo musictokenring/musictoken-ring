@@ -86,9 +86,10 @@ class MoonPayService {
                 return { processed: false, reason: 'Already processed', deposit: existingDeposit };
             }
 
-            // Extract user wallet from transaction
+            // CRÍTICO: Extract user identifiers from transaction metadata
             const userWallet = transactionData.walletAddress || transactionData.cryptoTransaction?.walletAddress || null;
-            const userEmail = transactionData.customer?.email || null;
+            const userEmail = transactionData.customer?.email || transactionData.metadata?.email || null;
+            const userIdFromMetadata = transactionData.metadata?.user_id || transactionData.externalCustomerId || null;
 
             // Calculate amounts
             const depositAmount = parseFloat(transactionData.baseCurrencyAmount || transactionData.quoteCurrencyAmount || 0);
@@ -106,44 +107,88 @@ class MoonPayService {
             const vaultFeeAmount = depositFee * (VAULT_FEE_PERCENTAGE / 100);
             const tradingFundFeeAmount = depositFee * (TRADING_FUND_FEE_PERCENTAGE / 100);
 
-            // Find or create user by email/wallet
+            // CRÍTICO: Find user by user_id (metadata), email, or wallet
+            // PRIORIDAD: user_id > email > wallet
             let userId = null;
-            if (userEmail || userWallet) {
+            
+            // PRIORIDAD 1: Si viene user_id directamente (metadata), usarlo
+            if (userIdFromMetadata) {
                 const { data: user } = await supabase
                     .from('users')
                     .select('id')
-                    .or(`email.ilike.${userEmail || ''},wallet_address.ilike.${userWallet || ''}`)
+                    .eq('id', userIdFromMetadata)
+                    .maybeSingle();
+                
+                if (user) {
+                    userId = user.id;
+                    console.log('[moonpay] ✅ Usuario encontrado por user_id:', userId);
+                }
+            }
+            
+            // PRIORIDAD 2: Buscar por email si no se encontró por user_id
+            if (!userId && userEmail) {
+                const { data: user } = await supabase
+                    .from('users')
+                    .select('id')
+                    .ilike('email', userEmail)
                     .maybeSingle();
 
                 if (user) {
                     userId = user.id;
+                    console.log('[moonpay] ✅ Usuario encontrado por email:', userEmail);
+                }
+            }
+            
+            // PRIORIDAD 3: Buscar por wallet si no se encontró por email
+            if (!userId && userWallet) {
+                const { data: user } = await supabase
+                    .from('users')
+                    .select('id')
+                    .ilike('wallet_address', userWallet)
+                    .maybeSingle();
+
+                if (user) {
+                    userId = user.id;
+                    console.log('[moonpay] ✅ Usuario encontrado por wallet:', userWallet);
                 }
             }
 
-            // If no user found, create pending deposit
+            // CRÍTICO: Si no se encuentra usuario, RECHAZAR el pago
+            // NO crear depósitos pendientes - el usuario DEBE estar autenticado antes de pagar
             if (!userId) {
-                console.log('[moonpay] No user found, creating pending deposit');
-                const { data: pendingDeposit } = await supabase
+                console.error('[moonpay] ❌ PAGO RECHAZADO: Usuario no encontrado', {
+                    userEmail,
+                    userWallet,
+                    userIdFromMetadata,
+                    transaction_id: transactionData.id
+                });
+                
+                // Registrar el rechazo para auditoría
+                await supabase
                     .from('deposits')
                     .insert({
                         tx_hash: transactionData.id,
                         wallet_address: userWallet || null,
                         amount: usdcAmount,
                         token: 'USDC',
-                        credits_awarded: creditsAwarded,
-                        status: 'pending_user_link',
+                        credits_awarded: 0,
+                        status: 'rejected_no_user',
                         payment_id: transactionData.id,
-                        payment_data: transactionData,
+                        payment_data: {
+                            ...transactionData,
+                            rejection_reason: 'User not authenticated or not found in system',
+                            user_email: userEmail,
+                            user_wallet: userWallet,
+                            user_id_from_metadata: userIdFromMetadata
+                        },
                         created_at: new Date().toISOString()
-                    })
-                    .select()
-                    .single();
+                    });
 
                 return {
                     processed: false,
-                    reason: 'Pending user link',
-                    pendingDeposit,
-                    message: 'Deposit recorded, waiting for user to link wallet/email'
+                    reason: 'User not authenticated',
+                    rejected: true,
+                    message: 'Payment rejected: User must be authenticated before making a deposit. Please contact support if you believe this is an error.'
                 };
             }
 
