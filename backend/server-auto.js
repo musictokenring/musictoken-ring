@@ -2020,6 +2020,50 @@ app.get('/src/credits-system.js', (req, res) => {
 });
 
 /**
+ * CRÍTICO: Endpoint para servir credits-system.js sin caché
+ * Esto evita que Render/CDN cachee el archivo
+ * NOTA: No incluir header 'Expires' porque causa error CORS
+ */
+const fs = require('fs');
+const path = require('path');
+
+app.get('/src/credits-system.js', (req, res) => {
+    try {
+        const filePath = path.join(__dirname, '..', 'src', 'credits-system.js');
+        
+        // Leer el archivo
+        const fileContent = fs.readFileSync(filePath, 'utf8');
+        
+        // CRÍTICO: Headers para evitar caché completamente
+        // NO incluir 'Expires' porque causa error CORS en preflight
+        res.setHeader('Content-Type', 'application/javascript; charset=utf-8');
+        res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate, max-age=0');
+        res.setHeader('Pragma', 'no-cache');
+        res.setHeader('X-Content-Type-Options', 'nosniff');
+        res.setHeader('X-Cache-Bust', Date.now().toString());
+        
+        // CORS headers para permitir acceso desde el frontend
+        res.setHeader('Access-Control-Allow-Origin', '*');
+        res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
+        res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Cache-Control, Pragma');
+        
+        // Enviar el contenido
+        res.send(fileContent);
+    } catch (error) {
+        console.error('[server] Error sirviendo credits-system.js:', error);
+        res.status(500).send('// Error loading credits-system.js');
+    }
+});
+
+// OPTIONS handler para CORS preflight
+app.options('/src/credits-system.js', (req, res) => {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Cache-Control, Pragma');
+    res.status(200).end();
+});
+
+/**
  * 404 handler for API routes
  */
 app.use('/api/*', (req, res) => {
