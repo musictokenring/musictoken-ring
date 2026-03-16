@@ -1992,36 +1992,6 @@ app.get('/', (req, res) => {
 /**
  * CRÍTICO: Endpoint para servir credits-system.js sin caché
  * Esto evita que Render/CDN cachee el archivo
- */
-const fs = require('fs');
-const path = require('path');
-
-app.get('/src/credits-system.js', (req, res) => {
-    try {
-        const filePath = path.join(__dirname, '..', 'src', 'credits-system.js');
-        
-        // Leer el archivo
-        const fileContent = fs.readFileSync(filePath, 'utf8');
-        
-        // CRÍTICO: Headers para evitar caché completamente
-        res.setHeader('Content-Type', 'application/javascript; charset=utf-8');
-        res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate, max-age=0');
-        res.setHeader('Pragma', 'no-cache');
-        res.setHeader('Expires', '0');
-        res.setHeader('X-Content-Type-Options', 'nosniff');
-        res.setHeader('X-Cache-Bust', Date.now().toString());
-        
-        // Enviar el contenido
-        res.send(fileContent);
-    } catch (error) {
-        console.error('[server] Error sirviendo credits-system.js:', error);
-        res.status(500).send('// Error loading credits-system.js');
-    }
-});
-
-/**
- * CRÍTICO: Endpoint para servir credits-system.js sin caché
- * Esto evita que Render/CDN cachee el archivo
  * NOTA: No incluir header 'Expires' porque causa error CORS
  */
 const fs = require('fs');
