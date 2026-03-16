@@ -3,10 +3,12 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate, max-age=0, private">
     <meta http-equiv="Pragma" content="no-cache">
     <meta http-equiv="Expires" content="0">
-    <meta name="mtr-build" content="v3.11-immediate-execution">
+    <meta name="mtr-build" content="v3.13-no-limits-force-reload">
+    <!-- CRÍTICO: Forzar recarga completa sin caché -->
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
     <title>MusicToken Ring - Music Battle Arena</title>
     
     <!-- Script INMEDIATO - Primera línea ejecutable del documento - SIN BLOQUEOS -->
@@ -766,35 +768,66 @@
             </div>
         </section>
 
-        <!-- LOGIN WALL -->
+        <!-- LOGIN WALL - Onboarding Mejorado con Wallet Opcional -->
         <section id="loginWall" class="mb-16">
-            <div class="max-w-2xl mx-auto text-center py-16 px-8 rounded-2xl border border-white/5 bg-white/[0.02]">
+            <div class="max-w-3xl mx-auto text-center py-16 px-8 rounded-2xl border border-white/5 bg-white/[0.02]">
                 <div class="text-6xl mb-6">🥊</div>
                 <h1 class="text-3xl sm:text-4xl font-extrabold text-white mb-4">Bienvenido a <span class="text-cyan-400 neon-text-cyan">MusicToken Ring</span></h1>
                 <p class="text-gray-400 text-lg mb-8 max-w-md mx-auto">
-                    Batalla con tus canciones favoritas, apuesta MTR y demuestra quién tiene mejor gusto musical.
+                    Batalla con tus canciones favoritas, apuesta créditos y demuestra quién tiene mejor gusto musical.
                 </p>
-                <button type="button" onclick="openAuthModal()" class="px-8 py-3 rounded-xl text-lg font-bold bg-gradient-to-r from-cyan-500 to-fuchsia-500 text-white hover:opacity-90 transition-all duration-200 shadow-lg shadow-cyan-500/25 cursor-pointer">
-                    Iniciar Sesión para Jugar
-                </button>
+                
+                <!-- Detección móvil: Mostrar recomendación si es móvil -->
+                <div id="mobileRecommendation" class="hidden mb-6 p-4 rounded-xl bg-blue-500/10 border border-blue-500/30 text-blue-300 text-sm">
+                    <p class="font-semibold mb-1">📱 Modo Sin Wallet Recomendado</p>
+                    <p class="text-xs">Para evitar problemas de conexión en móvil, te recomendamos usar Email/Google. Puedes conectar tu wallet después.</p>
+                </div>
+                
+                <!-- Opciones de Entrada -->
+                <div class="flex flex-col sm:flex-row gap-4 justify-center mb-8">
+                    <!-- Botón: Conectar Wallet -->
+                    <button type="button" id="connectWalletOnboardingBtn" class="px-8 py-3 rounded-xl text-lg font-bold bg-gradient-to-r from-cyan-500 to-blue-500 text-white hover:opacity-90 transition-all duration-200 shadow-lg shadow-cyan-500/25 cursor-pointer flex items-center justify-center gap-2">
+                        <span>🔗</span>
+                        <span>Conectar Wallet</span>
+                        <span class="text-sm opacity-75">(Crypto instantáneo)</span>
+                    </button>
+                    
+                    <!-- Botón: Entrar con Email/Google -->
+                    <button type="button" id="emailSignupOnboardingBtn" onclick="openAuthModal()" class="px-8 py-3 rounded-xl text-lg font-bold bg-gradient-to-r from-fuchsia-500 to-pink-500 text-white hover:opacity-90 transition-all duration-200 shadow-lg shadow-fuchsia-500/25 cursor-pointer flex items-center justify-center gap-2">
+                        <span>📧</span>
+                        <span>Entrar con Email/Google</span>
+                        <span class="text-sm opacity-75">(Sin wallet)</span>
+                    </button>
+                </div>
+                
+                <!-- Preview de Contenido (siempre visible, incluso sin login) -->
                 <div class="grid grid-cols-2 sm:grid-cols-4 gap-4 mt-12">
-                    <div class="flex flex-col items-center gap-2 p-4 rounded-xl bg-white/[0.03] border border-white/5">
+                    <div class="flex flex-col items-center gap-2 p-4 rounded-xl bg-white/[0.03] border border-white/5 hover:border-cyan-500/30 transition">
                         <span class="text-2xl">⚔️</span>
                         <span class="text-sm text-gray-300 font-medium">Modo Rápido</span>
+                        <span class="text-xs text-gray-500">Apuestas rápidas</span>
                     </div>
-                    <div class="flex flex-col items-center gap-2 p-4 rounded-xl bg-white/[0.03] border border-white/5">
+                    <div class="flex flex-col items-center gap-2 p-4 rounded-xl bg-white/[0.03] border border-white/5 hover:border-cyan-500/30 transition">
                         <span class="text-2xl">🎵</span>
                         <span class="text-sm text-gray-300 font-medium">Salas Privadas</span>
+                        <span class="text-xs text-gray-500">Juega con amigos</span>
                     </div>
-                    <div class="flex flex-col items-center gap-2 p-4 rounded-xl bg-white/[0.03] border border-white/5">
+                    <div class="flex flex-col items-center gap-2 p-4 rounded-xl bg-white/[0.03] border border-white/5 hover:border-cyan-500/30 transition">
                         <span class="text-2xl">🏆</span>
                         <span class="text-sm text-gray-300 font-medium">Torneos</span>
+                        <span class="text-xs text-gray-500">Competencias</span>
                     </div>
-                    <div class="flex flex-col items-center gap-2 p-4 rounded-xl bg-white/[0.03] border border-white/5">
+                    <div class="flex flex-col items-center gap-2 p-4 rounded-xl bg-white/[0.03] border border-white/5 hover:border-cyan-500/30 transition">
                         <span class="text-2xl">🎯</span>
                         <span class="text-sm text-gray-300 font-medium">Práctica</span>
+                        <span class="text-xs text-gray-500">Sin apuestas</span>
                     </div>
                 </div>
+                
+                <!-- Texto informativo -->
+                <p class="text-gray-500 text-xs mt-8">
+                    Puedes empezar sin wallet. Conecta tu wallet después para depósitos/retiros instantáneos en USDC.
+                </p>
             </div>
         </section>
 
@@ -812,6 +845,45 @@
                             <p class="text-green-400 text-sm font-semibold mb-1">Créditos MTR Nominales</p>
                             <p class="text-gray-300 text-xs">Estas fichas valen siempre $1 cada una (1:1 USDC estable). No fluctúan como el token MTR nativo. Respaldadas por USDC real en vault.</p>
                         </div>
+                    </div>
+                </div>
+
+                <!-- Opción Fiat: Mercado Pago (Sin Wallet) -->
+                <div id="fiatDepositSection" class="mb-6 p-4 rounded-lg bg-fuchsia-500/10 border border-fuchsia-500/30 hidden">
+                    <div class="flex items-center gap-2 mb-3">
+                        <span class="text-fuchsia-400 text-lg font-bold">💳</span>
+                        <h4 class="text-fuchsia-400 font-bold text-base">Depositar sin Wallet (Fiat)</h4>
+                    </div>
+                    <p class="text-gray-300 text-sm mb-3">Deposita con tarjeta, PSE, Nequi o efectivo usando Mercado Pago. Recibirás créditos nominales 1:1 (menos fee 5%).</p>
+                    <div class="flex flex-wrap gap-2 mb-3">
+                        <span class="text-xs px-2 py-1 rounded-full bg-fuchsia-500/20 text-fuchsia-300 border border-fuchsia-500/30">💳 Tarjeta</span>
+                        <span class="text-xs px-2 py-1 rounded-full bg-fuchsia-500/20 text-fuchsia-300 border border-fuchsia-500/30">🏦 PSE</span>
+                        <span class="text-xs px-2 py-1 rounded-full bg-fuchsia-500/20 text-fuchsia-300 border border-fuchsia-500/30">📱 Nequi</span>
+                        <span class="text-xs px-2 py-1 rounded-full bg-fuchsia-500/20 text-fuchsia-300 border border-fuchsia-500/30">💰 Efectivo</span>
+                    </div>
+                    <p class="text-xs text-yellow-400 mb-3">
+                        <strong>Mínimo:</strong> $10,000 COP (~$2.50 USD) | <strong>Fee:</strong> 5% | <strong>Recibes:</strong> 95% en créditos nominales
+                    </p>
+                    
+                    <!-- Formulario de Depósito Mercado Pago -->
+                    <div class="mt-4 space-y-3">
+                        <div>
+                            <label class="block text-xs text-gray-400 mb-1">Monto (COP)</label>
+                            <input 
+                                type="number" 
+                                id="mercadopagoAmount" 
+                                min="10000" 
+                                step="1000" 
+                                value="10000"
+                                class="w-full px-3 py-2 rounded-lg bg-gray-800/50 border border-gray-700 text-white text-sm focus:border-fuchsia-500 focus:outline-none"
+                                placeholder="10000">
+                        </div>
+                        <button 
+                            onclick="initMercadoPagoDeposit()"
+                            class="w-full px-6 py-3 rounded-full bg-gradient-to-r from-fuchsia-500/20 to-pink-500/20 border-2 border-fuchsia-500/40 hover:border-fuchsia-500/60 hover:from-fuchsia-500/30 hover:to-pink-500/30 transition-all duration-300 shadow-lg shadow-fuchsia-500/20 hover:shadow-fuchsia-500/30 group flex items-center justify-center gap-2">
+                            <span class="text-lg">💳</span>
+                            <span class="text-sm font-semibold text-fuchsia-400 group-hover:text-fuchsia-300">Depositar con Mercado Pago</span>
+                        </button>
                     </div>
                 </div>
 
@@ -972,6 +1044,87 @@
 
                         // Hacer función global
                         window.initMoonPay = initMoonPay;
+
+                        // Mercado Pago Deposit Function
+                        async function initMercadoPagoDeposit() {
+                            try {
+                                const amountInput = document.getElementById('mercadopagoAmount');
+                                const amount = parseFloat(amountInput?.value || 10000);
+                                
+                                if (!amount || amount < 10000) {
+                                    if (typeof showToast === 'function') {
+                                        showToast('Monto mínimo: $10,000 COP', 'error');
+                                    }
+                                    return;
+                                }
+
+                                // Verificar autenticación
+                                let userId = null;
+                                let email = null;
+                                
+                                if (typeof supabaseClient !== 'undefined') {
+                                    try {
+                                        const { data: { session } } = await supabaseClient.auth.getSession();
+                                        if (session && session.user) {
+                                            userId = session.user.id;
+                                            email = session.user.email;
+                                        }
+                                    } catch (e) {
+                                        console.error('[MercadoPago] Error obteniendo sesión:', e);
+                                    }
+                                }
+
+                                if (!userId) {
+                                    if (typeof showToast === 'function') {
+                                        showToast('Por favor inicia sesión primero', 'error');
+                                    }
+                                    if (typeof openAuthModal === 'function') {
+                                        openAuthModal();
+                                    }
+                                    return;
+                                }
+
+                                // Crear checkout preference
+                                const backendUrl = window.CONFIG?.BACKEND_API || 'https://musictoken-ring.onrender.com';
+                                const response = await fetch(`${backendUrl}/api/deposit/mercadopago/create`, {
+                                    method: 'POST',
+                                    headers: {
+                                        'Content-Type': 'application/json'
+                                    },
+                                    body: JSON.stringify({
+                                        amount: amount,
+                                        currency: 'COP',
+                                        userId: userId,
+                                        email: email
+                                    })
+                                });
+
+                                if (!response.ok) {
+                                    const errorData = await response.json();
+                                    throw new Error(errorData.error || 'Error al crear checkout');
+                                }
+
+                                const preference = await response.json();
+                                
+                                // Redirigir a Mercado Pago checkout
+                                if (preference.init_point) {
+                                    window.location.href = preference.init_point;
+                                } else if (preference.sandbox_init_point) {
+                                    window.location.href = preference.sandbox_init_point;
+                                } else {
+                                    throw new Error('No se pudo obtener URL de checkout');
+                                }
+
+                            } catch (error) {
+                                console.error('[MercadoPago] Error:', error);
+                                if (typeof showToast === 'function') {
+                                    showToast('Error: ' + (error.message || 'Desconocido'), 'error');
+                                }
+                            }
+                        }
+
+                        // Hacer función global
+                        window.initMercadoPagoDeposit = initMercadoPagoDeposit;
                     </script>
                     
                     <script>
@@ -1015,6 +1168,14 @@
                             if (widget) {
                                 widget.addEventListener('load', function() {
                                     console.log('[NOWPayments] Widget cargado, aplicando estilos oscuros');
+                                    
+                                    // Silenciar errores del widget (404 en donation-settings es normal)
+                                    widget.addEventListener('error', function(e) {
+                                        // Ignorar errores 404 del widget - son normales
+                                        if (e.message && e.message.includes('404')) {
+                                            return;
+                                        }
+                                    });
                                     
                                     // Filtros para oscurecer y ajustar colores a la paleta cyan/azul
                                     widget.style.filter = 'brightness(0.75) contrast(1.25) saturate(0.6)';
@@ -1484,9 +1645,9 @@
                 <p class="text-gray-500 text-xs mt-1">Miembro desde: <span id="profileSince">-</span></p>
             </div>
             <div class="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-6">
-                <div class="p-3 rounded-lg bg-white/[0.03] border border-white/5 text-center cursor-help" title="MTR créditos jugables: Fichas estables que valen siempre $1 cada una (1:1 USDC estable)">
-                    <span class="text-xs text-gray-400 block" id="profileBalanceLabel">MTR créditos</span>
-                    <strong id="profileBalance" class="text-white">-</strong>
+                <div class="p-3 rounded-lg bg-white/[0.03] border border-white/5 text-center cursor-help overflow-hidden" title="MTR créditos jugables: Fichas estables que valen siempre $1 cada una (1:1 USDC estable)" style="min-height: 60px; display: flex; flex-direction: column; justify-content: center;">
+                    <span class="text-xs text-gray-400 block mb-1" id="profileBalanceLabel">MTR créditos</span>
+                    <strong id="profileBalance" class="text-white block break-words" style="word-break: break-word; overflow-wrap: break-word;">-</strong>
                 </div>
                 <div class="p-3 rounded-lg bg-white/[0.03] border border-white/5 text-center"><span class="text-xs text-gray-400 block">Partidas</span><strong id="profileMatches" class="text-white">-</strong></div>
                 <div class="p-3 rounded-lg bg-white/[0.03] border border-white/5 text-center"><span class="text-xs text-gray-400 block">Victorias</span><strong id="profileWins" class="text-white">-</strong></div>
@@ -1534,7 +1695,136 @@
     <!-- ==================== SCRIPTS ==================== -->
     <!-- Scripts críticos para funcionalidad básica - mantener sin defer -->
     <script src="./auth-system.js?v=v2.7"></script>
-    <script src="./src/credits-system.js?v=v2.7"></script>
+    <!-- CRÍTICO: SOLUCIÓN AGRESIVA - Eliminar cualquier versión anterior y cargar nueva -->
+    <script>
+        // PASO 1: Eliminar cualquier script anterior de credits-system.js
+        (function() {
+            var scripts = document.querySelectorAll('script[src*="credits-system.js"]');
+            scripts.forEach(function(script) {
+                console.log('[CACHE-BUST] 🗑️ Eliminando script antiguo:', script.src);
+                script.remove();
+            });
+            
+            // PASO 2: Limpiar cualquier referencia en window
+            if (window.CreditsSystem && window.CreditsSystem.currentCredits !== undefined) {
+                console.log('[CACHE-BUST] ⚠️ CreditsSystem anterior detectado, será sobrescrito');
+            }
+        })();
+    </script>
+    
+    <!-- CRÍTICO: Cargar nueva versión con múltiples métodos de cache-busting -->
+    <script>
+        (function() {
+            // PASO 0: Limpiar Service Workers si existen (pueden estar cacheando archivos)
+            if ('serviceWorker' in navigator) {
+                navigator.serviceWorker.getRegistrations().then(function(registrations) {
+                    if (registrations.length > 0) {
+                        console.log('[CACHE-BUST] 🗑️ Eliminando', registrations.length, 'Service Worker(s)...');
+                        registrations.forEach(function(registration) {
+                            registration.unregister().then(function(success) {
+                                if (success) {
+                                    console.log('[CACHE-BUST] ✅ Service Worker eliminado');
+                                }
+                            });
+                        });
+                    }
+                });
+            }
+            
+            // Método 1: Cargar con timestamp único + random
+            var timestamp = Date.now();
+            var random = Math.random().toString(36).substring(7);
+            var version = 'v3.0-no-limits-' + timestamp + '-' + random;
+            
+            console.log('[CACHE-BUST] 🔄 Iniciando carga de credits-system.js, versión:', version);
+            console.log('[CACHE-BUST] 🔄 Timestamp:', timestamp);
+            console.log('[CACHE-BUST] 🔄 Random:', random);
+            
+            // Método 2: Usar fetch con no-cache para verificar que el servidor sirva el archivo correcto
+            var fetchUrl = './src/credits-system.js?v=' + version + '&nocache=' + timestamp + '&random=' + random + '&t=' + Date.now();
+            console.log('[CACHE-BUST] 🔄 Fetch URL:', fetchUrl);
+            
+            fetch(fetchUrl, {
+                cache: 'no-store',
+                headers: {
+                    'Cache-Control': 'no-cache, no-store, must-revalidate',
+                    'Pragma': 'no-cache',
+                    'Expires': '0'
+                }
+            }).then(function(response) {
+                console.log('[CACHE-BUST] 📥 Respuesta recibida:', response.status, response.statusText);
+                if (!response.ok) {
+                    throw new Error('HTTP ' + response.status + ': ' + response.statusText);
+                }
+                return response.text();
+            }).then(function(scriptContent) {
+                console.log('[CACHE-BUST] 📄 Contenido recibido, tamaño:', scriptContent.length, 'caracteres');
+                
+                // Verificar que el contenido NO tenga las validaciones antiguas
+                var tieneValidacionesAntiguas = scriptContent.includes('VALOR SOSPECHOSO') || 
+                                                scriptContent.includes('maximoRazonable') || 
+                                                scriptContent.includes('MAX_REASONABLE_CREDITS') ||
+                                                scriptContent.includes('10000000');
+                
+                if (tieneValidacionesAntiguas) {
+                    console.error('[CACHE-BUST] ❌❌❌ ARCHIVO SERVIDO AÚN TIENE VALIDACIONES ANTIGUAS!');
+                    console.error('[CACHE-BUST] El servidor está sirviendo una versión cacheada del archivo');
+                    console.error('[CACHE-BUST] Contenido del archivo (primeros 500 caracteres):', scriptContent.substring(0, 500));
+                    
+                    // Mostrar alerta visible
+                    var alertDiv = document.createElement('div');
+                    alertDiv.style.cssText = 'position: fixed; top: 0; left: 0; right: 0; background: red; color: white; padding: 20px; z-index: 99999; text-align: center; font-weight: bold;';
+                    alertDiv.innerHTML = '⚠️ ERROR CRÍTICO: El servidor está sirviendo una versión cacheada del archivo credits-system.js. Los cambios NO están desplegados en producción.';
+                    document.body.appendChild(alertDiv);
+                    
+                    setTimeout(function() {
+                        alertDiv.remove();
+                    }, 10000);
+                } else {
+                    console.log('[CACHE-BUST] ✅ Archivo verificado - NO contiene validaciones antiguas');
+                    console.log('[CACHE-BUST] ✅ Verificando que contiene la versión correcta...');
+                    
+                    // Verificar que contiene el log de versión correcto
+                    if (scriptContent.includes('v3.0-no-limits') || scriptContent.includes('v2.9-no-limits')) {
+                        console.log('[CACHE-BUST] ✅ Versión correcta detectada en el contenido');
+                    } else {
+                        console.warn('[CACHE-BUST] ⚠️ No se encontró la versión esperada en el contenido');
+                    }
+                    
+                    // Crear script inline con el contenido
+                    var script = document.createElement('script');
+                    script.textContent = scriptContent;
+                    script.setAttribute('data-version', 'v3.0-no-limits');
+                    script.setAttribute('data-loaded', new Date().toISOString());
+                    script.setAttribute('data-timestamp', timestamp.toString());
+                    document.head.appendChild(script);
+                    
+                    console.log('[CACHE-BUST] ✅✅✅ credits-system.js cargado INLINE (sin caché), versión:', version);
+                    console.log('[CACHE-BUST] ✅ Sin límites de balance - mostrará valores completos');
+                    console.log('[CACHE-BUST] ✅ Script agregado al DOM con timestamp:', timestamp);
+                }
+            }).catch(function(error) {
+                console.error('[CACHE-BUST] ❌ Error verificando/cargando archivo:', error);
+                console.error('[CACHE-BUST] ❌ Error details:', error.message, error.stack);
+                
+                // Fallback: Cargar normalmente pero con timestamp único
+                console.log('[CACHE-BUST] 🔄 Intentando método fallback...');
+                var script = document.createElement('script');
+                var fallbackUrl = './src/credits-system.js?v=' + version + '&nocache=' + timestamp + '&random=' + random + '&fallback=' + Date.now();
+                script.src = fallbackUrl;
+                script.setAttribute('data-no-cache', 'true');
+                script.setAttribute('data-version', 'v3.0-no-limits');
+                script.setAttribute('data-fallback', 'true');
+                script.onload = function() {
+                    console.log('[CACHE-BUST] ✅ credits-system.js cargado (fallback), versión:', version);
+                };
+                script.onerror = function() {
+                    console.error('[CACHE-BUST] ❌ Error cargando credits-system.js (fallback también falló)');
+                };
+                document.head.appendChild(script);
+            });
+        })();
+    </script>
     <!-- Mobile Auth Check -->
     <script src="src/mobile-auth-check.js"></script>
     <script src="./src/wallet-credits-integration.js?v=v2.7"></script>
@@ -2554,6 +2844,38 @@
             try {
                 if (typeof initializePreferredNetwork === 'function') initializePreferredNetwork();
                 if (typeof renderWalletDirectory === 'function') renderWalletDirectory();
+                
+                // Event listener para botón de conectar wallet en onboarding
+                const connectWalletOnboardingBtn = document.getElementById('connectWalletOnboardingBtn');
+                if (connectWalletOnboardingBtn) {
+                    connectWalletOnboardingBtn.addEventListener('click', async function() {
+                        try {
+                            // Intentar conectar wallet
+                            if (typeof connectWallet === 'function') {
+                                await connectWallet();
+                                // Si la conexión es exitosa, showLoginWall se encargará de ocultar el login wall
+                            } else {
+                                console.error('[onboarding] connectWallet no está disponible');
+                                if (typeof showToast === 'function') {
+                                    showToast('Error: Función de conexión no disponible', 'error');
+                                }
+                            }
+                        } catch (error) {
+                            console.error('[onboarding] Error conectando wallet:', error);
+                            if (typeof showToast === 'function') {
+                                showToast('Error al conectar wallet: ' + (error.message || 'Desconocido'), 'error');
+                            }
+                            
+                            // En móvil, mostrar sugerencia de usar email
+                            const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+                            if (isMobile && typeof showToast === 'function') {
+                                setTimeout(() => {
+                                    showToast('💡 En móvil, usa Email/Google para evitar problemas de conexión', 'info');
+                                }, 2000);
+                            }
+                        }
+                    });
+                }
 
                 var session = null;
                 if (typeof supabaseClient !== 'undefined') {
@@ -2592,6 +2914,17 @@
                 
                 if (session || hasLinkedWallet) {
                     showModeSelector();
+                    
+                    // Mostrar/ocultar sección de depósitos fiat según autenticación
+                    const fiatDepositSection = document.getElementById('fiatDepositSection');
+                    if (fiatDepositSection) {
+                        // Mostrar si hay sesión pero NO hay wallet conectada
+                        if (session && !connectedAddress) {
+                            fiatDepositSection.classList.remove('hidden');
+                        } else {
+                            fiatDepositSection.classList.add('hidden');
+                        }
+                    }
                     
                     // CRÍTICO: Cargar créditos inmediatamente si hay wallet conectada
                     const connectedWallet = window.__mtrConnectedWallet || localStorage.getItem('mtr_wallet') || connectedAddress;
@@ -2865,6 +3198,17 @@
             
             if (!loginWall) return;
             
+            // Detectar móvil y mostrar recomendación
+            const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+            const mobileRecommendation = document.getElementById('mobileRecommendation');
+            if (mobileRecommendation) {
+                if (isMobile) {
+                    mobileRecommendation.classList.remove('hidden');
+                } else {
+                    mobileRecommendation.classList.add('hidden');
+                }
+            }
+            
             // Verificar si wallet está vinculada antes de mostrar
             const connectedAddress = window.connectedAddress || localStorage.getItem('mtr_wallet');
             if (connectedAddress) {
@@ -2893,15 +3237,31 @@
                 }
             }
             
-            // Verificar sesión Supabase
+            // Verificar sesión Supabase (email/Google auth)
             if (typeof supabaseClient !== 'undefined') {
                 try {
                     const { data: { session } } = await supabaseClient.auth.getSession();
                     if (session && session.user) {
-                        // Usuario autenticado, ocultar login wall y mostrar selector de modos
+                        // Usuario autenticado con email/Google, ocultar login wall y mostrar selector de modos
                         loginWall.classList.add('hidden');
                         if (modeSelector) modeSelector.classList.remove('hidden');
-                        console.log('[showLoginWall] Usuario autenticado, ocultando login wall');
+                        console.log('[showLoginWall] Usuario autenticado (email/Google), ocultando login wall');
+                        
+                        // Inicializar GameEngine para usuarios con email (sin wallet)
+                        if (typeof window.GameEngine !== 'undefined' && typeof window.GameEngine.init === 'function') {
+                            window.GameEngine.init().catch(function(initError) {
+                                console.error('[showLoginWall] Error initializing GameEngine:', initError);
+                            });
+                        }
+                        
+                        // Cargar balance fiat si existe
+                        if (typeof window.CreditsSystem !== 'undefined' && typeof window.CreditsSystem.loadBalance === 'function') {
+                            // Pasar null como walletAddress para cargar solo saldo fiat
+                            window.CreditsSystem.loadBalance(null, session.user.id).catch(function(err) {
+                                console.warn('[showLoginWall] Error cargando balance fiat:', err);
+                            });
+                        }
+                        
                         return;
                     }
                 } catch (error) {
@@ -2910,6 +3270,7 @@
             }
             
             // Mostrar login wall solo si no hay autenticación ni wallet vinculada
+            // AHORA: Permitir preview sin login (loginWall visible pero con opciones)
             loginWall.classList.remove('hidden');
             if (modeSelector) modeSelector.classList.add('hidden');
         }
@@ -4907,8 +5268,13 @@
                     logFn('[DIAG] ⚠️ Handler guardado NO encontrado');
                 }
             } else {
-                errorFn('[DIAG] ❌ Botón createSocialBtn NO encontrado por ningún método');
-                errorFn('[DIAG] window.__createSocialBtn:', window.__createSocialBtn);
+                // Solo reportar error si estamos en modo social (donde el botón debería existir)
+                // Silenciar completamente si no estamos en modo social para evitar spam en consola
+                if (window.currentMode === 'social') {
+                    errorFn('[DIAG] ❌ Botón createSocialBtn NO encontrado por ningún método (modo social activo)');
+                    errorFn('[DIAG] window.__createSocialBtn:', window.__createSocialBtn);
+                }
+                // No mostrar ningún mensaje si no estamos en modo social (evitar spam)
             }
             
             // Verificar tracks con event listeners
@@ -4928,34 +5294,39 @@
             logFn('========================================');
         }
         
-        // Ejecutar diagnóstico múltiples veces - pero solo después de que el DOM esté completamente cargado
+        // Ejecutar diagnóstico solo UNA VEZ después de que el DOM esté completamente cargado
+        // Reducido para evitar spam en consola - solo ejecutar una vez al inicio
+        var diagnosticExecuted = false;
+        function executeDiagnosticOnce() {
+            if (diagnosticExecuted) return;
+            diagnosticExecuted = true;
+            setTimeout(runDiagnostic, 2000);
+        }
+        
         if (document.readyState === 'complete') {
-            setTimeout(runDiagnostic, 1000);
-            setTimeout(runDiagnostic, 3000);
-            setTimeout(runDiagnostic, 6000);
+            executeDiagnosticOnce();
         } else {
             window.addEventListener('load', function() {
-                setTimeout(runDiagnostic, 1000);
-                setTimeout(runDiagnostic, 3000);
-                setTimeout(runDiagnostic, 6000);
+                executeDiagnosticOnce();
             });
         }
         
-        // También ejecutar cuando se cambia a modo social
-        var originalSelectMode = window.selectMode;
-        if (typeof originalSelectMode === 'function') {
-            window.selectMode = function(mode) {
-                var result = originalSelectMode.apply(this, arguments);
-                if (mode === 'social') {
-                    setTimeout(function() {
-                        var logFn = window.__originalLog || console.log;
-                        logFn('[selectMode] Ejecutando diagnóstico después de cambiar a modo social...');
-                        runDiagnostic();
-                    }, 500);
-                }
-                return result;
-            };
-        }
+        // También ejecutar cuando se cambia a modo social (solo si hay problemas)
+        // DESHABILITADO: El diagnóstico ya se ejecuta una vez al inicio, no es necesario ejecutarlo de nuevo
+        // var originalSelectMode = window.selectMode;
+        // if (typeof originalSelectMode === 'function') {
+        //     window.selectMode = function(mode) {
+        //         var result = originalSelectMode.apply(this, arguments);
+        //         if (mode === 'social') {
+        //             setTimeout(function() {
+        //                 var logFn = window.__originalLog || console.log;
+        //                 logFn('[selectMode] Ejecutando diagnóstico después de cambiar a modo social...');
+        //                 runDiagnostic();
+        //             }, 500);
+        //         }
+        //         return result;
+        //     };
+        // }
     </script>
 
     <!-- VIEM WALLET MODULE - Cargar con defer para no bloquear -->

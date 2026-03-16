@@ -432,6 +432,27 @@ async function loadPlayerProfile(user) {
     if (!user?.id) return;
 
     activeProfileUserId = user.id;
+    
+    // CRÍTICO: Verificar si este es el usuario actual y si CreditsSystem tiene el balance cargado
+    // Si es así, usar ese balance directamente para garantizar consistencia con el dashboard
+    let useCreditsSystemBalance = false;
+    if (typeof supabaseClient !== 'undefined') {
+        try {
+            const { data: { session } } = await supabaseClient.auth.getSession();
+            if (session && session.user && session.user.id === user.id) {
+                // Es el usuario actual - verificar si CreditsSystem tiene balance cargado
+                // SIN LIMITACIONES: Usar el balance completo sin importar qué tan grande sea
+                if (typeof window.CreditsSystem !== 'undefined' && 
+                    window.CreditsSystem.currentCredits !== undefined && 
+                    window.CreditsSystem.currentCredits >= 0) {
+                    console.log('[loadPlayerProfile] ✅ Usuario actual detectado, usando balance de CreditsSystem para consistencia:', window.CreditsSystem.currentCredits);
+                    useCreditsSystemBalance = true;
+                }
+            }
+        } catch (e) {
+            console.warn('[loadPlayerProfile] Error verificando sesión:', e);
+        }
+    }
 
     const existingState = playerProfileLoadStateByUser.get(user.id);
     if (existingState?.inFlight) {
@@ -459,36 +480,96 @@ async function loadPlayerProfile(user) {
 
     const runLoad = async () => {
     try {
-        // CRÍTICO: Obtener el saldo real desde Supabase directamente
-        // Esto asegura que siempre mostremos el saldo correcto, independientemente de problemas en el backend
+        // CRÍTICO: Obtener el saldo unificado (fiat + onchain + credits) igual que el dashboard
+        // Esto asegura que siempre mostremos el saldo correcto y consistente
         let realBalance = 0;
         
-        // Primero intentar desde Supabase (fuente de verdad)
-        const { data: creditsData, error: creditsError } = await supabaseClient
-            .from('user_credits')
-            .select('credits')
-            .eq('user_id', user.id)
-            .maybeSingle();
-        
-        if (!creditsError && creditsData) {
-            realBalance = creditsData.credits || 0;
-            console.log('[loadPlayerProfile] ✅ Saldo obtenido desde Supabase:', realBalance);
+        // PRIORIDAD 1: Si es el usuario actual y CreditsSystem tiene balance, usarlo directamente
+        // Esto garantiza 100% de consistencia con el dashboard
+        // CRÍTICO: SIEMPRE usar CreditsSystem si está disponible para el usuario actual
+        if (useCreditsSystemBalance && window.CreditsSystem.currentCredits >= 0) {
+            realBalance = window.CreditsSystem.currentCredits;
+            console.log('[loadPlayerProfile] ✅✅✅ Usando balance de CreditsSystem (MÁXIMA CONSISTENCIA con dashboard):', realBalance);
         } else {
-            // Fallback: Si Supabase falla, intentar desde CreditsSystem
-            if (typeof window.CreditsSystem !== 'undefined' && window.CreditsSystem.currentCredits !== undefined) {
-                const creditsSystemBalance = window.CreditsSystem.currentCredits || 0;
-                // Solo usar CreditsSystem si el valor es razonable (menos de 10 millones)
-                if (creditsSystemBalance <= 10000000) {
-                    realBalance = creditsSystemBalance;
-                    console.log('[loadPlayerProfile] ⚠️ Usando saldo del CreditsSystem (fallback):', realBalance);
-                } else {
-                    console.warn('[loadPlayerProfile] ⚠️ CreditsSystem tiene valor sospechoso, usando 0');
-                    realBalance = 0;
-                }
+            // PRIORIDAD 2: Método 1: Intentar usar función SQL unificada (si existe y migración ejecutada)
+            let useRPC = false;
+        try {
+            const { data: unifiedBalance, error: unifiedError } = await supabaseClient
+                .rpc('get_user_unified_balance', { user_id_param: user.id });
+            
+            if (!unifiedError && unifiedBalance !== null && unifiedBalance !== undefined) {
+                realBalance = parseFloat(unifiedBalance) || 0;
+                console.log('[loadPlayerProfile] ✅ Saldo unificado obtenido desde RPC:', realBalance);
+                useRPC = true;
             } else {
-                console.warn('[loadPlayerProfile] ⚠️ No se pudo obtener saldo, usando 0');
-                realBalance = 0;
+                console.log('[loadPlayerProfile] RPC error o no disponible:', unifiedError?.message || 'unknown');
             }
+        } catch (rpcError) {
+            console.log('[loadPlayerProfile] RPC no disponible o migración no ejecutada:', rpcError.message);
+        }
+        
+        // Método 2: Si RPC no funcionó, calcular balance unificado manualmente
+        if (!useRPC) {
+            console.log('[loadPlayerProfile] Calculando balance manualmente...');
+            
+            // Intentar obtener datos de users (puede fallar si migración no ejecutada)
+            let fiatBalance = 0;
+            let onchainBalance = 0;
+            
+            try {
+                const { data: userData, error: userError } = await supabaseClient
+                    .from('users')
+                    .select('saldo_fiat, saldo_onchain')
+                    .eq('id', user.id)
+                    .maybeSingle();
+                
+                if (!userError && userData) {
+                    fiatBalance = parseFloat(userData.saldo_fiat || 0);
+                    onchainBalance = parseFloat(userData.saldo_onchain || 0);
+                    console.log('[loadPlayerProfile] Datos de users obtenidos:', { fiatBalance, onchainBalance });
+                } else {
+                    console.log('[loadPlayerProfile] Columnas saldo_fiat/saldo_onchain no existen (migración no ejecutada)');
+                }
+            } catch (userError) {
+                console.log('[loadPlayerProfile] Error obteniendo saldo_fiat/saldo_onchain (migración no ejecutada):', userError.message);
+            }
+            
+            // Obtener credits (siempre disponible)
+            const { data: creditsData, error: creditsError } = await supabaseClient
+                .from('user_credits')
+                .select('credits')
+                .eq('user_id', user.id)
+                .maybeSingle();
+            
+            const creditsBalance = parseFloat(creditsData?.credits || 0);
+            
+            // Balance unificado = fiat + onchain + credits
+            // Si migración no ejecutada, fiat y onchain serán 0, solo usamos credits
+            realBalance = fiatBalance + onchainBalance + creditsBalance;
+            
+            console.log('[loadPlayerProfile] ✅ Saldo calculado manualmente:', {
+                fiat: fiatBalance,
+                onchain: onchainBalance,
+                credits: creditsBalance,
+                total: realBalance,
+                userId: user.id
+            });
+        }
+        
+        // Fallback final: Si todo falla y es el usuario actual, usar CreditsSystem
+        // SIN LIMITACIONES: Usar el balance completo sin importar qué tan grande sea
+        if (!useCreditsSystemBalance && realBalance === 0 && typeof window.CreditsSystem !== 'undefined' && window.CreditsSystem.currentCredits !== undefined) {
+            const creditsSystemBalance = window.CreditsSystem.currentCredits || 0;
+            if (creditsSystemBalance > 0) {
+                realBalance = creditsSystemBalance;
+                console.log('[loadPlayerProfile] ⚠️ Usando saldo del CreditsSystem (fallback final):', realBalance);
+            }
+        }
+        
+        // Validación final: asegurar que el balance no sea negativo
+        if (realBalance < 0) {
+            console.warn('[loadPlayerProfile] ⚠️ Balance negativo detectado, corrigiendo a 0');
+            realBalance = 0;
         }
 
         let matchesData = [];
@@ -537,16 +618,57 @@ async function loadPlayerProfile(user) {
             return;
         }
 
-        // CRÍTICO: Mostrar el mismo saldo que el header
-        // Formatear el saldo igual que en el header (con 2 decimales si es necesario)
+        // CRÍTICO: Si es el usuario actual, SIEMPRE usar el balance del dashboard directamente
+        // Esto garantiza 100% de consistencia sin importar qué tan grande sea el valor
+        // PRIORIDAD ABSOLUTA: El dashboard es la fuente de verdad
+        if (typeof window.CreditsSystem !== 'undefined' && window.CreditsSystem.currentCredits !== undefined) {
+            const dashboardBalance = window.CreditsSystem.currentCredits;
+            console.log('[loadPlayerProfile] 🔍 Balance del dashboard disponible:', {
+                profileBalance: realBalance,
+                dashboardBalance: dashboardBalance,
+                userId: user.id,
+                diferencia: Math.abs(realBalance - dashboardBalance)
+            });
+            
+            // SIEMPRE usar el balance del dashboard si está disponible (incluso si es 0)
+            // SIN LIMITACIONES: Usar el balance completo sin importar qué tan grande sea
+            // NO comparar diferencias - el dashboard siempre tiene prioridad para el usuario actual
+            if (dashboardBalance >= 0) {
+                realBalance = dashboardBalance;
+                console.log('[loadPlayerProfile] ✅✅✅ Usando balance del dashboard (FUENTE DE VERDAD):', realBalance);
+            }
+        }
+        
+        // CRÍTICO: Mostrar el mismo saldo que el header (balance unificado)
+        // SIEMPRE mostrar el valor real completo sin limitaciones
         const displayBalance = realBalance;
         
-        // Formatear igual que el header: mostrar con 2 decimales si es un número grande
-        const formattedBalance = displayBalance >= 1000 
-            ? displayBalance.toFixed(2) 
-            : Math.round(displayBalance);
+        // Formatear igual que el header: usar toLocaleString para números grandes
+        // El dashboard muestra: "3024.64 MTR créditos" o "98024480.00 MTR créditos"
+        let formattedBalance;
+        if (displayBalance >= 1000) {
+            // Números grandes: mostrar con 2 decimales y separadores de miles
+            formattedBalance = displayBalance.toLocaleString('es-ES', { 
+                minimumFractionDigits: 2, 
+                maximumFractionDigits: 2 
+            });
+        } else if (displayBalance >= 1) {
+            // Números medianos: mostrar con 2 decimales
+            formattedBalance = displayBalance.toFixed(2);
+        } else {
+            // Números pequeños: mostrar tal cual
+            formattedBalance = displayBalance.toString();
+        }
         
-        setProfileValue('profileBalance', `${formattedBalance} MTR`);
+        console.log('[loadPlayerProfile] ✅ Balance final para mostrar:', {
+            raw: realBalance,
+            formatted: formattedBalance,
+            userId: user.id,
+            digitos: formattedBalance.replace(/[^\d]/g, '').length
+        });
+        
+        // Establecer el valor con ajuste automático de fuente
+        setProfileValueWithAutoFont('profileBalance', `${formattedBalance} MTR`, displayBalance);
         setProfileValue('profileMatches', `${totalMatches}`);
         setProfileValue('profileWins', `${wins}`);
         setProfileValue('profileLosses', `${losses}`);
@@ -578,7 +700,21 @@ async function loadPlayerProfile(user) {
         }
         console.error('Error loading player profile:', error);
         if (!isStaleResult()) {
-            setProfileValue('profileBalance', 'No disponible');
+            // En caso de error, intentar usar el balance del dashboard si está disponible
+            if (typeof window.CreditsSystem !== 'undefined' && window.CreditsSystem.currentCredits !== undefined) {
+                const dashboardBalance = window.CreditsSystem.currentCredits || 0;
+                if (dashboardBalance > 0) {
+                    const formattedError = dashboardBalance >= 1000 
+                        ? dashboardBalance.toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+                        : dashboardBalance.toFixed(2);
+                    setProfileValueWithAutoFont('profileBalance', `${formattedError} MTR`, dashboardBalance);
+                    console.log('[loadPlayerProfile] ⚠️ Error cargando perfil, usando balance del dashboard:', dashboardBalance);
+                } else {
+                    setProfileValue('profileBalance', 'No disponible');
+                }
+            } else {
+                setProfileValue('profileBalance', 'No disponible');
+            }
         }
     } finally {
         state.inFlight = false;
@@ -599,6 +735,60 @@ async function loadPlayerProfile(user) {
 function setProfileValue(id, value) {
     const el = document.getElementById(id);
     if (el) el.textContent = value;
+}
+
+/**
+ * Establece el valor del perfil con ajuste automático de fuente
+ * Si el número excede 6 dígitos, reduce el tamaño de fuente automáticamente
+ * @param {string} id - ID del elemento
+ * @param {string} formattedValue - Valor formateado con separadores
+ * @param {number} rawValue - Valor numérico real (sin formato)
+ */
+function setProfileValueWithAutoFont(id, formattedValue, rawValue) {
+    const el = document.getElementById(id);
+    if (!el) return;
+    
+    // Contar dígitos del valor numérico (sin decimales ni separadores)
+    const digitCount = Math.floor(Math.abs(rawValue)).toString().length;
+    
+    // Establecer el texto
+    el.textContent = formattedValue;
+    
+    // Resetear estilos previos
+    el.style.fontSize = '';
+    el.style.lineHeight = '';
+    el.style.wordBreak = '';
+    
+    // Ajustar tamaño de fuente automáticamente si excede 6 dígitos
+    if (digitCount > 6) {
+        // Calcular tamaño de fuente basado en número de dígitos
+        // Base: 1rem (16px), reducir progresivamente
+        let fontSize;
+        if (digitCount <= 8) {
+            fontSize = '0.9rem'; // 14.4px
+        } else if (digitCount <= 10) {
+            fontSize = '0.8rem'; // 12.8px
+        } else if (digitCount <= 12) {
+            fontSize = '0.7rem'; // 11.2px
+        } else {
+            fontSize = '0.6rem'; // 9.6px para números muy grandes
+        }
+        
+        el.style.fontSize = fontSize;
+        el.style.lineHeight = '1.2';
+        el.style.wordBreak = 'break-word'; // Permitir que se rompa si es necesario
+        
+        console.log('[loadPlayerProfile] 🔤 Ajuste automático de fuente aplicado:', {
+            digitCount: digitCount,
+            fontSize: fontSize,
+            rawValue: rawValue,
+            formattedValue: formattedValue
+        });
+    } else {
+        // Para números <= 6 dígitos, usar tamaño normal
+        el.style.fontSize = '';
+        el.style.lineHeight = '';
+    }
 }
 
 function openProfileModal() {
