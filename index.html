@@ -1079,13 +1079,15 @@
                                             }
                                             // Recargar balance después de unos segundos
                                             setTimeout(function() {
-                                                if (window.CreditsSystem && window.connectedAddress) {
-                                                    window.CreditsSystem.loadBalance(window.connectedAddress);
+                                                if (window.CreditsSystem && (walletAddress || window.connectedAddress)) {
+                                                    window.CreditsSystem.loadBalance(walletAddress || window.connectedAddress);
                                                 }
                                             }, 5000);
                                         }
                                     }
-                                });
+                                };
+                                
+                                const widget = moonPay(widgetParams);
                                 
                                 // Mostrar widget
                                 if (widget && typeof widget.show === 'function') {
