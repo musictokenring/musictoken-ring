@@ -2045,7 +2045,7 @@ app.get('/src/credits-system.js', (req, res) => {
         // CORS headers para permitir acceso desde el frontend
         res.setHeader('Access-Control-Allow-Origin', '*');
         res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
-        res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Cache-Control, Pragma');
+        res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
         
         // Enviar el contenido
         res.send(fileContent);
@@ -2059,7 +2059,7 @@ app.get('/src/credits-system.js', (req, res) => {
 app.options('/src/credits-system.js', (req, res) => {
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Cache-Control, Pragma');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
     res.status(200).end();
 });
 

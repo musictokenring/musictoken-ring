@@ -721,7 +721,7 @@
                         <span class="sm:hidden">Wallet</span>
                     </button>
                     <div id="authButton" class="flex-shrink-0">
-                        <button type="button" onclick="openAuthModal()" id="authButtonBtn" class="px-2 sm:px-2.5 sm:px-4 py-1.5 sm:py-2 rounded-lg text-[10px] sm:text-xs sm:text-sm font-semibold bg-fuchsia-500/10 border border-fuchsia-500/30 text-fuchsia-400 hover:bg-fuchsia-500/20 transition-all duration-200 cursor-pointer whitespace-nowrap">
+                        <button type="button" onclick="if(typeof openAuthModal === 'function') { openAuthModal(); } else if(typeof window.openAuthModal === 'function') { window.openAuthModal(); } else { console.error('openAuthModal no disponible'); }" id="authButtonBtn" class="px-2 sm:px-2.5 sm:px-4 py-1.5 sm:py-2 rounded-lg text-[10px] sm:text-xs sm:text-sm font-semibold bg-fuchsia-500/10 border border-fuchsia-500/30 text-fuchsia-400 hover:bg-fuchsia-500/20 transition-all duration-200 cursor-pointer whitespace-nowrap">
                             <span class="hidden sm:inline">Iniciar Sesión</span>
                             <span class="sm:hidden">Login</span>
                         </button>
@@ -793,7 +793,7 @@
                     </button>
                     
                     <!-- Botón: Entrar con Email/Google -->
-                    <button type="button" id="emailSignupOnboardingBtn" onclick="openAuthModal()" class="px-8 py-3 rounded-xl text-lg font-bold bg-gradient-to-r from-fuchsia-500 to-pink-500 text-white hover:opacity-90 transition-all duration-200 shadow-lg shadow-fuchsia-500/25 cursor-pointer flex items-center justify-center gap-2">
+                    <button type="button" id="emailSignupOnboardingBtn" onclick="if(typeof openAuthModal === 'function') { openAuthModal(); } else if(typeof window.openAuthModal === 'function') { window.openAuthModal(); } else { console.error('openAuthModal no disponible'); }" class="px-8 py-3 rounded-xl text-lg font-bold bg-gradient-to-r from-fuchsia-500 to-pink-500 text-white hover:opacity-90 transition-all duration-200 shadow-lg shadow-fuchsia-500/25 cursor-pointer flex items-center justify-center gap-2">
                         <span>📧</span>
                         <span>Entrar con Email/Google</span>
                         <span class="text-sm opacity-75">(Sin wallet)</span>
@@ -1697,23 +1697,43 @@
     <!-- CRÍTICO: Cargar auth-system.js primero para que openAuthModal esté disponible -->
     <script src="./auth-system.js?v=v2.7"></script>
     <script>
-        // Asegurar que openAuthModal esté disponible globalmente inmediatamente después de cargar auth-system.js
+        // CRÍTICO: Asegurar que openAuthModal esté disponible globalmente ANTES de que se ejecute cualquier onclick
+        // Esto debe ejecutarse inmediatamente después de cargar auth-system.js
         (function() {
-            // Esperar a que auth-system.js se cargue
-            if (typeof openAuthModal === 'function') {
-                window.openAuthModal = openAuthModal;
-                console.log('[init] ✅ openAuthModal disponible globalmente');
-            } else {
-                // Si no está disponible aún, esperar un poco y verificar de nuevo
-                setTimeout(function() {
-                    if (typeof openAuthModal === 'function') {
-                        window.openAuthModal = openAuthModal;
-                        console.log('[init] ✅ openAuthModal disponible globalmente (retry)');
-                    } else {
-                        console.warn('[init] ⚠️ openAuthModal no está disponible después de cargar auth-system.js');
-                    }
-                }, 100);
+            function ensureOpenAuthModal() {
+                if (typeof openAuthModal === 'function') {
+                    // Asegurar que esté en window para acceso global
+                    window.openAuthModal = openAuthModal;
+                    console.log('[init] ✅ openAuthModal disponible globalmente');
+                    return true;
+                }
+                return false;
             }
+            
+            // Intentar inmediatamente
+            if (!ensureOpenAuthModal()) {
+                // Si no está disponible, esperar a que el DOM esté listo
+                if (document.readyState === 'loading') {
+                    document.addEventListener('DOMContentLoaded', function() {
+                        if (!ensureOpenAuthModal()) {
+                            // Último intento después de un pequeño delay
+                            setTimeout(function() {
+                                ensureOpenAuthModal();
+                            }, 200);
+                        }
+                    });
+                } else {
+                    // DOM ya está listo, intentar de nuevo
+                    setTimeout(function() {
+                        ensureOpenAuthModal();
+                    }, 100);
+                }
+            }
+            
+            // También asegurar cuando auth-system.js se carga completamente
+            window.addEventListener('load', function() {
+                ensureOpenAuthModal();
+            });
         })();
     </script>
     <!-- CRÍTICO: SOLUCIÓN AGRESIVA - Eliminar cualquier versión anterior y cargar nueva -->
@@ -1770,13 +1790,11 @@
             // Fallback: Si el servidor no responde, intentar desde el mismo dominio
             var fallbackUrl = './src/credits-system.js?v=' + version + '&nocache=' + timestamp + '&random=' + random + '&t=' + Date.now();
             
+            // CRÍTICO: No enviar headers personalizados que causen problemas CORS
+            // Usar solo cache: 'no-store' que es suficiente
             fetch(fetchUrl, {
-                cache: 'no-store',
-                headers: {
-                    'Cache-Control': 'no-cache, no-store, must-revalidate',
-                    'Pragma': 'no-cache'
-                    // NOTA: No incluir 'Expires' porque causa error CORS en preflight
-                }
+                cache: 'no-store'
+                // NOTA: No incluir headers personalizados porque causan error CORS en preflight
             }).then(function(response) {
                 console.log('[CACHE-BUST] 📥 Respuesta recibida:', response.status, response.statusText);
                 if (!response.ok) {
@@ -1835,13 +1853,10 @@
                 
                 // Fallback: Intentar desde el mismo dominio con múltiples parámetros de cache-busting
                 console.log('[CACHE-BUST] 🔄 Intentando método fallback (mismo dominio)...');
+                // CRÍTICO: No enviar headers personalizados que causen problemas CORS
                 fetch(fallbackUrl, {
-                    cache: 'no-store',
-                    headers: {
-                        'Cache-Control': 'no-cache, no-store, must-revalidate',
-                        'Pragma': 'no-cache'
-                        // NOTA: No incluir 'Expires' porque causa error CORS en preflight
-                    }
+                    cache: 'no-store'
+                    // NOTA: No incluir headers personalizados porque causan error CORS
                 }).then(function(response) {
                     if (!response.ok) throw new Error('HTTP ' + response.status);
                     return response.text();
