@@ -493,11 +493,11 @@ async function loadPlayerProfile(user) {
         // PRIORIDAD 1: Si es el usuario actual y CreditsSystem tiene balance, usarlo directamente
         // Esto garantiza 100% de consistencia con el dashboard
         // CRÍTICO: SIEMPRE usar CreditsSystem si está disponible para el usuario actual
-        const isDevelopment = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-        
-        if (useCreditsSystemBalance && window.CreditsSystem.currentCredits >= 0) {
+        // CRÍTICO: Verificar que CreditsSystem existe antes de acceder a currentCredits
+        if (useCreditsSystemBalance && typeof window.CreditsSystem !== 'undefined' && window.CreditsSystem.currentCredits !== undefined && window.CreditsSystem.currentCredits >= 0) {
             realBalance = window.CreditsSystem.currentCredits;
-            // Log reducido: solo en desarrollo
+            // CRÍTICO: Si CreditsSystem tiene el balance, usarlo inmediatamente sin consultar DB
+            // Esto elimina el delay de 10 minutos - el perfil se actualiza instantáneamente
         } else {
             // PRIORIDAD 2: Método 1: Intentar usar función SQL unificada (si existe y migración ejecutada)
             let useRPC = false;
