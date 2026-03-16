@@ -2005,30 +2005,58 @@ app.get('/src/credits-system.js', (req, res) => {
             path.join(__dirname, '..', 'src', 'credits-system.js'), // Desarrollo local
             path.join(process.cwd(), 'src', 'credits-system.js'), // Render desde raíz
             path.join(__dirname, 'src', 'credits-system.js'), // Render desde backend/
-            path.join(process.cwd(), 'backend', '..', 'src', 'credits-system.js') // Render alternativo
+            path.join(process.cwd(), 'backend', '..', 'src', 'credits-system.js'), // Render alternativo
+            path.resolve(__dirname, '..', 'src', 'credits-system.js'), // Resolución absoluta desarrollo
+            path.resolve(process.cwd(), 'src', 'credits-system.js'), // Resolución absoluta Render
+            path.resolve(__dirname, '..', '..', 'src', 'credits-system.js'), // Render desde backend/ profundidad 2
+            path.join(process.cwd(), '..', 'src', 'credits-system.js') // Render desde subdirectorio
         ];
         
         let fileContent = null;
         let filePath = null;
         
+        // Logging para diagnóstico
+        console.log('[server] 🔍 Buscando credits-system.js...');
+        console.log('[server] __dirname:', __dirname);
+        console.log('[server] process.cwd():', process.cwd());
+        
         for (const tryPath of possiblePaths) {
             try {
-                if (fs.existsSync(tryPath)) {
-                    filePath = tryPath;
-                    fileContent = fs.readFileSync(tryPath, 'utf8');
-                    console.log('[server] ✅ credits-system.js encontrado en:', tryPath);
+                const normalizedPath = path.normalize(tryPath);
+                console.log('[server] Intentando ruta:', normalizedPath);
+                if (fs.existsSync(normalizedPath)) {
+                    filePath = normalizedPath;
+                    fileContent = fs.readFileSync(normalizedPath, 'utf8');
+                    console.log('[server] ✅ credits-system.js encontrado en:', normalizedPath);
                     break;
+                } else {
+                    console.log('[server] ❌ No existe:', normalizedPath);
                 }
             } catch (e) {
+                console.log('[server] ⚠️ Error verificando ruta:', tryPath, e.message);
                 // Continuar con la siguiente ruta
                 continue;
             }
         }
         
         if (!fileContent) {
-            console.error('[server] ❌ credits-system.js no encontrado en ninguna ruta:', possiblePaths);
+            console.error('[server] ❌ credits-system.js no encontrado en ninguna ruta probada');
+            console.error('[server] Rutas intentadas:', possiblePaths.map(p => path.normalize(p)));
             console.error('[server] __dirname:', __dirname);
             console.error('[server] process.cwd():', process.cwd());
+            // Intentar listar el directorio actual para diagnóstico
+            try {
+                const dirContents = fs.readdirSync(process.cwd());
+                console.error('[server] Contenido de process.cwd():', dirContents);
+            } catch (e) {
+                console.error('[server] No se pudo leer process.cwd()');
+            }
+            try {
+                const dirContents = fs.readdirSync(__dirname);
+                console.error('[server] Contenido de __dirname:', dirContents);
+            } catch (e) {
+                console.error('[server] No se pudo leer __dirname');
+            }
             return res.status(404).send('// credits-system.js not found on server');
         }
         
