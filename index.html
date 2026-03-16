@@ -1753,132 +1753,67 @@
         })();
     </script>
     
-    <!-- CRÍTICO: Cargar nueva versión con múltiples métodos de cache-busting -->
+    <!-- OPTIMIZADO: Cargar credits-system.js con cache-busting simplificado -->
     <script>
         (function() {
-            // PASO 0: Limpiar Service Workers si existen (pueden estar cacheando archivos)
+            // Limpiar Service Workers si existen (solo una vez, sin logs excesivos)
             if ('serviceWorker' in navigator) {
                 navigator.serviceWorker.getRegistrations().then(function(registrations) {
-                    if (registrations.length > 0) {
-                        console.log('[CACHE-BUST] 🗑️ Eliminando', registrations.length, 'Service Worker(s)...');
-                        registrations.forEach(function(registration) {
-                            registration.unregister().then(function(success) {
-                                if (success) {
-                                    console.log('[CACHE-BUST] ✅ Service Worker eliminado');
-                                }
-                            });
-                        });
-                    }
+                    registrations.forEach(function(registration) {
+                        registration.unregister();
+                    });
                 });
             }
             
-            // Método 1: Cargar con timestamp único + random
             var timestamp = Date.now();
-            var random = Math.random().toString(36).substring(7);
-            var version = 'v3.0-no-limits-' + timestamp + '-' + random;
-            
-            console.log('[CACHE-BUST] 🔄 Iniciando carga de credits-system.js, versión:', version);
-            console.log('[CACHE-BUST] 🔄 Timestamp:', timestamp);
-            console.log('[CACHE-BUST] 🔄 Random:', random);
-            
-            // Método 2: Usar el endpoint del servidor que fuerza no-cache
-            // Si el servidor está en Render, usar la URL completa del backend
             var backendUrl = window.CONFIG?.BACKEND_API || 'https://musictoken-ring.onrender.com';
-            var fetchUrl = backendUrl + '/src/credits-system.js?nocache=' + timestamp + '&random=' + random + '&t=' + Date.now();
-            console.log('[CACHE-BUST] 🔄 Fetch URL (desde servidor):', fetchUrl);
+            var fetchUrl = backendUrl + '/src/credits-system.js?nocache=' + timestamp + '&t=' + Date.now();
+            var fallbackUrl = './src/credits-system.js?v=' + timestamp + '&t=' + Date.now();
             
-            // Fallback: Si el servidor no responde, intentar desde el mismo dominio
-            var fallbackUrl = './src/credits-system.js?v=' + version + '&nocache=' + timestamp + '&random=' + random + '&t=' + Date.now();
-            
-            // CRÍTICO: No enviar headers personalizados que causen problemas CORS
-            // Usar solo cache: 'no-store' que es suficiente
-            fetch(fetchUrl, {
-                cache: 'no-store'
-                // NOTA: No incluir headers personalizados porque causan error CORS en preflight
-            }).then(function(response) {
-                console.log('[CACHE-BUST] 📥 Respuesta recibida:', response.status, response.statusText);
-                if (!response.ok) {
-                    throw new Error('HTTP ' + response.status + ': ' + response.statusText);
-                }
-                return response.text();
-            }).then(function(scriptContent) {
-                console.log('[CACHE-BUST] 📄 Contenido recibido, tamaño:', scriptContent.length, 'caracteres');
-                
-                // Verificar que el contenido NO tenga las validaciones antiguas
-                var tieneValidacionesAntiguas = scriptContent.includes('VALOR SOSPECHOSO') || 
-                                                scriptContent.includes('maximoRazonable') || 
-                                                scriptContent.includes('MAX_REASONABLE_CREDITS') ||
-                                                scriptContent.includes('10000000');
-                
-                if (tieneValidacionesAntiguas) {
-                    console.error('[CACHE-BUST] ❌❌❌ ARCHIVO SERVIDO AÚN TIENE VALIDACIONES ANTIGUAS!');
-                    console.error('[CACHE-BUST] El servidor está sirviendo una versión cacheada del archivo');
-                    console.error('[CACHE-BUST] Contenido del archivo (primeros 500 caracteres):', scriptContent.substring(0, 500));
-                    
-                    // Mostrar alerta visible
-                    var alertDiv = document.createElement('div');
-                    alertDiv.style.cssText = 'position: fixed; top: 0; left: 0; right: 0; background: red; color: white; padding: 20px; z-index: 99999; text-align: center; font-weight: bold;';
-                    alertDiv.innerHTML = '⚠️ ERROR CRÍTICO: El servidor está sirviendo una versión cacheada del archivo credits-system.js. Los cambios NO están desplegados en producción.';
-                    document.body.appendChild(alertDiv);
-                    
-                    setTimeout(function() {
-                        alertDiv.remove();
-                    }, 10000);
-                } else {
-                    console.log('[CACHE-BUST] ✅ Archivo verificado - NO contiene validaciones antiguas');
-                    console.log('[CACHE-BUST] ✅ Verificando que contiene la versión correcta...');
-                    
-                    // Verificar que contiene el log de versión correcto
-                    if (scriptContent.includes('v3.0-no-limits') || scriptContent.includes('v2.9-no-limits')) {
-                        console.log('[CACHE-BUST] ✅ Versión correcta detectada en el contenido');
-                    } else {
-                        console.warn('[CACHE-BUST] ⚠️ No se encontró la versión esperada en el contenido');
+            // OPTIMIZACIÓN: Cargar directamente sin verificaciones excesivas (solo verificar errores críticos)
+            fetch(fetchUrl, { cache: 'no-store' })
+                .then(function(response) {
+                    if (!response.ok) throw new Error('HTTP ' + response.status);
+                    return response.text();
+                })
+                .then(function(scriptContent) {
+                    // Solo verificar validaciones antiguas críticas (sin logs excesivos)
+                    if (scriptContent.includes('VALOR SOSPECHOSO') || scriptContent.includes('maximoRazonable')) {
+                        console.error('[CACHE-BUST] ❌ Archivo con validaciones antiguas detectado');
+                        var alertDiv = document.createElement('div');
+                        alertDiv.style.cssText = 'position: fixed; top: 0; left: 0; right: 0; background: red; color: white; padding: 20px; z-index: 99999; text-align: center; font-weight: bold;';
+                        alertDiv.innerHTML = '⚠️ ERROR: Versión cacheada detectada. Recarga la página.';
+                        document.body.appendChild(alertDiv);
+                        setTimeout(function() { alertDiv.remove(); }, 5000);
+                        return;
                     }
                     
-                    // Crear script inline con el contenido
+                    // Cargar script inline
                     var script = document.createElement('script');
                     script.textContent = scriptContent;
                     script.setAttribute('data-version', 'v3.0-no-limits');
-                    script.setAttribute('data-loaded', new Date().toISOString());
-                    script.setAttribute('data-timestamp', timestamp.toString());
                     document.head.appendChild(script);
-                    
-                    console.log('[CACHE-BUST] ✅✅✅ credits-system.js cargado INLINE (sin caché), versión:', version);
-                    console.log('[CACHE-BUST] ✅ Sin límites de balance - mostrará valores completos');
-                    console.log('[CACHE-BUST] ✅ Script agregado al DOM con timestamp:', timestamp);
-                }
-            }).catch(function(error) {
-                console.error('[CACHE-BUST] ❌ Error verificando/cargando desde servidor:', error);
-                console.error('[CACHE-BUST] ❌ Error details:', error.message);
-                console.warn('[CACHE-BUST] ⚠️ El endpoint del servidor no está disponible, usando fallback local');
-                
-                // Fallback: Intentar desde el mismo dominio con múltiples parámetros de cache-busting
-                console.log('[CACHE-BUST] 🔄 Intentando método fallback (mismo dominio)...');
-                // CRÍTICO: No enviar headers personalizados que causen problemas CORS
-                fetch(fallbackUrl, {
-                    cache: 'no-store'
-                    // NOTA: No incluir headers personalizados porque causan error CORS
-                }).then(function(response) {
-                    if (!response.ok) throw new Error('HTTP ' + response.status);
-                    return response.text();
-                }).then(function(scriptContent) {
-                    // Verificar contenido
-                    if (scriptContent.includes('VALOR SOSPECHOSO') || scriptContent.includes('maximoRazonable')) {
-                        console.error('[CACHE-BUST] ❌❌❌ FALLBACK también tiene validaciones antiguas!');
-                        console.error('[CACHE-BUST] El CDN/caché está muy agresivo. Necesitas limpiar el caché del servidor.');
-                    } else {
-                        var script = document.createElement('script');
-                        script.textContent = scriptContent;
-                        script.setAttribute('data-version', 'v3.0-no-limits');
-                        script.setAttribute('data-fallback', 'true');
-                        document.head.appendChild(script);
-                        console.log('[CACHE-BUST] ✅ credits-system.js cargado (fallback), versión:', version);
-                    }
-                }).catch(function(fallbackError) {
-                    console.error('[CACHE-BUST] ❌ Error en fallback también:', fallbackError);
-                    console.error('[CACHE-BUST] ❌❌❌ NO SE PUDO CARGAR credits-system.js desde ninguna fuente');
+                })
+                .catch(function(error) {
+                    // Fallback: intentar desde mismo dominio
+                    fetch(fallbackUrl, { cache: 'no-store' })
+                        .then(function(response) {
+                            if (!response.ok) throw new Error('HTTP ' + response.status);
+                            return response.text();
+                        })
+                        .then(function(scriptContent) {
+                            if (!scriptContent.includes('VALOR SOSPECHOSO') && !scriptContent.includes('maximoRazonable')) {
+                                var script = document.createElement('script');
+                                script.textContent = scriptContent;
+                                script.setAttribute('data-version', 'v3.0-no-limits');
+                                script.setAttribute('data-fallback', 'true');
+                                document.head.appendChild(script);
+                            }
+                        })
+                        .catch(function() {
+                            console.error('[CACHE-BUST] ❌ No se pudo cargar credits-system.js');
+                        });
                 });
-            });
         })();
     </script>
     <!-- Mobile Auth Check -->

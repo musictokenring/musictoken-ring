@@ -30,8 +30,9 @@
         currentUsdcValue: 0,
         currentRate: 778,
         currentMtrPrice: 0,
-        updateInterval: 30000, // 30 seconds
+        updateInterval: 90000, // 90 seconds (reducido de 30s para mejor rendimiento)
         updateTimer: null,
+        updateDisplayDebounceTimer: null, // Para debounce de updateCreditsDisplay
 
         /**
          * Initialize credits system
@@ -57,13 +58,8 @@
             // Load initial balance
             await this.loadBalance(walletAddress);
             
-            // En navegador interno, forzar actualización adicional después de un delay
-            if (isWalletBrowser) {
-                setTimeout(async () => {
-                    console.log('[credits-system] [WALLET-BROWSER] Re-cargando balance después de delay...');
-                    await this.loadBalance(walletAddress);
-                }, 2000);
-            }
+            // OPTIMIZACIÓN: Eliminado re-carga adicional en wallet browser (redundante)
+            // El polling periódico ya maneja las actualizaciones
             
             // Start periodic updates
             this.startPeriodicUpdates(walletAddress);
@@ -77,12 +73,14 @@
          * @param {string|null} userId - Supabase user ID (optional, will be fetched if not provided)
          */
         async loadBalance(walletAddress, userId = null) {
-            console.log('[credits-system] 🔄🔄🔄 INICIANDO loadBalance:', {
-                walletAddress: walletAddress,
-                userId: userId,
-                backendUrl: this.backendUrl,
-                timestamp: new Date().toISOString()
-            });
+            // Logs reducidos: solo en desarrollo
+            const isDevelopment = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+            if (isDevelopment) {
+                console.log('[credits-system] 🔄 loadBalance iniciado:', {
+                    walletAddress: walletAddress?.slice(0, 10) + '...',
+                    timestamp: new Date().toISOString()
+                });
+            }
             
             try {
                 // NUEVO: Si no hay wallet pero hay userId (email auth), cargar solo saldo fiat
@@ -405,14 +403,7 @@
                 if (this.currentCredits >= 0 && this.currentCredits !== undefined) {
                     // Update UI - Asegurar que se actualice después de cargar
                     this.updateCreditsDisplay();
-                    
-                    // También actualizar GameEngine si está disponible
-                    if (typeof window.GameEngine !== 'undefined' && typeof window.GameEngine.updateBalanceDisplay === 'function') {
-                        setTimeout(() => {
-                            console.log('[credits-system] 🔄 Actualizando GameEngine display...');
-                            window.GameEngine.updateBalanceDisplay();
-                        }, 200);
-                    }
+                    // OPTIMIZACIÓN: GameEngine se actualiza automáticamente en updateCreditsDisplay
                 } else {
                     console.warn('[credits-system] ⚠️ No actualizando display - valor aún no cargado completamente');
                 }
@@ -446,15 +437,27 @@
         },
 
         /**
-         * Update credits display in UI
+         * Update credits display in UI (con debounce para evitar múltiples actualizaciones)
          */
         updateCreditsDisplay() {
-            // Logs para debugging cuando hay créditos pero no se muestran
-            const shouldLog = this.currentCredits > 0;
-            
-            if (shouldLog) {
-                console.log('[updateCreditsDisplay] 🔄 Actualizando display con créditos:', this.currentCredits);
+            // Debounce: cancelar actualización pendiente si hay una nueva
+            if (this.updateDisplayDebounceTimer) {
+                clearTimeout(this.updateDisplayDebounceTimer);
             }
+            
+            // Ejecutar actualización después de un pequeño delay para agrupar múltiples llamadas
+            this.updateDisplayDebounceTimer = setTimeout(() => {
+                this._doUpdateCreditsDisplay();
+            }, 100); // 100ms de debounce
+        },
+        
+        /**
+         * Actualización real del display (método interno)
+         */
+        _doUpdateCreditsDisplay() {
+            // Logs reducidos: solo en desarrollo o cuando hay problemas
+            const isDevelopment = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+            const shouldLog = isDevelopment && this.currentCredits > 0;
             
             // Update combined display FIRST (this contains the child elements) - DESKTOP
             // ESPECIFICACIÓN REFINADA: Mostrar créditos estables como "MTR créditos jugables" (alias gráfico)
@@ -584,14 +587,16 @@
             
             // CRÍTICO: Forzar actualización de GameEngine también para mantener sincronización
             // Pero solo si GameEngine está disponible y CreditsSystem tiene créditos cargados
+            // OPTIMIZACIÓN: Reducir frecuencia de actualización de GameEngine
             if (typeof window.GameEngine !== 'undefined' && typeof window.GameEngine.updateBalanceDisplay === 'function') {
-                // Usar setTimeout para evitar loops infinitos
-                setTimeout(() => {
-                    if (this.currentCredits > 0) {
-                        console.log('[updateCreditsDisplay] 🔄 Forzando actualización de GameEngine para sincronizar...');
-                        window.GameEngine.updateBalanceDisplay();
+                // Solo actualizar GameEngine si hay créditos y no se ha actualizado recientemente
+                if (this.currentCredits > 0 && !this._lastGameEngineUpdate || (Date.now() - this._lastGameEngineUpdate > 1000)) {
+                    this._lastGameEngineUpdate = Date.now();
+                    if (shouldLog) {
+                        console.log('[updateCreditsDisplay] 🔄 Actualizando GameEngine...');
                     }
-                }, 50);
+                    window.GameEngine.updateBalanceDisplay();
+                }
             }
 
             // Update bet eligibility
