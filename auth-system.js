@@ -412,8 +412,25 @@ function updateAuthUI(session) {
                 Salir
             </button>
         `;
+        
+        loadPlayerProfile(session.user);
+        
+        // Mostrar selector de modos
+        if (typeof showModeSelector === 'function') {
+            showModeSelector();
+        }
+        
+        // Inicializar GameEngine si existe
+        if (typeof GameEngine !== 'undefined') {
+            GameEngine.init();
+        }
     } else {
         // Usuario NO logueado - mostrar mensaje de autenticación requerida
+        console.log('User logged out');
+
+        document.getElementById('loginWall')?.classList.remove('hidden');
+        document.getElementById('modeSelector')?.classList.add('hidden');
+        
         const depositSection = document.getElementById('depositSectionMain');
         const depositAuthRequired = document.getElementById('depositAuthRequired');
         const depositContent = depositSection?.querySelector('.deposit-content');
@@ -427,25 +444,6 @@ function updateAuthUI(session) {
         if (depositContent) {
             depositContent.style.display = 'none';
         }
-
-        loadPlayerProfile(session.user);
-        
-        // Mostrar selector de modos
-        if (typeof showModeSelector === 'function') {
-            showModeSelector();
-        }
-        
-        // Inicializar GameEngine si existe
-        if (typeof GameEngine !== 'undefined') {
-            GameEngine.init();
-        }
-        
-    } else {
-        // Usuario no logueado
-        console.log('User logged out');
-
-        document.getElementById('loginWall')?.classList.remove('hidden');
-        document.getElementById('modeSelector')?.classList.add('hidden');
         
         authButton.innerHTML = `
             <button onclick="openAuthModal()" class="btn-login">
