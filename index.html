@@ -2958,18 +2958,35 @@
                 // Event listener para botón de conectar wallet en onboarding
                 const connectWalletOnboardingBtn = document.getElementById('connectWalletOnboardingBtn');
                 if (connectWalletOnboardingBtn) {
-                    connectWalletOnboardingBtn.addEventListener('click', async function() {
+                    // Remover listener anterior si existe para evitar duplicados
+                    const newBtn = connectWalletOnboardingBtn.cloneNode(true);
+                    connectWalletOnboardingBtn.parentNode.replaceChild(newBtn, connectWalletOnboardingBtn);
+                    
+                    newBtn.addEventListener('click', async function(e) {
+                        e.preventDefault();
+                        e.stopPropagation();
                         try {
-                            // Intentar conectar wallet
+                            // Intentar conectar wallet - múltiples formas de acceso
                             if (typeof connectWallet === 'function') {
                                 await connectWallet();
-                                // Si la conexión es exitosa, showLoginWall se encargará de ocultar el login wall
+                            } else if (typeof window.connectWallet === 'function') {
+                                await window.connectWallet();
                             } else {
                                 console.error('[onboarding] connectWallet no está disponible');
                                 if (typeof showToast === 'function') {
-                                    showToast('Error: Función de conexión no disponible', 'error');
+                                    showToast('Error: Función de conexión no disponible. Recarga la página.', 'error');
                                 }
+                                // Intentar cargar dinámicamente si no está disponible
+                                console.log('[onboarding] Intentando cargar función dinámicamente...');
+                                setTimeout(() => {
+                                    if (typeof window.connectWallet === 'function') {
+                                        window.connectWallet();
+                                    } else {
+                                        console.error('[onboarding] No se pudo cargar connectWallet');
+                                    }
+                                }, 1000);
                             }
+                            // Si la conexión es exitosa, showLoginWall se encargará de ocultar el login wall
                         } catch (error) {
                             console.error('[onboarding] Error conectando wallet:', error);
                             if (typeof showToast === 'function') {
@@ -2985,6 +3002,7 @@
                             }
                         }
                     });
+                    console.log('[onboarding] ✅ Botón Conectar Wallet (onboarding) inicializado');
                 }
 
                 var session = null;
@@ -6012,6 +6030,35 @@
             var warningEl = document.getElementById('walletNetworkWarning');
             var creditsDisplay = document.getElementById('creditsCombinedDisplay');
             if (!walletEl || !btnEl) return;
+            
+            // CRÍTICO: Agregar event listener al botón del header si no está conectado
+            // Esto asegura que el botón funcione incluso si el DOM se carga antes que el script
+            if (btnEl && !btnEl.hasAttribute('data-listener-added')) {
+                btnEl.setAttribute('data-listener-added', 'true');
+                btnEl.addEventListener('click', async function(e) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    try {
+                        // Intentar múltiples formas de llamar a connectWallet
+                        if (typeof connectWallet === 'function') {
+                            await connectWallet();
+                        } else if (typeof window.connectWallet === 'function') {
+                            await window.connectWallet();
+                        } else {
+                            console.error('[wallet] connectWallet no está disponible');
+                            if (typeof showToast === 'function') {
+                                showToast('Error: Función de conexión no disponible. Recarga la página.', 'error');
+                            }
+                        }
+                    } catch (error) {
+                        console.error('[wallet] Error conectando wallet:', error);
+                        if (typeof showToast === 'function') {
+                            showToast('Error al conectar wallet: ' + (error.message || 'Desconocido'), 'error');
+                        }
+                    }
+                });
+            }
+            
             if (connectedAddress) {
                 walletEl.textContent = connectedAddress.slice(0, 6) + '...' + connectedAddress.slice(-4);
                 walletEl.classList.remove('hidden');
@@ -7099,7 +7146,11 @@
         }
 
         async function connectWallet() {
-            // VERIFICAR QUE EL USUARIO ESTÉ LOGUEADO ANTES DE CONECTAR WALLET
+            // CRÍTICO: Permitir conectar wallet SIN requerir login obligatorio
+            // El usuario puede conectar wallet primero y luego hacer login si lo desea
+            // Esto es parte del flujo híbrido (wallet opcional)
+            
+            // Verificar sesión (opcional, no bloqueante)
             let userSession = null;
             if (typeof supabaseClient !== 'undefined') {
                 try {
@@ -7110,15 +7161,10 @@
                 }
             }
             
+            // Si no hay sesión, continuar de todas formas (wallet puede conectarse sin login)
+            // Solo mostrar mensaje informativo en desarrollo
             if (!userSession) {
-                console.log('[wallet] Usuario no logueado, solicitando login primero');
-                if (typeof showToast === 'function') {
-                    showToast('Por favor inicia sesión antes de conectar tu wallet', 'info');
-                }
-                if (typeof openAuthModal === 'function') {
-                    openAuthModal();
-                }
-                return;
+                console.log('[wallet] Conectando wallet sin sesión (modo híbrido permitido)');
             }
             
             // Si Binance Wallet está disponible, usarla
@@ -7336,15 +7382,40 @@
             }
         }
 
+        // CRÍTICO: Exportar connectWallet globalmente para que esté disponible
+        window.connectWallet = connectWallet;
+        
         // Asegurar que el botón esté disponible antes de agregar el listener
         function initWalletButton() {
             var btn = document.getElementById('walletConnectBtn');
             if (btn) {
-                btn.addEventListener('click', function(e) {
+                // Remover listener anterior si existe para evitar duplicados
+                var newBtn = btn.cloneNode(true);
+                btn.parentNode.replaceChild(newBtn, btn);
+                btn = newBtn;
+                
+                btn.addEventListener('click', async function(e) {
                     e.preventDefault();
-                    connectWallet();
+                    e.stopPropagation();
+                    try {
+                        if (typeof connectWallet === 'function') {
+                            await connectWallet();
+                        } else if (typeof window.connectWallet === 'function') {
+                            await window.connectWallet();
+                        } else {
+                            console.error('[wallet] connectWallet no está disponible');
+                            if (typeof showToast === 'function') {
+                                showToast('Error: Función de conexión no disponible', 'error');
+                            }
+                        }
+                    } catch (error) {
+                        console.error('[wallet] Error conectando wallet:', error);
+                        if (typeof showToast === 'function') {
+                            showToast('Error al conectar wallet: ' + (error.message || 'Desconocido'), 'error');
+                        }
+                    }
                 });
-                console.log('[wallet] Botón Conectar Wallet inicializado');
+                console.log('[wallet] ✅ Botón Conectar Wallet inicializado');
             } else {
                 console.warn('[wallet] Botón walletConnectBtn no encontrado, reintentando...');
                 setTimeout(initWalletButton, 500);
