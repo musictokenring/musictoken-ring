@@ -30,9 +30,10 @@
         currentUsdcValue: 0,
         currentRate: 778,
         currentMtrPrice: 0,
-        updateInterval: 90000, // 90 seconds (reducido de 30s para mejor rendimiento)
+        updateInterval: 30000, // 30 seconds (balance entre rendimiento y actualización)
         updateTimer: null,
         updateDisplayDebounceTimer: null, // Para debounce de updateCreditsDisplay
+        profileUpdateTimer: null, // Timer para actualizar perfil del usuario actual
 
         /**
          * Initialize credits system
@@ -598,6 +599,25 @@
                     window.GameEngine.updateBalanceDisplay();
                 }
             }
+            
+            // CRÍTICO: Actualizar perfil del usuario actual si está visible
+            // Esto asegura que el perfil siempre muestre el balance más reciente
+            if (typeof window.loadPlayerProfile === 'function' && typeof supabaseClient !== 'undefined') {
+                supabaseClient.auth.getSession().then(({ data: { session } }) => {
+                    if (session && session.user) {
+                        // Verificar si el perfil modal está visible y es del usuario actual
+                        const profileModal = document.getElementById('profileModal');
+                        const isProfileVisible = profileModal && !profileModal.classList.contains('hidden');
+                        
+                        if (isProfileVisible) {
+                            // Actualizar perfil inmediatamente cuando el balance cambia
+                            window.loadPlayerProfile(session.user);
+                        }
+                    }
+                }).catch(() => {
+                    // Silenciar errores de sesión
+                });
+            }
 
             // Update bet eligibility
             this.updateBetEligibility();
@@ -633,6 +653,29 @@
             this.updateTimer = setInterval(() => {
                 this.loadBalance(walletAddress);
             }, this.updateInterval);
+            
+            // CRÍTICO: También iniciar actualización periódica del perfil del usuario actual
+            // Esto asegura que el perfil se actualice incluso si no está visible cuando cambia el balance
+            if (this.profileUpdateTimer) {
+                clearInterval(this.profileUpdateTimer);
+            }
+            
+            // Actualizar perfil cada 15 segundos si el usuario actual tiene sesión
+            this.profileUpdateTimer = setInterval(() => {
+                if (typeof supabaseClient !== 'undefined') {
+                    supabaseClient.auth.getSession().then(({ data: { session } }) => {
+                        if (session && session.user && typeof window.loadPlayerProfile === 'function') {
+                            // Solo actualizar si el perfil modal está visible
+                            const profileModal = document.getElementById('profileModal');
+                            if (profileModal && !profileModal.classList.contains('hidden')) {
+                                window.loadPlayerProfile(session.user);
+                            }
+                        }
+                    }).catch(() => {
+                        // Silenciar errores
+                    });
+                }
+            }, 15000); // 15 segundos para perfil (más frecuente que el balance general)
         },
 
         /**
@@ -642,6 +685,10 @@
             if (this.updateTimer) {
                 clearInterval(this.updateTimer);
                 this.updateTimer = null;
+            }
+            if (this.profileUpdateTimer) {
+                clearInterval(this.profileUpdateTimer);
+                this.profileUpdateTimer = null;
             }
         },
 

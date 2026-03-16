@@ -627,20 +627,26 @@ async function loadPlayerProfile(user) {
         // SIEMPRE mostrar el valor real completo sin limitaciones
         const displayBalance = realBalance;
         
-        // Formatear igual que el header: usar toLocaleString para números grandes
+        // Formatear igual que el header: usar toLocaleString para TODOS los números
+        // CRÍTICO: Mostrar TODOS los dígitos, no truncar a 2 decimales si el número es grande
         // El dashboard muestra: "3024.64 MTR créditos" o "98024480.00 MTR créditos"
         let formattedBalance;
+        
+        // CRÍTICO: Para números grandes, mostrar TODOS los decimales significativos
+        // Si tiene decimales, mostrar hasta 2. Si es entero grande, mostrar sin decimales forzados
         if (displayBalance >= 1000) {
-            // Números grandes: mostrar con 2 decimales y separadores de miles
+            // Números grandes: mostrar con separadores de miles y decimales si los tiene
+            const hasDecimals = displayBalance % 1 !== 0;
             formattedBalance = displayBalance.toLocaleString('es-ES', { 
-                minimumFractionDigits: 2, 
-                maximumFractionDigits: 2 
+                minimumFractionDigits: hasDecimals ? 2 : 0,
+                maximumFractionDigits: hasDecimals ? 2 : 0
             });
         } else if (displayBalance >= 1) {
-            // Números medianos: mostrar con 2 decimales
-            formattedBalance = displayBalance.toFixed(2);
+            // Números medianos: mostrar con 2 decimales si tiene decimales
+            const hasDecimals = displayBalance % 1 !== 0;
+            formattedBalance = hasDecimals ? displayBalance.toFixed(2) : displayBalance.toString();
         } else {
-            // Números pequeños: mostrar tal cual
+            // Números pequeños: mostrar tal cual con decimales si los tiene
             formattedBalance = displayBalance.toString();
         }
         
