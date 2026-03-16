@@ -565,6 +565,7 @@ async function loadPlayerProfile(user) {
                 console.log('[loadPlayerProfile] ⚠️ Usando saldo del CreditsSystem (fallback final):', realBalance);
             }
         }
+        } // CRÍTICO: Cerrar el bloque else que empezó en la línea 493
         
         // Validación final: asegurar que el balance no sea negativo
         if (realBalance < 0) {
