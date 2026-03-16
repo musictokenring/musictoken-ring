@@ -18,6 +18,7 @@ const { WalletLinkService } = require('./wallet-link-service');
 const { TradingFundService } = require('./trading-fund-service');
 const { NOWPaymentsService } = require('./nowpayments-service');
 const { MoonPayService } = require('./moonpay-service');
+const { MercadoPagoService } = require('./mercadopago-service');
 const { createClient } = require('@supabase/supabase-js');
 
 const app = express();
@@ -91,6 +92,7 @@ let walletLinkService;
 let tradingFundService;
 let nowPaymentsService;
 let moonPayService;
+let mercadoPagoService;
 
 // 🔒 SEGURIDAD: Validar variables de entorno críticas
 function validateEnvironmentVariables() {
@@ -227,8 +229,9 @@ async function initializeServices() {
         // Initialize Trading Fund Service (for fee distribution)
         try {
             tradingFundService = new TradingFundService();
-    nowPaymentsService = new NOWPaymentsService();
-    moonPayService = new MoonPayService();
+            nowPaymentsService = new NOWPaymentsService();
+            moonPayService = new MoonPayService();
+            mercadoPagoService = new MercadoPagoService();
             console.log('[server] ✅ Trading Fund Service initialized');
         } catch (tradingFundError) {
             console.error('[server] ⚠️ Error initializing trading fund service:', tradingFundError);
@@ -376,8 +379,55 @@ app.get('/api/user/credits/:walletAddress', async (req, res) => {
 });
 
 /**
+ * Get unified balance (fiat + onchain) for user by userId
+ * Used for email-only users (no wallet)
+ */
+app.get('/api/user/balance/:userId', async (req, res) => {
+    try {
+        const userId = req.params.userId;
+
+        // Get user data with fiat and onchain balances
+        const { data: userData, error: userError } = await supabase
+            .from('users')
+            .select('saldo_fiat, saldo_onchain, id')
+            .eq('id', userId)
+            .single();
+
+        if (userError || !userData) {
+            return res.status(404).json({ error: 'User not found' });
+        }
+
+        // Get credits from user_credits (legacy, for backwards compatibility)
+        const { data: creditsData } = await supabase
+            .from('user_credits')
+            .select('credits')
+            .eq('user_id', userId)
+            .maybeSingle();
+
+        const fiatBalance = parseFloat(userData.saldo_fiat || 0);
+        const onchainBalance = parseFloat(userData.saldo_onchain || 0);
+        const creditsBalance = parseFloat(creditsData?.credits || 0);
+        
+        // Unified balance = fiat + onchain + credits (credits are legacy)
+        const totalBalance = fiatBalance + onchainBalance + creditsBalance;
+
+        res.json({
+            total_balance: totalBalance,
+            fiat_balance: fiatBalance,
+            onchain_balance: onchainBalance,
+            credits_balance: creditsBalance, // Legacy
+            userId: userId
+        });
+    } catch (error) {
+        console.error('[server] Error getting unified balance:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+/**
  * Deduct credits (for betting)
  * Supports both userId and walletAddress for wallet-only operations
+ * NEW: Supports fiat balance deduction
  */
 app.post('/api/user/deduct-credits', async (req, res) => {
     try {
@@ -1847,6 +1897,81 @@ app.post('/webhook/moonpay', express.raw({ type: 'application/json' }), async (r
 });
 
 /**
+ * Mercado Pago Webhook Endpoint
+ * POST /webhook/mercadopago
+ * Receives payment notifications from Mercado Pago
+ */
+app.post('/webhook/mercadopago', express.json(), async (req, res) => {
+    try {
+        const notification = req.body;
+        console.log('[mercadopago-webhook] Received notification:', {
+            type: notification.type,
+            data_id: notification.data?.id
+        });
+
+        if (!mercadoPagoService) {
+            console.error('[mercadopago-webhook] Mercado Pago service not initialized');
+            return res.status(503).json({ error: 'Service not available' });
+        }
+
+        // Process deposit
+        const result = await mercadoPagoService.processDeposit(notification);
+
+        // Return 200 OK quickly
+        res.status(200).json({
+            received: true,
+            processed: result.processed,
+            payment_id: result.payment_id
+        });
+
+    } catch (error) {
+        console.error('[mercadopago-webhook] Error processing webhook:', error);
+        // Still return 200 to prevent Mercado Pago from retrying excessively
+        res.status(200).json({
+            received: true,
+            error: error.message
+        });
+    }
+});
+
+/**
+ * Create Mercado Pago Checkout Preference
+ * POST /api/deposit/mercadopago/create
+ * Creates a checkout preference for fiat deposit
+ */
+app.post('/api/deposit/mercadopago/create', async (req, res) => {
+    try {
+        const { amount, currency = 'COP', userId, email } = req.body;
+
+        if (!amount || amount <= 0) {
+            return res.status(400).json({ error: 'Invalid amount' });
+        }
+
+        if (!userId) {
+            return res.status(400).json({ error: 'userId required' });
+        }
+
+        if (!mercadoPagoService) {
+            return res.status(503).json({ error: 'Mercado Pago service not available' });
+        }
+
+        const preference = await mercadoPagoService.createCheckoutPreference({
+            amount,
+            currency,
+            userId,
+            email,
+            description: 'Depósito MusicToken Ring'
+        });
+
+        res.json(preference);
+
+    } catch (error) {
+        console.error('[mercadopago] Error creating checkout:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+/**
  * Root endpoint - helps verify server is running
  */
 app.get('/', (req, res) => {
@@ -1862,6 +1987,36 @@ app.get('/', (req, res) => {
             price: '/api/price'
         }
     });
+});
+
+/**
+ * CRÍTICO: Endpoint para servir credits-system.js sin caché
+ * Esto evita que Render/CDN cachee el archivo
+ */
+const fs = require('fs');
+const path = require('path');
+
+app.get('/src/credits-system.js', (req, res) => {
+    try {
+        const filePath = path.join(__dirname, '..', 'src', 'credits-system.js');
+        
+        // Leer el archivo
+        const fileContent = fs.readFileSync(filePath, 'utf8');
+        
+        // CRÍTICO: Headers para evitar caché completamente
+        res.setHeader('Content-Type', 'application/javascript; charset=utf-8');
+        res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate, max-age=0');
+        res.setHeader('Pragma', 'no-cache');
+        res.setHeader('Expires', '0');
+        res.setHeader('X-Content-Type-Options', 'nosniff');
+        res.setHeader('X-Cache-Bust', Date.now().toString());
+        
+        // Enviar el contenido
+        res.send(fileContent);
+    } catch (error) {
+        console.error('[server] Error sirviendo credits-system.js:', error);
+        res.status(500).send('// Error loading credits-system.js');
+    }
 });
 
 /**

@@ -1740,9 +1740,14 @@
             console.log('[CACHE-BUST] 🔄 Timestamp:', timestamp);
             console.log('[CACHE-BUST] 🔄 Random:', random);
             
-            // Método 2: Usar fetch con no-cache para verificar que el servidor sirva el archivo correcto
-            var fetchUrl = './src/credits-system.js?v=' + version + '&nocache=' + timestamp + '&random=' + random + '&t=' + Date.now();
-            console.log('[CACHE-BUST] 🔄 Fetch URL:', fetchUrl);
+            // Método 2: Usar el endpoint del servidor que fuerza no-cache
+            // Si el servidor está en Render, usar la URL completa del backend
+            var backendUrl = window.CONFIG?.BACKEND_API || 'https://musictoken-ring.onrender.com';
+            var fetchUrl = backendUrl + '/src/credits-system.js?nocache=' + timestamp + '&random=' + random + '&t=' + Date.now();
+            console.log('[CACHE-BUST] 🔄 Fetch URL (desde servidor):', fetchUrl);
+            
+            // Fallback: Si el servidor no responde, intentar desde el mismo dominio
+            var fallbackUrl = './src/credits-system.js?v=' + version + '&nocache=' + timestamp + '&random=' + random + '&t=' + Date.now();
             
             fetch(fetchUrl, {
                 cache: 'no-store',
@@ -1804,24 +1809,38 @@
                     console.log('[CACHE-BUST] ✅ Script agregado al DOM con timestamp:', timestamp);
                 }
             }).catch(function(error) {
-                console.error('[CACHE-BUST] ❌ Error verificando/cargando archivo:', error);
+                console.error('[CACHE-BUST] ❌ Error verificando/cargando desde servidor:', error);
                 console.error('[CACHE-BUST] ❌ Error details:', error.message, error.stack);
                 
-                // Fallback: Cargar normalmente pero con timestamp único
-                console.log('[CACHE-BUST] 🔄 Intentando método fallback...');
-                var script = document.createElement('script');
-                var fallbackUrl = './src/credits-system.js?v=' + version + '&nocache=' + timestamp + '&random=' + random + '&fallback=' + Date.now();
-                script.src = fallbackUrl;
-                script.setAttribute('data-no-cache', 'true');
-                script.setAttribute('data-version', 'v3.0-no-limits');
-                script.setAttribute('data-fallback', 'true');
-                script.onload = function() {
-                    console.log('[CACHE-BUST] ✅ credits-system.js cargado (fallback), versión:', version);
-                };
-                script.onerror = function() {
-                    console.error('[CACHE-BUST] ❌ Error cargando credits-system.js (fallback también falló)');
-                };
-                document.head.appendChild(script);
+                // Fallback: Intentar desde el mismo dominio con múltiples parámetros de cache-busting
+                console.log('[CACHE-BUST] 🔄 Intentando método fallback (mismo dominio)...');
+                fetch(fallbackUrl, {
+                    cache: 'no-store',
+                    headers: {
+                        'Cache-Control': 'no-cache, no-store, must-revalidate',
+                        'Pragma': 'no-cache',
+                        'Expires': '0'
+                    }
+                }).then(function(response) {
+                    if (!response.ok) throw new Error('HTTP ' + response.status);
+                    return response.text();
+                }).then(function(scriptContent) {
+                    // Verificar contenido
+                    if (scriptContent.includes('VALOR SOSPECHOSO') || scriptContent.includes('maximoRazonable')) {
+                        console.error('[CACHE-BUST] ❌❌❌ FALLBACK también tiene validaciones antiguas!');
+                        console.error('[CACHE-BUST] El CDN/caché está muy agresivo. Necesitas limpiar el caché del servidor.');
+                    } else {
+                        var script = document.createElement('script');
+                        script.textContent = scriptContent;
+                        script.setAttribute('data-version', 'v3.0-no-limits');
+                        script.setAttribute('data-fallback', 'true');
+                        document.head.appendChild(script);
+                        console.log('[CACHE-BUST] ✅ credits-system.js cargado (fallback), versión:', version);
+                    }
+                }).catch(function(fallbackError) {
+                    console.error('[CACHE-BUST] ❌ Error en fallback también:', fallbackError);
+                    console.error('[CACHE-BUST] ❌❌❌ NO SE PUDO CARGAR credits-system.js desde ninguna fuente');
+                });
             });
         })();
     </script>
