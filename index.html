@@ -889,8 +889,11 @@
             <div class="absolute inset-0 bg-black/75 backdrop-blur-sm" onclick="closeNowPaymentsModal()"></div>
             <div class="relative z-10 flex min-h-full items-center justify-center p-4 pointer-events-none">
                 <div class="nowpayments-modal-content pointer-events-auto w-full max-w-lg max-h-[92vh] rounded-2xl border border-cyan-500/25 bg-gray-950 shadow-2xl shadow-black/50 overflow-hidden flex flex-col">
-                    <div class="flex items-center justify-between px-4 py-3 border-b border-white/10 bg-gray-900/90">
-                        <span class="text-sm font-semibold text-cyan-300">Pago NOWPayments</span>
+                    <div class="flex flex-col gap-0.5 px-4 py-3 border-b border-white/10 bg-gray-900/90 sm:flex-row sm:items-center sm:justify-between">
+                        <div>
+                            <span class="text-sm font-semibold text-cyan-300">Pago NOWPayments</span>
+                            <p class="text-[11px] text-gray-500 font-normal mt-0.5">El widget interno puede mostrar &quot;Donation&quot; (embed estándar de NOWPayments); el importe acredita saldo en la plataforma.</p>
+                        </div>
                         <button type="button" onclick="closeNowPaymentsModal()" class="rounded-lg px-2.5 py-1 text-gray-400 hover:text-white hover:bg-white/10 text-xl leading-none" aria-label="Cerrar">&times;</button>
                     </div>
                     <div class="relative flex-1 min-h-[400px] bg-gray-950">
@@ -908,15 +911,6 @@
         <script>
         (function () {
             var npCache = null;
-            /**
-             * El embed de donación usa /embeds/donation-widget (título "Donation").
-             * Pagos comerciales: /embeds/payment-widget. Normalizamos por si el backend
-             * o env antiguo aún devuelven donation-widget.
-             */
-            function ensurePaymentWidgetEmbedUrl(url) {
-                if (!url || typeof url !== 'string') return url;
-                return url.replace(/\/embeds\/donation-widget(\?|#|$)/i, '/embeds/payment-widget$1');
-            }
             async function loadNpConfig(forceRefresh) {
                 if (!forceRefresh && npCache) return npCache;
                 var base = (window.CONFIG && window.CONFIG.BACKEND_API) || '';
@@ -929,12 +923,6 @@
                     url += (url.indexOf('?') === -1 ? '?' : '&') + '_np=' + Date.now();
                     var r = await fetch(url, { credentials: 'omit', cache: 'no-store' });
                     npCache = await r.json();
-                    if (npCache && npCache.embedUrl) {
-                        npCache.embedUrl = ensurePaymentWidgetEmbedUrl(npCache.embedUrl);
-                    }
-                    if (npCache && npCache.embedUrlFiat) {
-                        npCache.embedUrlFiat = ensurePaymentWidgetEmbedUrl(npCache.embedUrlFiat);
-                    }
                     return npCache;
                 } catch (e) {
                     console.warn('[NOWPayments] config fetch:', e);
@@ -958,7 +946,6 @@
                     return;
                 }
                 var u = (mode === 'fiat' && cfg.embedUrlFiat) ? cfg.embedUrlFiat : cfg.embedUrl;
-                u = ensurePaymentWidgetEmbedUrl(u);
                 iframe.src = u;
             };
             window.closeNowPaymentsModal = function () {
