@@ -25,11 +25,11 @@ const CUSTODY_ENABLED = process.env.CUSTODY_ENABLED === 'true';
 const NOWPAYOUT_CURRENCY = process.env.NOWPAYOUT_CURRENCY || 'USDTTRC20';
 const NOWPAYOUT_CHAIN = process.env.NOWPAYOUT_CHAIN || '';
 /**
- * Piso en USD para POST /v1/payment. NOWPayments valida el importe en cripto (pay_currency).
- * En la práctica: ~1 USD puede dar menos de 1 USDT; ~2 USD puede dar ~1.997 USDT si el mínimo
- * cripto es 2 unidades — también falla. Usamos margen sobre el tipo (ver env).
+ * Piso en USD para POST /v1/payment. NOWPayments valida el mínimo en la moneda de pago;
+ * el tipo suele dejar el importe cripto ~0,1–0,2 % por debajo del nominal (ej. 3 USD → 2,996 USDT
+ * con mínimo 3 USDT). Ajusta NOWPAYMENTS_MIN_PAY_AMOUNT en servidor si tu par tiene otro piso.
  */
-const MIN_DEPOSIT_USD_FLOOR = 2.05;
+const MIN_DEPOSIT_USD_FLOOR = 3.05;
 const MIN_DEPOSIT_UNITS = Math.max(
     MIN_DEPOSIT_USD_FLOOR,
     parseFloat(process.env.NOWPAYMENTS_MIN_PAY_AMOUNT || String(MIN_DEPOSIT_USD_FLOOR)) ||
@@ -38,6 +38,38 @@ const MIN_DEPOSIT_UNITS = Math.max(
 /** Moneda en la que el usuario paga (API /payment). NOWPayments exige pay_currency en muchas cuentas. */
 const NOWPAYMENTS_PAY_CURRENCY =
     (process.env.NOWPAYMENTS_PAY_CURRENCY || 'usdttrc20').trim().toLowerCase();
+
+/**
+ * URL de checkout en respuestas POST/GET /v1/payment (nombres y nesting varían).
+ */
+function extractNowpaymentsCheckoutUrl(data) {
+    if (!data || typeof data !== 'object') return null;
+    const nested =
+        data.data && typeof data.data === 'object' ? data.data : null;
+    const layers = nested ? [data, nested] : [data];
+    for (const layer of layers) {
+        const candidates = [
+            layer.invoice_url,
+            layer.pay_url,
+            layer.payment_url,
+            layer.url,
+            layer.invoiceUrl,
+            layer.checkout_url,
+            layer.payment_extra &&
+                typeof layer.payment_extra === 'object' &&
+                layer.payment_extra.invoice_url,
+            layer.payment_extra &&
+                typeof layer.payment_extra === 'object' &&
+                layer.payment_extra.pay_url
+        ];
+        for (const c of candidates) {
+            if (typeof c === 'string' && /^https?:\/\//i.test(c.trim())) {
+                return c.trim();
+            }
+        }
+    }
+    return null;
+}
 
 const { isValidPayoutAddress } = require('./platform-addresses');
 
@@ -154,13 +186,34 @@ class NOWPaymentsService {
                 (typeof data === 'string' ? data : JSON.stringify(data));
             throw new Error(`NOWPayments: ${res.status} ${msg}`);
         }
-        const payUrl =
-            data.invoice_url ||
-            data.pay_url ||
-            data.payment_url ||
-            (data.payment_extra && data.payment_extra.invoice_url);
+        let payUrl = extractNowpaymentsCheckoutUrl(data);
+        const paymentId = data.payment_id;
+        if (!payUrl && paymentId != null && paymentId !== '') {
+            const resPoll = await fetch(
+                `${NOWPAYMENTS_API_URL}/payment/${encodeURIComponent(String(paymentId))}`,
+                {
+                    method: 'GET',
+                    headers: { 'x-api-key': NOWPAYMENTS_API_KEY }
+                }
+            );
+            const polled = await resPoll.json().catch(() => ({}));
+            if (resPoll.ok) {
+                payUrl = extractNowpaymentsCheckoutUrl(polled);
+            } else {
+                console.error(
+                    '[nowpayments] GET /payment/:id failed:',
+                    resPoll.status,
+                    polled
+                );
+            }
+        }
         if (!payUrl) {
-            console.error('[nowpayments] Unexpected /payment response keys:', Object.keys(data));
+            console.error(
+                '[nowpayments] Sin URL de checkout. POST keys:',
+                Object.keys(data),
+                'sample:',
+                JSON.stringify(data).slice(0, 1200)
+            );
             throw new Error('NOWPayments did not return invoice_url / pay_url');
         }
         return {
