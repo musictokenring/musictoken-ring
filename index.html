@@ -628,11 +628,11 @@
             outline-offset: 2px;
         }
         
-        /* Estilos para Widget iframe oscuro */
+        /* Widget NOWPayments: sin filter en el iframe (cross-origin + filtros = carga colgada en Brave/WebKit) */
         .nowpayments-iframe-dark {
-            filter: brightness(0.75) contrast(1.25) saturate(0.6);
             position: relative;
             z-index: 1;
+            background: #0c0c12;
         }
         
         /* Responsive: Ajustar modal en móvil */
@@ -641,11 +641,11 @@
                 max-width: 95% !important;
                 margin: 1rem;
             }
-            
+            /* Sin scale en el iframe NOWPayments: el transform rompe el render del widget */
             #nowpaymentsModal iframe {
-                transform: scale(0.85) !important;
-                width: 117.65% !important;
-                margin-left: -8.825% !important;
+                transform: none !important;
+                width: 100% !important;
+                margin-left: 0 !important;
             }
         }
         
@@ -894,9 +894,10 @@
                         <button type="button" onclick="closeNowPaymentsModal()" class="rounded-lg px-2.5 py-1 text-gray-400 hover:text-white hover:bg-white/10 text-xl leading-none" aria-label="Cerrar">&times;</button>
                     </div>
                     <div class="relative flex-1 min-h-[400px] bg-gray-950">
-                        <iframe id="nowpaymentsWidgetIframe" title="NOWPayments" class="w-full h-[min(72vh,580px)] border-0 nowpayments-iframe-dark" sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-popups-to-escape-sandbox allow-top-navigation-by-user-activation"></iframe>
+                        <iframe id="nowpaymentsWidgetIframe" title="NOWPayments" class="w-full h-[min(72vh,580px)] border-0 nowpayments-iframe-dark" loading="eager" referrerpolicy="strict-origin-when-cross-origin" allow="payment *; fullscreen *; clipboard-write *"
+                            ></iframe>
                         <div id="nowpaymentsWidgetError" class="hidden absolute inset-0 flex flex-col items-center justify-center gap-3 p-6 text-center bg-gray-950/95">
-                            <p class="text-red-300 text-sm">No se pudo cargar el widget. Comprueba que el backend tenga <span class="font-mono text-xs">NOWPAYMENTS_API_KEY</span> y CORS para este dominio.</p>
+                            <p class="text-red-300 text-sm">No se pudo cargar el widget. Comprueba el backend (<span class="font-mono text-xs">NOWPAYMENTS_API_KEY</span>), CORS y que en <strong>Brave</strong> desactives el escudo para este sitio o prueba en Chrome.</p>
                             <button type="button" onclick="closeNowPaymentsModal()" class="px-4 py-2 rounded-lg bg-white/10 text-white text-sm hover:bg-white/20">Cerrar</button>
                         </div>
                     </div>
