@@ -24,7 +24,11 @@ const CUSTODY_ENABLED = process.env.CUSTODY_ENABLED === 'true';
 /** Retiros/premios: USDT TRC20 por defecto si Custody + Tron; override con NOWPAYOUT_CURRENCY */
 const NOWPAYOUT_CURRENCY = process.env.NOWPAYOUT_CURRENCY || 'USDTTRC20';
 const NOWPAYOUT_CHAIN = process.env.NOWPAYOUT_CHAIN || '';
-const MIN_DEPOSIT_UNITS = parseFloat(process.env.NOWPAYMENTS_MIN_PAY_AMOUNT || '0.01');
+/** Mínimo 1 USD; el env puede subir el piso (nunca bajar de 1). */
+const MIN_DEPOSIT_UNITS = Math.max(
+    1,
+    parseFloat(process.env.NOWPAYMENTS_MIN_PAY_AMOUNT || '1') || 1
+);
 
 const { isValidPayoutAddress } = require('./platform-addresses');
 
