@@ -29,6 +29,9 @@ const MIN_DEPOSIT_UNITS = Math.max(
     1,
     parseFloat(process.env.NOWPAYMENTS_MIN_PAY_AMOUNT || '1') || 1
 );
+/** Moneda en la que el usuario paga (API /payment). NOWPayments exige pay_currency en muchas cuentas. */
+const NOWPAYMENTS_PAY_CURRENCY =
+    (process.env.NOWPAYMENTS_PAY_CURRENCY || 'usdttrc20').trim().toLowerCase();
 
 const { isValidPayoutAddress } = require('./platform-addresses');
 
@@ -106,9 +109,14 @@ class NOWPaymentsService {
             'https://musictoken-ring.onrender.com';
         const ipnUrl = `${String(baseUrl).replace(/\/$/, '')}/webhook/nowpayments`;
         const orderId = `mtr_${publicUserId}_${Date.now()}`;
+        const payCur = (payCurrency && String(payCurrency).trim()) || NOWPAYMENTS_PAY_CURRENCY;
+        if (!payCur) {
+            throw new Error('pay_currency is required (set NOWPAYMENTS_PAY_CURRENCY on server)');
+        }
         const body = {
             price_amount: amount,
             price_currency: 'usd',
+            pay_currency: payCur,
             ipn_callback_url: ipnUrl,
             order_id: orderId,
             order_description: 'MusicToken Ring — depósito de saldo',

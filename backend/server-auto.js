@@ -1905,11 +1905,15 @@ const createNowpaymentsPaymentHandler = async (req, res) => {
             (req.body && req.body.success_url) || `${baseFront}/?np_payment=success`;
         const cancelUrl = (req.body && req.body.cancel_url) || `${baseFront}/?np_payment=cancel`;
 
+        const payCurrency =
+            req.body && req.body.pay_currency ? String(req.body.pay_currency).trim() : undefined;
+
         const result = await nowPaymentsService.createCommercialPayment({
             publicUserId,
             priceAmountUsd,
             successUrl,
-            cancelUrl
+            cancelUrl,
+            payCurrency
         });
         res.json({ ok: true, ...result });
     } catch (e) {
@@ -1929,7 +1933,7 @@ app.get('/api/payments/nowpayments/create', (req, res) => {
     res.json({
         ok: true,
         message:
-            'Ruta activa. Para cobrar: POST con Header Authorization: Bearer <supabase_jwt> y body JSON { "price_amount": 10 }',
+            'Ruta activa. POST + Bearer + JSON { "price_amount": 10 }. Opcional: "pay_currency" (default servidor: NOWPAYMENTS_PAY_CURRENCY, ej. usdttrc20).',
         postPath: '/api/payments/nowpayments/create',
         renderGitCommit: process.env.RENDER_GIT_COMMIT || null,
         renderService: process.env.RENDER_SERVICE_NAME || null
