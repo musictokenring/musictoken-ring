@@ -891,16 +891,27 @@
                 <div class="nowpayments-modal-content pointer-events-auto w-full max-w-lg max-h-[92vh] rounded-2xl border border-cyan-500/25 bg-gray-950 shadow-2xl shadow-black/50 overflow-hidden flex flex-col">
                     <div class="flex flex-col gap-0.5 px-4 py-3 border-b border-white/10 bg-gray-900/90 sm:flex-row sm:items-center sm:justify-between">
                         <div>
-                            <span class="text-sm font-semibold text-cyan-300">Pago NOWPayments</span>
-                            <p class="text-[11px] text-gray-500 font-normal mt-0.5">El widget interno puede mostrar &quot;Donation&quot; (embed estándar de NOWPayments); el importe acredita saldo en la plataforma.</p>
+                            <span class="text-sm font-semibold text-cyan-300">Pago comercial NOWPayments</span>
+                            <p class="text-[11px] text-gray-500 font-normal mt-0.5">Checkout oficial (API <span class="font-mono text-[10px]">POST /v1/payment</span>). Indica el importe y continúa; el IPN acredita saldo al confirmarse.</p>
                         </div>
-                        <button type="button" onclick="closeNowPaymentsModal()" class="rounded-lg px-2.5 py-1 text-gray-400 hover:text-white hover:bg-white/10 text-xl leading-none" aria-label="Cerrar">&times;</button>
+                        <button type="button" onclick="closeNowPaymentsModal()" class="rounded-lg px-2.5 py-1 text-gray-400 hover:text-white hover:bg-white/10 text-xl leading-none self-end" aria-label="Cerrar">&times;</button>
                     </div>
                     <div class="relative flex-1 min-h-[400px] bg-gray-950">
-                        <iframe id="nowpaymentsWidgetIframe" title="NOWPayments" class="w-full h-[min(72vh,580px)] border-0 nowpayments-iframe-dark" loading="eager" referrerpolicy="strict-origin-when-cross-origin" allow="payment *; fullscreen *; clipboard-write *"
-                            ></iframe>
+                        <div id="npAmountStep" class="flex flex-col gap-4 p-5 sm:p-6">
+                            <label class="text-xs text-gray-400" for="npUsdAmount">Importe a depositar (USD)</label>
+                            <input id="npUsdAmount" type="number" min="1" step="0.01" value="20" inputmode="decimal" class="w-full rounded-lg border border-white/15 bg-gray-900/80 px-3 py-2.5 text-white text-base focus:border-cyan-500/50 focus:outline-none" />
+                            <p class="text-[11px] text-gray-500">Debes tener sesión iniciada (misma cuenta que en MusicToken Ring). Mínimo según NOWPayments (típ. desde 1–2 USD).</p>
+                            <button type="button" id="npStartCheckoutBtn" class="w-full rounded-xl bg-gradient-to-r from-cyan-600 to-fuchsia-600 py-3 text-sm font-bold text-white shadow-lg shadow-cyan-900/30 hover:opacity-95 transition">Continuar al pago</button>
+                            <p id="npCheckoutErr" class="hidden text-red-300 text-sm"></p>
+                        </div>
+                        <iframe id="nowpaymentsWidgetIframe" title="NOWPayments checkout" class="hidden w-full h-[min(72vh,580px)] border-0 nowpayments-iframe-dark" loading="eager" referrerpolicy="strict-origin-when-cross-origin" allow="payment *; fullscreen *; clipboard-write *"></iframe>
+                        <div id="npOpenExternalWrap" class="hidden px-4 pb-3 text-center">
+                            <a id="npOpenExternal" href="#" target="_blank" rel="noopener noreferrer" class="text-cyan-400 text-xs underline hover:text-cyan-300">Abrir checkout en una nueva pestaña</a>
+                            <span class="text-gray-600 text-xs mx-2">·</span>
+                            <span class="text-gray-500 text-xs">Si el iframe no carga (bloqueo del navegador), usa este enlace.</span>
+                        </div>
                         <div id="nowpaymentsWidgetError" class="hidden absolute inset-0 flex flex-col items-center justify-center gap-3 p-6 text-center bg-gray-950/95">
-                            <p class="text-red-300 text-sm">No se pudo cargar el widget. Comprueba el backend (<span class="font-mono text-xs">NOWPAYMENTS_API_KEY</span>), CORS y que en <strong>Brave</strong> desactives el escudo para este sitio o prueba en Chrome.</p>
+                            <p class="text-red-300 text-sm">No se pudo iniciar el pago. Comprueba el backend, CORS y que en <strong>Brave</strong> desactives el escudo para este sitio.</p>
                             <button type="button" onclick="closeNowPaymentsModal()" class="px-4 py-2 rounded-lg bg-white/10 text-white text-sm hover:bg-white/20">Cerrar</button>
                         </div>
                     </div>
@@ -910,43 +921,31 @@
 
         <script>
         (function () {
-            var npCache = null;
-            async function loadNpConfig(forceRefresh) {
-                if (!forceRefresh && npCache) return npCache;
-                var base = (window.CONFIG && window.CONFIG.BACKEND_API) || '';
-                if (!base) {
-                    npCache = { ok: false };
-                    return npCache;
-                }
-                try {
-                    var url = base.replace(/\/$/, '') + '/api/public/nowpayments-widget-config';
-                    url += (url.indexOf('?') === -1 ? '?' : '&') + '_np=' + Date.now();
-                    var r = await fetch(url, { credentials: 'omit', cache: 'no-store' });
-                    npCache = await r.json();
-                    return npCache;
-                } catch (e) {
-                    console.warn('[NOWPayments] config fetch:', e);
-                    npCache = { ok: false };
-                    return npCache;
-                }
-            }
-            window.openNowPaymentsModal = async function (mode) {
-                var modal = document.getElementById('nowpaymentsModal');
+            function resetNpModalUi() {
                 var iframe = document.getElementById('nowpaymentsWidgetIframe');
+                var step = document.getElementById('npAmountStep');
+                var ext = document.getElementById('npOpenExternalWrap');
+                var err = document.getElementById('npCheckoutErr');
                 var errWrap = document.getElementById('nowpaymentsWidgetError');
-                if (!modal || !iframe) return;
+                if (iframe) {
+                    iframe.removeAttribute('src');
+                    iframe.classList.add('hidden');
+                }
+                if (step) step.classList.remove('hidden');
+                if (ext) ext.classList.add('hidden');
+                if (err) {
+                    err.textContent = '';
+                    err.classList.add('hidden');
+                }
                 if (errWrap) errWrap.classList.add('hidden');
+            }
+            window.openNowPaymentsModal = async function () {
+                var modal = document.getElementById('nowpaymentsModal');
+                if (!modal) return;
+                resetNpModalUi();
                 modal.classList.remove('hidden');
                 modal.setAttribute('aria-hidden', 'false');
                 document.body.style.overflow = 'hidden';
-                iframe.removeAttribute('src');
-                var cfg = await loadNpConfig(true);
-                if (!cfg || !cfg.ok || !cfg.embedUrl) {
-                    if (errWrap) errWrap.classList.remove('hidden');
-                    return;
-                }
-                var u = (mode === 'fiat' && cfg.embedUrlFiat) ? cfg.embedUrlFiat : cfg.embedUrl;
-                iframe.src = u;
             };
             window.closeNowPaymentsModal = function () {
                 var modal = document.getElementById('nowpaymentsModal');
@@ -955,9 +954,96 @@
                     modal.classList.add('hidden');
                     modal.setAttribute('aria-hidden', 'true');
                 }
-                if (iframe) iframe.src = 'about:blank';
+                if (iframe) {
+                    iframe.removeAttribute('src');
+                    iframe.classList.add('hidden');
+                }
+                resetNpModalUi();
                 document.body.style.overflow = '';
             };
+            document.addEventListener('click', async function (ev) {
+                var t = ev.target;
+                if (!t || !t.id || t.id !== 'npStartCheckoutBtn') return;
+                var errEl = document.getElementById('npCheckoutErr');
+                var errWrap = document.getElementById('nowpaymentsWidgetError');
+                var inp = document.getElementById('npUsdAmount');
+                var iframe = document.getElementById('nowpaymentsWidgetIframe');
+                var step = document.getElementById('npAmountStep');
+                var ext = document.getElementById('npOpenExternalWrap');
+                var extLink = document.getElementById('npOpenExternal');
+                if (errEl) {
+                    errEl.textContent = '';
+                    errEl.classList.add('hidden');
+                }
+                if (errWrap) errWrap.classList.add('hidden');
+                var amt = inp ? parseFloat(String(inp.value).replace(',', '.'), 10) : NaN;
+                if (!Number.isFinite(amt) || amt < 1) {
+                    if (errEl) {
+                        errEl.textContent = 'Indica un importe válido (mín. 1 USD).';
+                        errEl.classList.remove('hidden');
+                    }
+                    return;
+                }
+                var supa = window.supabaseClient;
+                if (!supa) {
+                    if (errEl) {
+                        errEl.textContent = 'Inicia sesión antes de pagar.';
+                        errEl.classList.remove('hidden');
+                    }
+                    return;
+                }
+                var sess = await supa.auth.getSession();
+                if (!sess.data.session) {
+                    if (errEl) {
+                        errEl.textContent = 'Debes iniciar sesión (email o Google) para vincular el pago a tu cuenta.';
+                        errEl.classList.remove('hidden');
+                    }
+                    return;
+                }
+                var base = (window.CONFIG && window.CONFIG.BACKEND_API) || '';
+                if (!base) {
+                    if (errWrap) errWrap.classList.remove('hidden');
+                    return;
+                }
+                t.disabled = true;
+                try {
+                    var url = base.replace(/\/$/, '') + '/api/payments/nowpayments/create';
+                    var r = await fetch(url, {
+                        method: 'POST',
+                        credentials: 'omit',
+                        cache: 'no-store',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            Authorization: 'Bearer ' + sess.data.session.access_token
+                        },
+                        body: JSON.stringify({ price_amount: amt })
+                    });
+                    var j = await r.json().catch(function () { return {}; });
+                    if (!r.ok || !j.ok || !j.pay_url) {
+                        var msg = (j && j.error) ? j.error : ('Error ' + r.status);
+                        if (errEl) {
+                            errEl.textContent = msg;
+                            errEl.classList.remove('hidden');
+                        }
+                        return;
+                    }
+                    if (step) step.classList.add('hidden');
+                    if (iframe) {
+                        iframe.classList.remove('hidden');
+                        iframe.src = j.pay_url;
+                    }
+                    if (extLink) extLink.href = j.pay_url;
+                    if (ext) ext.classList.remove('hidden');
+                } catch (e) {
+                    console.warn('[NOWPayments] create payment:', e);
+                    if (errEl) {
+                        errEl.textContent = e.message || 'Error de red';
+                        errEl.classList.remove('hidden');
+                    }
+                } finally {
+                    t.disabled = false;
+                }
+            });
             document.addEventListener('keydown', function (e) {
                 var m = document.getElementById('nowpaymentsModal');
                 if (e.key === 'Escape' && m && !m.classList.contains('hidden')) {

@@ -62,6 +62,91 @@ class NOWPaymentsService {
     }
 
     /**
+     * Extrae UUID de usuario desde order_id (API comercial usa mtr_<uuid>_<ts> o solo uuid).
+     * @param {string|null|undefined} orderId
+     * @returns {string|null}
+     */
+    parseUserIdFromOrderId(orderId) {
+        if (orderId == null || orderId === '') return null;
+        const s = String(orderId).trim();
+        const m = s.match(
+            /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i
+        );
+        return m ? m[0] : null;
+    }
+
+    /**
+     * Pago comercial vía API oficial POST /v1/payment (Postman / documentación NOWPayments).
+     * Devuelve URL de checkout (invoice) para iframe o nueva pestaña.
+     * @param {Object} p
+     * @param {string} p.publicUserId - users.id (UUID)
+     * @param {number} p.priceAmountUsd
+     * @param {string} p.successUrl
+     * @param {string} p.cancelUrl
+     * @returns {Promise<{ payment_id: string|number, pay_url: string, order_id: string }>}
+     */
+    async createCommercialPayment({ publicUserId, priceAmountUsd, successUrl, cancelUrl }) {
+        if (!NOWPAYMENTS_API_KEY) {
+            throw new Error('NOWPayments API key not configured');
+        }
+        const amount = Number(priceAmountUsd);
+        if (!Number.isFinite(amount) || amount < MIN_DEPOSIT_UNITS) {
+            throw new Error(`Minimum amount is ${MIN_DEPOSIT_UNITS} USD`);
+        }
+        if (amount > 500000) {
+            throw new Error('Amount exceeds maximum (500000 USD)');
+        }
+        const baseUrl =
+            process.env.BACKEND_URL ||
+            process.env.RENDER_EXTERNAL_URL ||
+            'https://musictoken-ring.onrender.com';
+        const ipnUrl = `${String(baseUrl).replace(/\/$/, '')}/webhook/nowpayments`;
+        const orderId = `mtr_${publicUserId}_${Date.now()}`;
+        const body = {
+            price_amount: amount,
+            price_currency: 'usd',
+            ipn_callback_url: ipnUrl,
+            order_id: orderId,
+            order_description: 'MusicToken Ring — depósito de saldo',
+            success_url: successUrl,
+            cancel_url: cancelUrl,
+            is_fixed_rate: false,
+            is_fee_paid_by_user: false
+        };
+        const res = await fetch(`${NOWPAYMENTS_API_URL}/payment`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'x-api-key': NOWPAYMENTS_API_KEY
+            },
+            body: JSON.stringify(body)
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) {
+            const msg =
+                data.message ||
+                data.error ||
+                (typeof data === 'string' ? data : JSON.stringify(data));
+            throw new Error(`NOWPayments: ${res.status} ${msg}`);
+        }
+        const payUrl =
+            data.invoice_url ||
+            data.pay_url ||
+            data.payment_url ||
+            (data.payment_extra && data.payment_extra.invoice_url);
+        if (!payUrl) {
+            console.error('[nowpayments] Unexpected /payment response keys:', Object.keys(data));
+            throw new Error('NOWPayments did not return invoice_url / pay_url');
+        }
+        return {
+            payment_id: data.payment_id,
+            pay_url: payUrl,
+            order_id: orderId,
+            payment_status: data.payment_status
+        };
+    }
+
+    /**
      * IPN NOWPayments: HMAC-SHA512 del body en crudo con NOWPAYMENTS_WEBHOOK_SECRET;
      * comparación timing-safe del hex en x-nowpayments-sig.
      * @param {string} payload - Raw request body
@@ -121,7 +206,7 @@ class NOWPaymentsService {
             // NOWPayments widget passes email/wallet/order_id (user_id) in the payment
             const userEmail = paymentData.email || paymentData.pay_currency_extra_id || null;
             const userWallet = paymentData.wallet || paymentData.pay_currency_extra_id || null;
-            const userIdFromOrder = paymentData.order_id || null; // order_id contiene el user_id interno
+            const userIdFromOrder = this.parseUserIdFromOrderId(paymentData.order_id);
 
             const depositAmount = this.normalizeIncomingAmount(paymentData);
             if (depositAmount < MIN_DEPOSIT_UNITS) {

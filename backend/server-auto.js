@@ -1852,6 +1852,72 @@ app.get('/api/public/nowpayments-widget-config', (req, res) => {
 });
 
 /**
+ * Pago comercial NOWPayments: POST /v1/payment (documentación API).
+ * Requiere Authorization: Bearer (Supabase). Body: { price_amount: number (USD) }.
+ * Respuesta: { ok, pay_url, payment_id, order_id } — usar pay_url en iframe o nueva pestaña.
+ */
+app.post('/api/payments/nowpayments/create', depositRateLimiter, async (req, res) => {
+    try {
+        if (!nowPaymentsService) {
+            return res.status(503).json({ error: 'NOWPayments service unavailable' });
+        }
+        const authHeader = req.headers.authorization;
+        if (!authHeader || !authHeader.startsWith('Bearer ')) {
+            return res.status(401).json({ error: 'Authentication required' });
+        }
+        const token = authHeader.replace('Bearer ', '');
+        const { data: { user: authUser }, error: authError } = await supabase.auth.getUser(token);
+        if (authError || !authUser) {
+            return res.status(401).json({ error: 'Invalid or expired token' });
+        }
+
+        const { data: row } = await supabase
+            .from('users')
+            .select('id')
+            .eq('id', authUser.id)
+            .maybeSingle();
+        let publicUserId = row?.id;
+        if (!publicUserId && authUser.email) {
+            const { data: byEmail } = await supabase
+                .from('users')
+                .select('id')
+                .ilike('email', authUser.email)
+                .maybeSingle();
+            publicUserId = byEmail?.id;
+        }
+        if (!publicUserId) {
+            return res.status(400).json({
+                error: 'Usuario no encontrado. Regístrate o inicia sesión en la plataforma antes de pagar.'
+            });
+        }
+
+        const raw = req.body && (req.body.price_amount ?? req.body.amount);
+        const priceAmountUsd = typeof raw === 'string' ? parseFloat(raw, 10) : Number(raw);
+        if (!Number.isFinite(priceAmountUsd)) {
+            return res.status(400).json({ error: 'price_amount inválido (USD)' });
+        }
+
+        const origin = (req.headers.origin || '').replace(/\/$/, '');
+        const fallbackOrigin = 'https://musictokenring.xyz';
+        const baseFront = origin || fallbackOrigin;
+        const successUrl =
+            (req.body && req.body.success_url) || `${baseFront}/?np_payment=success`;
+        const cancelUrl = (req.body && req.body.cancel_url) || `${baseFront}/?np_payment=cancel`;
+
+        const result = await nowPaymentsService.createCommercialPayment({
+            publicUserId,
+            priceAmountUsd,
+            successUrl,
+            cancelUrl
+        });
+        res.json({ ok: true, ...result });
+    } catch (e) {
+        console.error('[nowpayments-create]', e);
+        res.status(400).json({ ok: false, error: e.message || 'Error creating payment' });
+    }
+});
+
+/**
  * Health check
  */
 app.get('/api/health', (req, res) => {
@@ -1957,6 +2023,7 @@ app.get('/', (req, res) => {
             price: '/api/price',
             nowpaymentsIpn: '/webhook/nowpayments',
             nowpaymentsWidgetConfig: '/api/public/nowpayments-widget-config',
+            nowpaymentsCreatePayment: 'POST /api/payments/nowpayments/create',
             prizeSend: '/api/prizes/send'
         }
     });
