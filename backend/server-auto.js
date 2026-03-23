@@ -79,6 +79,15 @@ const corsOptions = {
 app.use(cors(corsOptions));
 app.use(express.json());
 
+// GET en IPN: el navegador no debe usar esta URL como checkout (solo POST firmado por NOWPayments).
+app.get('/webhook/nowpayments', (req, res) => {
+    res.status(200).json({
+        ok: true,
+        message:
+            'IPN NOWPayments: solo acepta POST (notificaciones del servidor NOWPayments). No es la página de pago del usuario; el checkout es una URL en nowpayments.io devuelta por POST /api/payments/nowpayments/create.'
+    });
+});
+
 // Middleware para webhook de NOWPayments (necesita raw body)
 app.use('/webhook/nowpayments', express.raw({ type: 'application/json' }));
 

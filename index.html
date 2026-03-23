@@ -1043,6 +1043,26 @@
                         }
                         return;
                     }
+                    var payUrlStr = String(j.pay_url).trim();
+                    try {
+                        var payHost = new URL(payUrlStr).hostname.toLowerCase();
+                        if (payHost !== 'nowpayments.io' && !payHost.endsWith('.nowpayments.io')) {
+                            console.error('[NOWPayments] pay_url no es dominio NOWPayments:', payUrlStr);
+                            if (errEl) {
+                                errEl.textContent =
+                                    'El enlace de pago no es válido (no apunta a NOWPayments). Revisa el backend: no debe usarse la URL del webhook/IPN como checkout.';
+                                errEl.classList.remove('hidden');
+                            }
+                            return;
+                        }
+                    } catch (eUrl) {
+                        if (errEl) {
+                            errEl.textContent = 'URL de pago con formato inválido.';
+                            errEl.classList.remove('hidden');
+                        }
+                        return;
+                    }
+                    j.pay_url = payUrlStr;
                     if (
                         adjustNote &&
                         j.requested_price_amount_usd != null &&
@@ -1060,9 +1080,9 @@
                     if (step) step.classList.add('hidden');
                     if (iframe) {
                         iframe.classList.remove('hidden');
-                        iframe.src = j.pay_url;
+                        iframe.src = payUrlStr;
                     }
-                    if (extLink) extLink.href = j.pay_url;
+                    if (extLink) extLink.href = payUrlStr;
                     if (ext) ext.classList.remove('hidden');
                 } catch (e) {
                     console.warn('[NOWPayments] create payment:', e);

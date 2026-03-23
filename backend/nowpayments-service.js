@@ -39,6 +39,19 @@ const NOWPAYMENTS_PAY_CURRENCY =
     (process.env.NOWPAYMENTS_PAY_CURRENCY || 'usdttrc20').trim().toLowerCase();
 
 /**
+ * Solo URLs reales de checkout NOWPayments (evita usar ipn_callback_url / success_url del JSON).
+ */
+function isNowpaymentsHostedCheckoutUrl(u) {
+    if (typeof u !== 'string' || !/^https?:\/\//i.test(u.trim())) return false;
+    try {
+        const h = new URL(u.trim()).hostname.toLowerCase();
+        return h === 'nowpayments.io' || h.endsWith('.nowpayments.io');
+    } catch {
+        return false;
+    }
+}
+
+/**
  * URL de checkout en respuestas POST/GET /v1/payment (nombres y nesting varían).
  */
 function extractNowpaymentsCheckoutUrl(data) {
@@ -51,7 +64,6 @@ function extractNowpaymentsCheckoutUrl(data) {
             layer.invoice_url,
             layer.pay_url,
             layer.payment_url,
-            layer.url,
             layer.invoiceUrl,
             layer.checkout_url,
             layer.payment_extra &&
@@ -62,7 +74,7 @@ function extractNowpaymentsCheckoutUrl(data) {
                 layer.payment_extra.pay_url
         ];
         for (const c of candidates) {
-            if (typeof c === 'string' && /^https?:\/\//i.test(c.trim())) {
+            if (typeof c === 'string' && isNowpaymentsHostedCheckoutUrl(c)) {
                 return c.trim();
             }
         }
@@ -70,20 +82,31 @@ function extractNowpaymentsCheckoutUrl(data) {
     return null;
 }
 
+const DEEP_FIND_SKIP_KEYS = new Set([
+    'ipn_callback_url',
+    'success_url',
+    'cancel_url',
+    'callback_url',
+    'webhook_url',
+    'ipn_url'
+]);
+
 /**
- * Si la extracción directa falla, busca cualquier URL https en campos típicos de checkout.
+ * Último recurso: buscar URL de checkout sin coger callbacks hacia nuestro backend.
  */
 function deepFindNowpaymentsCheckoutUrl(obj, depth) {
     const d = depth == null ? 0 : depth;
     if (d > 5 || !obj || typeof obj !== 'object') return null;
     for (const [k, v] of Object.entries(obj)) {
         const kl = k.toLowerCase();
+        if (DEEP_FIND_SKIP_KEYS.has(kl)) continue;
         if (typeof v === 'string' && /^https?:\/\//i.test(v.trim())) {
             if (
-                kl.includes('url') ||
-                kl.includes('link') ||
-                kl.includes('invoice') ||
-                kl.includes('checkout')
+                (kl.includes('url') ||
+                    kl.includes('link') ||
+                    kl.includes('invoice') ||
+                    kl.includes('checkout')) &&
+                isNowpaymentsHostedCheckoutUrl(v)
             ) {
                 return v.trim();
             }
