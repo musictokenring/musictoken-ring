@@ -25,11 +25,11 @@ const CUSTODY_ENABLED = process.env.CUSTODY_ENABLED === 'true';
 const NOWPAYOUT_CURRENCY = process.env.NOWPAYOUT_CURRENCY || 'USDTTRC20';
 const NOWPAYOUT_CHAIN = process.env.NOWPAYOUT_CHAIN || '';
 /**
- * Piso en USD para POST /v1/payment. NOWPayments valida el importe en cripto;
- * con 1.00 USD el tipo suele dar menos de 1 unidad (ej. 0.997 USDT) y responde 400.
- * El env puede subir el piso; no bajar de 1.05 salvo que cambies esta constante.
+ * Piso en USD para POST /v1/payment. NOWPayments valida el importe en cripto (pay_currency).
+ * En la práctica: ~1 USD puede dar menos de 1 USDT; ~2 USD puede dar ~1.997 USDT si el mínimo
+ * cripto es 2 unidades — también falla. Usamos margen sobre el tipo (ver env).
  */
-const MIN_DEPOSIT_USD_FLOOR = 1.05;
+const MIN_DEPOSIT_USD_FLOOR = 2.05;
 const MIN_DEPOSIT_UNITS = Math.max(
     MIN_DEPOSIT_USD_FLOOR,
     parseFloat(process.env.NOWPAYMENTS_MIN_PAY_AMOUNT || String(MIN_DEPOSIT_USD_FLOOR)) ||

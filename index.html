@@ -899,8 +899,8 @@
                     <div class="relative flex-1 min-h-[400px] bg-gray-950">
                         <div id="npAmountStep" class="flex flex-col gap-4 p-5 sm:p-6">
                             <label class="text-xs text-gray-400" for="npUsdAmount">Importe a depositar (USD)</label>
-                            <input id="npUsdAmount" type="number" min="1.05" step="0.01" value="20" inputmode="decimal" class="w-full rounded-lg border border-white/15 bg-gray-900/80 px-3 py-2.5 text-white text-base focus:border-cyan-500/50 focus:outline-none" />
-                            <p class="text-[11px] text-gray-500">Debes tener sesión iniciada (misma cuenta que en MusicToken Ring). <strong class="text-gray-400">Mínimo 1,05 USD</strong> por depósito (NOWPayments exige un mínimo en cripto; 1 USD en fiat suele quedar por debajo tras el tipo de cambio).</p>
+                            <input id="npUsdAmount" type="number" min="2.05" step="0.01" value="20" inputmode="decimal" class="w-full rounded-lg border border-white/15 bg-gray-900/80 px-3 py-2.5 text-white text-base focus:border-cyan-500/50 focus:outline-none" />
+                            <p class="text-[11px] text-gray-500">Debes tener sesión iniciada (misma cuenta que en MusicToken Ring). <strong class="text-gray-400">Mínimo 2,05 USD</strong> por depósito (NOWPayments aplica mínimo en la moneda de pago; importes bajos en fiat suelen quedar por debajo tras el tipo de cambio, p. ej. 2 USD ≈ 1,99 USDT).</p>
                             <button type="button" id="npStartCheckoutBtn" class="w-full rounded-xl bg-gradient-to-r from-cyan-600 to-fuchsia-600 py-3 text-sm font-bold text-white shadow-lg shadow-cyan-900/30 hover:opacity-95 transition">Continuar al pago</button>
                             <p id="npCheckoutErr" class="hidden text-red-300 text-sm"></p>
                         </div>
@@ -977,9 +977,9 @@
                 }
                 if (errWrap) errWrap.classList.add('hidden');
                 var amt = inp ? parseFloat(String(inp.value).replace(',', '.'), 10) : NaN;
-                if (!Number.isFinite(amt) || amt < 1.05) {
+                if (!Number.isFinite(amt) || amt < 2.05) {
                     if (errEl) {
-                        errEl.textContent = 'Indica un importe válido (mín. 1,05 USD).';
+                        errEl.textContent = 'Indica un importe válido (mín. 2,05 USD).';
                         errEl.classList.remove('hidden');
                     }
                     return;
