@@ -1922,6 +1922,21 @@ app.post('/api/payments/nowpayments/create', depositRateLimiter, createNowpaymen
 app.post('/nowpayments/create', depositRateLimiter, createNowpaymentsPaymentHandler);
 
 /**
+ * Verificación sin auth: confirma que el deploy incluye la ruta de pagos NOWPayments.
+ * Si ves 404 aquí, Render aún no tiene el último código (redeploy desde GitHub).
+ */
+app.get('/api/payments/nowpayments/create', (req, res) => {
+    res.json({
+        ok: true,
+        message:
+            'Ruta activa. Para cobrar: POST con Header Authorization: Bearer <supabase_jwt> y body JSON { "price_amount": 10 }',
+        postPath: '/api/payments/nowpayments/create',
+        renderGitCommit: process.env.RENDER_GIT_COMMIT || null,
+        renderService: process.env.RENDER_SERVICE_NAME || null
+    });
+});
+
+/**
  * Health check
  */
 app.get('/api/health', (req, res) => {
@@ -1934,7 +1949,9 @@ app.get('/api/health', (req, res) => {
             vaultService: vaultService ? true : false
         },
         timestamp: new Date().toISOString(),
-        cors: 'enabled'
+        cors: 'enabled',
+        renderGitCommit: process.env.RENDER_GIT_COMMIT || null,
+        nowpaymentsCreateGetProbe: '/api/payments/nowpayments/create (GET para verificar deploy)'
     });
 });
 
@@ -2141,6 +2158,7 @@ app.use('/api/*', (req, res) => {
     res.status(404).json({
         error: 'Endpoint not found',
         path: req.path,
+        originalUrl: req.originalUrl,
         method: req.method,
         message: 'El endpoint solicitado no existe. Verifica la URL.'
     });
