@@ -1927,7 +1927,15 @@ const createNowpaymentsPaymentHandler = async (req, res) => {
         res.json({ ok: true, ...result });
     } catch (e) {
         console.error('[nowpayments-create]', e);
-        res.status(400).json({ ok: false, error: e.message || 'Error creating payment' });
+        const code =
+            typeof e.clientStatus === 'number' && e.clientStatus >= 400 && e.clientStatus < 600
+                ? e.clientStatus
+                : 400;
+        res.status(code).json({
+            ok: false,
+            error: e.message || 'Error creating payment',
+            npStatus: typeof e.npStatus === 'number' ? e.npStatus : undefined
+        });
     }
 };
 

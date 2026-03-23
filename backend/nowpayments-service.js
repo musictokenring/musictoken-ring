@@ -135,6 +135,72 @@ function adjustUsdForNowpaymentsCryptoMinimum(usd) {
     return Math.round(out * 100) / 100;
 }
 
+function sleep(ms) {
+    return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function describeNowpaymentsHttpError(status, data) {
+    const fromBody =
+        data &&
+        (data.message ||
+            data.error ||
+            (typeof data.errors === 'string' ? data.errors : null));
+    if (fromBody && String(fromBody).trim() !== '') {
+        return String(fromBody).trim();
+    }
+    if (status === 429) {
+        return 'Límite de peticiones (rate limit). Espera 1–2 minutos o revisa el plan en NOWPayments.';
+    }
+    if (status === 401 || status === 403) {
+        return 'API key inválida o sin permiso (NOWPayments).';
+    }
+    if (status === 503) {
+        return 'NOWPayments no disponible temporalmente.';
+    }
+    return `Respuesta sin mensaje (HTTP ${status})`;
+}
+
+function nowpaymentsClientStatus(npStatus) {
+    if (npStatus === 429) return 429;
+    if (npStatus === 408 || npStatus === 504) return 504;
+    if (npStatus >= 500) return 503;
+    if (npStatus >= 400) return 502;
+    return 502;
+}
+
+function throwNowpaymentsHttpError(res, data) {
+    const desc = describeNowpaymentsHttpError(res.status, data);
+    const err = new Error(`NOWPayments: ${res.status} ${desc}`);
+    err.clientStatus = nowpaymentsClientStatus(res.status);
+    err.npStatus = res.status;
+    throw err;
+}
+
+async function postNowpaymentsCreatePayment(bodyObj) {
+    const doFetch = () =>
+        fetch(`${NOWPAYMENTS_API_URL}/payment`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'x-api-key': NOWPAYMENTS_API_KEY
+            },
+            body: JSON.stringify(bodyObj)
+        });
+    let res = await doFetch();
+    let data = await res.json().catch(() => ({}));
+    if (!res.ok && res.status === 429) {
+        const waitMs =
+            parseInt(process.env.NOWPAYMENTS_429_RETRY_MS || '3000', 10) || 3000;
+        console.warn(
+            `[nowpayments] NOWPayments 429; reintento en ${waitMs}ms...`
+        );
+        await sleep(waitMs);
+        res = await doFetch();
+        data = await res.json().catch(() => ({}));
+    }
+    return { res, data };
+}
+
 const { isValidPayoutAddress } = require('./platform-addresses');
 
 // Fee distribution: 75% vault, 25% trading fund
@@ -238,15 +304,7 @@ class NOWPaymentsService {
         });
         let priceAmountFinal = priceAmountToSend;
         let body = buildPaymentBody(priceAmountFinal);
-        let res = await fetch(`${NOWPAYMENTS_API_URL}/payment`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'x-api-key': NOWPAYMENTS_API_KEY
-            },
-            body: JSON.stringify(body)
-        });
-        let data = await res.json().catch(() => ({}));
+        let { res, data } = await postNowpaymentsCreatePayment(body);
         if (!res.ok) {
             const msg0 =
                 data.message ||
@@ -255,23 +313,11 @@ class NOWPaymentsService {
             if (/less than minimal/i.test(String(msg0))) {
                 priceAmountFinal = Math.round((priceAmountFinal * 1.05 + 0.2) * 100) / 100;
                 body = buildPaymentBody(priceAmountFinal);
-                res = await fetch(`${NOWPAYMENTS_API_URL}/payment`, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'x-api-key': NOWPAYMENTS_API_KEY
-                    },
-                    body: JSON.stringify(body)
-                });
-                data = await res.json().catch(() => ({}));
+                ({ res, data } = await postNowpaymentsCreatePayment(body));
             }
         }
         if (!res.ok) {
-            const msg =
-                data.message ||
-                data.error ||
-                (typeof data === 'string' ? data : JSON.stringify(data));
-            throw new Error(`NOWPayments: ${res.status} ${msg}`);
+            throwNowpaymentsHttpError(res, data);
         }
         let payUrl =
             extractNowpaymentsCheckoutUrl(data) || deepFindNowpaymentsCheckoutUrl(data);
