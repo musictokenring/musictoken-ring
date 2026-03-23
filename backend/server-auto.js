@@ -1808,6 +1808,7 @@ app.get('/api/vault/stats', async (req, res) => {
  * Config pública del widget NOWPayments (iframe).
  * La clave del embed es la misma API key del panel NOWPayments (pública en el iframe).
  * IPN / firma sigue siendo solo en servidor (NOWPAYMENTS_WEBHOOK_SECRET).
+ * Por defecto: payment-widget (comercio). Para donaciones explícitas: NOWPAYMENTS_EMBED_TYPE=donation-widget
  */
 app.get('/api/public/nowpayments-widget-config', (req, res) => {
     res.set('Cache-Control', 'no-store');
@@ -1816,9 +1817,9 @@ app.get('/api/public/nowpayments-widget-config', (req, res) => {
         process.env.NOWPAYMENTS_PUBLIC_KEY ||
         process.env.NOWPAYMENTS_API_KEY ||
         '';
-    const rawType = (process.env.NOWPAYMENTS_EMBED_TYPE || 'donation-widget').toLowerCase();
+    const rawType = (process.env.NOWPAYMENTS_EMBED_TYPE || 'payment-widget').toLowerCase();
     const allowed = ['donation-widget', 'payment-widget'];
-    const embedType = allowed.includes(rawType) ? rawType : 'donation-widget';
+    const embedType = allowed.includes(rawType) ? rawType : 'payment-widget';
     if (!embedKey) {
         return res.status(503).json({
             ok: false,
