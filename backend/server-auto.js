@@ -1868,8 +1868,8 @@ app.get('/api/health', (req, res) => {
 /**
  * NOWPayments Webhook Endpoint
  * POST /webhook/nowpayments
- * Receives IPN notifications from NOWPayments
- * IMPORTANT: This endpoint needs raw body for signature verification
+ * IPN: body JSON crudo; firma x-nowpayments-sig verificada con HMAC-SHA512 (NOWPaymentsService.verifyIPNSignature).
+ * Tras OK: NOWPaymentsService.processDeposit → increment_user_credits + registro en deposits.
  */
 app.post('/webhook/nowpayments', express.raw({ type: 'application/json' }), async (req, res) => {
     try {

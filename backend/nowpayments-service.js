@@ -62,7 +62,8 @@ class NOWPaymentsService {
     }
 
     /**
-     * Verify IPN signature using HMAC-SHA512
+     * IPN NOWPayments: HMAC-SHA512 del body en crudo con NOWPAYMENTS_WEBHOOK_SECRET;
+     * comparación timing-safe del hex en x-nowpayments-sig.
      * @param {string} payload - Raw request body
      * @param {string} signature - x-nowpayments-sig header
      * @returns {boolean}
