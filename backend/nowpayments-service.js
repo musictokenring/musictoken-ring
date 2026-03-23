@@ -24,10 +24,16 @@ const CUSTODY_ENABLED = process.env.CUSTODY_ENABLED === 'true';
 /** Retiros/premios: USDT TRC20 por defecto si Custody + Tron; override con NOWPAYOUT_CURRENCY */
 const NOWPAYOUT_CURRENCY = process.env.NOWPAYOUT_CURRENCY || 'USDTTRC20';
 const NOWPAYOUT_CHAIN = process.env.NOWPAYOUT_CHAIN || '';
-/** Mínimo 1 USD; el env puede subir el piso (nunca bajar de 1). */
+/**
+ * Piso en USD para POST /v1/payment. NOWPayments valida el importe en cripto;
+ * con 1.00 USD el tipo suele dar menos de 1 unidad (ej. 0.997 USDT) y responde 400.
+ * El env puede subir el piso; no bajar de 1.05 salvo que cambies esta constante.
+ */
+const MIN_DEPOSIT_USD_FLOOR = 1.05;
 const MIN_DEPOSIT_UNITS = Math.max(
-    1,
-    parseFloat(process.env.NOWPAYMENTS_MIN_PAY_AMOUNT || '1') || 1
+    MIN_DEPOSIT_USD_FLOOR,
+    parseFloat(process.env.NOWPAYMENTS_MIN_PAY_AMOUNT || String(MIN_DEPOSIT_USD_FLOOR)) ||
+        MIN_DEPOSIT_USD_FLOOR
 );
 /** Moneda en la que el usuario paga (API /payment). NOWPayments exige pay_currency en muchas cuentas. */
 const NOWPAYMENTS_PAY_CURRENCY =
