@@ -287,8 +287,10 @@
             BATTLE_DURATION: 60,
             BACKEND_API: 'https://musictoken-ring.onrender.com',
             MTR_TOKEN_ADDRESS: window.MTR_TOKEN_ADDRESS || '0x99cd1eb32846c9027ed9cb8710066fa08791c33b',
-            WALLETCONNECT_PROJECT_ID: 'ed97c5607e9ee5748e9b519a33830e04' // Project ID real de WalletConnect
+            WALLETCONNECT_PROJECT_ID: 'ed97c5607e9ee5748e9b519a33830e04',
+            PLATFORM_WALLET_ADDRESS: ''
         };
+        window.CONFIG = CONFIG;
         
         // Variable global para WalletConnect
         var walletConnectProvider = null;
@@ -338,7 +340,7 @@
             }
         });
 
-        var PLATFORM_WALLET_ADDRESSES = { base: window.PLATFORM_WALLET_BASE_ADDRESS || '0x75376BC58830f27415402875D26B73A6BE8E2253' };
+        var PLATFORM_WALLET_ADDRESSES = { base: window.PLATFORM_WALLET_BASE_ADDRESS || '' };
         window.MTR_BUILD_ID = 'v3.9-start-battle-fix';
 
         if (typeof window.selectMode !== 'function') {
@@ -612,23 +614,18 @@
         .neon-scrollbar::-webkit-scrollbar-thumb:hover { background: rgba(0,243,255,0.5); }
         .neon-scrollbar { scrollbar-width: thin; scrollbar-color: rgba(0,243,255,0.3) rgba(15,15,40,0.4); }
 
-        /* Estilos para Botones Minimalistas de Depósito */
+        /* Depósito NOWPayments — botones */
         .nowpayments-btn-minimal,
-        .moonpay-btn-minimal {
+        .deposit-flow-btn {
             font-family: 'Inter', system-ui, sans-serif;
             cursor: pointer;
             outline: none;
         }
         
         .nowpayments-btn-minimal:focus,
-        .moonpay-btn-minimal:focus {
+        .deposit-flow-btn:focus {
             outline: 2px solid rgba(6, 182, 212, 0.5);
             outline-offset: 2px;
-        }
-        
-        /* Estilos específicos para MoonPay widget overlay */
-        .moonpay-overlay {
-            z-index: 9999;
         }
         
         /* Estilos para Widget iframe oscuro */
@@ -790,7 +787,7 @@
                         <span>🔗</span>
                         <span>Conectar Wallet</span>
                         <span class="text-sm opacity-75">(Crypto instantáneo)</span>
-                    </button>
+                </button>
                     
                     <!-- Botón: Entrar con Email/Google -->
                     <button type="button" id="emailSignupOnboardingBtn" onclick="if(typeof openAuthModal === 'function') { openAuthModal(); } else if(typeof window.openAuthModal === 'function') { window.openAuthModal(); } else { console.error('openAuthModal no disponible'); }" class="px-8 py-3 rounded-xl text-lg font-bold bg-gradient-to-r from-fuchsia-500 to-pink-500 text-white hover:opacity-90 transition-all duration-200 shadow-lg shadow-fuchsia-500/25 cursor-pointer flex items-center justify-center gap-2">
@@ -831,14 +828,15 @@
             </div>
         </section>
 
-        <!-- DEPOSIT CARD (USDC Directo + MTR Opcional) -->
-        <!-- CRÍTICO: Esta sección requiere autenticación - se oculta si no hay usuario -->
+        <!-- Depósitos: solo NOWPayments (widget + IPN en servidor) -->
         <section id="depositSectionMain" class="mb-16">
-            <div class="max-w-2xl mx-auto p-6 sm:p-8 rounded-2xl border border-cyan-500/15 bg-gradient-to-br from-gray-900/80 to-indigo-950/40 neon-border-cyan">
-                <h3 class="text-xl font-bold text-cyan-400 neon-text-cyan mb-2">Depositar Créditos</h3>
-                <p class="text-gray-400 text-sm mb-4">Envía USDC directo para obtener créditos MTR nominales respaldados 1:1 por USDC real.</p>
-                
-                <!-- Mensaje de autenticación requerida (oculto por defecto, se muestra si no hay auth) -->
+            <div class="max-w-2xl mx-auto p-6 sm:p-8 rounded-2xl border border-cyan-500/20 bg-gradient-to-br from-gray-900/90 to-slate-950/85 shadow-xl shadow-cyan-500/5">
+                <div class="flex flex-wrap items-center gap-3 mb-3">
+                    <span class="flex h-9 min-w-[2.25rem] items-center justify-center rounded-lg bg-cyan-500/15 text-cyan-300 text-sm font-bold border border-cyan-500/30">1</span>
+                    <h3 class="text-xl font-bold text-white tracking-tight">Depositar USDC con NOWPayments</h3>
+                </div>
+                <p class="text-gray-400 text-sm mb-6 leading-relaxed">Un solo flujo: compra con tarjeta (fiat) o paga en cripto. Los créditos se acreditan cuando el pago queda confirmado en NOWPayments.</p>
+
                 <div id="depositAuthRequired" class="hidden mb-6 p-4 rounded-lg bg-yellow-500/10 border border-yellow-500/20">
                     <div class="flex items-center gap-2 mb-2">
                         <span class="text-yellow-400 text-lg">⚠️</span>
@@ -851,536 +849,118 @@
                         Iniciar Sesión o Conectar Wallet
                     </button>
                 </div>
-                
-                <!-- Explicación de Créditos Nominales -->
-                <div class="mb-6 p-4 rounded-lg bg-green-500/10 border border-green-500/20">
+
+                <div class="mb-6 p-4 rounded-xl bg-emerald-500/10 border border-emerald-500/20">
                     <div class="flex items-start gap-2">
-                        <span class="text-green-400 text-lg">✓</span>
+                        <span class="text-emerald-400 text-lg">✓</span>
                         <div class="flex-1">
-                            <p class="text-green-400 text-sm font-semibold mb-1">Créditos MTR Nominales</p>
-                            <p class="text-gray-300 text-xs">Estas fichas valen siempre $1 cada una (1:1 USDC estable). No fluctúan como el token MTR nativo. Respaldadas por USDC real en vault.</p>
+                            <p class="text-emerald-400 text-sm font-semibold mb-1">Créditos MTR nominales</p>
+                            <p class="text-gray-300 text-xs leading-relaxed">1 crédito = 1 USD nominal (respaldado vía NOWPayments). Fees de plataforma según reglas abajo.</p>
                         </div>
                     </div>
                 </div>
 
-                <!-- Contenido de depósitos (oculto si no hay auth) -->
-                <div class="deposit-content">
-                <!-- Opción Fiat: Mercado Pago (Sin Wallet) -->
-                <div id="fiatDepositSection" class="mb-6 p-4 rounded-lg bg-fuchsia-500/10 border border-fuchsia-500/30 hidden">
-                    <div class="flex items-center gap-2 mb-3">
-                        <span class="text-fuchsia-400 text-lg font-bold">💳</span>
-                        <h4 class="text-fuchsia-400 font-bold text-base">Depositar sin Wallet (Fiat)</h4>
-                    </div>
-                    <p class="text-gray-300 text-sm mb-3">Deposita con tarjeta, PSE, Nequi o efectivo usando Mercado Pago. Recibirás créditos nominales 1:1 (menos fee 5%).</p>
-                    <div class="flex flex-wrap gap-2 mb-3">
-                        <span class="text-xs px-2 py-1 rounded-full bg-fuchsia-500/20 text-fuchsia-300 border border-fuchsia-500/30">💳 Tarjeta</span>
-                        <span class="text-xs px-2 py-1 rounded-full bg-fuchsia-500/20 text-fuchsia-300 border border-fuchsia-500/30">🏦 PSE</span>
-                        <span class="text-xs px-2 py-1 rounded-full bg-fuchsia-500/20 text-fuchsia-300 border border-fuchsia-500/30">📱 Nequi</span>
-                        <span class="text-xs px-2 py-1 rounded-full bg-fuchsia-500/20 text-fuchsia-300 border border-fuchsia-500/30">💰 Efectivo</span>
-                    </div>
-                    <p class="text-xs text-yellow-400 mb-3">
-                        <strong>Mínimo:</strong> $10,000 COP (~$2.50 USD) | <strong>Fee:</strong> 5% | <strong>Recibes:</strong> 95% en créditos nominales
-                    </p>
-                    
-                    <!-- Formulario de Depósito Mercado Pago -->
-                    <div class="mt-4 space-y-3">
-                        <div>
-                            <label class="block text-xs text-gray-400 mb-1">Monto (COP)</label>
-                            <input 
-                                type="number" 
-                                id="mercadopagoAmount" 
-                                min="10000" 
-                                step="1000" 
-                                value="10000"
-                                class="w-full px-3 py-2 rounded-lg bg-gray-800/50 border border-gray-700 text-white text-sm focus:border-fuchsia-500 focus:outline-none"
-                                placeholder="10000">
-                        </div>
-                        <button 
-                            onclick="initMercadoPagoDeposit()"
-                            class="w-full px-6 py-3 rounded-full bg-gradient-to-r from-fuchsia-500/20 to-pink-500/20 border-2 border-fuchsia-500/40 hover:border-fuchsia-500/60 hover:from-fuchsia-500/30 hover:to-pink-500/30 transition-all duration-300 shadow-lg shadow-fuchsia-500/20 hover:shadow-fuchsia-500/30 group flex items-center justify-center gap-2">
-                            <span class="text-lg">💳</span>
-                            <span class="text-sm font-semibold text-fuchsia-400 group-hover:text-fuchsia-300">Depositar con Mercado Pago</span>
-                        </button>
-                    </div>
+                <div class="grid gap-3 sm:grid-cols-2">
+                    <button type="button" onclick="openNowPaymentsModal('fiat')" class="deposit-flow-btn group relative overflow-hidden rounded-xl border border-fuchsia-500/35 bg-gradient-to-br from-fuchsia-950/50 to-gray-900/80 px-4 py-4 text-left transition hover:border-fuchsia-400/50 hover:shadow-lg hover:shadow-fuchsia-500/10">
+                        <span class="block text-xs font-medium text-fuchsia-300/90 mb-1">Tarjeta / fiat</span>
+                        <span class="block text-base font-bold text-white">Comprar con Fiat</span>
+                        <span class="mt-2 block text-[11px] text-gray-500">On-ramp dentro del widget NOWPayments</span>
+                    </button>
+                    <button type="button" onclick="openNowPaymentsModal('crypto')" class="deposit-flow-btn group relative overflow-hidden rounded-xl border border-cyan-500/40 bg-gradient-to-br from-cyan-950/40 to-gray-900/80 px-4 py-4 text-left transition hover:border-cyan-400/55 hover:shadow-lg hover:shadow-cyan-500/10">
+                        <span class="block text-xs font-medium text-cyan-300/90 mb-1">Cripto</span>
+                        <span class="block text-base font-bold text-white">Depositar con Cripto</span>
+                        <span class="mt-2 block text-[11px] text-gray-500">USDC y otras monedas admitidas</span>
+                    </button>
                 </div>
 
-                <!-- Opción Principal: NOWPayments Widget -->
-                <div class="mb-6 p-4 rounded-lg bg-cyan-500/10 border border-cyan-500/30">
-                    <div class="flex items-center gap-2 mb-3">
-                        <span class="text-cyan-400 text-lg font-bold">1️⃣</span>
-                        <h4 class="text-cyan-400 font-bold text-base">Depositar USDC con NOWPayments</h4>
-                    </div>
-                    <p class="text-gray-300 text-sm mb-3">Deposita USDC usando múltiples métodos de pago (tarjeta, cripto, etc.). Recibirás créditos nominales 1:1 (menos fee 5%).</p>
-                    <div class="flex flex-wrap gap-2 mb-3">
-                        <span class="text-xs px-2 py-1 rounded-full bg-cyan-500/20 text-cyan-300 border border-cyan-500/30">💳 Múltiples Métodos</span>
-                        <span class="text-xs px-2 py-1 rounded-full bg-cyan-500/20 text-cyan-300 border border-cyan-500/30">💰 USDC Estable</span>
-                        <span class="text-xs px-2 py-1 rounded-full bg-cyan-500/20 text-cyan-300 border border-cyan-500/30">⚡ Instantáneo</span>
-                    </div>
-                    <p class="text-xs text-yellow-400 mb-3">
-                        <strong>Mínimo:</strong> 1 USDC | <strong>Fee:</strong> 5% | <strong>Recibes:</strong> 95% en créditos nominales
-                    </p>
-                    
-                    <!-- Botones de Depósito - NOWPayments y MoonPay -->
-                    <div class="mt-4 flex flex-col sm:flex-row gap-3 justify-center items-center">
-                        <!-- Botón MoonPay - Comprar con Fiat (Tarjeta/PSE/Nequi) -->
-                        <button 
-                            onclick="initMoonPay()"
-                            id="moonpay-deposit-btn"
-                            class="moonpay-btn-minimal px-6 py-3 rounded-full bg-gradient-to-r from-cyan-500/20 to-indigo-500/20 border-2 border-cyan-500/40 hover:border-cyan-500/60 hover:from-cyan-500/30 hover:to-indigo-500/30 transition-all duration-300 shadow-lg shadow-cyan-500/20 hover:shadow-cyan-500/30 group flex items-center gap-2">
-                            <span class="text-lg">💳</span>
-                            <span class="text-sm font-semibold text-cyan-400 group-hover:text-cyan-300">Comprar con Fiat</span>
-                        </button>
-                        
-                        <!-- Botón NOWPayments - Depositar con Cripto -->
-                        <button 
-                            onclick="openNowPaymentsModal()"
-                            class="nowpayments-btn-minimal px-6 py-3 rounded-full bg-gradient-to-r from-indigo-500/20 to-purple-500/20 border-2 border-indigo-500/40 hover:border-indigo-500/60 hover:from-indigo-500/30 hover:to-purple-500/30 transition-all duration-300 shadow-lg shadow-indigo-500/20 hover:shadow-indigo-500/30 group flex items-center gap-2">
-                            <span class="text-lg">🪙</span>
-                            <span class="text-sm font-semibold text-indigo-400 group-hover:text-indigo-300">Depositar con Cripto</span>
-                        </button>
-                    </div>
+                <p class="text-xs text-gray-500 mt-5 text-center">Procesado por NOWPayments · Asegúrate de usar la misma cuenta (email / wallet) que en MusicToken Ring</p>
 
-                    <!-- Modal Minimalista para Widget NOWPayments -->
-                    <div id="nowpaymentsModal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4" style="background: rgba(3, 7, 18, 0.9); backdrop-filter: blur(12px);">
-                        <div class="nowpayments-modal-content relative bg-gradient-to-br from-gray-900 via-indigo-950 to-gray-900 rounded-2xl border-2 border-cyan-500/40 shadow-2xl max-w-[320px] w-full overflow-hidden flex flex-col">
-                            <!-- Header Minimalista -->
-                            <div class="bg-gradient-to-r from-cyan-500/20 to-indigo-500/20 border-b border-cyan-500/30 px-4 py-3 flex items-center justify-between">
-                                <h5 class="text-sm font-bold text-cyan-400">Depositar USDC</h5>
-                                <button 
-                                    onclick="closeNowPaymentsModal()"
-                                    class="text-gray-400 hover:text-white transition-colors text-xl font-bold w-6 h-6 flex items-center justify-center rounded hover:bg-white/10">
-                                    ×
-                                </button>
-                            </div>
-
-                            <!-- Contenedor del Widget con Overlays -->
-                            <div class="relative bg-gray-900/50" style="height: 560px; overflow: hidden;">
-                                <!-- Overlay superior para ocultar "Donación" -->
-                                <div class="absolute top-0 left-0 right-0 pointer-events-none z-30" style="height: 60px; background: linear-gradient(180deg, rgba(17, 24, 39, 1) 0%, rgba(17, 24, 39, 0.98) 70%, transparent 100%);"></div>
-                                
-                                <!-- Widget iframe - Compacto con parámetros USDC Base -->
-                                <!-- CRÍTICO: La URL se actualizará dinámicamente con user_id/email cuando se abra el modal -->
-                                <iframe
-                                    src="https://nowpayments.io/embeds/donation-widget?api_key=c10a0c54-be7e-492d-9773-fc769531796f&currency=USDC&chain=BASE"
-                                    width="346"
-                                    height="623"
-                                    frameborder="0"
-                                    scrolling="no"
-                                    style="overflow-y: hidden; transform: scale(0.90); transform-origin: top center; width: 111.11%; margin-left: -5.555%; border-radius: 0; margin-top: -10px;"
-                                    id="nowpaymentsWidget"
-                                    class="nowpayments-iframe-dark">
-                                    Can't load widget
-                                </iframe>
-                                
-                                <!-- Overlay inferior REDUCIDO - Solo oculta "Powered by", NO el botón -->
-                                <div class="absolute bottom-0 left-0 right-0 pointer-events-none z-30" style="height: 25px; background: linear-gradient(0deg, rgba(17, 24, 39, 1) 0%, rgba(17, 24, 39, 0.95) 60%, transparent 100%);"></div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Scripts para MoonPay y controlar modales -->
-                    <script>
-                        // MoonPay Integration
-                        async function initMoonPay() {
-                            try {
-                                // CRÍTICO: Verificar autenticación antes de permitir depósito
-                                let userId = null;
-                                let email = null;
-                                let walletAddress = null;
-                                
-                                if (typeof supabaseClient !== 'undefined') {
-                                    try {
-                                        const { data: { session } } = await supabaseClient.auth.getSession();
-                                        if (session && session.user) {
-                                            userId = session.user.id;
-                                            email = session.user.email;
-                                        }
-                                    } catch (e) {
-                                        console.error('[MoonPay] Error obteniendo sesión:', e);
-                                    }
-                                }
-                                
-                                // También verificar wallet conectada como alternativa
-                                if (!userId && (window.connectedAddress || localStorage.getItem('mtr_wallet'))) {
-                                    walletAddress = window.connectedAddress || localStorage.getItem('mtr_wallet');
-                                }
-                                
-                                // Si no hay autenticación ni wallet, bloquear acceso
-                                if (!userId && !walletAddress) {
-                                    if (typeof showToast === 'function') {
-                                        showToast('Por favor inicia sesión o conecta tu wallet primero', 'error');
-                                    }
-                                    if (typeof openAuthModal === 'function') {
-                                        openAuthModal();
-                                    }
-                                    return;
-                                }
-                                
-                                console.log('[MoonPay] Inicializando widget...', { userId, email, walletAddress });
-
-                                // Cargar MoonPay SDK dinámicamente si no está cargado
-                                if (!document.querySelector('script[src*="moonpay-web-sdk"]')) {
-                                    const moonPayScript = document.createElement('script');
-                                    moonPayScript.src = 'https://static.moonpay.com/web-sdk/v1/moonpay-web-sdk.min.js';
-                                    moonPayScript.defer = true;
-                                    document.head.appendChild(moonPayScript);
-                                    
-                                    // Esperar a que cargue
-                                    await new Promise((resolve, reject) => {
-                                        moonPayScript.onload = resolve;
-                                        moonPayScript.onerror = reject;
-                                        setTimeout(resolve, 3000); // Timeout de seguridad
-                                    });
-                                }
-
-                                // Esperar a que MoonPayWebSdk esté disponible
-                                let attempts = 0;
-                                while (typeof window.MoonPayWebSdk === 'undefined' && attempts < 10) {
-                                    await new Promise(resolve => setTimeout(resolve, 300));
-                                    attempts++;
-                                }
-
-                                if (typeof window.MoonPayWebSdk === 'undefined') {
-                                    throw new Error('MoonPay SDK no está disponible después de cargar');
-                                }
-
-                                // Configurar widget MoonPay usando la API correcta
-                                // CRÍTICO: Pasar email/wallet como metadata para asociación en webhook
-                                const moonPay = window.MoonPayWebSdk.init;
-                                const widgetParams = {
-                                    flow: 'partnerTopup', // Flow para comprar crypto
-                                    environment: 'sandbox', // Cambiar a 'production' cuando esté live
-                                    variant: 'overlay', // Overlay modal
-                                    params: {
-                                        apiKey: 'pk_test_ABC123DEF456GHI789JKL0MNOPQRSTUV', // Reemplazar con la real cuando llegue
-                                        walletAddress: walletAddress || window.connectedAddress || null, // Wallet del usuario si está conectada
-                                        currencyCode: 'usdc_base', // USDC en Base network
-                                        baseCurrencyCode: 'usd', // Puede cambiarse a 'cop' para pesos colombianos
-                                        baseCurrencyAmount: '10', // Monto inicial sugerido
-                                        theme: 'dark', // Tema oscuro
-                                        // CRÍTICO: Pasar identificadores del usuario para asociación en webhook
-                                        email: email || undefined, // Email si está disponible
-                                        externalCustomerId: userId || undefined, // User ID interno
-                                        metadata: userId || email || walletAddress ? JSON.stringify({
-                                            user_id: userId,
-                                            email: email,
-                                            wallet_address: walletAddress,
-                                            platform: 'musictoken-ring'
-                                        }) : undefined,
-                                        onInitiateDeposit: function(data) {
-                                            console.log('[MoonPay] Depósito iniciado:', data);
-                                        },
-                                        onTransactionCompleted: function(transaction) {
-                                            console.log('[MoonPay] Transacción completada:', transaction);
-                                            // El webhook de MoonPay manejará el depósito
-                                            // Aquí solo mostramos confirmación
-                                            if (typeof showToast === 'function') {
-                                                showToast('Depósito procesado. Los créditos se acreditarán automáticamente.', 'success');
-                                            }
-                                            // Recargar balance después de unos segundos
-                                            setTimeout(function() {
-                                                if (window.CreditsSystem && (walletAddress || window.connectedAddress)) {
-                                                    window.CreditsSystem.loadBalance(walletAddress || window.connectedAddress);
-                                                }
-                                            }, 5000);
-                                        }
-                                    }
-                                };
-                                
-                                const widget = moonPay(widgetParams);
-                                
-                                // Mostrar widget
-                                if (widget && typeof widget.show === 'function') {
-                                    widget.show();
-                                } else {
-                                    console.error('[MoonPay] Widget no se pudo inicializar correctamente');
-                                    throw new Error('Widget no disponible');
-                                }
-                                
-                            } catch (error) {
-                                console.error('[MoonPay] Error inicializando widget:', error);
-                                if (typeof showToast === 'function') {
-                                    showToast('Error al cargar MoonPay. Por favor intenta más tarde.', 'error');
-                                }
-                            }
-                        }
-
-                        // Hacer función global
-                        window.initMoonPay = initMoonPay;
-
-                        // Mercado Pago Deposit Function
-                        async function initMercadoPagoDeposit() {
-                            try {
-                                const amountInput = document.getElementById('mercadopagoAmount');
-                                const amount = parseFloat(amountInput?.value || 10000);
-                                
-                                if (!amount || amount < 10000) {
-                                    if (typeof showToast === 'function') {
-                                        showToast('Monto mínimo: $10,000 COP', 'error');
-                                    }
-                                    return;
-                                }
-
-                                // Verificar autenticación
-                                let userId = null;
-                                let email = null;
-                                
-                                if (typeof supabaseClient !== 'undefined') {
-                                    try {
-                                        const { data: { session } } = await supabaseClient.auth.getSession();
-                                        if (session && session.user) {
-                                            userId = session.user.id;
-                                            email = session.user.email;
-                                        }
-                                    } catch (e) {
-                                        console.error('[MercadoPago] Error obteniendo sesión:', e);
-                                    }
-                                }
-
-                                if (!userId) {
-                                    if (typeof showToast === 'function') {
-                                        showToast('Por favor inicia sesión primero', 'error');
-                                    }
-                                    if (typeof openAuthModal === 'function') {
-                                        openAuthModal();
-                                    }
-                                    return;
-                                }
-
-                                // Crear checkout preference
-                                const backendUrl = window.CONFIG?.BACKEND_API || 'https://musictoken-ring.onrender.com';
-                                const response = await fetch(`${backendUrl}/api/deposit/mercadopago/create`, {
-                                    method: 'POST',
-                                    headers: {
-                                        'Content-Type': 'application/json'
-                                    },
-                                    body: JSON.stringify({
-                                        amount: amount,
-                                        currency: 'COP',
-                                        userId: userId,
-                                        email: email
-                                    })
-                                });
-
-                                if (!response.ok) {
-                                    const errorData = await response.json();
-                                    throw new Error(errorData.error || 'Error al crear checkout');
-                                }
-
-                                const preference = await response.json();
-                                
-                                // Redirigir a Mercado Pago checkout
-                                if (preference.init_point) {
-                                    window.location.href = preference.init_point;
-                                } else if (preference.sandbox_init_point) {
-                                    window.location.href = preference.sandbox_init_point;
-                                } else {
-                                    throw new Error('No se pudo obtener URL de checkout');
-                                }
-
-                            } catch (error) {
-                                console.error('[MercadoPago] Error:', error);
-                                if (typeof showToast === 'function') {
-                                    showToast('Error: ' + (error.message || 'Desconocido'), 'error');
-                                }
-                            }
-                        }
-
-                        // Hacer función global
-                        window.initMercadoPagoDeposit = initMercadoPagoDeposit;
-                    </script>
-                </div>
-                <!-- Fin de contenido de depósitos -->
-                    
-                    <script>
-                        async function openNowPaymentsModal() {
-                            // CRÍTICO: Verificar autenticación antes de permitir depósito
-                            let userId = null;
-                            let email = null;
-                            let walletAddress = null;
-                            
-                            if (typeof supabaseClient !== 'undefined') {
-                                try {
-                                    const { data: { session } } = await supabaseClient.auth.getSession();
-                                    if (session && session.user) {
-                                        userId = session.user.id;
-                                        email = session.user.email;
-                                    }
-                                } catch (e) {
-                                    console.error('[NOWPayments] Error obteniendo sesión:', e);
-                                }
-                            }
-                            
-                            // También verificar wallet conectada como alternativa
-                            if (!userId && (window.connectedAddress || localStorage.getItem('mtr_wallet'))) {
-                                walletAddress = window.connectedAddress || localStorage.getItem('mtr_wallet');
-                            }
-                            
-                            // Si no hay autenticación ni wallet, bloquear acceso
-                            if (!userId && !walletAddress) {
-                                if (typeof showToast === 'function') {
-                                    showToast('Por favor inicia sesión o conecta tu wallet primero', 'error');
-                                }
-                                if (typeof openAuthModal === 'function') {
-                                    openAuthModal();
-                                }
-                                return;
-                            }
-                            
-                            // CRÍTICO: Actualizar iframe con parámetros de usuario para asociación en webhook
-                            const iframe = document.getElementById('nowpaymentsWidget');
-                            if (iframe) {
-                                // Construir URL con parámetros de usuario
-                                let widgetUrl = 'https://nowpayments.io/embeds/donation-widget?api_key=c10a0c54-be7e-492d-9773-fc769531796f&currency=USDC&chain=BASE';
-                                
-                                // Agregar identificadores del usuario
-                                if (email) {
-                                    widgetUrl += '&email=' + encodeURIComponent(email);
-                                }
-                                if (walletAddress) {
-                                    widgetUrl += '&wallet=' + encodeURIComponent(walletAddress);
-                                }
-                                if (userId) {
-                                    widgetUrl += '&order_id=' + encodeURIComponent(userId);
-                                }
-                                
-                                // Actualizar src del iframe
-                                iframe.src = widgetUrl;
-                            }
-                            
-                            var modal = document.getElementById('nowpaymentsModal');
-                            if (modal) {
-                                modal.classList.remove('hidden');
-                                document.body.style.overflow = 'hidden';
-                            }
-                        }
-
-                        function closeNowPaymentsModal() {
-                            var modal = document.getElementById('nowpaymentsModal');
-                            if (modal) {
-                                modal.classList.add('hidden');
-                                document.body.style.overflow = '';
-                            }
-                        }
-
-                        // Inicialización cuando el DOM está listo
-                        document.addEventListener('DOMContentLoaded', function() {
-                            // Cerrar modal al hacer clic fuera
-                            var modal = document.getElementById('nowpaymentsModal');
-                            if (modal) {
-                                modal.addEventListener('click', function(e) {
-                                    if (e.target === modal) {
-                                        closeNowPaymentsModal();
-                                    }
-                                });
-                            }
-
-                            // Cerrar con ESC
-                            document.addEventListener('keydown', function(e) {
-                                if (e.key === 'Escape') {
-                                    closeNowPaymentsModal();
-                                }
-                            });
-
-                            // Aplicar estilos oscuros al widget cuando carga
-                            var widget = document.getElementById('nowpaymentsWidget');
-                            if (widget) {
-                                widget.addEventListener('load', function() {
-                                    console.log('[NOWPayments] Widget cargado, aplicando estilos oscuros');
-                                    
-                                    // Silenciar errores del widget (404 en donation-settings es normal)
-                                    widget.addEventListener('error', function(e) {
-                                        // Ignorar errores 404 del widget - son normales
-                                        if (e.message && e.message.includes('404')) {
-                                            return;
-                                        }
-                                    });
-                                    
-                                    // Filtros para oscurecer y ajustar colores a la paleta cyan/azul
-                                    widget.style.filter = 'brightness(0.75) contrast(1.25) saturate(0.6)';
-                                    
-                                    // Crear overlays adicionales dinámicos para asegurar cobertura
-                                    setTimeout(function() {
-                                        var container = widget.parentElement;
-                                        if (container) {
-                                            // Overlay superior adicional más grueso
-                                            var topOverlay = document.createElement('div');
-                                            topOverlay.className = 'nowpayments-dynamic-overlay-top';
-                                            topOverlay.style.cssText = 'position: absolute; top: 0; left: 0; right: 0; height: 65px; background: rgba(17, 24, 39, 0.99); pointer-events: none; z-index: 35;';
-                                            container.appendChild(topOverlay);
-                                            
-                                            // Overlay inferior REDUCIDO - Solo oculta "Powered by", NO el botón
-                                            var bottomOverlay = document.createElement('div');
-                                            bottomOverlay.className = 'nowpayments-dynamic-overlay-bottom';
-                                            bottomOverlay.style.cssText = 'position: absolute; bottom: 0; left: 0; right: 0; height: 30px; background: linear-gradient(0deg, rgba(17, 24, 39, 0.98) 0%, rgba(17, 24, 39, 0.90) 70%, transparent 100%); pointer-events: none; z-index: 35;';
-                                            container.appendChild(bottomOverlay);
-                                        }
-                                    }, 1500);
-                                });
-                            }
-                        });
-                    </script>
-                    
-                    <p class="text-xs text-gray-400 mt-3">
-                        <strong>Nota:</strong> Asegúrate de incluir tu email o wallet en el campo de comentarios del widget para recibir tus créditos correctamente.
-                    </p>
-                </div>
-
-                <!-- Opción Secundaria: USDC Directo Manual -->
-                <div class="mb-6 p-4 rounded-lg bg-white/5 border border-white/10">
-                    <div class="flex items-center gap-2 mb-3">
-                        <span class="text-gray-400 text-lg font-bold">2️⃣</span>
-                        <h4 class="text-gray-300 font-semibold text-base">Depositar USDC Directo Manual (Alternativa)</h4>
-                    </div>
-                    <p class="text-gray-400 text-sm mb-3">Si prefieres enviar USDC directamente desde tu wallet, usa esta opción.</p>
-                    <p class="text-xs text-gray-400 mt-2">
-                        <strong>Wallet de depósito:</strong> <span class="font-mono text-cyan-300">0x75376BC58830f27415402875D26B73A6BE8E2253</span>
-                    </p>
-                    <p class="text-xs text-gray-400 mt-1">
-                        <strong>Ejemplo:</strong> Envías 100 USDC → Recibes 95 créditos nominales (5% fee)
-                    </p>
-                </div>
-
-                <!-- Opción Secundaria: MTR Opcional -->
-                <div class="mb-6 p-4 rounded-lg bg-white/5 border border-white/10">
-                    <div class="flex items-center gap-2 mb-3">
-                        <span class="text-gray-400 text-lg font-bold">2️⃣</span>
-                        <h4 class="text-gray-300 font-semibold text-base">Convertir MTR a Créditos (Opcional)</h4>
-                    </div>
-                    <p class="text-gray-400 text-sm mb-3">Si tienes MTR, se convertirá automáticamente a USDC al precio de mercado y recibirás créditos nominales 1:1.</p>
-                    <div class="flex flex-wrap gap-3">
-                        <a href="https://aerodrome.finance/swap?from=ETH&to=0x99cd1eb32846c9027ed9cb8710066fa08791c33b" target="_blank" rel="noopener noreferrer"
-                           class="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-semibold bg-white/5 border border-white/10 text-gray-300 hover:text-white hover:border-white/20 transition-all">
-                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/></svg>
-                            Swap MTR en Aerodrome
-                        </a>
-                        <a href="https://basescan.org/token/0x99cd1eb32846c9027ed9cb8710066fa08791c33b" target="_blank" rel="noopener noreferrer"
-                           class="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-semibold bg-white/5 border border-white/10 text-gray-300 hover:text-white hover:border-white/20 transition-all">
-                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/></svg>
-                            Ver en Basescan
-                        </a>
-                    </div>
-                    <div class="mt-3 flex flex-col sm:flex-row gap-3">
-                        <input id="depositTxHash" type="text" placeholder="Pega hash de transacción MTR (0x...)" autocomplete="off"
-                               class="flex-1 px-4 py-3 rounded-lg bg-black/40 border border-white/10 text-white placeholder-gray-500 text-sm focus:outline-none focus:border-cyan-500/50 focus:ring-1 focus:ring-cyan-500/20 transition">
-                        <button type="button" id="creditPurchaseBtn" onclick="verifyPurchasedMtrTx()"
-                                class="px-6 py-3 rounded-lg text-sm font-bold bg-gradient-to-r from-gray-600 to-gray-700 text-white hover:opacity-90 transition-all shadow-lg shadow-gray-500/20 cursor-pointer whitespace-nowrap">
-                            🔎 Acreditar MTR
-                        </button>
-                    </div>
-                </div>
-
-                <!-- Información de Fees -->
-                <div class="mt-4 p-3 rounded-lg bg-yellow-500/10 border border-yellow-500/20">
-                    <p class="text-yellow-400 text-xs">
-                        <strong>Fees:</strong> Depósito 5% | Apuesta 2% | Retiro 5% | 
-                        <span class="text-gray-400">Créditos nominales respaldados por USDC real en vault</span>
+                <div class="mt-4 p-3 rounded-lg bg-amber-500/10 border border-amber-500/20">
+                    <p class="text-amber-200/90 text-xs leading-relaxed">
+                        <strong class="text-amber-300">Fees:</strong> Depósito 5% · Apuesta 2% · Retiro 5%
                     </p>
                 </div>
 
                 <p id="tokenConfigError" class="hidden text-red-400 text-sm mt-3"></p>
             </div>
         </section>
+
+        <div id="nowpaymentsModal" class="fixed inset-0 z-[10000] hidden" aria-hidden="true">
+            <div class="absolute inset-0 bg-black/75 backdrop-blur-sm" onclick="closeNowPaymentsModal()"></div>
+            <div class="relative z-10 flex min-h-full items-center justify-center p-4 pointer-events-none">
+                <div class="nowpayments-modal-content pointer-events-auto w-full max-w-lg max-h-[92vh] rounded-2xl border border-cyan-500/25 bg-gray-950 shadow-2xl shadow-black/50 overflow-hidden flex flex-col">
+                    <div class="flex items-center justify-between px-4 py-3 border-b border-white/10 bg-gray-900/90">
+                        <span class="text-sm font-semibold text-cyan-300">Pago NOWPayments</span>
+                        <button type="button" onclick="closeNowPaymentsModal()" class="rounded-lg px-2.5 py-1 text-gray-400 hover:text-white hover:bg-white/10 text-xl leading-none" aria-label="Cerrar">&times;</button>
+                    </div>
+                    <div class="relative flex-1 min-h-[400px] bg-gray-950">
+                        <iframe id="nowpaymentsWidgetIframe" title="NOWPayments" class="w-full h-[min(72vh,580px)] border-0 nowpayments-iframe-dark" sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-popups-to-escape-sandbox allow-top-navigation-by-user-activation"></iframe>
+                        <div id="nowpaymentsWidgetError" class="hidden absolute inset-0 flex flex-col items-center justify-center gap-3 p-6 text-center bg-gray-950/95">
+                            <p class="text-red-300 text-sm">No se pudo cargar el widget. Comprueba que el backend tenga <span class="font-mono text-xs">NOWPAYMENTS_API_KEY</span> y CORS para este dominio.</p>
+                            <button type="button" onclick="closeNowPaymentsModal()" class="px-4 py-2 rounded-lg bg-white/10 text-white text-sm hover:bg-white/20">Cerrar</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <script>
+        (function () {
+            var npCache = null;
+            async function loadNpConfig() {
+                if (npCache) return npCache;
+                var base = (window.CONFIG && window.CONFIG.BACKEND_API) || '';
+                if (!base) {
+                    npCache = { ok: false };
+                    return npCache;
+                }
+                try {
+                    var url = base.replace(/\/$/, '') + '/api/public/nowpayments-widget-config';
+                    var r = await fetch(url, { credentials: 'omit', cache: 'no-store' });
+                    npCache = await r.json();
+                    return npCache;
+                } catch (e) {
+                    console.warn('[NOWPayments] config fetch:', e);
+                    npCache = { ok: false };
+                    return npCache;
+                }
+            }
+            window.openNowPaymentsModal = async function (mode) {
+                var modal = document.getElementById('nowpaymentsModal');
+                var iframe = document.getElementById('nowpaymentsWidgetIframe');
+                var errWrap = document.getElementById('nowpaymentsWidgetError');
+                if (!modal || !iframe) return;
+                if (errWrap) errWrap.classList.add('hidden');
+                modal.classList.remove('hidden');
+                modal.setAttribute('aria-hidden', 'false');
+                document.body.style.overflow = 'hidden';
+                iframe.removeAttribute('src');
+                var cfg = await loadNpConfig();
+                if (!cfg || !cfg.ok || !cfg.embedUrl) {
+                    if (errWrap) errWrap.classList.remove('hidden');
+                    return;
+                }
+                var u = (mode === 'fiat' && cfg.embedUrlFiat) ? cfg.embedUrlFiat : cfg.embedUrl;
+                iframe.src = u;
+            };
+            window.closeNowPaymentsModal = function () {
+                var modal = document.getElementById('nowpaymentsModal');
+                var iframe = document.getElementById('nowpaymentsWidgetIframe');
+                if (modal) {
+                    modal.classList.add('hidden');
+                    modal.setAttribute('aria-hidden', 'true');
+                }
+                if (iframe) iframe.src = 'about:blank';
+                document.body.style.overflow = '';
+            };
+            document.addEventListener('keydown', function (e) {
+                var m = document.getElementById('nowpaymentsModal');
+                if (e.key === 'Escape' && m && !m.classList.contains('hidden')) {
+                    closeNowPaymentsModal();
+                }
+            });
+        })();
+        </script>
 
         <!-- GAME MODE SELECTOR (shown when logged in) -->
         <section id="modeSelector" class="hidden mb-16">
@@ -1941,7 +1521,6 @@
     
     <!-- Scripts que pueden cargarse después del render inicial -->
     <script src="./src/streams-realtime.js?v=v2.7" defer></script>
-    <script src="./src/deposit-ui.js?v=v2.7" defer></script>
     <!-- Ramp Network removido - ya no se usa -->
     <script src="./src/claim-ui.js?v=v2.7" defer></script>
     <script src="./game-engine.js?v=v2.7"></script>
@@ -3041,19 +2620,8 @@
                 }
                 
                 if (session || hasLinkedWallet) {
-                    showModeSelector();
-                    
-                    // Mostrar/ocultar sección de depósitos fiat según autenticación
-                    const fiatDepositSection = document.getElementById('fiatDepositSection');
-                    if (fiatDepositSection) {
-                        // Mostrar si hay sesión pero NO hay wallet conectada
-                        if (session && !connectedAddress) {
-                            fiatDepositSection.classList.remove('hidden');
-                        } else {
-                            fiatDepositSection.classList.add('hidden');
-                        }
-                    }
-                    
+                        showModeSelector();
+
                     // CRÍTICO: Cargar créditos inmediatamente si hay wallet conectada
                     const connectedWallet = window.__mtrConnectedWallet || localStorage.getItem('mtr_wallet') || connectedAddress;
                     console.log('[init] 🔍 Verificando carga de créditos:', {
@@ -3197,7 +2765,7 @@
                         console.log('[INIT] window.pendingChallengeInfo:', window.pendingChallengeInfo);
                         
                         // Si hay sesión, cambiar a modo social inmediatamente
-                        if (session) {
+                    if (session) {
                             console.log('[INIT] ✅ Sesión encontrada, cambiando a modo social...');
                             
                             // CRÍTICO: Verificar que los datos se cargaron correctamente antes de continuar
@@ -3209,7 +2777,7 @@
                                     showToast('Error al cargar el desafío. Intenta recargar la página.', 'error');
                                 }
                                 // Aún así, cambiar a modo social para que el usuario vea la UI
-                                selectMode('social');
+                        selectMode('social');
                                 return;
                             }
                             
@@ -3278,11 +2846,11 @@
                                 }
                             }, 1000);
                             
-                            if (typeof showToast === 'function') showToast('Desafío detectado. Selecciona tu canción para aceptarlo.', 'info');
-                        } else {
+                        if (typeof showToast === 'function') showToast('Desafío detectado. Selecciona tu canción para aceptarlo.', 'info');
+                    } else {
                             // Si no hay sesión, mostrar mensaje pero aún cargar el desafío
                             console.log('[INIT] ⚠️ No hay sesión, pero cargando desafío de todas formas...');
-                            if (typeof showToast === 'function') showToast('Inicia sesión para aceptar el desafío', 'info');
+                        if (typeof showToast === 'function') showToast('Inicia sesión para aceptar el desafío', 'info');
                         }
                     }
                     
@@ -3306,8 +2874,8 @@
                                 showModeSelector();
                     if (typeof window.GameEngine !== 'undefined') {
                         window.GameEngine.init().catch(function(initError) {
-                            console.error('Error initializing GameEngine:', initError);
-                        });
+                                        console.error('Error initializing GameEngine:', initError);
+                                    });
                                 }
                                 return;
                             }
@@ -3347,7 +2915,7 @@
                         const walletData = await walletResponse.json();
                         if (walletData.linked && walletData.userId) {
                             // Wallet vinculada, ocultar login wall y mostrar selector de modos
-                            loginWall.classList.add('hidden');
+                                loginWall.classList.add('hidden');
                             if (modeSelector) modeSelector.classList.remove('hidden');
                             console.log('[showLoginWall] Wallet vinculada, ocultando login wall y mostrando selector de modos');
                             
@@ -3390,8 +2958,8 @@
                             });
                         }
                         
-                        return;
-                    }
+                            return;
+                        }
                 } catch (error) {
                     console.warn('[showLoginWall] Error verificando sesión:', error);
                 }
@@ -3653,7 +3221,7 @@
                             if (typeof window.GameEngine.updatePracticeBetDisplay === 'function') {
                                 window.GameEngine.updatePracticeBetDisplay();
                             }
-                            setTimeout(function() {
+                setTimeout(function() {
                                 if (typeof window.GameEngine !== 'undefined' && typeof window.GameEngine.updatePracticeBetDisplay === 'function') {
                                     window.GameEngine.updatePracticeBetDisplay();
                                 }
@@ -3668,11 +3236,11 @@
                                     window.GameEngine.updatePracticeBetDisplay();
                                 }
                                 // Verificar que el balance se muestre
-                                var balanceLabel = document.getElementById('balanceLabel');
-                                var userBalance = document.getElementById('userBalance');
-                                console.log('[selectMode] Verificación final - Label:', balanceLabel?.textContent, 'Balance:', userBalance?.textContent);
-                            }, 1000);
-                        } else {
+                    var balanceLabel = document.getElementById('balanceLabel');
+                    var userBalance = document.getElementById('userBalance');
+                    console.log('[selectMode] Verificación final - Label:', balanceLabel?.textContent, 'Balance:', userBalance?.textContent);
+                }, 1000);
+            } else {
                             console.error('[selectMode] GameEngine no disponible después de esperar');
                         }
                     };
@@ -3855,7 +3423,7 @@
                     });
                 }, mode === 'practice' ? 500 : 400); // Delay más largo para práctica para asegurar renderizado completo
             }
-        }
+            }
 
         function backToModes() {
             document.getElementById('songSelection').classList.add('hidden');
@@ -4107,7 +3675,7 @@
                     btn.textContent = '✅ Aceptar e Iniciar Desafío';
                     console.log('[updateActionButtons] ✅ Botón configurado para ACEPTAR desafío');
                 } else {
-                    btn.textContent = '⚔️ Crear Desafío';
+                btn.textContent = '⚔️ Crear Desafío';
                     console.log('[updateActionButtons] ✅ Botón configurado para CREAR desafío');
                 }
                 
@@ -4439,7 +4007,7 @@
                 if (isAcceptingChallenge) {
                     createSocialBtn.disabled = !selectedSong;
                 } else {
-                    createSocialBtn.disabled = !canCoverSocialBet || !selectedSong;
+                createSocialBtn.disabled = !canCoverSocialBet || !selectedSong;
                 }
                 
                 // ELIMINAR CUALQUIER REFERENCIA A "100" en el tooltip - FORZADO
@@ -5208,24 +4776,10 @@
             if (payout?.ok) showToast('Retiro solicitado: ' + (payout.requestId || 'ID pendiente'), 'success');
         }
 
-        function isBaseTxHash(value) { return /^0x([A-Fa-f0-9]{64})$/.test(value || ''); }
-
         async function verifyPurchasedMtrTx() {
-            var txInput = document.getElementById('depositTxHash');
-            var creditButton = document.getElementById('creditPurchaseBtn');
-            var txHash = txInput?.value?.trim();
-            if (!isBaseTxHash(txHash)) { showToast('Pega un hash válido de Base (0x + 64 hex)', 'error'); return; }
-            if (typeof GameEngine === 'undefined') { showToast('GameEngine no está cargado', 'error'); return; }
-            if (creditButton) creditButton.disabled = true;
-            try {
-                var result = await GameEngine.verifyDepositAndCredit(txHash, { network: 'base' });
-                if (result?.credited || typeof result?.newBalance === 'number') {
-                    showToast('Depósito verificado y acreditado.', 'success');
-                    if (txInput) txInput.value = '';
-                } else if (result?.status) {
-                    showToast('Estado: ' + result.status, 'info');
-                }
-            } finally { if (creditButton) creditButton.disabled = false; }
+            if (typeof showToast === 'function') {
+                showToast('Los depósitos por hash on-chain están desactivados. Usa el flujo NOWPayments cuando esté activo.', 'info');
+            }
         }
 
         var betAmountInput = document.getElementById('betAmount');
@@ -5400,7 +4954,7 @@
                 // Silenciar completamente si no estamos en modo social para evitar spam en consola
                 if (window.currentMode === 'social') {
                     errorFn('[DIAG] ❌ Botón createSocialBtn NO encontrado por ningún método (modo social activo)');
-                    errorFn('[DIAG] window.__createSocialBtn:', window.__createSocialBtn);
+                errorFn('[DIAG] window.__createSocialBtn:', window.__createSocialBtn);
                 }
                 // No mostrar ningún mensaje si no estamos en modo social (evitar spam)
             }
@@ -5589,12 +5143,12 @@
                 }
                 // SIEMPRE actualizar el header con balance real, incluso en modo práctica
                 if (typeof GameEngine !== 'undefined' && typeof GameEngine.updateBalanceDisplay === 'function') {
-                    GameEngine.updateBalanceDisplay();
-                }
+                            GameEngine.updateBalanceDisplay();
+                        }
                 
                 // Si estamos en modo práctica, también actualizar el display del balance demo
                 if (isPracticeMode && typeof GameEngine !== 'undefined' && typeof GameEngine.updatePracticeBetDisplay === 'function') {
-                    GameEngine.updatePracticeBetDisplay();
+                            GameEngine.updatePracticeBetDisplay();
                 }
                 
                 // REGLA: El perfil siempre muestra información REAL, nunca información de práctica
@@ -7384,7 +6938,7 @@
 
         // CRÍTICO: Exportar connectWallet globalmente para que esté disponible
         window.connectWallet = connectWallet;
-        
+
         // Asegurar que el botón esté disponible antes de agregar el listener
         function initWalletButton() {
             var btn = document.getElementById('walletConnectBtn');
@@ -7576,7 +7130,7 @@
         
         // Verificar estado inicial
         validateMtrTokenAddress();
-        await checkAndUpdateWalletState();
+            await checkAndUpdateWalletState();
         
         // En móvil, verificar periódicamente si MetaMask se conectó después de la carga inicial
         if (isMobileDevice()) {
@@ -7733,7 +7287,7 @@
                 intervals.forEach(function(id) {
                     if (id) clearInterval(id);
                 });
-            }, 100);
+                        }, 100);
         })();
     </script>
 </body>

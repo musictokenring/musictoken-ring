@@ -17,9 +17,17 @@ const { LiquidityManager } = require('./liquidity-manager');
 const { WalletLinkService } = require('./wallet-link-service');
 const { TradingFundService } = require('./trading-fund-service');
 const { NOWPaymentsService } = require('./nowpayments-service');
-const { MoonPayService } = require('./moonpay-service');
-const { MercadoPagoService } = require('./mercadopago-service');
+const { requireEvmPlatformWallet, getNowPaymentsSettlementAddress, isEvmAddress, resolveEvmPlatformWallet } = require('./platform-addresses');
 const { createClient } = require('@supabase/supabase-js');
+
+const LEGACY_CHAIN_DEPOSITS = process.env.ENABLE_LEGACY_CHAIN_DEPOSITS === 'true';
+
+function legacyDepositsGone(res) {
+    return res.status(410).json({
+        error: 'legacy_chain_deposits_disabled',
+        message: 'Depósitos on-chain directos desactivados. Integración vía NOWPayments (Full API + IPN).'
+    });
+}
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -59,7 +67,9 @@ const corsOptions = {
         'http://localhost:3000',
         'http://localhost:8080',
         'http://127.0.0.1:5500',
-        'http://127.0.0.1:3000'
+        'http://127.0.0.1:3000',
+        'http://localhost:8000',
+        'http://127.0.0.1:8000'
     ],
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
@@ -91,8 +101,6 @@ let liquidityManager;
 let walletLinkService;
 let tradingFundService;
 let nowPaymentsService;
-let moonPayService;
-let mercadoPagoService;
 
 // 🔒 SEGURIDAD: Validar variables de entorno críticas
 function validateEnvironmentVariables() {
@@ -110,25 +118,32 @@ function validateEnvironmentVariables() {
         const error = `❌ Missing required environment variables: ${missing.join(', ')}`;
         console.error(`[SECURITY] ${error}`);
         console.error(`[SECURITY] ⚠️ Server will start but some features may not work`);
-        // No lanzar error - permitir que el servidor inicie para diagnóstico
-        // Los servicios individuales manejarán sus propios errores
         return false;
     }
-    
-    // Validar formato de direcciones
-    const PLATFORM_WALLET = process.env.PLATFORM_WALLET_ADDRESS;
-    if (!PLATFORM_WALLET || !/^0x[a-fA-F0-9]{40}$/.test(PLATFORM_WALLET)) {
-        const error = `❌ Invalid PLATFORM_WALLET_ADDRESS format: ${PLATFORM_WALLET || 'undefined'}`;
-        console.error(`[SECURITY] ${error}`);
-        console.error(`[SECURITY] ⚠️ Server will start but wallet operations may fail`);
+
+    const settlement = getNowPaymentsSettlementAddress();
+    if (!settlement || !String(settlement).trim()) {
+        console.error('[SECURITY] ❌ PLATFORM_WALLET_ADDRESS / NOWPAYMENTS_SETTLEMENT_ADDRESS vacío');
         return false;
     }
+
+    if (LEGACY_CHAIN_DEPOSITS) {
+        try {
+            requireEvmPlatformWallet();
+        } catch (e) {
+            console.error('[SECURITY] ❌ ENABLE_LEGACY_CHAIN_DEPOSITS=true requiere EVM_PLATFORM_WALLET_ADDRESS (0x…) o PLATFORM_WALLET_ADDRESS en formato EVM');
+            console.error('[SECURITY]', e.message);
+            return false;
+        }
+    } else {
+        if (!isEvmAddress(process.env.PLATFORM_WALLET_ADDRESS)) {
+            console.log('[server] ℹ️ PLATFORM_WALLET_ADDRESS no es EVM (p. ej. Tron USDT) — OK para NOWPayments. On-chain Base usa EVM_PLATFORM_WALLET_ADDRESS si lo configuras.');
+        }
+    }
     
-    // Validar que las wallets no sean la misma (si están configuradas)
-    if (process.env.VAULT_WALLET_ADDRESS) {
-        if (process.env.VAULT_WALLET_ADDRESS.toLowerCase() === PLATFORM_WALLET.toLowerCase()) {
-            console.warn('[SECURITY] ⚠️ WARNING: VAULT_WALLET_ADDRESS is the same as PLATFORM_WALLET_ADDRESS');
-            console.warn('[SECURITY] ⚠️ This is not recommended for security. Consider using separate wallets.');
+    if (process.env.VAULT_WALLET_ADDRESS && isEvmAddress(process.env.VAULT_WALLET_ADDRESS) && isEvmAddress(process.env.PLATFORM_WALLET_ADDRESS)) {
+        if (process.env.VAULT_WALLET_ADDRESS.toLowerCase() === process.env.PLATFORM_WALLET_ADDRESS.toLowerCase()) {
+            console.warn('[SECURITY] ⚠️ VAULT_WALLET_ADDRESS igual a PLATFORM_WALLET_ADDRESS (EVM)');
         }
     }
     
@@ -139,8 +154,9 @@ function validateEnvironmentVariables() {
     }
     
     console.log('[server] ✅ Environment variables validated');
-    console.log(`[server] 🔒 Platform Wallet: ${PLATFORM_WALLET}`);
-    console.log(`[server] 🔒 Vault Wallet: ${process.env.VAULT_WALLET_ADDRESS || 'Not configured (using platform wallet)'}`);
+    console.log(`[server] 🔒 NOWPayments / liquidación: ${settlement}`);
+    console.log(`[server] 🔒 EVM Base (swaps/listeners): ${resolveEvmPlatformWallet() || 'no configurada'}`);
+    console.log(`[server] 🔒 Vault Wallet: ${process.env.VAULT_WALLET_ADDRESS || 'not set'}`);
     return true;
 }
 
@@ -160,20 +176,19 @@ async function initializeServices() {
         priceUpdater = new PriceUpdater();
         await priceUpdater.init();
 
-        // Initialize deposit listener (Base network - legacy, keep for compatibility)
-        depositListener = new DepositListener();
-        await depositListener.init();
-
-        // Initialize multi-chain deposit listener (all networks)
-        // Wrap in try-catch to prevent server crash if initialization fails
-        try {
-            multiChainDepositListener = new MultiChainDepositListener();
-            await multiChainDepositListener.init();
-        } catch (multiChainError) {
-            console.error('[server] ⚠️ Error initializing multi-chain listener:', multiChainError);
-            console.error('[server] Stack:', multiChainError.stack);
-            console.log('[server] Continuing with Base-only listener...');
-            // Server continues with Base listener only
+        if (LEGACY_CHAIN_DEPOSITS) {
+            depositListener = new DepositListener();
+            await depositListener.init();
+            try {
+                multiChainDepositListener = new MultiChainDepositListener();
+                await multiChainDepositListener.init();
+            } catch (multiChainError) {
+                console.error('[server] ⚠️ Error initializing multi-chain listener:', multiChainError);
+                console.error('[server] Stack:', multiChainError.stack);
+                console.log('[server] Continuing with Base-only listener...');
+            }
+        } else {
+            console.log('[server] Legacy chain deposit listeners off (ENABLE_LEGACY_CHAIN_DEPOSITS is not true).');
         }
 
         // Initialize claim service (puede fallar si ADMIN_WALLET_PRIVATE_KEY no está configurado)
@@ -198,9 +213,12 @@ async function initializeServices() {
             // No fallar - el servicio se puede inicializar bajo demanda
         }
 
-        // Initialize deposit sync service (backup mechanism)
-        depositSyncService = new DepositSyncService();
-        await depositSyncService.init();
+        if (LEGACY_CHAIN_DEPOSITS) {
+            depositSyncService = new DepositSyncService();
+            await depositSyncService.init();
+        } else {
+            console.log('[server] Deposit sync service skipped (legacy chain deposits disabled).');
+        }
 
         // Initialize liquidity manager (manages USDC buffer and MTR pool)
         try {
@@ -226,17 +244,19 @@ async function initializeServices() {
             // Non-critical - continue without it
         }
 
-        // Initialize Trading Fund Service (for fee distribution)
         try {
             tradingFundService = new TradingFundService();
-            nowPaymentsService = new NOWPaymentsService();
-            moonPayService = new MoonPayService();
-            mercadoPagoService = new MercadoPagoService();
             console.log('[server] ✅ Trading Fund Service initialized');
         } catch (tradingFundError) {
             console.error('[server] ⚠️ Error initializing trading fund service:', tradingFundError);
-            console.log('[server] Continuing without trading fund service (fees will go to vault only)...');
-            // Non-critical - continue without it, fees will go to vault only
+            console.log('[server] Continuing without trading fund service...');
+        }
+
+        try {
+            nowPaymentsService = new NOWPaymentsService();
+            console.log('[server] ✅ NOWPayments service initialized');
+        } catch (npError) {
+            console.error('[server] ⚠️ Error initializing NOWPayments service:', npError.message);
         }
 
         console.log('[server] ✅ All services initialized');
@@ -620,6 +640,7 @@ app.get('/api/price', async (req, res) => {
  */
 app.post('/api/deposits/auto-sync/:walletAddress', async (req, res) => {
     try {
+        if (!LEGACY_CHAIN_DEPOSITS) return legacyDepositsGone(res);
         const walletAddress = req.params.walletAddress.toLowerCase();
 
         // Intentar inicializar el servicio si no está disponible
@@ -703,6 +724,7 @@ app.get('/api/deposits/:walletAddress', async (req, res) => {
  * Diagnose a deposit transaction
  */
 app.get('/api/deposits/diagnose/:txHash', async (req, res) => {
+    if (!LEGACY_CHAIN_DEPOSITS) return legacyDepositsGone(res);
     let txHash;
     try {
         txHash = req.params.txHash;
@@ -750,7 +772,7 @@ app.get('/api/deposits/diagnose/:txHash', async (req, res) => {
         const { createPublicClient, http, formatUnits } = require('viem');
         const { base } = require('viem/chains');
 
-        const PLATFORM_WALLET = process.env.PLATFORM_WALLET_ADDRESS || '0x75376BC58830f27415402875D26B73A6BE8E2253';
+        const PLATFORM_WALLET = requireEvmPlatformWallet();
         const USDC_ADDRESS = process.env.USDC_ADDRESS || '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913';
 
         // ANTES de consultar blockchain, buscar depósitos recientes si hay wallet address
@@ -827,11 +849,10 @@ app.get('/api/deposits/diagnose/:txHash', async (req, res) => {
             }
         }
 
-        // Configurar RPC con múltiples fallbacks
+        // Configurar RPC: oficial Base + fallback alternativo (sin proveedores de terceros con API key)
         const RPC_URLS = [
             process.env.BASE_RPC_URL,
             'https://mainnet.base.org',
-            'https://base-mainnet.g.alchemy.com/v2/demo',
             'https://base.llamarpc.com'
         ].filter(Boolean);
         
@@ -1248,6 +1269,7 @@ app.get('/api/deposits/diagnose/:txHash', async (req, res) => {
  */
 app.post('/api/deposits/sync', async (req, res) => {
     try {
+        if (!LEGACY_CHAIN_DEPOSITS) return legacyDepositsGone(res);
         if (!depositSyncService) {
             return res.status(503).json({ error: 'Deposit sync service not initialized' });
         }
@@ -1265,6 +1287,7 @@ app.post('/api/deposits/sync', async (req, res) => {
  */
 app.post('/api/deposits/sync-transaction', async (req, res) => {
     try {
+        if (!LEGACY_CHAIN_DEPOSITS) return legacyDepositsGone(res);
         const { txHash } = req.body;
 
         if (!txHash) {
@@ -1288,6 +1311,7 @@ app.post('/api/deposits/sync-transaction', async (req, res) => {
  */
 app.post('/api/deposits/process', async (req, res) => {
     try {
+        if (!LEGACY_CHAIN_DEPOSITS) return legacyDepositsGone(res);
         const { txHash, walletAddress } = req.body;
 
         if (!txHash || !walletAddress) {
@@ -1298,7 +1322,7 @@ app.post('/api/deposits/process', async (req, res) => {
         const { createPublicClient, http, formatUnits } = require('viem');
         const { base } = require('viem/chains');
         
-        const PLATFORM_WALLET = process.env.PLATFORM_WALLET_ADDRESS || '0x75376BC58830f27415402875D26B73A6BE8E2253';
+        const PLATFORM_WALLET = requireEvmPlatformWallet();
         const USDC_ADDRESS = process.env.USDC_ADDRESS || '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913';
         
         const publicClient = createPublicClient({
@@ -1781,6 +1805,50 @@ app.get('/api/vault/stats', async (req, res) => {
 });
 
 /**
+ * Config pública del widget NOWPayments (iframe).
+ * La clave del embed es la misma API key del panel NOWPayments (pública en el iframe).
+ * IPN / firma sigue siendo solo en servidor (NOWPAYMENTS_WEBHOOK_SECRET).
+ */
+app.get('/api/public/nowpayments-widget-config', (req, res) => {
+    res.set('Cache-Control', 'no-store');
+    const embedKey =
+        process.env.NOWPAYMENTS_EMBED_PUBLIC_KEY ||
+        process.env.NOWPAYMENTS_PUBLIC_KEY ||
+        process.env.NOWPAYMENTS_API_KEY ||
+        '';
+    const rawType = (process.env.NOWPAYMENTS_EMBED_TYPE || 'donation-widget').toLowerCase();
+    const allowed = ['donation-widget', 'payment-widget'];
+    const embedType = allowed.includes(rawType) ? rawType : 'donation-widget';
+    if (!embedKey) {
+        return res.status(503).json({
+            ok: false,
+            error: 'NOWPayments no configurado (falta NOWPAYMENTS_API_KEY o NOWPAYMENTS_EMBED_PUBLIC_KEY)',
+            embedUrl: null,
+            embedUrlFiat: null
+        });
+    }
+    const qs = new URLSearchParams({ api_key: embedKey });
+    const cur = (process.env.NOWPAYMENTS_EMBED_CURRENCY || '').trim().toLowerCase();
+    if (cur) {
+        qs.set('currency', cur);
+    }
+    const base = `https://nowpayments.io/embeds/${embedType}`;
+    const embedUrl = `${base}?${qs.toString()}`;
+    const baseUrl =
+        process.env.BACKEND_URL ||
+        process.env.RENDER_EXTERNAL_URL ||
+        'https://musictoken-ring.onrender.com';
+    const ipnUrl = `${String(baseUrl).replace(/\/$/, '')}/webhook/nowpayments`;
+    res.json({
+        ok: true,
+        embedUrl,
+        embedUrlFiat: embedUrl,
+        ipnUrl,
+        embedType
+    });
+});
+
+/**
  * Health check
  */
 app.get('/api/health', (req, res) => {
@@ -1805,6 +1873,10 @@ app.get('/api/health', (req, res) => {
  */
 app.post('/webhook/nowpayments', express.raw({ type: 'application/json' }), async (req, res) => {
     try {
+        if (!nowPaymentsService) {
+            console.error('[nowpayments-webhook] Service not initialized');
+            return res.status(503).json({ error: 'NOWPayments service unavailable' });
+        }
         const signature = req.headers['x-nowpayments-sig'];
         const rawBody = req.body.toString();
 
@@ -1846,130 +1918,25 @@ app.post('/webhook/nowpayments', express.raw({ type: 'application/json' }), asyn
     }
 });
 
-/**
- * MoonPay Webhook Endpoint
- * POST /webhook/moonpay
- * Receives webhook notifications from MoonPay
- */
-app.post('/webhook/moonpay', express.raw({ type: 'application/json' }), async (req, res) => {
-    try {
-        const signature = req.headers['x-moonpay-signature'];
-        const rawBody = req.body.toString();
-
-        if (!signature && process.env.MOONPAY_SECRET_KEY) {
-            console.warn('[moonpay-webhook] Missing signature header');
-            // En sandbox puede no haber signature, continuar
-        }
-
-        // Verify signature if secret key is configured
-        if (process.env.MOONPAY_SECRET_KEY && signature) {
-            if (!moonPayService.verifyWebhookSignature(rawBody, signature)) {
-                console.error('[moonpay-webhook] Invalid signature');
-                return res.status(401).json({ error: 'Invalid signature' });
-            }
-        }
-
-        const transactionData = JSON.parse(rawBody);
-        console.log('[moonpay-webhook] Received transaction notification:', {
-            transaction_id: transactionData.id,
-            status: transactionData.status,
-            amount: transactionData.baseCurrencyAmount
-        });
-
-        // Process deposit
-        const result = await moonPayService.processDeposit(transactionData);
-
-        // Return 200 OK quickly
-        res.status(200).json({
-            received: true,
-            transaction_id: transactionData.id,
-            processed: result.processed
-        });
-
-    } catch (error) {
-        console.error('[moonpay-webhook] Error processing webhook:', error);
-        // Still return 200 to prevent MoonPay from retrying
-        res.status(200).json({
-            received: true,
-            error: error.message
-        });
-    }
+app.post('/webhook/moonpay', express.raw({ type: 'application/json' }), (req, res) => {
+    res.status(410).json({ error: 'legacy_moonpay_disabled', message: 'MoonPay retirado; usar NOWPayments.' });
 });
 
-/**
- * Mercado Pago Webhook Endpoint
- * POST /webhook/mercadopago
- * Receives payment notifications from Mercado Pago
- */
-app.post('/webhook/mercadopago', express.json(), async (req, res) => {
-    try {
-        const notification = req.body;
-        console.log('[mercadopago-webhook] Received notification:', {
-            type: notification.type,
-            data_id: notification.data?.id
-        });
-
-        if (!mercadoPagoService) {
-            console.error('[mercadopago-webhook] Mercado Pago service not initialized');
-            return res.status(503).json({ error: 'Service not available' });
-        }
-
-        // Process deposit
-        const result = await mercadoPagoService.processDeposit(notification);
-
-        // Return 200 OK quickly
-        res.status(200).json({
-            received: true,
-            processed: result.processed,
-            payment_id: result.payment_id
-        });
-
-    } catch (error) {
-        console.error('[mercadopago-webhook] Error processing webhook:', error);
-        // Still return 200 to prevent Mercado Pago from retrying excessively
-        res.status(200).json({
-            received: true,
-            error: error.message
-        });
-    }
+app.post('/webhook/mercadopago', express.json(), (req, res) => {
+    res.status(410).json({ error: 'legacy_mercadopago_disabled', message: 'Mercado Pago retirado; usar NOWPayments.' });
 });
 
-/**
- * Create Mercado Pago Checkout Preference
- * POST /api/deposit/mercadopago/create
- * Creates a checkout preference for fiat deposit
- */
-app.post('/api/deposit/mercadopago/create', async (req, res) => {
-    try {
-        const { amount, currency = 'COP', userId, email } = req.body;
-
-        if (!amount || amount <= 0) {
-            return res.status(400).json({ error: 'Invalid amount' });
-        }
-
-        if (!userId) {
-            return res.status(400).json({ error: 'userId required' });
-        }
-
-        if (!mercadoPagoService) {
-            return res.status(503).json({ error: 'Mercado Pago service not available' });
-        }
-
-        const preference = await mercadoPagoService.createCheckoutPreference({
-            amount,
-            currency,
-            userId,
-            email,
-            description: 'Depósito MusicToken Ring'
-        });
-
-        res.json(preference);
-
-    } catch (error) {
-        console.error('[mercadopago] Error creating checkout:', error);
-        res.status(500).json({ error: error.message });
-    }
+app.post('/api/deposit/mercadopago/create', (req, res) => {
+    res.status(410).json({ error: 'legacy_mercadopago_disabled', message: 'Mercado Pago retirado; usar NOWPayments.' });
 });
+
+try {
+    const { registerPrizeRoutes } = require('./prize-api');
+    registerPrizeRoutes(app);
+    console.log('[server] Registered POST /api/prizes/send');
+} catch (prizeRegErr) {
+    console.warn('[server] Prize routes not registered:', prizeRegErr.message);
+}
 
 /**
  * Root endpoint - helps verify server is running
@@ -1984,7 +1951,10 @@ app.get('/', (req, res) => {
             userCredits: '/api/user/credits/:walletAddress',
             deposits: '/api/deposits/:walletAddress',
             claims: '/api/claims/:walletAddress',
-            price: '/api/price'
+            price: '/api/price',
+            nowpaymentsIpn: '/webhook/nowpayments',
+            nowpaymentsWidgetConfig: '/api/public/nowpayments-widget-config',
+            prizeSend: '/api/prizes/send'
         }
     });
 });
