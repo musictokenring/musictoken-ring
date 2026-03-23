@@ -13,7 +13,7 @@
 MusicToken Ring es una plataforma web innovadora que combina:
 - Sistema de batallas musicales en tiempo real
 - Integración con blockchain (Base Network)
-- Sistema de créditos estables (1 crédito = 1 USDC)
+- Sistema de créditos estables (1 crédito = 1 USD nominal)
 - Múltiples modos de juego (Rápido, Social, Privado, Torneo, Práctica)
 - Sistema de vault y liquidez automático
 - Integración con wallets criptográficas
@@ -47,7 +47,7 @@ Debes tomar capturas de pantalla de las siguientes secciones:
 
 1. **Página Principal / Header**
    - Logo y nombre de la aplicación
-   - Información de balances (MTR, créditos, USDC)
+   - Información de balances (MTR, créditos, equivalente USD nominal)
    - Estado de wallet conectada
    - Información de usuario
 
@@ -76,8 +76,8 @@ Debes tomar capturas de pantalla de las siguientes secciones:
    - Balance de práctica
 
 7. **Sistema de Depósitos**
-   - Integración Ramp Network
-   - Depósitos USDC
+   - Integración NOWPayments (fiat / cripto)
+   - Añadir saldo en USD nominal
    - Historial de transacciones
 
 8. **Sistema de Retiros**
@@ -117,7 +117,7 @@ Debes tomar capturas de pantalla de las siguientes secciones:
 - Framework: Express.js
 - Base de datos: Supabase (PostgreSQL)
 - Blockchain: Base Network (Ethereum L2)
-- Tokens: ERC-20 (MTR, USDC)
+- Tokens: ERC-20 (MTR, USDC en Base donde aplique on-chain)
 
 ### Funcionalidades Clave Implementadas
 
@@ -134,7 +134,7 @@ Debes tomar capturas de pantalla de las siguientes secciones:
    - Gestión de vault
 
 3. **Sistema de Créditos Estables**
-   - 1 crédito = 1 USDC (tasa fija)
+   - 1 crédito = 1 USD nominal (referencia de juego)
    - Conversión automática
    - Gestión de balances
 

@@ -1,6 +1,6 @@
 /**
  * Automatic Deposit Detection Service
- * Listens for MTR/USDC transfers to platform wallet and auto-converts to credits
+ * Escucha transferencias MTR / stablecoin USDC (Base) a la wallet plataforma y acredita créditos
  * Uses ethers.js event listeners + Supabase for credit management
  */
 
@@ -234,26 +234,23 @@ class DepositListener {
             const decimals = tokenName === 'USDC' ? 6 : 18;
             const amount = parseFloat(formatUnits(value, decimals));
 
-            // NUEVO SISTEMA: Créditos estables (1 crédito = 1 USDC fijo)
-            // Calcular valor en USDC al momento del depósito
+            // Créditos estables (1 crédito ≈ 1 USD nominal); on-chain USDC Base = 1:1
             let usdcValue = 0;
             if (tokenName === 'USDC') {
-                // USDC directo: 1 USDC = 1 crédito
                 usdcValue = amount;
             } else if (tokenName === 'MTR') {
-                // MTR: convertir a USDC usando precio actual
                 const mtrPrice = await this.getMTRPrice();
                 if (!mtrPrice || mtrPrice <= 0) {
                     throw new Error('MTR price unavailable');
                 }
-                usdcValue = amount * mtrPrice; // Valor en USDC
+                usdcValue = amount * mtrPrice;
             }
 
-            // Fee de depósito: 5% del valor en USDC
+            // Fee 5% del valor nominal
             const DEPOSIT_FEE_RATE = 0.05; // 5%
             const depositFee = usdcValue * DEPOSIT_FEE_RATE;
             
-            // Créditos otorgados: valor USDC - fee (1 crédito = 1 USDC)
+            // Créditos: valor nominal - fee
             const credits = usdcValue - depositFee;
 
             // Round credits to 4 decimal places
@@ -294,7 +291,7 @@ class DepositListener {
             }
 
             this.processedTxHashes.add(txHash);
-            console.log(`[deposit-listener] ✅ Credited ${creditsRounded} credits (${usdcValue} USDC - ${depositFee} fee) to user ${from}`);
+            console.log(`[deposit-listener] ✅ Credited ${creditsRounded} credits (${usdcValue} USD nominal - ${depositFee} fee) to user ${from}`);
 
         } catch (error) {
             console.error('[deposit-listener] Error processing deposit:', error);
@@ -357,7 +354,7 @@ class DepositListener {
             // Enviar fee al vault (5% del depósito)
             await this.sendFeeToVault(depositFee, 'deposit', txHash);
 
-            console.log(`[deposit-listener] ✅ Credited ${credits} credits to user ${userId}, fee ${depositFee} USDC sent to vault`);
+            console.log(`[deposit-listener] ✅ Credited ${credits} credits to user ${userId}, fee ${depositFee} USD nominal to vault`);
 
         } catch (error) {
             console.error('[deposit-listener] Error crediting user:', error);
@@ -365,7 +362,7 @@ class DepositListener {
     }
 
     /**
-     * Get current MTR price in USDC
+     * Get current MTR price in USD (stable reference)
      */
     async getMTRPrice() {
         try {
@@ -402,7 +399,7 @@ class DepositListener {
 
                 if (response.ok) {
                     const result = await response.json();
-                    console.log(`[deposit-listener] Fee ${feeAmount} USDC sent to vault (type: ${feeType})`);
+                    console.log(`[deposit-listener] Fee ${feeAmount} USD nominal (USDC on Base) to vault (type: ${feeType})`);
                     return result;
                 } else {
                     throw new Error(`HTTP ${response.status}`);

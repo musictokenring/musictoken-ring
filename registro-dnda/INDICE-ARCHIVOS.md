@@ -85,7 +85,7 @@ registro-dnda/
 
 3. **credits-system-muestra.js**
    - Sistema de créditos estables
-   - Conversión 1 crédito = 1 USDC
+   - Conversión 1 crédito = 1 USD nominal
    - Gestión de balances
    - Integración con backend
    - Aproximadamente 260 líneas de código

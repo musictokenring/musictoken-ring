@@ -1,6 +1,6 @@
 /**
  * Automatic Deposit Detection Service
- * Listens for MTR/USDC transfers to platform wallet and auto-converts to credits
+ * Escucha transferencias MTR / USDC (Base) a la wallet plataforma y acredita créditos (legacy on-chain)
  * Uses ethers.js event listeners + Supabase for credit management
  */
 
@@ -286,19 +286,18 @@ class DepositListener {
             const decimals = tokenName === 'USDC' ? 6 : 18;
             const amount = parseFloat(formatUnits(value, decimals));
 
-            // NUEVO SISTEMA: Créditos estables (1 crédito = 1 USDC fijo)
-            // PRIORIDAD: USDC directo (1:1), MTR opcional con swap automático
+            // Créditos estables (1 crédito ≈ 1 USD nominal); USDC Base directo 1:1
             let usdcValue = 0;
             let mtrSwapped = false;
             
             if (tokenName === 'USDC') {
                 // USDC directo: 1 USDC = 1 crédito (PRIORIDAD)
                 usdcValue = amount;
-                console.log(`[deposit-listener] ✅ USDC directo detectado: ${amount} USDC = ${amount} créditos nominales`);
+                console.log(`[deposit-listener] ✅ USDC (Base) directo: ${amount} = ${amount} créditos nominales`);
             } else if (tokenName === 'MTR') {
                 // MTR opcional: Swap automático a USDC usando Aerodrome
                 // 🛡️ PROTECCIÓN CRÍTICA: Solo procesar si swap service está disponible y funcional
-                console.log(`[deposit-listener] 🔄 MTR detectado, iniciando swap automático a USDC...`);
+                console.log(`[deposit-listener] 🔄 MTR detectado, iniciando swap automático a USDC (Base)...`);
                 
                 if (!this.swapService || !this.swapService.enabled) {
                     // 🚨 RECHAZAR depósito si swap service no está disponible
@@ -311,12 +310,12 @@ class DepositListener {
                         credits_awarded: 0,
                         status: 'rejected_no_swap_service',
                         payment_data: {
-                            reason: 'MTR deposits require swap service to be enabled. Please deposit USDC directly or contact support.',
+                            reason: 'MTR deposits require swap service. Use USDC on Base or the platform payment gateway.',
                             rejection_timestamp: new Date().toISOString()
                         },
                         created_at: new Date().toISOString()
                     });
-                    throw new Error('MTR deposits are temporarily disabled. Swap service not available. Please deposit USDC directly.');
+                    throw new Error('MTR deposits are temporarily disabled. Use USDC on Base or the payment gateway.');
                 }
 
                 try {
@@ -326,7 +325,7 @@ class DepositListener {
                     if (swapResult.success && swapResult.usdcReceived > 0) {
                         usdcValue = swapResult.usdcReceived;
                         mtrSwapped = true;
-                        console.log(`[deposit-listener] ✅ Swap MTR → USDC exitoso: ${amount} MTR → ${usdcValue} USDC`);
+                        console.log(`[deposit-listener] ✅ Swap MTR → USDC (Base) exitoso: ${amount} MTR → ${usdcValue} USD nominal`);
                     } else {
                         // 🚨 RECHAZAR depósito si swap falla (NO usar fallback de precio)
                         console.error(`[deposit-listener] 🚨 MTR deposit REJECTED: Swap failed - ${swapResult.reason || swapResult.error}`);
@@ -343,7 +342,7 @@ class DepositListener {
                             },
                             created_at: new Date().toISOString()
                         });
-                        throw new Error(`MTR swap failed: ${swapResult.reason || swapResult.error || 'Unknown error'}. Deposit rejected for security. Please try again or deposit USDC directly.`);
+                        throw new Error(`MTR swap failed: ${swapResult.reason || swapResult.error || 'Unknown error'}. Deposit rejected. Try again or use USDC on Base / payment gateway.`);
                     }
                 } catch (swapError) {
                     // 🚨 RECHAZAR depósito si hay error en swap (NO usar fallback de precio)
@@ -361,7 +360,7 @@ class DepositListener {
                         },
                         created_at: new Date().toISOString()
                     });
-                    throw new Error(`MTR swap error: ${swapError.message}. Deposit rejected for security. Please try again or deposit USDC directly.`);
+                    throw new Error(`MTR swap error: ${swapError.message}. Deposit rejected. Try again or use USDC on Base / payment gateway.`);
                 }
             }
 
@@ -480,12 +479,12 @@ class DepositListener {
             await this.creditUser(userId, creditsRounded, txHash, tokenName, amount, usdcValue, depositFee);
 
             this.processedTxHashes.add(txHash);
-            console.log(`[deposit-listener] ✅ Credited ${creditsRounded} credits (${usdcValue} USDC - ${depositFee} fee) to user ${from}`);
+            console.log(`[deposit-listener] ✅ Credited ${creditsRounded} credits (${usdcValue} USD nominal - ${depositFee} fee) to user ${from}`);
 
             // AUTO-SWAP: If USDC deposit, automatically buy MTR
             if (tokenName === 'USDC' && this.swapService && this.swapService.enabled) {
                 try {
-                    console.log(`[deposit-listener] 🔄 Triggering auto-swap for ${usdcValue.toFixed(2)} USDC deposit...`);
+                    console.log(`[deposit-listener] 🔄 Triggering auto-swap for ${usdcValue.toFixed(2)} USD nominal (USDC) deposit...`);
                     // Execute swap asynchronously (don't block deposit processing)
                     this.swapService.autoBuyMTR(usdcValue, txHash).then(result => {
                         if (result.success) {
@@ -535,7 +534,7 @@ class DepositListener {
             }
 
             // Obtener el rate actual para USDC (siempre 1:1) o MTR (desde price updater)
-            let rateUsed = 1.0; // Default para USDC (1 USDC = 1 crédito)
+            let rateUsed = 1.0; // USDC Base: 1:1 con crédito nominal
             
             if (tokenName === 'MTR') {
                 // Para MTR, obtener el rate desde el price updater si está disponible
@@ -624,7 +623,7 @@ class DepositListener {
                 await this.sendFeeToVault(depositFee, 'deposit', txHash);
             }
 
-            console.log(`[deposit-listener] ✅ Credited ${credits} credits to user ${userId}, fee ${depositFee} USDC distributed (vault + trading fund)`);
+            console.log(`[deposit-listener] ✅ Credited ${credits} credits to user ${userId}, fee ${depositFee} USD nominal (vault + trading fund)`);
             console.log(`[deposit-listener] ✅ Deposit ${txHash} processed successfully - NO DUPLICATES POSSIBLE`);
 
         } catch (error) {
@@ -633,7 +632,7 @@ class DepositListener {
     }
 
     /**
-     * Get current MTR price in USDC
+     * Get current MTR price (USD reference)
      */
     async getMTRPrice() {
         try {
@@ -670,7 +669,7 @@ class DepositListener {
 
                 if (response.ok) {
                     const result = await response.json();
-                    console.log(`[deposit-listener] Fee ${feeAmount} USDC sent to vault (type: ${feeType})`);
+                    console.log(`[deposit-listener] Fee ${feeAmount} USD nominal (USDC) to vault (type: ${feeType})`);
                     return result;
                 } else {
                     throw new Error(`HTTP ${response.status}`);

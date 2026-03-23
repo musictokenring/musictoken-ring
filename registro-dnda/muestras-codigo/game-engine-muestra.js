@@ -4,7 +4,7 @@
 // =========================================
 
 // Constante global para mínimo de apuesta (aplica a todos los modos con apuesta real)
-const MIN_BET_AMOUNT = 5; // créditos (~$5 USDC, ya que créditos son estables 1:1)
+const MIN_BET_AMOUNT = 5; // créditos (~$5 USD nominal, 1:1)
 const MIN_BET_TORNEO = 5; // mismo mínimo para Torneo (puede ajustarse después si se desea)
 
 const GameEngine = {

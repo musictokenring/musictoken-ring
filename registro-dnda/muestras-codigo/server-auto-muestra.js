@@ -109,7 +109,7 @@ app.get('/api/user/credits/:walletAddress', async (req, res) => {
 
         const credits = creditsData?.credits || 0;
 
-        // NUEVO: 1 crédito = 1 USDC fijo siempre
+        // NUEVO: 1 crédito = 1 USD nominal
         const usdcValue = credits; // 1:1 fijo
 
         res.json({
@@ -118,7 +118,7 @@ app.get('/api/user/credits/:walletAddress', async (req, res) => {
             mtrPrice: null, // Ya no relevante
             rate: null, // Ya no se usa
             userId: user.id,
-            note: '1 crédito = 1 USDC fijo'
+            note: '1 crédito = 1 USD nominal'
         });
     } catch (error) {
         console.error('[server] Error getting credits:', error);
@@ -171,7 +171,7 @@ app.post('/api/user/deduct-credits', async (req, res) => {
 });
 
 /**
- * Claim credits (convert to USDC)
+ * Claim credits (liquidación a wallet)
  */
 app.post('/api/claim', async (req, res) => {
     try {

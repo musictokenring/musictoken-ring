@@ -8,7 +8,7 @@ Debes tomar capturas de pantalla de tu aplicación en funcionamiento y guardarla
 ### 1. PÁGINA PRINCIPAL / HEADER
 **Archivo:** `01-pagina-principal.png`
 - Captura completa del header con logo, nombre "MusicToken Ring"
-- Balances visibles (MTR, créditos, USDC)
+- Balances visibles (MTR, créditos, equivalente USD nominal)
 - Estado de wallet (conectada o botón de conectar)
 - Información de usuario si está logueado
 
@@ -71,13 +71,13 @@ Debes tomar capturas de pantalla de tu aplicación en funcionamiento y guardarla
 ### 11. SISTEMA DE DEPÓSITOS
 **Archivo:** `11-depositos.png`
 - Sección de depósitos
-- Integración Ramp Network visible
-- Opciones de depósito USDC
+- Integración NOWPayments visible
+- Opciones de depósito (fiat / cripto)
 
-### 12. INTEGRACIÓN RAMP
-**Archivo:** `12-ramp-integration.png`
-- Widget de Ramp Network
-- Proceso de compra de USDC
+### 12. PASARELA DE PAGO
+**Archivo:** `12-pasarela-pago.png`
+- Widget / flujo NOWPayments
+- Proceso de compra o depósito
 - Instrucciones de depósito
 
 ### 13. SISTEMA DE RETIROS

@@ -47,7 +47,7 @@
                 const data = await response.json();
                 
                 this.currentCredits = data.credits || 0;
-                // NUEVO: 1 crédito = 1 USDC fijo siempre
+                // NUEVO: 1 crédito = 1 USD nominal (valor estable)
                 this.currentUsdcValue = this.currentCredits; // 1:1 fijo
                 this.currentRate = null; // Ya no se usa rate variable
                 this.currentMtrPrice = null; // Ya no relevante para créditos
@@ -58,7 +58,7 @@
                 console.log('[credits-system] Balance loaded (créditos estables):', {
                     credits: this.currentCredits,
                     usdcValue: this.currentUsdcValue,
-                    note: '1 crédito = 1 USDC fijo'
+                    note: '1 crédito = 1 USD nominal'
                 });
 
             } catch (error) {
@@ -79,11 +79,10 @@
                 creditsBadge.textContent = `${this.currentCredits.toFixed(2)} créditos`;
             }
 
-            // Update USDC equivalent (1:1 fijo)
+            // Equivalente USD nominal (1:1)
             const usdcDisplay = document.getElementById('usdcValueDisplay');
             if (usdcDisplay) {
-                // Mostrar como igual (no aproximado) porque es 1:1 fijo
-                usdcDisplay.textContent = `= $${this.currentUsdcValue.toFixed(2)} USDC`;
+                usdcDisplay.textContent = `= $${this.currentUsdcValue.toFixed(2)} USD nominal`;
             }
 
             // Update combined display
@@ -91,8 +90,8 @@
             if (combinedDisplay) {
                 combinedDisplay.innerHTML = `
                     <span class="text-cyan-400 font-bold">${this.currentCredits.toFixed(2)} créditos</span>
-                    <span class="text-gray-400 text-sm">= $${this.currentUsdcValue.toFixed(2)} USDC</span>
-                    <span class="text-xs text-green-400 ml-1" title="Créditos estables: 1 crédito = 1 USDC fijo">✓</span>
+                    <span class="text-gray-400 text-sm">= $${this.currentUsdcValue.toFixed(2)} USD nominal</span>
+                    <span class="text-xs text-green-400 ml-1" title="Créditos estables: 1 crédito ≈ 1 USD nominal">✓</span>
                 `;
             }
 
@@ -143,7 +142,7 @@
         },
 
         /**
-         * Claim credits (convert to USDC)
+         * Claim credits (liquidación según backend)
          */
         async claimCredits(credits, walletAddress) {
             try {
@@ -192,7 +191,7 @@
                 await this.loadBalance(walletAddress);
 
                 if (typeof showToast === 'function') {
-                    showToast(`✅ ${result.usdcAmount} USDC enviados! Tx: ${result.txHash.slice(0, 10)}...`, 'success');
+                    showToast(`✅ ${result.usdcAmount} USD enviados a tu wallet. Tx: ${result.txHash.slice(0, 10)}...`, 'success');
                 }
 
                 return result;

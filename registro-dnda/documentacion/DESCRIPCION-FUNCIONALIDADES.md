@@ -42,17 +42,17 @@ MusicToken Ring es una plataforma web innovadora que combina batallas musicales 
 
 ### 2. INTEGRACIÓN BLOCKCHAIN
 
-#### 2.1 Detección Automática de Depósitos
-- El sistema monitorea constantemente la blockchain de Base Network
-- Detecta automáticamente transferencias de MTR y USDC
-- Acredita créditos automáticamente al usuario
-- Sin necesidad de confirmación manual
+#### 2.1 Detección Automática de Depósitos (opcional / legacy on-chain)
+- El sistema puede monitorear la red Base
+- Detecta transferencias de MTR y de stablecoin USDC (contrato USDC en Base)
+- Acredita créditos automáticamente al usuario cuando aplica
+- Depósitos principales vía pasarela (NOWPayments): fiat y cripto
 
 #### 2.2 Conversión de Tokens
-- Los usuarios depositan MTR (MusicToken) o USDC
-- El sistema convierte automáticamente a créditos estables
-- Tasa fija: 1 crédito = 1 USDC
-- Los créditos son estables y no fluctúan
+- Los usuarios pueden depositar MTR o USDC en Base (si el flujo on-chain está activo)
+- El sistema convierte a créditos estables de plataforma
+- Tasa de referencia: **1 crédito = 1 USD nominal** (valor estable para apuestas)
+- Los créditos de juego no fluctúan con el precio spot del token MTR
 
 #### 2.3 Gestión de Wallet
 - Conexión con múltiples wallets (MetaMask, Binance Wallet, WalletConnect)
@@ -63,15 +63,15 @@ MusicToken Ring es una plataforma web innovadora que combina batallas musicales 
 ### 3. SISTEMA DE CRÉDITOS ESTABLES
 
 #### 3.1 Conversión Estable
-- 1 crédito = 1 USDC (tasa fija, no variable)
-- Los créditos no fluctúan con el precio de MTR
+- **1 crédito = 1 USD nominal** (referencia fija para el juego)
+- Los créditos no fluctúan con el precio de mercado del MTR on-chain
 - Facilita el cálculo de apuestas y premios
 - Sistema predecible para usuarios
 
 #### 3.2 Gestión de Balances
 - Balance on-chain: MTR en wallet del usuario
-- Balance de créditos: Créditos estables en la plataforma
-- Balance jugable: Créditos disponibles para apostar
+- Balance de créditos: créditos estables en la plataforma
+- Balance jugable: créditos disponibles para apostar
 - Actualización en tiempo real
 
 ### 4. SISTEMA DE VAULT Y LIQUIDEZ
@@ -102,19 +102,17 @@ MusicToken Ring es una plataforma web innovadora que combina batallas musicales 
 - Validación de entrada de datos
 - Protección contra ataques comunes
 
-### 6. INTEGRACIÓN CON RAMP NETWORK
+### 6. INTEGRACIÓN DE PAGOS (NOWPayments)
 
-#### 6.1 Compra de USDC
-- Widget integrado de Ramp Network
-- Compra directa de USDC con fiat (COP, USD, etc.)
-- Proceso simplificado para usuarios nuevos
-- Soporte para múltiples métodos de pago
+#### 6.1 Depósitos
+- Pasarela NOWPayments: compra con fiat o cripto
+- Los fondos se liquidan según configuración (p. ej. stablecoin / red configurada en el panel)
+- IPN al backend para acreditar créditos al usuario identificado
 
-#### 6.2 Flujo Automatizado
-- Después de comprar en Ramp, el usuario transfiere USDC a la plataforma
-- El sistema detecta automáticamente el depósito
-- Acredita créditos al usuario
-- Todo el proceso es automatizado
+#### 6.2 Flujo
+- El usuario inicia el pago desde la web
+- El backend verifica notificaciones firmadas (IPN)
+- Se acreditan créditos al confirmarse el pago
 
 ### 7. INTERFAZ DE USUARIO
 
@@ -156,31 +154,31 @@ MusicToken Ring es una plataforma web innovadora que combina batallas musicales 
 
 ### Blockchain
 - Base Network (Ethereum L2)
-- Tokens ERC-20 (MTR, USDC)
+- Tokens ERC-20 (MTR, USDC en Base para operaciones on-chain donde aplique)
 - Smart contracts para transacciones
-- Eventos blockchain para detección automática
+- Eventos blockchain para detección automática (listeners legacy opcionales)
 
 ## INNOVACIONES TÉCNICAS
 
-1. **Detección Automática de Depósitos**: Sistema que monitorea la blockchain sin necesidad de confirmación manual
-2. **Créditos Estables**: Sistema único que mantiene estabilidad independiente del precio del token
-3. **Múltiples Modos de Juego**: Arquitectura flexible que soporta diferentes tipos de competencias
-4. **Integración Web3 Simplificada**: Experiencia de usuario fluida para usuarios no técnicos
-5. **Sistema de Vault Automático**: Gestión automática de liquidez y retiros
+1. **Detección Automática de Depósitos** (on-chain): monitoreo opcional en Base
+2. **Créditos Estables**: valor de juego anclado a USD nominal
+3. **Múltiples Modos de Juego**: arquitectura flexible
+4. **Integración Web3 Simplificada**: experiencia fluida
+5. **Sistema de Vault Automático**: liquidez y retiros
 
 ## CASOS DE USO
 
-1. **Usuario Casual**: Juega en modo práctica para aprender, luego apuesta pequeñas cantidades en modo rápido
-2. **Competidor Serio**: Participa en torneos, crea desafíos sociales, acumula créditos y retira ganancias
-3. **Usuario Nuevo**: Compra USDC con Ramp, deposita en la plataforma, y comienza a jugar inmediatamente
-4. **Comunidad**: Crea salas privadas para competir con amigos específicos
+1. **Usuario Casual**: modo práctica, luego apuestas pequeñas en modo rápido
+2. **Competidor Serio**: torneos, desafíos, retiros
+3. **Usuario Nuevo**: depósito vía NOWPayments, juego inmediato
+4. **Comunidad**: salas privadas entre amigos
 
 ## MÉTRICAS Y ESTADÍSTICAS
 
 - Tiempo promedio de batalla: 60 segundos
-- Apuesta mínima: 5 créditos (~$5 USDC)
+- Apuesta mínima: 5 créditos (~$5 USD nominal)
 - Fee de plataforma: 2% por apuesta
-- Actualización de streams: Cada 5 minutos
+- Actualización de streams: cada 5 minutos
 - Soporte de redes: Base Network (Chain ID 8453)
 
 ---

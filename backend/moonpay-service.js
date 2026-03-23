@@ -1,6 +1,6 @@
 /**
  * MoonPay Integration Service
- * Handles deposits via MoonPay On-Ramp (fiat → USDC)
+ * Legacy MoonPay (desactivado en servidor). Referencia: fiat → stablecoin / USD nominal
  */
 
 const crypto = require('crypto');

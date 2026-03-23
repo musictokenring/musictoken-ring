@@ -1,7 +1,7 @@
 /**
  * Automatic Claim Service
- * Processes credit claims and sends USDC payouts automatically
- * Converts credits → USDC using current MTR/USDC price
+ * Procesa reclamaciones de créditos y envía liquidación (USDC en Base on-chain o NOWPayments si Custody)
+ * Créditos de usuario: 1:1 USD nominal; el token on-chain en Base sigue siendo USDC (contrato configurado)
  */
 
 const { createPublicClient, createWalletClient, http, parseUnits, formatUnits } = require('viem');
@@ -90,7 +90,7 @@ class ClaimService {
      * Process claim request
      * @param {string} userId - User ID
      * @param {number} credits - Credits to claim
-     * @param {string} recipientWallet - Wallet address to receive USDC
+     * @param {string} recipientWallet - Wallet address to receive payout (USDC on Base si retiro directo)
      * @param {Object} requestInfo - Request metadata (ip, userAgent) for audit
      */
     async processClaim(userId, credits, recipientWallet, requestInfo = {}) {
@@ -121,19 +121,19 @@ class ClaimService {
                 throw new Error('Insufficient credits');
             }
 
-            // NUEVO SISTEMA: Retiro directo 1 crédito = 1 USDC (fijo)
+            // Retiro directo: 1 crédito = 1 USD nominal (envío en USDC Base on-chain)
             // Fee de retiro: 5%
             const WITHDRAWAL_FEE_RATE = 0.05; // 5%
             const withdrawalFee = credits * WITHDRAWAL_FEE_RATE;
             
-            // USDC a enviar: créditos - fee (1:1)
+            // Importe a enviar: créditos - fee (1:1 nominal)
             const usdcAmount = credits - withdrawalFee;
 
             // Round to 6 decimals (USDC precision)
             const usdcAmountRounded = Math.floor(usdcAmount * 1000000) / 1000000;
 
             if (usdcAmountRounded <= 0) {
-                throw new Error('USDC amount too small');
+                throw new Error('Payout amount too small');
             }
 
             // NUEVO: Verificar balance del vault antes de pagar
@@ -146,18 +146,18 @@ class ClaimService {
                     
                     if (!liquidityResult.success) {
                         const vaultBalance = await this.vaultService.getVaultBalance();
-                        throw new Error(`Insufficient vault balance. Available: ${vaultBalance} USDC, Required: ${usdcAmountRounded} USDC. ${liquidityResult.reason}`);
+                        throw new Error(`Insufficient vault balance. Available: ${vaultBalance} USD nominal, Required: ${usdcAmountRounded} USD nominal. ${liquidityResult.reason}`);
                     }
                     
                     // Re-check vault balance after potential MTR sale
                     const canWithdrawAfter = await this.vaultService.canWithdraw(usdcAmountRounded);
                     if (!canWithdrawAfter) {
                         const vaultBalance = await this.vaultService.getVaultBalance();
-                        throw new Error(`Insufficient vault balance after MTR sale. Available: ${vaultBalance} USDC, Required: ${usdcAmountRounded} USDC.`);
+                        throw new Error(`Insufficient vault balance after MTR sale. Available: ${vaultBalance} USD nominal, Required: ${usdcAmountRounded} USD nominal.`);
                     }
                 } else {
                     const vaultBalance = await this.vaultService.getVaultBalance();
-                    throw new Error(`Insufficient vault balance. Available: ${vaultBalance} USDC, Required: ${usdcAmountRounded} USDC. Vault en recarga, espera unos minutos.`);
+                    throw new Error(`Insufficient vault balance. Available: ${vaultBalance} USD nominal, Required: ${usdcAmountRounded} USD nominal. Vault en recarga, espera unos minutos.`);
                 }
             }
 
@@ -176,7 +176,7 @@ class ClaimService {
                 // Intentar usar vault si admin wallet no tiene suficiente
                 try {
                     const vaultTxHash = await this.vaultService.withdrawFromVault(usdcAmountRounded, recipientWallet, 'claim_payout', userId, requestInfo);
-                    console.log(`[claim-service] Withdrew ${usdcAmountRounded} USDC from vault. Tx: ${vaultTxHash}`);
+                    console.log(`[claim-service] Withdrew ${usdcAmountRounded} USD nominal (USDC) from vault. Tx: ${vaultTxHash}`);
                     
                     // Deduct credits and update claim record
                     await supabase.rpc('decrement_user_credits', {
@@ -208,10 +208,10 @@ class ClaimService {
                         creditsUsed: credits,
                         withdrawalFee: withdrawalFee,
                         source: 'vault',
-                        note: '1 crédito = 1 USDC fijo'
+                        note: '1 crédito = 1 USD nominal (USDC Base on-chain)'
                     };
                 } catch (vaultError) {
-                    throw new Error(`Insufficient funds. Admin: ${adminBalanceFormatted} USDC, Vault error: ${vaultError.message}`);
+                    throw new Error(`Insufficient funds. Admin: ${adminBalanceFormatted} USD nominal (USDC), Vault error: ${vaultError.message}`);
                 }
             }
 
@@ -267,7 +267,7 @@ class ClaimService {
                         creditsUsed: credits,
                         withdrawalFee: withdrawalFee,
                         method: 'nowpayments',
-                        note: '1 crédito = 1 USDC fijo. Payout processing via NOWPayments.'
+                        note: '1 crédito = 1 USD nominal. Payout via NOWPayments Custody.'
                     };
                 } catch (nowPaymentsError) {
                     console.error('[claim-service] NOWPayments payout failed, falling back to direct transfer:', nowPaymentsError);
@@ -275,8 +275,8 @@ class ClaimService {
                 }
             }
 
-            // Fallback: Direct USDC transaction
-            console.log('[claim-service] Using direct USDC transfer for withdrawal');
+            // Fallback: transferencia directa USDC (Base)
+            console.log('[claim-service] Using direct USDC (Base) transfer for withdrawal');
             const txHash = await this.sendUSDC(recipientWallet, usdcAmountRounded);
 
             // Wait for confirmation
@@ -310,7 +310,7 @@ class ClaimService {
                 })
                 .eq('id', claimRecord.id);
 
-            console.log(`[claim-service] ✅ Claim processed: ${usdcAmountRounded} USDC sent to ${recipientWallet}, fee ${withdrawalFee} USDC to vault`);
+            console.log(`[claim-service] ✅ Claim processed: ${usdcAmountRounded} USD nominal (USDC) sent to ${recipientWallet}, fee ${withdrawalFee} to vault`);
 
             return {
                 success: true,
@@ -319,7 +319,7 @@ class ClaimService {
                 creditsUsed: credits,
                 withdrawalFee: withdrawalFee,
                 method: 'direct',
-                note: '1 crédito = 1 USDC fijo'
+                note: '1 crédito = 1 USD nominal (USDC Base on-chain)'
             };
 
         } catch (error) {
@@ -342,13 +342,13 @@ class ClaimService {
     }
 
     /**
-     * Send USDC to recipient
+     * Send USDC (Base ERC20) to recipient
      */
     async sendUSDC(recipient, amount) {
         try {
             const amountWei = parseUnits(amount.toFixed(6), 6); // USDC has 6 decimals
 
-            console.log(`[claim-service] Sending ${amount} USDC to ${recipient}`);
+            console.log(`[claim-service] Sending ${amount} USD nominal (USDC) to ${recipient}`);
 
             const hash = await this.walletClient.writeContract({
                 address: USDC_ADDRESS,
@@ -359,13 +359,13 @@ class ClaimService {
 
             return hash;
         } catch (error) {
-            console.error('[claim-service] Error sending USDC:', error);
+            console.error('[claim-service] Error sending USDC (Base):', error);
             throw error;
         }
     }
 
     /**
-     * Get current MTR/USDC price
+     * Get current MTR/USD reference price
      */
     async getMTRPrice() {
         try {
@@ -388,7 +388,7 @@ class ClaimService {
         try {
             // Usar vaultService directamente
             await this.vaultService.addFee(feeAmount, feeType, txHash);
-            console.log(`[claim-service] Fee ${feeAmount} USDC sent to vault (type: ${feeType})`);
+            console.log(`[claim-service] Fee ${feeAmount} USD nominal (USDC) to vault (type: ${feeType})`);
         } catch (error) {
             console.error('[claim-service] Error sending fee to vault:', error);
             // No bloquear el flujo si falla el fee

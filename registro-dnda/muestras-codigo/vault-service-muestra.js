@@ -112,7 +112,7 @@ class VaultService {
 
                     // Sync database with on-chain if there's a significant difference
                     const difference = Math.abs(onChainBalanceFormatted - dbBalanceValue);
-                    if (difference > 1) { // More than 1 USDC difference
+                    if (difference > 1) { // > 1 USD nominal difference
                         console.log(`[vault-service] Syncing vault balance: DB=${dbBalanceValue}, On-chain=${onChainBalanceFormatted}`);
                         await this.updateVaultBalance(onChainBalanceFormatted, null);
                         return onChainBalanceFormatted;
@@ -191,7 +191,7 @@ class VaultService {
                     .eq('id', feeRecord.id);
             }
 
-            console.log(`[vault-service] ✅ Fee ${feeAmount} USDC added to vault (type: ${feeType})`);
+            console.log(`[vault-service] ✅ Fee ${feeAmount} USD nominal (USDC) added to vault (type: ${feeType})`);
 
             return {
                 success: true,
@@ -244,7 +244,7 @@ class VaultService {
     }
 
     /**
-     * Transfer USDC to vault wallet
+     * Transfer USDC (Base) to vault wallet
      */
     async transferToVault(amount, sourceTxHash = null) {
         if (!this.vaultEnabled || !VAULT_WALLET_ADDRESS) {
@@ -269,7 +269,7 @@ class VaultService {
                 throw new Error(`Insufficient balance in admin wallet. Available: ${adminBalanceFormatted}, Required: ${amount}`);
             }
 
-            console.log(`[vault-service] Transferring ${amount} USDC to vault wallet ${VAULT_WALLET_ADDRESS}`);
+            console.log(`[vault-service] Transferring ${amount} USD nominal (USDC) to vault ${VAULT_WALLET_ADDRESS}`);
 
             const txHash = await this.walletClient.writeContract({
                 address: USDC_ADDRESS,
@@ -281,7 +281,7 @@ class VaultService {
             // Wait for confirmation
             await this.publicClient.waitForTransactionReceipt({ hash: txHash });
 
-            console.log(`[vault-service] ✅ Transferred ${amount} USDC to vault. Tx: ${txHash}`);
+            console.log(`[vault-service] ✅ Transferred ${amount} USD nominal (USDC) to vault. Tx: ${txHash}`);
 
             return txHash;
 
@@ -317,7 +317,7 @@ class VaultService {
             const canWithdraw = await this.canWithdraw(amount);
             if (!canWithdraw) {
                 const balance = await this.getVaultBalance();
-                throw new Error(`Insufficient vault balance. Available: ${balance} USDC, Required: ${amount} USDC`);
+                throw new Error(`Insufficient vault balance. Available: ${balance} USD nominal, Required: ${amount} USD nominal`);
             }
 
             // If vault wallet is different from admin wallet, we need to transfer from vault to admin first
@@ -349,9 +349,9 @@ class VaultService {
                 }
             }
 
-            console.log(`[vault-service] Withdrawing ${amount} USDC from vault to ${recipientAddress}`);
+            console.log(`[vault-service] Withdrawing ${amount} USD nominal (USDC) from vault to ${recipientAddress}`);
 
-            // Transfer USDC to recipient
+            // Transfer USDC (ERC20) to recipient
             const txHash = await walletClient.writeContract({
                 address: USDC_ADDRESS,
                 abi: USDC_ABI,
@@ -365,7 +365,7 @@ class VaultService {
             // Update vault balance (subtract)
             await this.updateVaultBalance(-amount, txHash);
 
-            console.log(`[vault-service] ✅ Withdrew ${amount} USDC from vault. Tx: ${txHash}`);
+            console.log(`[vault-service] ✅ Withdrew ${amount} USD nominal (USDC) from vault. Tx: ${txHash}`);
 
             return txHash;
 
