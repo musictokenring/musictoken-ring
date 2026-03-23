@@ -1,13 +1,8 @@
 /**
  * Multi-Chain Deposit Detection Service
- * Monitors USDC deposits to platform wallet across multiple networks:
- * - Base (main network)
- * - Ethereum Mainnet
- * - Polygon
- * - Optimism
- * - Arbitrum
- * 
- * Automatically credits user accounts regardless of which network was used
+ * Vigila depósitos en USD nominal (USDC nativo por red) hacia la wallet de la plataforma:
+ * Base, Ethereum, Polygon, Optimism, Arbitrum.
+ * Acredita cuentas según la red usada (mismo criterio nominal 1 USDC ≈ 1 USD nominal).
  */
 
 const { createPublicClient, http, formatUnits } = require('viem');
@@ -42,7 +37,7 @@ const { requireEvmPlatformWallet } = require('./platform-addresses');
 let PLATFORM_WALLET;
 const DEPOSIT_FEE_RATE = 0.05; // 5%
 
-// USDC addresses on different networks
+// Contratos USDC por red (USD nominal on-chain por cadena)
 const USDC_ADDRESSES = {
     base: process.env.USDC_ADDRESS_BASE || '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913',
     ethereum: process.env.USDC_ADDRESS_ETHEREUM || '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48',
@@ -226,12 +221,12 @@ class MultiChainDepositListener {
             const usdcAddress = USDC_ADDRESSES[networkName];
             
             if (!client || !usdcAddress) {
-                console.warn(`[multi-chain] ⚠️ Skipping ${networkName}: client or USDC address not configured`);
+                console.warn(`[multi-chain] ⚠️ Skipping ${networkName}: client or USDC contract not configured`);
                 return;
             }
 
             console.log(`[multi-chain] 🌐 Starting listener for ${networkName}...`);
-            console.log(`[multi-chain] 📍 Monitoring USDC: ${usdcAddress}`);
+            console.log(`[multi-chain] 📍 Monitoring USD nominal (USDC) on ${networkName}: ${usdcAddress}`);
             console.log(`[multi-chain] 💼 Platform wallet: ${PLATFORM_WALLET}`);
 
             // Get current block
@@ -335,7 +330,7 @@ class MultiChainDepositListener {
                 }
             }
 
-            console.log(`[multi-chain] Found ${logs.length} USDC transfers to platform on ${networkName}`);
+            console.log(`[multi-chain] Found ${logs.length} USD nominal (USDC) transfers to platform on ${networkName}`);
 
             for (const log of logs) {
                 await this.processDeposit(networkName, log);
@@ -425,10 +420,10 @@ class MultiChainDepositListener {
                 return;
             }
 
-            // Convert value to human-readable amount (USDC has 6 decimals)
+            // Importe humano (USDC = 6 decimales)
             const amount = parseFloat(formatUnits(value, 6));
 
-            // Calculate credits (1 USDC = 1 credit, minus 5% fee)
+            // Créditos: 1 USD nominal = 1 crédito, menos fee 5%
             const depositFee = amount * DEPOSIT_FEE_RATE;
             const credits = amount - depositFee;
             const creditsRounded = Math.round(credits * 10000) / 10000;
@@ -476,7 +471,7 @@ class MultiChainDepositListener {
             await this.creditUser(user.id, creditsRounded, txHash, networkName, amount, depositFee);
 
             this.processedTxHashes.add(`${networkName}:${txHash}`);
-            console.log(`[multi-chain] ✅ Credited ${creditsRounded} credits (${amount} USDC - ${depositFee} fee) to user ${from} from ${networkName}`);
+            console.log(`[multi-chain] ✅ Credited ${creditsRounded} credits (${amount} USD nominal USDC - ${depositFee} fee) to user ${from} from ${networkName}`);
 
         } catch (error) {
             console.error(`[multi-chain] Error processing deposit on ${networkName}:`, error);
@@ -511,7 +506,7 @@ class MultiChainDepositListener {
                     credits_awarded: credits,
                     usdc_value_at_deposit: amount,
                     deposit_fee: depositFee,
-                    rate_used: 1.0, // USDC always 1:1
+                    rate_used: 1.0, // 1:1 USD nominal
                     status: 'processed',
                     network: networkName, // Store which network the deposit came from
                     processed_at: new Date().toISOString()
@@ -592,12 +587,12 @@ class MultiChainDepositListener {
             const expectedBalance = fees?.reduce((sum, fee) => sum + parseFloat(fee.amount || 0), 0) || 0;
             const actualBalance = parseFloat(vaultBalance.balance_usdc || 0);
             
-            console.log(`[multi-chain] Vault balance: ${actualBalance} USDC, Expected from fees: ${expectedBalance} USDC`);
+            console.log(`[multi-chain] Vault balance: ${actualBalance} USD nominal, Expected from fees: ${expectedBalance} USD nominal`);
             
             // If there's a significant difference, there might be missing deposits
             const difference = actualBalance - expectedBalance;
-            if (difference > 0.1) { // More than 0.1 USDC difference
-                console.log(`[multi-chain] ⚠️ Vault balance difference detected: ${difference} USDC`);
+            if (difference > 0.1) { // > 0.1 USD nominal
+                console.log(`[multi-chain] ⚠️ Vault balance difference detected: ${difference} USD nominal`);
                 console.log(`[multi-chain] This might indicate missing deposits. Searching for unprocessed transfers...`);
                 
                 // Search for recent transfers to platform wallet that aren't in deposits

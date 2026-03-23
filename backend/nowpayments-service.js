@@ -338,9 +338,9 @@ class NOWPaymentsService {
                 .select('balance')
                 .single();
 
-            const usdcAmount = creditsAmount; // 1 credit = 1 USDC
+            const usdcAmount = creditsAmount; // 1 crédito = 1 USD nominal (USDC en Base si NOWPAYOUT_USE_USDC_BASE)
             const withdrawalFee = usdcAmount * DEPOSIT_FEE_RATE; // 5%
-            const payoutAmount = usdcAmount - withdrawalFee; // 95%
+            const payoutAmount = usdcAmount - withdrawalFee; // 95% USD nominal
 
             if (!vaultBalance || vaultBalance.balance < usdcAmount) {
                 throw new Error('Insufficient vault balance');

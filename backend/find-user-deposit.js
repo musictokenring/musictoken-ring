@@ -104,7 +104,7 @@ async function findDeposits() {
             userDeposits.forEach((deposit, i) => {
                 console.log(`${i + 1}. Transacción: ${deposit.txHash}`);
                 console.log(`   Bloque: ${deposit.blockNumber}`);
-                console.log(`   Cantidad: ${deposit.amount} USDC`);
+                console.log(`   Cantidad: ${deposit.amount} USD nominal (USDC Ethereum)`);
                 console.log(`   From: ${deposit.from}`);
                 console.log(`   To: ${deposit.to}`);
                 console.log('');
@@ -132,7 +132,7 @@ async function findDeposits() {
                         topics: log.topics
                     });
                     const amount = formatUnits(BigInt(decoded.args.value), 6);
-                    console.log(`   ${decoded.args.from} → ${amount} USDC (Tx: ${log.transactionHash.slice(0, 20)}...)`);
+                    console.log(`   ${decoded.args.from} → ${amount} USD nominal USDC (Tx: ${log.transactionHash.slice(0, 20)}...)`);
                     count++;
                     if (count >= 10) break;
                 } catch (e) {
@@ -177,7 +177,7 @@ async function findDeposits() {
                             topics: log.topics
                         });
                         const amount = formatUnits(BigInt(decoded.args.value), 6);
-                        console.log(`   Tx: ${log.transactionHash}, Amount: ${amount} USDC`);
+                        console.log(`   Tx: ${log.transactionHash}, Amount: ${amount} USD nominal (USDC Ethereum)`);
                     });
                 } else {
                     console.log('❌ No se encontraron transferencias directas en los últimos 1000 bloques');

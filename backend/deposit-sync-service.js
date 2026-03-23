@@ -102,7 +102,7 @@ class DepositSyncService {
             const latestBlock = await publicClient.getBlockNumber();
             const fromBlock = this.lastSyncBlock || latestBlock - 2000n; // Check last 2000 blocks
 
-            // Scan for USDC deposits
+            // Depósitos USDC en Base (USD nominal on-chain)
             const usdcDeposits = await this.scanTokenDeposits(USDC_ADDRESS, 'USDC', fromBlock, latestBlock);
             
             // Scan for MTR deposits
@@ -273,7 +273,7 @@ class DepositSyncService {
             const deposits = [];
 
             for (const log of receipt.logs) {
-                // Check USDC
+                // USDC en Base (USD nominal)
                 if (log.address.toLowerCase() === USDC_ADDRESS.toLowerCase()) {
                     try {
                         const decoded = await publicClient.decodeEventLog({

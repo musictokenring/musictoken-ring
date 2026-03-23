@@ -104,7 +104,7 @@ async function investigateFundLeak() {
                     .filter(c => c.status === 'completed' || c.status === 'success')
                     .reduce((sum, c) => sum + parseFloat(c.usdc_amount || 0), 0);
                 
-                console.log(`\n${colors.red}${colors.bright}💰 TOTAL POTENCIALMENTE ROBADO: ${totalStolen.toFixed(2)} USDC${colors.reset}\n`);
+                console.log(`\n${colors.red}${colors.bright}💰 TOTAL POTENCIALMENTE ROBADO: ${totalStolen.toFixed(2)} USD nominal${colors.reset}\n`);
             } else {
                 console.log(`${colors.green}✅ No se encontraron claims con wallet incorrecta${colors.reset}`);
             }
@@ -181,7 +181,7 @@ async function investigateFundLeak() {
                 
                 console.log(`${colors.yellow}📊 RESUMEN POR DIRECCIÓN:${colors.reset}`);
                 Object.values(byAddress).forEach(addr => {
-                    console.log(`  ${colors.red}${addr.address}${colors.reset}: ${addr.count} transacciones, ${addr.total.toFixed(2)} USDC total`);
+                    console.log(`  ${colors.red}${addr.address}${colors.reset}: ${addr.count} transacciones, ${addr.total.toFixed(2)} USD nominal total`);
                 });
             } else {
                 console.log(`${colors.green}✅ No se encontraron transacciones sospechosas${colors.reset}`);
@@ -266,7 +266,7 @@ async function investigateFundLeak() {
                     const totalMismatch = mismatching
                         .filter(c => c.status === 'completed' || c.status === 'success')
                         .reduce((sum, c) => sum + parseFloat(c.usdc_amount || 0), 0);
-                    console.log(`${colors.red}${colors.bright}💰 TOTAL EN CLAIMS CON WALLET INCORRECTA: ${totalMismatch.toFixed(2)} USDC${colors.reset}\n`);
+                    console.log(`${colors.red}${colors.bright}💰 TOTAL EN CLAIMS CON WALLET INCORRECTA: ${totalMismatch.toFixed(2)} USD nominal${colors.reset}\n`);
                 }
             } else {
                 console.log(`${colors.green}✅ No se encontraron claims grandes recientes${colors.reset}`);

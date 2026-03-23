@@ -73,19 +73,18 @@ async function processDeposit(txHash, network = 'ethereum') {
         const isDirectTransfer = tx.to?.toLowerCase() === PLATFORM_WALLET.toLowerCase();
         console.log(`   ¿Es transferencia directa a plataforma? ${isDirectTransfer ? '✅ SÍ' : '❌ NO'}`);
         
-        // Find USDC Transfer event to platform wallet
+        // Transfer USDC (Ethereum) → USD nominal
         console.log('\n🔍 Analizando logs de la transacción...');
         console.log(`   Total logs: ${receipt.logs.length}`);
         
-        // Show all USDC transfers
         const usdcLogs = receipt.logs.filter(log => 
             log.address.toLowerCase() === USDC_ADDRESS_ETHEREUM.toLowerCase()
         );
         
-        console.log(`   Logs de USDC: ${usdcLogs.length}`);
+        console.log(`   Logs USDC (Ethereum): ${usdcLogs.length}`);
         
         if (usdcLogs.length > 0) {
-            console.log('\n📋 Transferencias de USDC encontradas:');
+            console.log('\n📋 Transferencias USDC (Ethereum, USD nominal) encontradas:');
             usdcLogs.forEach((log, i) => {
                 try {
                     const decoded = decodeEventLog({
@@ -97,7 +96,7 @@ async function processDeposit(txHash, network = 'ethereum') {
                     const isToPlatform = decoded.args.to?.toLowerCase() === PLATFORM_WALLET.toLowerCase();
                     console.log(`   ${i + 1}. From: ${decoded.args.from}`);
                     console.log(`      To: ${decoded.args.to}`);
-                    console.log(`      Amount: ${amount} USDC`);
+                    console.log(`      Amount: ${amount} USD nominal (USDC Ethereum)`);
                     console.log(`      To platform? ${isToPlatform ? '✅ SÍ' : '❌ NO'}`);
                 } catch (e) {
                     console.log(`   ${i + 1}. Error decodificando log: ${e.message}`);
@@ -172,9 +171,8 @@ async function processDeposit(txHash, network = 'ethereum') {
                 });
                 
                 if (largestTransfer) {
-                    console.log(`   Usando la transferencia más grande: ${formatUnits(largestTransfer.amount, 6)} USDC`);
-                    // We'll process this as if it was a deposit, even though it went to an intermediary
-                    // This handles cases where the user sent USDC through a bridge or swap service
+                    console.log(`   Usando la transferencia más grande: ${formatUnits(largestTransfer.amount, 6)} USD nominal (USDC Ethereum)`);
+                    // Casos bridge/swap: el usuario pudo enviar USDC vía ruta indirecta
                     transferLog = largestTransfer.log;
                     // We'll need to adjust the logic below to handle this case
                 }
@@ -185,7 +183,7 @@ async function processDeposit(txHash, network = 'ethereum') {
             console.log(`\n⚠️  Wallet de la plataforma esperada: ${PLATFORM_WALLET}`);
             console.log(`\n💡 Intentando buscar transferencias recientes a la wallet de la plataforma...`);
             
-            // Try to find recent USDC transfers to platform wallet from this user
+            // Buscar transferencias recientes USDC (Ethereum) usuario → plataforma
             // Search around the transaction block (±500 blocks)
             try {
                 const txBlock = receipt.blockNumber;
@@ -221,10 +219,10 @@ async function processDeposit(txHash, network = 'ethereum') {
                     transferLog = recentLog;
                     console.log(`   Usando transferencia del bloque ${recentLog.blockNumber}`);
                 } else {
-                    throw new Error('No se encontró transferencia de USDC a la wallet de la plataforma en esta transacción ni en transferencias recientes.');
+                    throw new Error('No se encontró transferencia de USDC (Ethereum, USD nominal) a la wallet de la plataforma en esta transacción ni en transferencias recientes.');
                 }
             } catch (searchError) {
-                throw new Error(`No se encontró transferencia de USDC a la wallet de la plataforma. Error buscando transferencias recientes: ${searchError.message}`);
+                throw new Error(`No se encontró transferencia de USDC (Ethereum) a la wallet de la plataforma. Error buscando transferencias recientes: ${searchError.message}`);
             }
         }
 
@@ -242,7 +240,7 @@ async function processDeposit(txHash, network = 'ethereum') {
         console.log('✅ Transferencia encontrada:');
         console.log(`   From: ${fromAddress}`);
         console.log(`   To: ${toAddress}`);
-        console.log(`   Amount: ${formatUnits(amount, 6)} USDC`);
+        console.log(`   Amount: ${formatUnits(amount, 6)} USD nominal (USDC Ethereum)`);
 
         // Verify it's to platform wallet
         if (toAddress.toLowerCase() !== PLATFORM_WALLET.toLowerCase()) {
@@ -255,9 +253,9 @@ async function processDeposit(txHash, network = 'ethereum') {
         const creditsAwarded = amountUsdc - fee;
 
         console.log('\n💰 Cálculo de créditos:');
-        console.log(`   Depósito: ${amountUsdc} USDC`);
-        console.log(`   Fee (5%): ${fee} USDC`);
-        console.log(`   Créditos: ${creditsAwarded} USDC`);
+        console.log(`   Depósito: ${amountUsdc} USD nominal (USDC Ethereum)`);
+        console.log(`   Fee (5%): ${fee} USD nominal`);
+        console.log(`   Créditos: ${creditsAwarded} USD nominal`);
 
         // Check if deposit already exists
         const { data: existingDeposit } = await supabase
@@ -350,7 +348,7 @@ async function processDeposit(txHash, network = 'ethereum') {
         if (vaultError) {
             console.warn(`   ⚠️  Error actualizando vault: ${vaultError.message}`);
         } else {
-            console.log(`   ✅ Vault actualizado (+${fee} USDC)`);
+            console.log(`   ✅ Vault actualizado (+${fee} USD nominal)`);
         }
 
         console.log('\n✅ Depósito procesado exitosamente!');

@@ -220,7 +220,7 @@ async function initializeServices() {
             console.log('[server] Deposit sync service skipped (legacy chain deposits disabled).');
         }
 
-        // Initialize liquidity manager (manages USDC buffer and MTR pool)
+        // Liquidity manager: buffer USDC (Base) + pool MTR
         try {
             console.log('[server] 🔄 Initializing liquidity manager...');
             console.log('[server] SWAP_WALLET_PRIVATE_KEY configured:', !!process.env.SWAP_WALLET_PRIVATE_KEY);
@@ -381,8 +381,8 @@ app.get('/api/user/credits/:walletAddress', async (req, res) => {
 
         const credits = creditsData?.credits || 0;
 
-        // NUEVO: 1 crédito = 1 USDC fijo siempre
-        const usdcValue = credits; // 1:1 fijo
+        // 1 crédito = 1 USD nominal
+        const usdcValue = credits;
 
         res.json({
             credits: Math.round(credits * 10000) / 10000, // 4 decimals
@@ -390,7 +390,7 @@ app.get('/api/user/credits/:walletAddress', async (req, res) => {
             mtrPrice: null, // Ya no relevante
             rate: null, // Ya no se usa
             userId: user.id,
-            note: '1 crédito = 1 USDC fijo'
+            note: '1 crédito = 1 USD nominal'
         });
     } catch (error) {
         console.error('[server] Error getting credits:', error);
@@ -526,7 +526,7 @@ app.post('/api/user/deduct-credits', async (req, res) => {
 });
 
 /**
- * Claim credits (convert to USDC)
+ * Claim credits (liquidación a wallet según claim-service)
  */
 // 🔒 SEGURIDAD: Aplicar rate limiting al endpoint de claims
 app.post('/api/claim', claimRateLimiter, async (req, res) => {
@@ -901,7 +901,7 @@ app.get('/api/deposits/diagnose/:txHash', async (req, res) => {
                     
                     console.log('[diagnose] Scanning blocks', fromBlock.toString(), 'to', toBlock.toString());
                     
-                    // Buscar logs de USDC Transfer a la plataforma
+                    // Logs Transfer del contrato USDC (Base) hacia la plataforma
                     const logs = await publicClient.getLogs({
                         address: USDC_ADDRESS,
                         event: {
@@ -920,7 +920,7 @@ app.get('/api/deposits/diagnose/:txHash', async (req, res) => {
                         toBlock: toBlock
                     });
                     
-                    console.log('[diagnose] Found', logs.length, 'USDC transfer logs to platform');
+                    console.log('[diagnose] Found', logs.length, 'USDC (Base) transfer logs to platform');
                     
                     // Buscar si alguna de estas transacciones coincide con nuestro hash
                     for (const log of logs) {
@@ -1074,16 +1074,16 @@ app.get('/api/deposits/diagnose/:txHash', async (req, res) => {
 
         console.log('[diagnose] Total logs in receipt:', receipt.logs?.length || 0);
         
-        // Filtrar logs de USDC Transfer
+        // Filtrar logs Transfer del token USDC (Base)
         const allTransferLogs = receipt.logs.filter(log => 
             log.address.toLowerCase() === USDC_ADDRESS.toLowerCase()
         );
         
-        console.log('[diagnose] USDC transfer logs found:', allTransferLogs.length);
-        console.log('[diagnose] USDC address:', USDC_ADDRESS);
+        console.log('[diagnose] USDC (Base) transfer logs found:', allTransferLogs.length);
+        console.log('[diagnose] USDC contract:', USDC_ADDRESS);
         console.log('[diagnose] Platform wallet:', PLATFORM_WALLET);
         
-        // Si no hay logs de USDC, también buscar en MTR
+        // Si no hay logs USDC, buscar MTR
         let transferLogs = allTransferLogs;
         if (transferLogs.length === 0) {
             const mtrLogs = receipt.logs.filter(log => 
@@ -1144,7 +1144,7 @@ app.get('/api/deposits/diagnose/:txHash', async (req, res) => {
             })));
             return res.status(400).json({ 
                 error: 'No transfer to platform wallet found',
-                message: 'Esta transacción no contiene una transferencia de USDC o MTR a la dirección de la plataforma. Verifica que el hash sea correcto y que la transacción sea un depósito a la plataforma.'
+                message: 'Esta transacción no contiene una transferencia de USDC (Base) o MTR a la dirección de la plataforma. Verifica el hash y que sea un depósito válido.'
             });
         }
 
@@ -1155,7 +1155,7 @@ app.get('/api/deposits/diagnose/:txHash', async (req, res) => {
         // Calcular créditos según el token
         let credits;
         if (depositTransfer.token === 'USDC') {
-            // USDC: 1 USDC = 1 crédito (después del fee)
+            // USDC Base: 1:1 nominal tras fee
             credits = depositTransfer.amount - depositFee;
         } else {
             // MTR: usar el rate actual desde la BD
@@ -1397,7 +1397,7 @@ app.post('/api/deposits/process', async (req, res) => {
         }
 
         if (!transferEvent) {
-            return res.status(400).json({ error: 'No USDC transfer to platform wallet found' });
+            return res.status(400).json({ error: 'No USDC (Base) transfer to platform wallet found' });
         }
 
         // Verify wallet matches

@@ -1,8 +1,6 @@
 /**
  * Liquidity Manager Service
- * Manages USDC buffer and MTR pool
- * Automatically sells MTR when USDC buffer is low
- * Ensures platform always has USDC for payouts
+ * Buffer en USDC (Base) y pool MTR; vende MTR si falta liquidez nominal para pagos
  */
 
 const { createPublicClient, http, formatUnits } = require('viem');
@@ -17,8 +15,8 @@ const USDC_ADDRESS = process.env.USDC_ADDRESS || '0x833589fCD6eDb6E08f4c7C32D4f7
 const MTR_TOKEN_ADDRESS = process.env.MTR_TOKEN_ADDRESS || '0x99cd1eb32846c9027ed9cb8710066fa08791c33b';
 const MTR_POOL_WALLET = process.env.MTR_POOL_WALLET || PLATFORM_WALLET;
 
-const MIN_USDC_BUFFER = parseFloat(process.env.MIN_USDC_BUFFER || '1000'); // Minimum 1000 USDC buffer
-const TARGET_USDC_BUFFER = parseFloat(process.env.TARGET_USDC_BUFFER || '5000'); // Target 5000 USDC buffer
+const MIN_USDC_BUFFER = parseFloat(process.env.MIN_USDC_BUFFER || '1000'); // mín. buffer USD nominal (token USDC Base)
+const TARGET_USDC_BUFFER = parseFloat(process.env.TARGET_USDC_BUFFER || '5000'); // objetivo buffer USD nominal
 const CHECK_INTERVAL = parseInt(process.env.LIQUIDITY_CHECK_INTERVAL || '300000'); // Check every 5 minutes
 
 const SUPABASE_URL = process.env.SUPABASE_URL || 'https://bscmgcnynbxalcuwdqlm.supabase.co';
@@ -53,8 +51,8 @@ class LiquidityManager {
      */
     async init() {
         console.log('[liquidity-manager] Initializing...');
-        console.log(`[liquidity-manager] Min USDC buffer: ${MIN_USDC_BUFFER} USDC`);
-        console.log(`[liquidity-manager] Target USDC buffer: ${TARGET_USDC_BUFFER} USDC`);
+        console.log(`[liquidity-manager] Min buffer: ${MIN_USDC_BUFFER} USD nominal (USDC)`);
+        console.log(`[liquidity-manager] Target buffer: ${TARGET_USDC_BUFFER} USD nominal (USDC)`);
         
         // Initialize swap service (detects pool fee tier)
         if (this.swapService && this.swapService.enabled) {
@@ -107,16 +105,14 @@ class LiquidityManager {
                 targetBuffer: TARGET_USDC_BUFFER
             });
             
-            // Check if USDC buffer is below minimum
+            // Buffer USDC (Base) bajo mínimo
             if (balances.usdc < MIN_USDC_BUFFER) {
-                console.log(`[liquidity-manager] ⚠️ USDC buffer low (${balances.usdc.toFixed(2)} < ${MIN_USDC_BUFFER})`);
+                console.log(`[liquidity-manager] ⚠️ Buffer bajo (${balances.usdc.toFixed(2)} < ${MIN_USDC_BUFFER} USD nominal)`);
                 
-                // Calculate how much USDC we need
                 const usdcNeeded = TARGET_USDC_BUFFER - balances.usdc;
                 
-                // Try to sell MTR to get USDC
                 if (balances.mtr > 0) {
-                    console.log(`[liquidity-manager] Selling MTR to replenish USDC buffer...`);
+                    console.log(`[liquidity-manager] Selling MTR to replenish buffer (USDC)...`);
                     const sellResult = await this.swapService.sellMTRForUSDC(usdcNeeded);
                     
                     if (sellResult.success) {
@@ -129,9 +125,9 @@ class LiquidityManager {
                 }
             } else if (balances.usdc < TARGET_USDC_BUFFER) {
                 // Buffer is OK but below target - optional: sell some MTR to reach target
-                console.log(`[liquidity-manager] USDC buffer below target, but above minimum (OK)`);
+                console.log(`[liquidity-manager] Buffer below target, above minimum (OK)`);
             } else {
-                console.log(`[liquidity-manager] ✅ USDC buffer healthy`);
+                console.log(`[liquidity-manager] ✅ Buffer OK`);
             }
             
         } catch (error) {
@@ -175,7 +171,7 @@ class LiquidityManager {
     }
 
     /**
-     * Check if we have enough USDC for a payout
+     * Verificar liquidez USDC (Base) para un pago
      * If not, try to sell MTR first
      */
     async ensureUSDCForPayout(requiredUSDC) {
@@ -183,10 +179,10 @@ class LiquidityManager {
             const balances = await this.getBalances();
             
             if (balances.usdc >= requiredUSDC) {
-                return { success: true, reason: 'Sufficient USDC balance' };
+                return { success: true, reason: 'Sufficient USDC (Base) balance' };
             }
             
-            console.log(`[liquidity-manager] ⚠️ Insufficient USDC for payout (${balances.usdc.toFixed(2)} < ${requiredUSDC.toFixed(2)})`);
+            console.log(`[liquidity-manager] ⚠️ Insufficient liquidity for payout (${balances.usdc.toFixed(2)} < ${requiredUSDC.toFixed(2)} USD nominal)`);
             
             // Try to sell MTR
             if (balances.mtr > 0) {
@@ -207,7 +203,7 @@ class LiquidityManager {
                 return { success: false, reason: 'No MTR available to sell' };
             }
         } catch (error) {
-            console.error('[liquidity-manager] Error ensuring USDC:', error);
+            console.error('[liquidity-manager] Error ensuring payout liquidity:', error);
             return { success: false, reason: error.message };
         }
     }

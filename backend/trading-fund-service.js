@@ -66,7 +66,7 @@ class TradingFundService {
 
     /**
      * Distribute fee between vault and trading fund
-     * @param {number} totalFeeAmount - Total fee amount in USDC
+     * @param {number} totalFeeAmount - Total fee amount (USD nominal, token USDC Base)
      * @param {string} feeType - Type of fee: 'deposit', 'withdrawal', 'bet'
      * @param {string} txHash - Transaction hash for audit
      * @returns {Promise<Object>} Distribution result
@@ -117,7 +117,7 @@ class TradingFundService {
                 if (vaultAmountRounded > 0) {
                     const vaultTxHash = await this.transferUSDC(VAULT_WALLET, vaultAmountRounded);
                     results.vaultTxHash = vaultTxHash;
-                    console.log(`[trading-fund-service] ✅ Transferred ${vaultAmountRounded} USDC to vault. Tx: ${vaultTxHash}`);
+                    console.log(`[trading-fund-service] ✅ Transferred ${vaultAmountRounded} USD nominal (USDC) to vault. Tx: ${vaultTxHash}`);
                 }
             } catch (vaultError) {
                 console.error('[trading-fund-service] ❌ Error transferring to vault:', vaultError);
@@ -129,7 +129,7 @@ class TradingFundService {
                 try {
                     const tradingFundTxHash = await this.transferUSDC(TRADING_FUND_WALLET, tradingFundAmountRounded);
                     results.tradingFundTxHash = tradingFundTxHash;
-                    console.log(`[trading-fund-service] ✅ Transferred ${tradingFundAmountRounded} USDC to trading fund. Tx: ${tradingFundTxHash}`);
+                    console.log(`[trading-fund-service] ✅ Transferred ${tradingFundAmountRounded} USD nominal (USDC) to trading fund. Tx: ${tradingFundTxHash}`);
                 } catch (tradingFundError) {
                     console.error('[trading-fund-service] ❌ Error transferring to trading fund:', tradingFundError);
                     results.errors.push({ target: 'trading_fund', error: tradingFundError.message });
@@ -139,7 +139,7 @@ class TradingFundService {
                     try {
                         const fallbackTxHash = await this.transferUSDC(VAULT_WALLET, tradingFundAmountRounded);
                         results.vaultTxHash = results.vaultTxHash || fallbackTxHash;
-                        console.log(`[trading-fund-service] ✅ Fallback: Transferred ${tradingFundAmountRounded} USDC to vault. Tx: ${fallbackTxHash}`);
+                        console.log(`[trading-fund-service] ✅ Fallback: Transferred ${tradingFundAmountRounded} USD nominal (USDC) to vault. Tx: ${fallbackTxHash}`);
                     } catch (fallbackError) {
                         console.error('[trading-fund-service] ❌ Fallback transfer also failed:', fallbackError);
                         results.errors.push({ target: 'vault_fallback', error: fallbackError.message });
@@ -152,7 +152,7 @@ class TradingFundService {
                     try {
                         const fallbackTxHash = await this.transferUSDC(VAULT_WALLET, tradingFundAmountRounded);
                         results.vaultTxHash = results.vaultTxHash || fallbackTxHash;
-                        console.log(`[trading-fund-service] ✅ Sent ${tradingFundAmountRounded} USDC to vault (trading fund not configured)`);
+                        console.log(`[trading-fund-service] ✅ Sent ${tradingFundAmountRounded} USD nominal (USDC) to vault (trading fund not configured)`);
                     } catch (fallbackError) {
                         console.error('[trading-fund-service] ❌ Error in fallback transfer:', fallbackError);
                         results.errors.push({ target: 'vault_fallback', error: fallbackError.message });
@@ -179,9 +179,9 @@ class TradingFundService {
     }
 
     /**
-     * Transfer USDC to a wallet
+     * Transfer USDC (Base) to a wallet
      * @param {string} to - Recipient address
-     * @param {number} amount - Amount in USDC (human-readable)
+     * @param {number} amount - USD nominal (human-readable, 6 decimals)
      * @returns {Promise<string>} Transaction hash
      */
     async transferUSDC(to, amount) {
@@ -199,7 +199,7 @@ class TradingFundService {
 
             const balanceFormatted = parseFloat(formatUnits(balance, 6));
             if (balanceFormatted < amount) {
-                throw new Error(`Insufficient balance. Available: ${balanceFormatted} USDC, Required: ${amount} USDC`);
+                throw new Error(`Insufficient balance. Available: ${balanceFormatted} USD nominal, Required: ${amount} USD nominal`);
             }
 
             // Transfer
@@ -215,14 +215,14 @@ class TradingFundService {
 
             return txHash;
         } catch (error) {
-            console.error('[trading-fund-service] Error transferring USDC:', error);
+            console.error('[trading-fund-service] Error transferring USDC (Base):', error);
             throw error;
         }
     }
 
     /**
      * Get trading fund balance
-     * @returns {Promise<number>} Balance in USDC
+     * @returns {Promise<number>} Balance USD nominal (USDC)
      */
     async getTradingFundBalance() {
         if (!TRADING_FUND_WALLET) {

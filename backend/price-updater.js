@@ -1,7 +1,7 @@
 /**
  * Automatic Price Updater Service
- * Fetches MTR/USDC price from Aerodrome pool every minute
- * Updates rate automatically if price changes significantly
+ * Obtiene precio MTR vs USD nominal (USDC en Base) desde el pool Aerodrome cada minuto
+ * Actualiza la tasa si el precio cambia de forma significativa
  */
 
 const { createPublicClient, http } = require('viem');
@@ -99,7 +99,7 @@ class PriceUpdater {
     }
 
     /**
-     * Update MTR/USDC price from Aerodrome pool
+     * Actualiza precio MTR en USD nominal (par USDC en Base) desde Aerodrome
      */
     async updatePrice() {
         try {
@@ -130,7 +130,7 @@ class PriceUpdater {
                     onConflict: 'key'
                 });
 
-            console.log(`[price-updater] Price updated: ${price} USDC per MTR`);
+            console.log(`[price-updater] Price updated: ${price} USD nominal per MTR (USDC en Base)`);
 
             // Check if rate needs adjustment
             if (previousPrice) {
@@ -171,13 +171,13 @@ class PriceUpdater {
             const reserve0 = Number(reserves[0]);
             const reserve1 = Number(reserves[1]);
 
-            // Determine which reserve is MTR and which is USDC
+            // Reserva MTR vs USDC (Base)
             const isMTRToken0 = token0.toLowerCase() === MTR_TOKEN_ADDRESS.toLowerCase();
             
             const mtrReserve = isMTRToken0 ? reserve0 : reserve1;
             const usdcReserve = isMTRToken0 ? reserve1 : reserve0;
 
-            // Price = USDC reserve / MTR reserve (adjust for decimals)
+            // Precio = reserva USDC / reserva MTR (ajuste decimales)
             const price = (usdcReserve / 1e6) / (mtrReserve / 1e18);
             
             return price;

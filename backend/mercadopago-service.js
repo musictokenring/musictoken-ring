@@ -1,7 +1,7 @@
 /**
  * Mercado Pago Service
  * Handles Mercado Pago checkout integration and webhook processing
- * For fiat deposits (COP/USD) → USDC credits
+ * Depósitos fiat (COP/USD) → créditos en USD nominal (equivalente 1:1 a USDC en Base on-chain)
  */
 
 const { createClient } = require('@supabase/supabase-js');
@@ -178,8 +178,8 @@ class MercadoPagoService {
             const vaultFee = depositFee * this.vaultFeePercent;
             const tradingFundFee = depositFee * this.tradingFundFeePercent;
 
-            // Credit user with nominal credits (1:1 with USDC)
-            const creditsToAward = netAmount; // 1 crédito = 1 USDC
+            // Créditos en USD nominal (1 crédito = 1 USD nominal)
+            const creditsToAward = netAmount;
 
             // Update user fiat balance
             const { error: updateError } = await this.supabase.rpc('increment_user_fiat_balance', {
@@ -217,7 +217,7 @@ class MercadoPagoService {
                     token: 'FIAT', // Fiat deposit
                     amount: paymentAmount,
                     credits_awarded: creditsToAward,
-                    rate_used: 1, // 1:1 with USDC
+                    rate_used: 1, // 1:1 USD nominal
                     status: 'processed',
                     external_payment_id: `mp_${paymentId}`,
                     payment_method: 'mercadopago',

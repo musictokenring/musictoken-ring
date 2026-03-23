@@ -1,13 +1,13 @@
 /**
  * MTR Auto-Swap Service
- * Automatically buys MTR from Uniswap/BaseSwap when USDC deposits arrive
- * Manages liquidity pool and sells MTR when needed for payouts
- * 
- * Flow:
- * 1. USDC deposit detected → Buy MTR automatically (90% of deposit)
- * 2. MTR goes to internal pool wallet
- * 3. When payout needed → Sell MTR if USDC buffer insufficient
- * 4. Result: MTR volume, price movement, user always gets USDC
+ * Compra MTR vía Uniswap/BaseSwap cuando hay depósitos en USD nominal (USDC en Base).
+ * Gestiona el pool y vende MTR cuando hace falta liquidez para pagos.
+ *
+ * Flujo:
+ * 1. Depósito en USD nominal (USDC en Base) → compra MTR automática (90% del depósito)
+ * 2. El MTR va al wallet interno del pool
+ * 3. Si hace falta pagar → vender MTR si el buffer en USD nominal es insuficiente
+ * 4. Resultado: volumen MTR, movimiento de precio; el usuario recibe créditos en USD nominal
  */
 
 const { createPublicClient, createWalletClient, http, parseUnits, formatUnits, encodeFunctionData } = require('viem');
@@ -31,13 +31,13 @@ const BASE_SWAP_ROUTER = '0x327Df1E6de05895d2ab08513aaDD9313Fe505d86'; // BaseSw
 
 // Swap configuration
 const SWAP_PERCENTAGE = parseFloat(process.env.SWAP_PERCENTAGE || '0.90'); // 90% of deposit goes to MTR purchase
-const MIN_SWAP_AMOUNT = parseFloat(process.env.MIN_SWAP_AMOUNT || '10'); // Minimum 10 USDC to trigger swap
-const MAX_DAILY_SWAP = parseFloat(process.env.MAX_DAILY_SWAP || '10000'); // Max 10k USDC per day
-const USDC_BUFFER_PERCENTAGE = parseFloat(process.env.USDC_BUFFER_PERCENTAGE || '0.20'); // Keep 20% USDC for immediate payouts
+const MIN_SWAP_AMOUNT = parseFloat(process.env.MIN_SWAP_AMOUNT || '10'); // Mín. 10 USD nominal (USDC en Base) para swap
+const MAX_DAILY_SWAP = parseFloat(process.env.MAX_DAILY_SWAP || '10000'); // Tope diario en USD nominal (USDC en Base)
+const USDC_BUFFER_PERCENTAGE = parseFloat(process.env.USDC_BUFFER_PERCENTAGE || '0.20'); // 20% en USD nominal para pagos inmediatos
 const SLIPPAGE_TOLERANCE = parseFloat(process.env.SLIPPAGE_TOLERANCE || '0.05'); // 5% slippage tolerance
 
 // Treasury protection configuration
-const MIN_MTR_RESERVE_USDC_VALUE = parseFloat(process.env.MIN_MTR_RESERVE_USDC_VALUE || '1000000'); // Minimum reserve value in USDC (default: $1M - conservador)
+const MIN_MTR_RESERVE_USDC_VALUE = parseFloat(process.env.MIN_MTR_RESERVE_USDC_VALUE || '1000000'); // Valor mínimo de reserva en USD nominal (USDC en Base); default $1M
 const TREASURY_PROTECTION_UPDATE_INTERVAL = parseInt(process.env.TREASURY_PROTECTION_UPDATE_INTERVAL || '1800000'); // Update every 30 minutes (1800000ms) - más frecuente para mejor protección
 
 const SUPABASE_URL = process.env.SUPABASE_URL || 'https://bscmgcnynbxalcuwdqlm.supabase.co';
@@ -262,13 +262,13 @@ class MTRSwapService {
             return;
         }
 
-        console.log('[mtr-swap] 🔍 Detecting MTR/USDC pool fee tier...');
+        console.log('[mtr-swap] 🔍 Detecting MTR / USD nominal (USDC en Base) pool fee tier...');
         this.poolFeeTier = await this.findPoolFeeTier();
         
         if (this.poolFeeTier) {
             console.log(`[mtr-swap] ✅ Pool encontrado con fee tier: ${this.poolFeeTier} (${this.poolFeeTier === 500 ? '0.05%' : this.poolFeeTier === 3000 ? '0.3%' : '1%'})`);
         } else {
-            console.error('[mtr-swap] ❌ No se encontró pool MTR/USDC con liquidez en Uniswap V3 Base');
+            console.error('[mtr-swap] ❌ No se encontró pool MTR / USDC (Base) con liquidez en Uniswap V3 Base');
             console.error('[mtr-swap] ❌ Los swaps estarán deshabilitados hasta que exista un pool');
             this.enabled = false;
             return;
@@ -283,21 +283,21 @@ class MTRSwapService {
 
     /**
      * Update treasury protection limit based on current MTR price
-     * This ensures the minimum reserve maintains its value in USDC
+     * Mantiene el valor mínimo de reserva en USD nominal (USDC en Base)
      */
     async updateTreasuryProtectionLimit() {
         try {
             const mtrPrice = await this.getMTRPrice();
             
             if (mtrPrice > 0) {
-                // Calculate minimum MTR reserve based on USDC value
-                // Example: If MIN_MTR_RESERVE_USDC_VALUE = 500000 and MTR price = 0.001
+                // Reserva mínima de MTR según valor en USD nominal
+                // Ej.: MIN_MTR_RESERVE_USDC_VALUE = 500000 y precio MTR = 0.001
                 // Then minMTRReserve = 500000 / 0.001 = 500,000,000 MTR
                 this.minMTRReserve = MIN_MTR_RESERVE_USDC_VALUE / mtrPrice;
                 
                 console.log(`[mtr-swap] 🛡️ Treasury protection updated:`);
                 console.log(`[mtr-swap]    MTR Price: $${mtrPrice.toFixed(6)}`);
-                console.log(`[mtr-swap]    Min Reserve Value: $${MIN_MTR_RESERVE_USDC_VALUE.toLocaleString()} USDC`);
+                console.log(`[mtr-swap]    Min Reserve Value: $${MIN_MTR_RESERVE_USDC_VALUE.toLocaleString()} USD nominal (USDC en Base)`);
                 console.log(`[mtr-swap]    Min MTR Reserve: ${this.minMTRReserve.toLocaleString()} MTR`);
                 console.log(`[mtr-swap]    Protection Level: ${(this.minMTRReserve / 1000000000).toFixed(2)}B MTR protected`);
                 
@@ -373,7 +373,7 @@ class MTRSwapService {
     }
 
     /**
-     * Find MTR/USDC pool fee tier automatically
+     * Encuentra el fee tier del pool MTR / USDC (Base)
      * Tries fee tiers: 500 (0.05%), 3000 (0.3%), 10000 (1%)
      * @returns {Promise<number|null>} Fee tier found or null if no pool exists
      */
@@ -462,7 +462,7 @@ class MTRSwapService {
 
         // Check minimum amount
         if (amountUSDC < MIN_SWAP_AMOUNT) {
-            return { allowed: false, reason: `Amount too small (min: ${MIN_SWAP_AMOUNT} USDC)` };
+            return { allowed: false, reason: `Amount too small (min: ${MIN_SWAP_AMOUNT} USD nominal, USDC en Base)` };
         }
 
         // Check daily limit
@@ -475,11 +475,11 @@ class MTRSwapService {
         if (this.dailySwapAmount + amountUSDC > MAX_DAILY_SWAP) {
             return { 
                 allowed: false, 
-                reason: `Daily limit exceeded (${this.dailySwapAmount.toFixed(2)}/${MAX_DAILY_SWAP} USDC)` 
+                reason: `Daily limit exceeded (${this.dailySwapAmount.toFixed(2)}/${MAX_DAILY_SWAP} USD nominal, USDC en Base)` 
             };
         }
 
-        // Check USDC balance
+        // Saldo USDC (Base) = USD nominal on-chain
         try {
             const balance = await this.publicClient.readContract({
                 address: USDC_ADDRESS,
@@ -491,7 +491,7 @@ class MTRSwapService {
             const balanceFormatted = parseFloat(formatUnits(balance, 6));
             
             if (balanceFormatted < amountUSDC) {
-                return { allowed: false, reason: `Insufficient USDC balance (${balanceFormatted.toFixed(2)} USDC)` };
+                return { allowed: false, reason: `Insufficient balance (${balanceFormatted.toFixed(2)} USD nominal, USDC en Base)` };
             }
         } catch (error) {
             console.error('[mtr-swap] Error checking balance:', error);
@@ -530,8 +530,8 @@ class MTRSwapService {
     }
 
     /**
-     * Auto-buy MTR when USDC deposit arrives
-     * @param {number} depositAmountUSDC - Amount of USDC deposited
+     * Auto-compra MTR cuando llega un depósito en USD nominal (USDC en Base)
+     * @param {number} depositAmountUSDC - Importe depositado (USDC en Base, 1:1 USD nominal)
      * @param {string} depositTxHash - Transaction hash of the deposit
      * @returns {Promise<Object>} Swap result
      */
@@ -552,7 +552,7 @@ class MTRSwapService {
                 return { success: false, reason: canSwapResult.reason };
             }
 
-            console.log(`[mtr-swap] 🔄 Auto-buying MTR: ${swapAmountUSDC.toFixed(2)} USDC`);
+            console.log(`[mtr-swap] 🔄 Auto-buying MTR: ${swapAmountUSDC.toFixed(2)} USD nominal (USDC en Base)`);
 
             // Estimate MTR output (for logging)
             const estimatedMTRPrice = await this.getMTRPrice();
@@ -572,7 +572,7 @@ class MTRSwapService {
             
             // Approve if needed
             if (allowance < swapAmountWei) {
-                console.log('[mtr-swap] Approving USDC for swap...');
+                console.log('[mtr-swap] Approving USDC (Base) for swap...');
                 const approveHash = await this.walletClient.writeContract({
                     address: USDC_ADDRESS,
                     abi: ERC20_ABI,
@@ -581,7 +581,7 @@ class MTRSwapService {
                 });
                 
                 await this.publicClient.waitForTransactionReceipt({ hash: approveHash });
-                console.log('[mtr-swap] ✅ USDC approved');
+                console.log('[mtr-swap] ✅ USDC (Base) approved');
             }
 
             // Calculate minimum output (with slippage tolerance)
@@ -591,7 +591,7 @@ class MTRSwapService {
             );
 
             // Execute swap using Uniswap V3
-            // Path: USDC -> MTR
+            // Path: USDC (Base) -> MTR
             // Fee tier: Detected automatically
             if (!this.poolFeeTier) {
                 throw new Error('Pool fee tier not detected. Call init() first or pool does not exist.');
@@ -651,8 +651,8 @@ class MTRSwapService {
                 status: 'success'
             });
 
-            console.log(`[mtr-swap] ✅ Successfully bought ${actualMTRReceived.toFixed(2)} MTR for ${swapAmountUSDC.toFixed(2)} USDC`);
-            console.log(`[mtr-swap] Daily swap total: ${this.dailySwapAmount.toFixed(2)}/${MAX_DAILY_SWAP} USDC`);
+            console.log(`[mtr-swap] ✅ Successfully bought ${actualMTRReceived.toFixed(2)} MTR for ${swapAmountUSDC.toFixed(2)} USD nominal (USDC en Base)`);
+            console.log(`[mtr-swap] Daily swap total: ${this.dailySwapAmount.toFixed(2)}/${MAX_DAILY_SWAP} USD nominal (USDC en Base)`);
 
             return {
                 success: true,
@@ -684,8 +684,8 @@ class MTRSwapService {
     }
 
     /**
-     * Sell MTR when USDC buffer is insufficient for payouts
-     * @param {number} requiredUSDC - Amount of USDC needed
+     * Vende MTR cuando el buffer en USD nominal (USDC en Base) no alcanza para pagos
+     * @param {number} requiredUSDC - USD nominal necesarios (USDC en Base)
      * @returns {Promise<Object>} Sell result
      */
     async sellMTRForUSDC(requiredUSDC) {
@@ -694,7 +694,7 @@ class MTRSwapService {
         }
 
         try {
-            // Check current USDC balance
+            // Saldo actual USDC (Base)
             const usdcBalance = await this.publicClient.readContract({
                 address: USDC_ADDRESS,
                 abi: ERC20_ABI,
@@ -704,9 +704,8 @@ class MTRSwapService {
             
             const usdcBalanceFormatted = parseFloat(formatUnits(usdcBalance, 6));
             
-            // Only sell if we don't have enough USDC
             if (usdcBalanceFormatted >= requiredUSDC) {
-                return { success: false, reason: 'Sufficient USDC balance, no need to sell' };
+                return { success: false, reason: 'Sufficient USD nominal balance (USDC en Base), no need to sell' };
             }
 
             // Check MTR balance FIRST (before calculating)
@@ -723,7 +722,7 @@ class MTRSwapService {
             if (mtrBalanceFormatted === 0) {
                 return { 
                     success: false, 
-                    reason: 'No MTR available to sell. Waiting for USDC deposits to buy MTR first.' 
+                    reason: 'No MTR available to sell. Waiting for USD nominal deposits (USDC en Base) to buy MTR first.' 
                 };
             }
 
@@ -749,12 +748,12 @@ class MTRSwapService {
                     console.log(`[mtr-swap] ⚠️ Attempting partial sale: ${protectionCheck.availableToSell.toLocaleString()} MTR`);
                     // Recursively call with available amount (but limit recursion)
                     const partialRequiredUSDC = protectionCheck.availableToSell * mtrPrice;
-                    if (partialRequiredUSDC >= requiredUSDC * 0.5) { // Only if we can get at least 50% of needed USDC
+                    if (partialRequiredUSDC >= requiredUSDC * 0.5) { // al menos 50% del USD nominal necesario
                         return await this.sellMTRForUSDC(partialRequiredUSDC);
                     } else {
                         return {
                             success: false,
-                            reason: protectionCheck.reason + ' Partial sale would not provide sufficient USDC.'
+                            reason: protectionCheck.reason + ' Partial sale would not provide sufficient USD nominal (USDC en Base).'
                         };
                     }
                 }
@@ -765,7 +764,7 @@ class MTRSwapService {
                 };
             }
 
-            console.log(`[mtr-swap] 💰 Selling ${mtrToSell.toFixed(2)} MTR for USDC...`);
+            console.log(`[mtr-swap] 💰 Selling ${mtrToSell.toFixed(2)} MTR for USD nominal (USDC en Base)...`);
 
             // Approve MTR if needed
             const mtrAllowance = await this.publicClient.readContract({
@@ -796,7 +795,7 @@ class MTRSwapService {
                 await this.publicClient.waitForTransactionReceipt({ hash: approveHash });
             }
 
-            // Calculate minimum USDC output
+            // Mínimo salida en USD nominal (USDC en Base)
             const minUSDCOutput = parseUnits(
                 (requiredUSDC * (1 - SLIPPAGE_TOLERANCE)).toFixed(6),
                 6
@@ -811,7 +810,7 @@ class MTRSwapService {
             
             console.log(`[mtr-swap] Executing sell swap with fee tier ${this.poolFeeTier}...`);
             
-            // Execute swap: MTR -> USDC
+            // Swap: MTR -> USDC (Base)
             const swapHash = await this.walletClient.writeContract({
                 address: UNISWAP_V3_ROUTER,
                 abi: UNISWAP_ROUTER_ABI,
@@ -844,7 +843,7 @@ class MTRSwapService {
                 status: 'success'
             });
 
-            console.log(`[mtr-swap] ✅ Sold ${mtrToSell.toFixed(2)} MTR for USDC`);
+            console.log(`[mtr-swap] ✅ Sold ${mtrToSell.toFixed(2)} MTR for USD nominal (USDC en Base)`);
 
             return {
                 success: true,
@@ -902,13 +901,13 @@ class MTRSwapService {
     }
 
     /**
-     * 🔴 CRÍTICO: Swap MTR to USDC (for deposits)
-     * This function executes a REAL swap on Aerodrome/Uniswap V3
-     * Returns the ACTUAL USDC received, not an estimated price
-     * 
-     * @param {number} mtrAmount - Amount of MTR to swap
-     * @param {string} depositTxHash - Original deposit transaction hash
-     * @returns {Promise<Object>} { success: boolean, usdcReceived: number, swapTxHash?: string, error?: string }
+     * 🔴 CRÍTICO: valoración MTR → USD nominal (USDC en Base) para depósitos MTR
+     * En implementación completa: swap real en Aerodrome/Uniswap V3
+     * Devuelve el equivalente en USD nominal recibido (campo usdcReceived)
+     *
+     * @param {number} mtrAmount - Cantidad de MTR a valorar/cambiar
+     * @param {string} depositTxHash - Hash del depósito original
+     * @returns {Promise<Object>} { success, usdcReceived, swapTxHash?, error?, reason? }
      */
     async swapMTRToUSDC(mtrAmount, depositTxHash) {
         if (!this.enabled) {
@@ -923,7 +922,7 @@ class MTRSwapService {
         try {
             // 🛡️ PROTECCIÓN: Validar precio mínimo antes de procesar
             const currentPrice = await this.getMTRPrice();
-            const MIN_MTR_PRICE = 0.000001; // 1 MTR = 0.000001 USDC mínimo (1 USDC = 1M MTR máximo)
+            const MIN_MTR_PRICE = 0.000001; // precio mínimo aceptable (USD nominal por MTR)
             
             if (currentPrice < MIN_MTR_PRICE) {
                 console.error(`[mtr-swap] 🚨 MTR price too low: ${currentPrice} < ${MIN_MTR_PRICE}. Rejecting deposit.`);
@@ -958,7 +957,7 @@ class MTRSwapService {
                     success: false,
                     usdcReceived: 0,
                     error: 'Price unavailable',
-                    reason: 'Could not fetch real-time MTR price from Aerodrome pool. Please try again later or deposit USDC directly.'
+                    reason: 'Could not fetch real-time MTR price from Aerodrome pool. Please try again later or deposit USD nominal (USDC en Base) directly.'
                 };
             }
 
@@ -974,27 +973,25 @@ class MTRSwapService {
                 };
             }
 
-            // Calcular USDC esperado basado en precio real
+            // Equivalente USD nominal (USDC en Base) según precio real
             const expectedUSDC = mtrAmount * realTimePrice;
             
-            // 🛡️ PROTECCIÓN: Validar que el valor USDC esperado es razonable
-            // Si alguien deposita 760,000 MTR y el precio es 0.0000013, debería recibir ~1 USDC
-            // Si el cálculo da un valor sospechosamente alto, rechazar
-            const MAX_REASONABLE_USDC_PER_MTR = 0.01; // Máximo 0.01 USDC por MTR (1 MTR = 0.01 USDC máximo)
+            // 🛡️ Validar que el valor en USD nominal esperado es razonable
+            const MAX_REASONABLE_USDC_PER_MTR = 0.01; // tope razonable USD nominal por MTR
             
             if (realTimePrice > MAX_REASONABLE_USDC_PER_MTR) {
-                console.error(`[mtr-swap] 🚨 Suspicious MTR price: ${realTimePrice} USDC/MTR (max expected: ${MAX_REASONABLE_USDC_PER_MTR})`);
+                console.error(`[mtr-swap] 🚨 Suspicious MTR price: ${realTimePrice} USD nominal/MTR (max expected: ${MAX_REASONABLE_USDC_PER_MTR})`);
                 return {
                     success: false,
                     usdcReceived: 0,
                     error: 'Suspicious price',
-                    reason: `MTR price appears suspiciously high (${realTimePrice} USDC/MTR). Please verify price on Aerodrome and try again.`
+                    reason: `MTR price appears suspiciously high (${realTimePrice} USD nominal per MTR, USDC en Base). Please verify price on Aerodrome and try again.`
                 };
             }
 
-            console.log(`[mtr-swap] 🔄 Swapping ${mtrAmount.toLocaleString()} MTR to USDC...`);
-            console.log(`[mtr-swap] Real-time price: ${realTimePrice} USDC/MTR`);
-            console.log(`[mtr-swap] Expected USDC: ${expectedUSDC.toFixed(6)} USDC`);
+            console.log(`[mtr-swap] 🔄 Swapping ${mtrAmount.toLocaleString()} MTR → USD nominal (USDC en Base)...`);
+            console.log(`[mtr-swap] Real-time price: ${realTimePrice} USD nominal per MTR (USDC en Base)`);
+            console.log(`[mtr-swap] Expected USD nominal: ${expectedUSDC.toFixed(6)} (USDC en Base)`);
 
             // ⚠️ NOTA: Para implementación completa, aquí se ejecutaría el swap REAL en Aerodrome
             // Por ahora, retornamos el valor basado en precio real del pool
@@ -1004,7 +1001,7 @@ class MTRSwapService {
             // Esto asegura que siempre usamos el precio más actualizado
             return {
                 success: true,
-                usdcReceived: expectedUSDC, // USDC basado en precio REAL del pool
+                usdcReceived: expectedUSDC, // USD nominal según precio REAL del pool (USDC en Base)
                 swapTxHash: null, // No hay swap real aún, solo cálculo basado en precio
                 realTimePrice: realTimePrice,
                 note: 'Using real-time pool price. Actual swap execution pending implementation.'
@@ -1025,7 +1022,7 @@ class MTRSwapService {
      * Get real-time MTR price from Aerodrome pool
      * Queries the pool directly instead of using database price
      * 
-     * @returns {Promise<number>} Price in USDC per MTR
+     * @returns {Promise<number>} Precio en USD nominal por MTR (par USDC en Base)
      */
     async getRealTimeMTRPrice() {
         try {
