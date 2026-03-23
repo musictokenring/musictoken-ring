@@ -90,9 +90,16 @@ class NOWPaymentsService {
      * @param {number} p.priceAmountUsd
      * @param {string} p.successUrl
      * @param {string} p.cancelUrl
+     * @param {string} [p.payCurrency] - override opcional (default NOWPAYMENTS_PAY_CURRENCY)
      * @returns {Promise<{ payment_id: string|number, pay_url: string, order_id: string }>}
      */
-    async createCommercialPayment({ publicUserId, priceAmountUsd, successUrl, cancelUrl }) {
+    async createCommercialPayment({
+        publicUserId,
+        priceAmountUsd,
+        successUrl,
+        cancelUrl,
+        payCurrency
+    }) {
         if (!NOWPAYMENTS_API_KEY) {
             throw new Error('NOWPayments API key not configured');
         }
