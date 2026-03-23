@@ -4,7 +4,7 @@
 // =========================================
 
 // Constante global para mínimo de apuesta (aplica a todos los modos con apuesta real)
-const MIN_BET_AMOUNT = 1; // créditos (1 crédito = 1 USDC estable)
+const MIN_BET_AMOUNT = 1; // créditos (1 crédito ≈ 1 USD nominal)
 const MIN_BET_TORNEO = 1; // mismo mínimo para Torneo
 
 const GameEngine = {
@@ -402,14 +402,14 @@ const GameEngine = {
             playableLabelEl = document.getElementById('playableLabel');
             if (playableLabelEl && playableLabelEl.textContent !== 'Fichas jugables') {
                 playableLabelEl.textContent = 'Fichas jugables';
-                playableLabelEl.title = 'MTR créditos jugables: Fichas estables 1:1 USDC';
+                playableLabelEl.title = 'MTR créditos jugables: fichas estables 1:1 USD nominal';
             }
             
             // CRÍTICO: Reutilizar la variable ya declarada arriba, no redeclarar
             balanceUnitEl = document.getElementById('balanceUnit');
             if (balanceUnitEl && balanceUnitEl.textContent !== 'MTR créditos') {
                 balanceUnitEl.textContent = 'MTR créditos';
-                balanceUnitEl.title = 'Alias gráfico: Estas fichas valen siempre $1 cada una (1:1 USDC estable)';
+                balanceUnitEl.title = 'Alias gráfico: estas fichas valen ~$1 USD nominal cada una (1:1)';
             }
             
             console.log('[updatePracticeBetDisplay] Modo normal - Créditos estables mostrados:', {
@@ -585,7 +585,7 @@ const GameEngine = {
                 playableLabelEl.textContent = 'Fichas jugables';
                 playableLabelEl.style.color = '';
                 playableLabelEl.style.fontWeight = '';
-                playableLabelEl.title = 'MTR créditos jugables: Fichas estables 1:1 USDC';
+                playableLabelEl.title = 'MTR créditos jugables: fichas estables 1:1 USD nominal';
                 console.log('[updateBalanceDisplay] ✅ playableLabel actualizado a "Fichas jugables"');
             }
             
@@ -596,7 +596,7 @@ const GameEngine = {
                     balanceUnitEl.textContent = 'MTR créditos';
                     balanceUnitEl.style.color = '';
                     balanceUnitEl.style.fontWeight = '';
-                    balanceUnitEl.title = 'Alias gráfico: Estas fichas valen siempre $1 cada una (1:1 USDC estable)';
+                    balanceUnitEl.title = 'Alias gráfico: estas fichas valen ~$1 USD nominal cada una (1:1)';
                     console.log('[updateBalanceDisplay] ✅ balanceUnit actualizado a "MTR créditos"');
                 }
             }
@@ -675,7 +675,7 @@ const GameEngine = {
         
         // Si no hay suficientes créditos, mostrar mensaje claro
         const shortfall = betAmount - credits;
-        showToast(`MTR créditos jugables insuficientes. Necesitas ${betAmount}, tienes ${credits.toFixed(2)}. ${onchainBalance > 0 ? `Tienes ${onchainBalance.toLocaleString('es-ES')} MTR on-chain que puede convertirse automáticamente.` : 'Deposita USDC para obtener más créditos.'}`, 'error');
+        showToast(`MTR créditos jugables insuficientes. Necesitas ${betAmount}, tienes ${credits.toFixed(2)}. ${onchainBalance > 0 ? `Tienes ${onchainBalance.toLocaleString('es-ES')} MTR on-chain que puede convertirse automáticamente.` : 'Añade saldo (depósito) para obtener más créditos.'}`, 'error');
         return false;
     },
     
@@ -938,7 +938,7 @@ const GameEngine = {
                         if (onchainBalance >= normalizedBet) {
                             errorMsg += `Tienes ${onchainBalance.toLocaleString('es-ES')} MTR on-chain que puede convertirse automáticamente. Intenta nuevamente.`;
                         } else {
-                            errorMsg += `Deposita USDC para obtener más créditos.`;
+                            errorMsg += `Añade saldo (depósito) para obtener más créditos.`;
                         }
                         showToast(errorMsg, 'error');
                         return;
@@ -1020,7 +1020,7 @@ const GameEngine = {
                     errorMsg += `Tienes ${credits.toFixed(2)} créditos pero ${onchainBalance.toLocaleString('es-ES')} MTR on-chain. La conversión automática falló. Intenta nuevamente.`;
                 } else if (credits < normalizedBet && onchainBalance < normalizedBet) {
                     errorMsg += `Disponibles: ${credits.toFixed(2)} créditos y ${onchainBalance.toLocaleString('es-ES', { maximumFractionDigits: 4 })} MTR on-chain. `;
-                    errorMsg += `Deposita USDC para obtener más créditos.`;
+                    errorMsg += `Añade saldo (depósito) para obtener más créditos.`;
                 } else {
                     errorMsg += `Verifica tu saldo y vuelve a intentar.`;
                 }
@@ -4866,9 +4866,9 @@ const GameEngine = {
                                 if (onchainBalance >= creditsNeeded && creditsNeeded > 0) {
                                     console.log('[updateBalance] Usuario tiene suficiente MTR on-chain, convirtiendo automáticamente...');
                                     
-                                    // Obtener precio actual de MTR (1 MTR = X USDC)
+                                    // Obtener precio actual de MTR (1 MTR = X USD)
                                     // Por ahora, asumimos 1:1 para simplificar, pero deberíamos obtener el precio real
-                                    const mtrToUsdcRate = 1; // TODO: Obtener precio real de MTR/USDC
+                                    const mtrToUsdcRate = 1; // TODO: precio real MTR/USD
                                     const mtrToConvert = creditsNeeded / mtrToUsdcRate;
                                     
                                     try {

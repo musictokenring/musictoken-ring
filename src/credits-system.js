@@ -367,7 +367,7 @@
                 });
                 
                 this.currentCredits = rawCredits;
-                // NUEVO: 1 crédito = 1 USDC fijo siempre
+                // NUEVO: 1 crédito = 1 USD nominal (valor estable)
                 this.currentUsdcValue = this.currentCredits; // 1:1 fijo
                 this.currentRate = null; // Ya no se usa rate variable
                 this.currentMtrPrice = null; // Ya no relevante para créditos
@@ -454,11 +454,11 @@
             
             // Update combined display FIRST (this contains the child elements) - DESKTOP
             // ESPECIFICACIÓN REFINADA: Mostrar créditos estables como "MTR créditos jugables" (alias gráfico)
-            // Internamente son créditos estables 1:1 USDC, pero visualmente se muestran como "MTR créditos"
+            // Internamente son créditos estables 1:1 USD nominal, visualmente "MTR créditos"
             const combinedDisplay = document.getElementById('creditsCombinedDisplay');
             if (combinedDisplay) {
                 // Actualizar el contenido completo del combined display
-                // Mostrar como "MTR créditos jugables" con clarificación de que son estables 1:1 USDC
+                // Mostrar como "MTR créditos jugables" (1:1 USD nominal)
                 // Formatear con separadores de miles para números grandes (transparencia completa)
                 const formattedCredits = this.currentCredits >= 1000
                     ? this.currentCredits.toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
@@ -469,8 +469,8 @@
                 
                 combinedDisplay.innerHTML = `
                     <span id="creditsDisplay" class="text-cyan-400 font-bold">${formattedCredits} MTR créditos</span>
-                    <span id="usdcValueDisplay" class="text-gray-400 text-sm">= $${formattedUsdc} USDC estables</span>
-                    <span class="text-xs text-green-400 ml-1 cursor-help" title="Estas fichas valen siempre $1 cada una. No fluctúan como el token MTR nativo. 1 MTR crédito jugable = $1 USDC estable (1:1 fijo – sin volatilidad)">✓</span>
+                    <span id="usdcValueDisplay" class="text-gray-400 text-sm">= $${formattedUsdc} USD nominal</span>
+                    <span class="text-xs text-green-400 ml-1 cursor-help" title="Estas fichas valen siempre $1 cada una. No fluctúan como el token MTR nativo. 1 crédito jugable ≈ $1 USD nominal (1:1)">✓</span>
                 `;
                 
                 // Asegurar que el elemento esté visible si hay créditos
@@ -500,7 +500,7 @@
                     const usdcFormatted = this.currentUsdcValue >= 1000
                         ? this.currentUsdcValue.toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
                         : this.currentUsdcValue.toFixed(2);
-                    usdcDisplay.textContent = `= $${usdcFormatted} USDC estables`;
+                    usdcDisplay.textContent = `= $${usdcFormatted} USD nominal`;
                 }
             } else {
                 // Fallback: intentar actualizar elementos individuales si existen
@@ -517,7 +517,7 @@
                     const usdcFormatted = this.currentUsdcValue >= 1000
                         ? this.currentUsdcValue.toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
                         : this.currentUsdcValue.toFixed(2);
-                    usdcDisplay.textContent = `= $${usdcFormatted} USDC estables`;
+                    usdcDisplay.textContent = `= $${usdcFormatted} USD nominal`;
                 }
             }
             
@@ -685,7 +685,7 @@
         },
 
         /**
-         * Claim credits (convert to USDC)
+         * Claim credits (liquidación a wallet según backend)
          */
         async claimCredits(credits, walletAddress) {
             try {
@@ -762,7 +762,7 @@
                 await this.loadBalance(walletAddress);
 
                 if (typeof showToast === 'function') {
-                    showToast(`✅ ${result.usdcAmount} USDC enviados! Tx: ${result.txHash.slice(0, 10)}...`, 'success');
+                    showToast(`✅ ${result.usdcAmount} USD enviados a tu wallet. Tx: ${result.txHash.slice(0, 10)}...`, 'success');
                 }
 
                 return result;
@@ -945,7 +945,7 @@
                         const totalBalance = fiatBalance + onchainBalance;
                         
                         this.currentCredits = totalBalance;
-                        this.currentUsdcValue = totalBalance; // 1:1 con USDC
+                        this.currentUsdcValue = totalBalance; // 1:1 USD nominal
                         this.currentUserId = userId;
                         
                         console.log('[credits-system] ✅ Saldo fiat cargado:', {

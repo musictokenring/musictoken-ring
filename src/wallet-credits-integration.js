@@ -1,7 +1,7 @@
 /**
  * Wallet-Credits Integration
  * Automatically syncs wallet connection with credits system
- * Shows credits balance and USDC equivalent
+ * Muestra créditos y equivalente en USD nominal
  */
 
 (function() {

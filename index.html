@@ -701,17 +701,17 @@
 
                 <div class="flex items-center gap-1 sm:gap-1.5 sm:gap-2 lg:gap-4 text-sm flex-shrink-0 overflow-x-auto" style="max-width: 100%;">
                     <!-- Saldos en móvil (compacto) -->
-                    <span id="creditsCombinedDisplayMobile" class="sm:hidden px-1.5 py-0.5 rounded text-[10px] bg-fuchsia-500/10 text-fuchsia-400 font-semibold whitespace-nowrap cursor-help" title="MTR créditos jugables: Fichas estables 1:1 USDC">
+                    <span id="creditsCombinedDisplayMobile" class="sm:hidden px-1.5 py-0.5 rounded text-[10px] bg-fuchsia-500/10 text-fuchsia-400 font-semibold whitespace-nowrap cursor-help" title="MTR créditos jugables: fichas estables 1:1 USD nominal">
                         <span id="creditsDisplayMobile">0</span> <span id="usdcValueDisplayMobile" class="text-gray-400">$0</span>
                     </span>
                     <!-- Saldos en desktop -->
                     <span id="onchainBalanceDisplay" class="hidden sm:inline px-2 py-1 rounded-md bg-cyan-500/10 text-cyan-400 text-xs font-semibold">On-chain: --</span>
-                    <span id="creditsCombinedDisplay" class="hidden sm:inline px-2 py-1 rounded-md bg-fuchsia-500/10 text-fuchsia-400 text-xs font-semibold flex items-center gap-2 cursor-help" title="MTR créditos jugables: Fichas estables que valen siempre $1 cada una. No fluctúan como el token MTR nativo. 1 MTR crédito = $1 USDC estable (1:1 fijo – sin volatilidad)">
+                    <span id="creditsCombinedDisplay" class="hidden sm:inline px-2 py-1 rounded-md bg-fuchsia-500/10 text-fuchsia-400 text-xs font-semibold flex items-center gap-2 cursor-help" title="MTR créditos jugables: fichas estables que valen siempre $1 cada una. No fluctúan como el token MTR nativo. 1 crédito ≈ $1 USD nominal (1:1)">
                         <span id="creditsDisplay">0 MTR créditos</span>
-                        <span id="usdcValueDisplay" class="text-gray-400">= $0 USDC estables</span>
-                        <span class="text-xs text-green-400" title="Créditos estables: 1 crédito = 1 USDC fijo">✓</span>
+                        <span id="usdcValueDisplay" class="text-gray-400">= $0 USD nominal</span>
+                        <span class="text-xs text-green-400" title="Créditos estables: 1 crédito ≈ $1 USD nominal">✓</span>
                     </span>
-                    <span id="appBalanceDisplay" class="hidden sm:inline px-2 py-1 rounded-md bg-fuchsia-500/10 text-fuchsia-400 text-xs font-semibold cursor-help" title="MTR créditos jugables disponibles para apostar. Estas fichas valen siempre $1 cada una (1:1 USDC estable)">Fichas jugables: --</span>
+                    <span id="appBalanceDisplay" class="hidden sm:inline px-2 py-1 rounded-md bg-fuchsia-500/10 text-fuchsia-400 text-xs font-semibold cursor-help" title="MTR créditos jugables disponibles para apostar. 1 ficha ≈ $1 USD nominal (1:1)">Fichas jugables: --</span>
                     <span id="walletAddress" class="hidden text-cyan-300 font-mono text-xs bg-cyan-500/10 px-2 py-1 rounded-md"></span>
                     <button type="button" id="walletConnectBtn" class="px-2 sm:px-2.5 sm:px-4 py-1.5 sm:py-2 rounded-lg text-[10px] sm:text-xs sm:text-sm font-semibold bg-cyan-500/10 border border-cyan-500/30 text-cyan-400 hover:bg-cyan-500/20 transition-all duration-200 cursor-pointer whitespace-nowrap flex-shrink-0">
                         <span class="hidden sm:inline">Conectar Wallet</span>
@@ -823,7 +823,7 @@
                 
                 <!-- Texto informativo -->
                 <p class="text-gray-500 text-xs mt-8">
-                    Puedes empezar sin wallet. Conecta tu wallet después para depósitos/retiros instantáneos en USDC.
+                    Puedes empezar sin wallet. Conecta tu wallet después para depósitos y retiros (saldo en USD vía pasarela).
                 </p>
             </div>
         </section>
@@ -833,7 +833,7 @@
             <div class="max-w-2xl mx-auto p-6 sm:p-8 rounded-2xl border border-cyan-500/20 bg-gradient-to-br from-gray-900/90 to-slate-950/85 shadow-xl shadow-cyan-500/5">
                 <div class="flex flex-wrap items-center gap-3 mb-3">
                     <span class="flex h-9 min-w-[2.25rem] items-center justify-center rounded-lg bg-cyan-500/15 text-cyan-300 text-sm font-bold border border-cyan-500/30">1</span>
-                    <h3 class="text-xl font-bold text-white tracking-tight">Depositar USDC con NOWPayments</h3>
+                    <h3 class="text-xl font-bold text-white tracking-tight">Añadir saldo (USD) con NOWPayments</h3>
                 </div>
                 <p class="text-gray-400 text-sm mb-6 leading-relaxed">Un solo flujo: compra con tarjeta (fiat) o paga en cripto. Los créditos se acreditan cuando el pago queda confirmado en NOWPayments.</p>
 
@@ -869,7 +869,7 @@
                     <button type="button" onclick="openNowPaymentsModal('crypto')" class="deposit-flow-btn group relative overflow-hidden rounded-xl border border-cyan-500/40 bg-gradient-to-br from-cyan-950/40 to-gray-900/80 px-4 py-4 text-left transition hover:border-cyan-400/55 hover:shadow-lg hover:shadow-cyan-500/10">
                         <span class="block text-xs font-medium text-cyan-300/90 mb-1">Cripto</span>
                         <span class="block text-base font-bold text-white">Depositar con Cripto</span>
-                        <span class="mt-2 block text-[11px] text-gray-500">USDC y otras monedas admitidas</span>
+                        <span class="mt-2 block text-[11px] text-gray-500">Stablecoins y otras monedas admitidas</span>
                     </button>
                 </div>
 
@@ -1059,7 +1059,7 @@
                         <h3 class="text-lg font-bold text-white mb-4">💰 Tu Apuesta</h3>
                         <div class="grid grid-cols-2 gap-3 text-sm text-gray-400 mb-4">
                             <span class="hidden"><span id="balanceLabel">Tu MTR (on-chain)</span>: <strong id="onchainMtrBalance" class="text-white">--</strong></span>
-                            <span><span id="playableLabel">Fichas jugables</span>: <strong id="userBalance" class="text-white">0</strong> <span id="balanceUnit">MTR créditos</span> <span class="text-xs text-green-400 cursor-help" title="Estas fichas valen siempre $1 cada una. No fluctúan como el token MTR nativo. 1 MTR crédito jugable = $1 USDC estable (1:1 fijo – sin volatilidad)">✓</span></span>
+                            <span><span id="playableLabel">Fichas jugables</span>: <strong id="userBalance" class="text-white">0</strong> <span id="balanceUnit">MTR créditos</span> <span class="text-xs text-green-400 cursor-help" title="Estas fichas valen siempre $1 cada una. No fluctúan como el token MTR nativo. 1 crédito jugable ≈ $1 USD nominal (1:1)">✓</span></span>
                             <span>Mínimo: <strong id="minBet" class="text-white">1</strong> crédito</span>
                         </div>
                         <input type="number" id="betAmount" placeholder="1" min="1"
@@ -1123,37 +1123,37 @@
         <section class="mb-16">
             <div class="max-w-2xl mx-auto p-6 sm:p-8 rounded-2xl border border-fuchsia-500/15 bg-gradient-to-br from-gray-900/80 to-purple-950/30 neon-border-magenta">
                 <h3 class="text-xl font-bold text-fuchsia-400 neon-text-magenta mb-2">Retirar Créditos</h3>
-                <p class="text-gray-400 text-sm mb-4">Retira tus créditos nominales y recibe USDC real. Conversión 1:1 respaldada por vault.</p>
+                <p class="text-gray-400 text-sm mb-4">Retira tus créditos nominales y recibe fondos en tu wallet (USD / stablecoin según red y pasarela). Conversión 1:1 respaldada por vault.</p>
                 
                 <!-- Explicación de Retiro -->
                 <div class="mb-6 p-4 rounded-lg bg-blue-500/10 border border-blue-500/20">
                     <div class="flex items-start gap-2">
                         <span class="text-blue-400 text-lg">💸</span>
                         <div class="flex-1">
-                            <p class="text-blue-400 text-sm font-semibold mb-1">Retiro en USDC Real</p>
-                            <p class="text-gray-300 text-xs">Tus créditos nominales se convierten a USDC real (1:1). Fee de retiro: 5%.</p>
-                            <p class="text-gray-400 text-xs mt-1">Ejemplo: Retiras 100 créditos → Recibes 95 USDC</p>
+                            <p class="text-blue-400 text-sm font-semibold mb-1">Retiro a tu wallet</p>
+                            <p class="text-gray-300 text-xs">Tus créditos nominales se liquidan 1:1 en valor USD (menos fee). Fee de retiro: 5%.</p>
+                            <p class="text-gray-400 text-xs mt-1">Ejemplo: retiras 100 créditos → recibes ~95 USD netos</p>
                         </div>
                     </div>
                 </div>
                 <div class="flex flex-col sm:flex-row gap-3 mb-4">
                     <input id="cashoutAmount" type="number" min="1" placeholder="Créditos nominales a retirar"
                            class="flex-1 px-4 py-3 rounded-lg bg-black/40 border border-white/10 text-white placeholder-gray-500 text-sm focus:outline-none focus:border-fuchsia-500/50 focus:ring-1 focus:ring-fuchsia-500/20 transition">
-                    <button type="button" onclick="quoteCashout()" class="px-6 py-3 rounded-lg text-sm font-bold bg-fuchsia-500/15 border border-fuchsia-500/30 text-fuchsia-400 hover:bg-fuchsia-500/25 transition cursor-pointer whitespace-nowrap">📊 Cotizar en USDC</button>
+                    <button type="button" onclick="quoteCashout()" class="px-6 py-3 rounded-lg text-sm font-bold bg-fuchsia-500/15 border border-fuchsia-500/30 text-fuchsia-400 hover:bg-fuchsia-500/25 transition cursor-pointer whitespace-nowrap">📊 Cotizar retiro</button>
                 </div>
                 <div class="mb-4 p-3 rounded-lg bg-blue-500/10 border border-blue-500/20">
                     <p class="text-blue-400 text-xs mb-2">
-                        <strong>💡 Conversión:</strong> Retiras créditos nominales → Recibes USDC real
+                        <strong>💡 Conversión:</strong> Retiras créditos nominales → recibes fondos en stablecoin / USD según la pasarela
                     </p>
                     <p class="text-gray-300 text-xs">
-                        <strong>Ejemplo:</strong> Retiras 100 créditos nominales → Recibes 95 USDC (5% fee)
+                        <strong>Ejemplo:</strong> 100 créditos nominales → ~95 USD netos (5% fee)
                     </p>
                     <p class="text-gray-400 text-xs mt-1">
-                        Los créditos nominales están respaldados 1:1 por USDC real en vault.
+                        Los créditos nominales están respaldados 1:1 por liquidez del vault (dólares).
                     </p>
                 </div>
                 <p id="cashoutQuote" class="text-gray-400 text-sm mb-4">Sin cotización aún.</p>
-                <button type="button" onclick="requestCashout()" class="px-6 py-3 rounded-lg text-sm font-bold bg-gradient-to-r from-fuchsia-500 to-purple-600 text-white hover:opacity-90 transition-all shadow-lg shadow-fuchsia-500/20 cursor-pointer">💸 Solicitar Retiro (USDC)</button>
+                <button type="button" onclick="requestCashout()" class="px-6 py-3 rounded-lg text-sm font-bold bg-gradient-to-r from-fuchsia-500 to-purple-600 text-white hover:opacity-90 transition-all shadow-lg shadow-fuchsia-500/20 cursor-pointer">💸 Solicitar retiro</button>
             </div>
         </section>
 
@@ -1168,7 +1168,7 @@
                         <div>
                             <div class="text-sm text-gray-400 mb-1">Balance del Vault:</div>
                             <div id="publicVaultBalance" class="text-2xl font-bold text-cyan-400">Cargando...</div>
-                            <div class="text-xs text-gray-500 mt-1">USDC disponible para retiros</div>
+                            <div class="text-xs text-gray-500 mt-1">Liquidez en USD (vault) para retiros</div>
                         </div>
                         <div class="text-4xl">🏦</div>
                     </div>
@@ -1344,7 +1344,7 @@
                 <p class="text-gray-500 text-xs mt-1">Miembro desde: <span id="profileSince">-</span></p>
             </div>
             <div class="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-6">
-                <div class="p-3 rounded-lg bg-white/[0.03] border border-white/5 text-center cursor-help overflow-hidden" title="MTR créditos jugables: Fichas estables que valen siempre $1 cada una (1:1 USDC estable)" style="min-height: 60px; display: flex; flex-direction: column; justify-content: center;">
+                <div class="p-3 rounded-lg bg-white/[0.03] border border-white/5 text-center cursor-help overflow-hidden" title="MTR créditos jugables: fichas estables ~$1 USD nominal cada una (1:1)" style="min-height: 60px; display: flex; flex-direction: column; justify-content: center;">
                     <span class="text-xs text-gray-400 block mb-1" id="profileBalanceLabel">MTR créditos</span>
                     <strong id="profileBalance" class="text-white block break-words" style="word-break: break-word; overflow-wrap: break-word;">-</strong>
                 </div>
@@ -3036,7 +3036,7 @@
                     const vaultLinkEl = document.getElementById('publicVaultLink');
 
                     if (vaultBalanceEl) {
-                        vaultBalanceEl.textContent = balance.toFixed(2) + ' USDC';
+                        vaultBalanceEl.textContent = balance.toFixed(2) + ' USD (vault)';
                         vaultBalanceEl.classList.remove('text-gray-400', 'text-red-400', 'text-gray-500');
                         vaultBalanceEl.classList.add('text-cyan-400');
                     }
@@ -4254,7 +4254,7 @@
             if (!canCover) {
                 var errorMsg = `MTR créditos jugables insuficientes para apostar ${bet}. `;
                 errorMsg += `Tienes ${credits.toFixed(2)} MTR créditos pero necesitas ${bet}. `;
-                errorMsg += `Deposita USDC para obtener más MTR créditos jugables (1 crédito = $1 USDC estable).`;
+                errorMsg += `Añade saldo (depósito) para obtener más MTR créditos jugables (1 crédito ≈ $1 USD nominal).`;
                 showToast(errorMsg, 'error');
                 return;
             }
@@ -5546,7 +5546,7 @@
                 if (profileBalanceLabelEl) {
                     profileBalanceLabelEl.textContent = 'MTR créditos';
                     profileBalanceLabelEl.style.color = '';
-                    profileBalanceLabelEl.title = 'MTR créditos jugables: Fichas estables 1:1 USDC';
+                    profileBalanceLabelEl.title = 'MTR créditos jugables: fichas estables 1:1 USD nominal';
                 }
             } catch (e) {
                 console.error('[ensureProfileShowsRealData] Error:', e);
