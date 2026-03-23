@@ -899,11 +899,12 @@
                     <div class="relative flex-1 min-h-[400px] bg-gray-950">
                         <div id="npAmountStep" class="flex flex-col gap-4 p-5 sm:p-6">
                             <label class="text-xs text-gray-400" for="npUsdAmount">Importe a depositar (USD)</label>
-                            <input id="npUsdAmount" type="number" min="3.05" step="0.01" value="20" inputmode="decimal" class="w-full rounded-lg border border-white/15 bg-gray-900/80 px-3 py-2.5 text-white text-base focus:border-cyan-500/50 focus:outline-none" />
-                            <p class="text-[11px] text-gray-500">Debes tener sesión iniciada (misma cuenta que en MusicToken Ring). <strong class="text-gray-400">Mínimo 3,05 USD</strong> por depósito (NOWPayments exige un mínimo en cripto; el tipo suele dejar ~0,1–0,2 % por debajo del nominal, p. ej. 3 USD ≈ 2,996 USDT).</p>
+                            <input id="npUsdAmount" type="number" min="1" step="0.01" value="20" inputmode="decimal" class="w-full rounded-lg border border-white/15 bg-gray-900/80 px-3 py-2.5 text-white text-base focus:border-cyan-500/50 focus:outline-none" />
+                            <p class="text-[11px] text-gray-500">Debes tener sesión iniciada (misma cuenta que en MusicToken Ring). <strong class="text-gray-400">Mínimo 1 USD</strong>. El servidor puede subir unos céntimos el importe enviado a NOWPayments para cumplir el mínimo en cripto (el tipo suele dejar el monto ligeramente por debajo del entero).</p>
                             <button type="button" id="npStartCheckoutBtn" class="w-full rounded-xl bg-gradient-to-r from-cyan-600 to-fuchsia-600 py-3 text-sm font-bold text-white shadow-lg shadow-cyan-900/30 hover:opacity-95 transition">Continuar al pago</button>
                             <p id="npCheckoutErr" class="hidden text-red-300 text-sm"></p>
                         </div>
+                        <p id="npCheckoutAdjustNote" class="hidden px-5 sm:px-6 pt-2 text-amber-200/90 text-[11px] leading-snug"></p>
                         <iframe id="nowpaymentsWidgetIframe" title="NOWPayments checkout" class="hidden w-full h-[min(72vh,580px)] border-0 nowpayments-iframe-dark" loading="eager" referrerpolicy="strict-origin-when-cross-origin" allow="payment *; fullscreen *; clipboard-write *"></iframe>
                         <div id="npOpenExternalWrap" class="hidden px-4 pb-3 text-center">
                             <a id="npOpenExternal" href="#" target="_blank" rel="noopener noreferrer" class="text-cyan-400 text-xs underline hover:text-cyan-300">Abrir checkout en una nueva pestaña</a>
@@ -938,6 +939,11 @@
                     err.classList.add('hidden');
                 }
                 if (errWrap) errWrap.classList.add('hidden');
+                var adj = document.getElementById('npCheckoutAdjustNote');
+                if (adj) {
+                    adj.textContent = '';
+                    adj.classList.add('hidden');
+                }
             }
             window.openNowPaymentsModal = async function () {
                 var modal = document.getElementById('nowpaymentsModal');
@@ -976,10 +982,15 @@
                     errEl.classList.add('hidden');
                 }
                 if (errWrap) errWrap.classList.add('hidden');
+                var adjustNote = document.getElementById('npCheckoutAdjustNote');
+                if (adjustNote) {
+                    adjustNote.textContent = '';
+                    adjustNote.classList.add('hidden');
+                }
                 var amt = inp ? parseFloat(String(inp.value).replace(',', '.'), 10) : NaN;
-                if (!Number.isFinite(amt) || amt < 3.05) {
+                if (!Number.isFinite(amt) || amt < 1) {
                     if (errEl) {
-                        errEl.textContent = 'Indica un importe válido (mín. 3,05 USD).';
+                        errEl.textContent = 'Indica un importe válido (mín. 1 USD).';
                         errEl.classList.remove('hidden');
                     }
                     return;
@@ -1031,6 +1042,20 @@
                             errEl.classList.remove('hidden');
                         }
                         return;
+                    }
+                    if (
+                        adjustNote &&
+                        j.requested_price_amount_usd != null &&
+                        j.price_amount_usd != null &&
+                        Number(j.price_amount_usd) > Number(j.requested_price_amount_usd) + 0.001
+                    ) {
+                        adjustNote.textContent =
+                            'Importe en el checkout: ' +
+                            Number(j.price_amount_usd).toFixed(2) +
+                            ' USD (tu solicitud: ' +
+                            Number(j.requested_price_amount_usd).toFixed(2) +
+                            ' USD; ajuste automático por mínimo de red NOWPayments).';
+                        adjustNote.classList.remove('hidden');
                     }
                     if (step) step.classList.add('hidden');
                     if (iframe) {

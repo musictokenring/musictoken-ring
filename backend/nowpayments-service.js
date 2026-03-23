@@ -25,11 +25,10 @@ const CUSTODY_ENABLED = process.env.CUSTODY_ENABLED === 'true';
 const NOWPAYOUT_CURRENCY = process.env.NOWPAYOUT_CURRENCY || 'USDTTRC20';
 const NOWPAYOUT_CHAIN = process.env.NOWPAYOUT_CHAIN || '';
 /**
- * Piso en USD para POST /v1/payment. NOWPayments valida el mínimo en la moneda de pago;
- * el tipo suele dejar el importe cripto ~0,1–0,2 % por debajo del nominal (ej. 3 USD → 2,996 USDT
- * con mínimo 3 USDT). Ajusta NOWPAYMENTS_MIN_PAY_AMOUNT en servidor si tu par tiene otro piso.
+ * Piso en USD solicitado por el usuario (antes del ajuste de red). El servidor puede subir
+ * ligeramente el importe enviado a NOWPayments (ver adjustUsdForNowpaymentsCryptoMinimum).
  */
-const MIN_DEPOSIT_USD_FLOOR = 3.05;
+const MIN_DEPOSIT_USD_FLOOR = 1;
 const MIN_DEPOSIT_UNITS = Math.max(
     MIN_DEPOSIT_USD_FLOOR,
     parseFloat(process.env.NOWPAYMENTS_MIN_PAY_AMOUNT || String(MIN_DEPOSIT_USD_FLOOR)) ||
@@ -69,6 +68,48 @@ function extractNowpaymentsCheckoutUrl(data) {
         }
     }
     return null;
+}
+
+/**
+ * Si la extracción directa falla, busca cualquier URL https en campos típicos de checkout.
+ */
+function deepFindNowpaymentsCheckoutUrl(obj, depth) {
+    const d = depth == null ? 0 : depth;
+    if (d > 5 || !obj || typeof obj !== 'object') return null;
+    for (const [k, v] of Object.entries(obj)) {
+        const kl = k.toLowerCase();
+        if (typeof v === 'string' && /^https?:\/\//i.test(v.trim())) {
+            if (
+                kl.includes('url') ||
+                kl.includes('link') ||
+                kl.includes('invoice') ||
+                kl.includes('checkout')
+            ) {
+                return v.trim();
+            }
+        }
+        if (v && typeof v === 'object') {
+            const inner = deepFindNowpaymentsCheckoutUrl(v, d + 1);
+            if (inner) return inner;
+        }
+    }
+    return null;
+}
+
+/**
+ * NOWPayments convierte price_amount USD a pay_currency; el monto cripto suele quedar
+ * un poco por debajo del entero mínimo (ej. 4 USD → 3,995 USDT, mínimo 4). Subimos el USD
+ * enviado con un pequeño colchón configurable.
+ */
+function adjustUsdForNowpaymentsCryptoMinimum(usd) {
+    const n = Number(usd);
+    if (!Number.isFinite(n) || n <= 0) return n;
+    const pct =
+        parseFloat(process.env.NOWPAYMENTS_MIN_PAY_BUFFER_PCT || '0.008') || 0.008;
+    const flat =
+        parseFloat(process.env.NOWPAYMENTS_MIN_PAY_BUFFER_USD || '0.06') || 0.06;
+    const out = n * (1 + Math.max(0, pct)) + Math.max(0, flat);
+    return Math.round(out * 100) / 100;
 }
 
 const { isValidPayoutAddress } = require('./platform-addresses');
@@ -148,6 +189,8 @@ class NOWPaymentsService {
         if (amount > 500000) {
             throw new Error('Amount exceeds maximum (500000 USD)');
         }
+        const requestedUsd = amount;
+        const priceAmountToSend = adjustUsdForNowpaymentsCryptoMinimum(amount);
         const baseUrl =
             process.env.BACKEND_URL ||
             process.env.RENDER_EXTERNAL_URL ||
@@ -158,8 +201,8 @@ class NOWPaymentsService {
         if (!payCur) {
             throw new Error('pay_currency is required (set NOWPAYMENTS_PAY_CURRENCY on server)');
         }
-        const body = {
-            price_amount: amount,
+        const buildPaymentBody = (usd) => ({
+            price_amount: usd,
             price_currency: 'usd',
             pay_currency: payCur,
             ipn_callback_url: ipnUrl,
@@ -169,8 +212,10 @@ class NOWPaymentsService {
             cancel_url: cancelUrl,
             is_fixed_rate: false,
             is_fee_paid_by_user: false
-        };
-        const res = await fetch(`${NOWPAYMENTS_API_URL}/payment`, {
+        });
+        let priceAmountFinal = priceAmountToSend;
+        let body = buildPaymentBody(priceAmountFinal);
+        let res = await fetch(`${NOWPAYMENTS_API_URL}/payment`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -178,7 +223,26 @@ class NOWPaymentsService {
             },
             body: JSON.stringify(body)
         });
-        const data = await res.json().catch(() => ({}));
+        let data = await res.json().catch(() => ({}));
+        if (!res.ok) {
+            const msg0 =
+                data.message ||
+                data.error ||
+                (typeof data === 'string' ? data : JSON.stringify(data));
+            if (/less than minimal/i.test(String(msg0))) {
+                priceAmountFinal = Math.round((priceAmountFinal * 1.05 + 0.2) * 100) / 100;
+                body = buildPaymentBody(priceAmountFinal);
+                res = await fetch(`${NOWPAYMENTS_API_URL}/payment`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'x-api-key': NOWPAYMENTS_API_KEY
+                    },
+                    body: JSON.stringify(body)
+                });
+                data = await res.json().catch(() => ({}));
+            }
+        }
         if (!res.ok) {
             const msg =
                 data.message ||
@@ -186,7 +250,8 @@ class NOWPaymentsService {
                 (typeof data === 'string' ? data : JSON.stringify(data));
             throw new Error(`NOWPayments: ${res.status} ${msg}`);
         }
-        let payUrl = extractNowpaymentsCheckoutUrl(data);
+        let payUrl =
+            extractNowpaymentsCheckoutUrl(data) || deepFindNowpaymentsCheckoutUrl(data);
         const paymentId = data.payment_id;
         if (!payUrl && paymentId != null && paymentId !== '') {
             const resPoll = await fetch(
@@ -198,7 +263,9 @@ class NOWPaymentsService {
             );
             const polled = await resPoll.json().catch(() => ({}));
             if (resPoll.ok) {
-                payUrl = extractNowpaymentsCheckoutUrl(polled);
+                payUrl =
+                    extractNowpaymentsCheckoutUrl(polled) ||
+                    deepFindNowpaymentsCheckoutUrl(polled);
             } else {
                 console.error(
                     '[nowpayments] GET /payment/:id failed:',
@@ -220,7 +287,9 @@ class NOWPaymentsService {
             payment_id: data.payment_id,
             pay_url: payUrl,
             order_id: orderId,
-            payment_status: data.payment_status
+            payment_status: data.payment_status,
+            requested_price_amount_usd: requestedUsd,
+            price_amount_usd: priceAmountFinal
         };
     }
 
