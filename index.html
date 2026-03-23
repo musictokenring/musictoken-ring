@@ -1001,13 +1001,18 @@
                     return;
                 }
                 var base = (window.CONFIG && window.CONFIG.BACKEND_API) || '';
+                base = String(base).replace(/\/$/, '');
                 if (!base) {
                     if (errWrap) errWrap.classList.remove('hidden');
                     return;
                 }
                 t.disabled = true;
                 try {
-                    var url = base.replace(/\/$/, '') + '/api/payments/nowpayments/create';
+                    var path = '/api/payments/nowpayments/create';
+                    if (/\/api$/i.test(base)) {
+                        path = '/payments/nowpayments/create';
+                    }
+                    var url = base + path;
                     var r = await fetch(url, {
                         method: 'POST',
                         credentials: 'omit',

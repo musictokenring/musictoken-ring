@@ -1855,8 +1855,9 @@ app.get('/api/public/nowpayments-widget-config', (req, res) => {
  * Pago comercial NOWPayments: POST /v1/payment (documentación API).
  * Requiere Authorization: Bearer (Supabase). Body: { price_amount: number (USD) }.
  * Respuesta: { ok, pay_url, payment_id, order_id } — usar pay_url en iframe o nueva pestaña.
+ * Alias: POST /nowpayments/create (compat. clientes con ruta antigua o sin prefijo /api).
  */
-app.post('/api/payments/nowpayments/create', depositRateLimiter, async (req, res) => {
+const createNowpaymentsPaymentHandler = async (req, res) => {
     try {
         if (!nowPaymentsService) {
             return res.status(503).json({ error: 'NOWPayments service unavailable' });
@@ -1892,7 +1893,7 @@ app.post('/api/payments/nowpayments/create', depositRateLimiter, async (req, res
         }
 
         const raw = req.body && (req.body.price_amount ?? req.body.amount);
-        const priceAmountUsd = typeof raw === 'string' ? parseFloat(raw, 10) : Number(raw);
+        const priceAmountUsd = typeof raw === 'string' ? parseFloat(raw) : Number(raw);
         if (!Number.isFinite(priceAmountUsd)) {
             return res.status(400).json({ error: 'price_amount inválido (USD)' });
         }
@@ -1915,7 +1916,10 @@ app.post('/api/payments/nowpayments/create', depositRateLimiter, async (req, res
         console.error('[nowpayments-create]', e);
         res.status(400).json({ ok: false, error: e.message || 'Error creating payment' });
     }
-});
+};
+
+app.post('/api/payments/nowpayments/create', depositRateLimiter, createNowpaymentsPaymentHandler);
+app.post('/nowpayments/create', depositRateLimiter, createNowpaymentsPaymentHandler);
 
 /**
  * Health check
@@ -2023,7 +2027,7 @@ app.get('/', (req, res) => {
             price: '/api/price',
             nowpaymentsIpn: '/webhook/nowpayments',
             nowpaymentsWidgetConfig: '/api/public/nowpayments-widget-config',
-            nowpaymentsCreatePayment: 'POST /api/payments/nowpayments/create',
+            nowpaymentsCreatePayment: 'POST /api/payments/nowpayments/create (alias: POST /nowpayments/create)',
             prizeSend: '/api/prizes/send'
         }
     });
