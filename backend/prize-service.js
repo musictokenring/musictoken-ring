@@ -1,20 +1,14 @@
 /**
- * Servicio backend para enviar premios MTR en Base.
- * Usa variables de entorno (no hardcodear claves privadas).
+ * Premios: con CUSTODY_ENABLED + NOWPayments se envía USDT (p. ej. TRC20) vía Custody;
+ * si no, transferencia MTR on-chain en Base (PRIZE_SIGNER_PRIVATE_KEY).
  */
 const { createPublicClient, createWalletClient, http, parseUnits, isAddress } = require('viem');
 const { privateKeyToAccount } = require('viem/accounts');
 const { base } = require('viem/chains');
-
- codex/fix-issues-from-codex-review-on-pr-#117-h1vqdv
-const MTR_TOKEN_ADDRESS = process.env.MTR_TOKEN_ADDRESS || '0x99cd1eb32846c9027ed9cb8710066fa08791c33b';
-
- codex/fix-issues-from-codex-review-on-pr-#117-vm0jtz
-const MTR_TOKEN_ADDRESS = process.env.MTR_TOKEN_ADDRESS || '0x99cd1eb32846c9027ed9cb8710066fa08791c33b';
+const { isValidPayoutAddress } = require('./platform-addresses');
 
 const MTR_TOKEN_ADDRESS = process.env.MTR_TOKEN_ADDRESS || '0x99cd1eb32846c9027ed9cb8710066fa08791c33b';
- codex/migrate-mtoken-to-mtr-on-base-chain-hbd77v
- codex/migrate-mtoken-to-mtr-on-base-chain-hbd77v
+
 const ERC20_ABI = [
   {
     type: 'function',
@@ -29,20 +23,37 @@ const ERC20_ABI = [
 ];
 
 async function sendPrize(winner, amount) {
+  const numericAmount = Number(amount);
+  if (!Number.isFinite(numericAmount) || numericAmount <= 0) {
+    throw new Error('Invalid prize amount');
+  }
+
+  const useCustody =
+    process.env.CUSTODY_ENABLED === 'true' && !!process.env.NOWPAYMENTS_API_KEY;
+
+  if (useCustody) {
+    if (!isValidPayoutAddress(winner)) {
+      throw new Error('Invalid winner address for Custody payout (Base 0x… o Tron T…)');
+    }
+    const { NOWPaymentsService } = require('./nowpayments-service');
+    const np = new NOWPaymentsService();
+    const out = await np.createCustodyPayout(winner, numericAmount, { source: 'prize' });
+    return {
+      method: 'nowpayments_custody',
+      payoutId: out.payoutId,
+      data: out.data
+    };
+  }
+
   const rpcUrl = process.env.BASE_RPC_URL || 'https://mainnet.base.org';
   const privateKey = process.env.PRIZE_SIGNER_PRIVATE_KEY;
 
   if (!privateKey) {
-    throw new Error('Missing PRIZE_SIGNER_PRIVATE_KEY env var');
+    throw new Error('Missing PRIZE_SIGNER_PRIVATE_KEY env var (or enable Custody + NOWPayments)');
   }
 
   if (!isAddress(winner)) {
     throw new Error('Invalid winner wallet address');
-  }
-
-  const numericAmount = Number(amount);
-  if (!Number.isFinite(numericAmount) || numericAmount <= 0) {
-    throw new Error('Invalid prize amount');
   }
 
   const account = privateKeyToAccount(privateKey.startsWith('0x') ? privateKey : `0x${privateKey}`);
@@ -50,7 +61,7 @@ async function sendPrize(winner, amount) {
   const walletClient = createWalletClient({ account, chain: base, transport: http(rpcUrl) });
 
   const value = parseUnits(String(numericAmount), 18);
-  console.log('[prize] sendPrize start', { winner, amount, value: value.toString() });
+  console.log('[prize] sendPrize on-chain MTR', { winner, amount, value: value.toString() });
 
   const hash = await walletClient.writeContract({
     address: MTR_TOKEN_ADDRESS,
@@ -62,7 +73,7 @@ async function sendPrize(winner, amount) {
   const receipt = await publicClient.waitForTransactionReceipt({ hash });
   console.log('[prize] sendPrize confirmed', { hash, status: receipt.status });
 
-  return { txHash: hash, status: receipt.status };
+  return { method: 'mtr_onchain', txHash: hash, status: receipt.status };
 }
 
 module.exports = { sendPrize };

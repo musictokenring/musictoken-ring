@@ -60,7 +60,7 @@ Si solo tienes tiempo para ejecutar algunas queries, ejecuta estas primero:
 
 ### Direcciones Sospechosas:
 - Verifica cada dirección en Basescan: `https://basescan.org/address/[DIRECCION]`
-- Busca transacciones desde `PLATFORM_WALLET` (0x75376BC58830f27415402875D26B73A6BE8E2253)
+- Busca transacciones desde `PLATFORM_WALLET` (0x0000000000000000000000000000000000000001)
 - Verifica si coincide con el dominio mencionado (foodam.xyz)
 
 ## 📊 Interpretación de Resultados

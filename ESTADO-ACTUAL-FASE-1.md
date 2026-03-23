@@ -90,10 +90,10 @@ Revisión del código de las 4 funciones core para identificar qué verificar y 
   - Detecta depósitos USDC en cada red
   - Convierte todo a créditos
 
-### ⚠️ Problema Detectado:
-- **Alchemy Free Tier**: Limita `eth_getLogs` a 10 bloques
-- **Impacto**: Puede fallar escaneo de rangos grandes
-- **Estado**: Funciona pero con limitaciones
+### ⚠️ Problema detectado:
+- Algunos RPC limitan el rango de `eth_getLogs` (p. ej. pocos bloques por petición)
+- **Impacto:** puede fallar el escaneo de rangos muy grandes
+- **Estado:** funciona con limitaciones; usar `https://mainnet.base.org` o ajustar chunks
 
 ### 🔍 Qué Verificar:
 - [ ] Detecta depósitos USDC en Base

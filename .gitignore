@@ -1,1 +1,10 @@
 node_modules
+dist
+build
+.DS_Store
+
+# Secretos locales (usar .env.example / vercel.env.example)
+.env
+.env.local
+.env.*.local
+vercel.env

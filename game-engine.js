@@ -1176,26 +1176,15 @@ const GameEngine = {
             // Si es usuario nuevo, puede que no tenga wallet conectada todavía
             let walletAddress = this.connectedWallet || localStorage.getItem('mtr_wallet');
             
-            // CRÍTICO: Verificar que NO sea la wallet de tesorería del sistema
-            // PERMITIR durante testing si es el propietario de la plataforma
-            const TREASURY_WALLET = '0x75376BC58830f27415402875D26B73A6BE8E2253';
-            const ALLOW_TREASURY_FOR_TESTING = true; // Cambiar a false en producción
-            
-            if (walletAddress && walletAddress.toLowerCase() === TREASURY_WALLET.toLowerCase()) {
-                if (!ALLOW_TREASURY_FOR_TESTING) {
-                    console.error('[acceptSocialChallenge] ❌❌❌ ERROR: Usuario intentando usar wallet de tesorería!');
-                    showToast('Error: No puedes usar la wallet de tesorería del sistema. Conecta tu wallet personal.', 'error');
-                    if (typeof renderWallet === 'function') {
-                        renderWallet();
-                    }
-                    return;
-                } else {
-                    console.warn('[acceptSocialChallenge] ⚠️⚠️⚠️ ADVERTENCIA: Usando wallet de tesorería para TESTING');
-                    console.warn('[acceptSocialChallenge] ⚠️ Esto solo debe usarse durante desarrollo/testing');
-                    showToast('⚠️ Modo TESTING: Usando wallet de tesorería. Solo para desarrollo.', 'warning');
-                }
+            const platformAddr = (typeof window !== 'undefined' && window.CONFIG && window.CONFIG.PLATFORM_WALLET_ADDRESS)
+                ? String(window.CONFIG.PLATFORM_WALLET_ADDRESS).trim()
+                : '';
+            if (platformAddr && walletAddress && walletAddress.toLowerCase() === platformAddr.toLowerCase()) {
+                showToast('Conecta una wallet de usuario distinta de la wallet operativa de la plataforma.', 'error');
+                if (typeof renderWallet === 'function') renderWallet();
+                return;
             }
-            
+
             // Si no tiene wallet conectada, pedirle que la conecte
             if (!walletAddress) {
                 showToast('Debes conectar tu wallet para aceptar el desafío. Conecta tu wallet y vuelve a intentar.', 'error');

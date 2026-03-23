@@ -53,7 +53,7 @@ Para cada variable del archivo `.env.example`, sigue estos pasos:
 
 **Variable 6: PLATFORM_WALLET_ADDRESS**
 - **Key**: `PLATFORM_WALLET_ADDRESS`
-- **Value**: `0x75376BC58830f27415402875D26B73A6BE8E2253`
+- **Value**: `0x0000000000000000000000000000000000000001`
 - **Environment**: Todas
 - Haz clic en **Save**
 

@@ -67,7 +67,7 @@ El buffer está en `5.29 USDC` cuando el mínimo configurado es `5000 USDC`. Est
 - Resolverá los errores de rate limit
 
 **Cómo hacerlo:**
-- Agregar `BASE_RPC_URL` con Alchemy, Infura o QuickNode
+- Agregar `BASE_RPC_URL` con el RPC oficial Base: `https://mainnet.base.org` (u otro endpoint compatible si lo necesitas)
 - Ver `SOLUCION-RATE-LIMIT-RPC.md` para instrucciones detalladas
 
 ### Solución 2: Ajustar Configuración (Temporal)
@@ -110,7 +110,7 @@ BASE_RPC_URL=...                  ❌ No configurada (usa RPC público por defec
 2. **Más depósitos** para aumentar el buffer de USDC
 
 **Recomendación:**
-- ✅ Configurar `BASE_RPC_URL` con Alchemy/Infura/QuickNode
+- ✅ Configurar `BASE_RPC_URL` con `https://mainnet.base.org`
 - ✅ Esto resolverá los errores de rate limit
 - ✅ El sistema podrá vender MTR cuando sea necesario
 - ✅ El buffer se repondrá automáticamente cuando lleguen depósitos

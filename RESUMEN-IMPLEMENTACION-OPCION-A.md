@@ -109,7 +109,7 @@ MTR_POOL_WALLET=<dirección_de_wallet_separada>
 [mtr-swap] ✅ Service initialized
 [mtr-swap] Swap wallet: 0x...
 [mtr-swap] MTR pool wallet: 0x... (o advertencia si es igual)
-[mtr-swap] Platform wallet (tesorería): 0x75376BC58830f27415402875D26B73A6BE8E2253
+[mtr-swap] Platform wallet (tesorería): 0x0000000000000000000000000000000000000001
 [mtr-swap] 🔍 Detecting MTR/USDC pool fee tier...
 [mtr-swap] ✅ Pool encontrado con fee tier: 3000 (0.3%)
 ```
@@ -185,7 +185,7 @@ MTR_POOL_WALLET=<dirección_de_wallet_separada>
 
 Si encuentras algún problema:
 1. Revisa los logs del servidor
-2. Verifica que `BASE_RPC_URL` esté configurado (Alchemy)
+2. Verifica que `BASE_RPC_URL` esté configurado (`https://mainnet.base.org`)
 3. Verifica que `SWAP_WALLET_PRIVATE_KEY` esté configurado
 4. Revisa `CONFIGURACION-WALLET-SEPARADA.md` para configuración de wallet
 

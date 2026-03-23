@@ -5,7 +5,7 @@
 ### Situación Actual
 
 **En Render, tienes configurado:**
-- ✅ `PLATFORM_WALLET_ADDRESS` = `0x75376BC58830f27415402875D26B73A6BE8E2253`
+- ✅ `PLATFORM_WALLET_ADDRESS` = `0x0000000000000000000000000000000000000001`
 - ❌ `MTR_POOL_WALLET` = **NO CONFIGURADA** (no existe)
 
 **Código en `mtr-swap-service.js`:**
@@ -15,7 +15,7 @@ const MTR_POOL_WALLET = process.env.MTR_POOL_WALLET || PLATFORM_WALLET;
 
 **Comportamiento:**
 - Como `MTR_POOL_WALLET` no está configurada, el código usa `PLATFORM_WALLET` como fallback
-- Por eso ambas wallets tienen la misma dirección: `0x75376BC58830f27415402875D26B73A6BE8E2253`
+- Por eso ambas wallets tienen la misma dirección: `0x0000000000000000000000000000000000000001`
 
 ---
 

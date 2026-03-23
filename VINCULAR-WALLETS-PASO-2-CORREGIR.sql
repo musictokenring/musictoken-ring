@@ -10,7 +10,7 @@ DECLARE
     v_users_processed INTEGER := 0;
     v_wallets_linked INTEGER := 0;
     v_errors INTEGER := 0;
-    v_platform_wallet TEXT := '0x75376bc58830f27415402875d26b73a6be8e2253';
+    v_platform_wallet TEXT := '0x0000000000000000000000000000000000000001';
 BEGIN
     RAISE NOTICE '========================================';
     RAISE NOTICE 'INICIANDO VINCULACIÓN AUTOMÁTICA';

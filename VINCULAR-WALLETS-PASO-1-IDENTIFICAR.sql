@@ -23,7 +23,7 @@ LEFT JOIN user_credits uc ON uc.user_id = u.id
 WHERE u.wallet_address IS NOT NULL
     AND u.wallet_address != ''
     -- Excluir wallet de plataforma/tesorería
-    AND LOWER(u.wallet_address) != '0x75376bc58830f27415402875d26b73a6be8e2253'
+    AND LOWER(u.wallet_address) != '0x0000000000000000000000000000000000000001'
     -- Excluir wallets renombradas (que terminan en _old_)
     AND u.wallet_address NOT LIKE '%_old_%'
     -- Solo wallets que NO están en user_wallets

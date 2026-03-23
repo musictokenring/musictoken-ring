@@ -45,7 +45,7 @@ Si Render NO está haciendo deploy automático:
    - Busca estos mensajes de éxito:
      ```
      ✅ Environment variables validated
-     ✅ Platform Wallet: 0x75376BC58830f27415402875D26B73A6BE8E2253
+     ✅ Platform Wallet: 0x0000000000000000000000000000000000000001
      ✅ All services initialized
      ```
 
@@ -60,7 +60,7 @@ En los logs de Render, deberías ver:
 ```
 [server] 🔒 Validating environment variables...
 [server] ✅ Environment variables validated
-[server] 🔒 Platform Wallet: 0x75376BC58830f27415402875D26B73A6BE8E2253
+[server] 🔒 Platform Wallet: 0x0000000000000000000000000000000000000001
 [server] Initializing automated services...
 [server] ✅ All services initialized
 ```

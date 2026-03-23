@@ -5,7 +5,8 @@
 const { createPublicClient, http, formatUnits, decodeEventLog } = require('viem');
 const { mainnet } = require('viem/chains');
 
-const PLATFORM_WALLET = process.env.PLATFORM_WALLET_ADDRESS || '0x75376BC58830f27415402875D26B73A6BE8E2253';
+const { requireEvmPlatformWallet } = require('./platform-addresses');
+const PLATFORM_WALLET = requireEvmPlatformWallet();
 const USDC_ADDRESS_ETHEREUM = '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48';
 const USER_WALLET = '0x72eca083fbceb05a4f21b1a9883a57bcd638b6dd';
 

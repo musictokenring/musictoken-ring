@@ -16,8 +16,8 @@ Después del redeploy en Render, revisa los logs del servidor. Deberías ver:
 
 ```
 [mtr-swap] ✅ Service initialized
-[mtr-swap] Swap wallet: 0x75376BC58830f27415402875D26B73A6BE8E2253
-[mtr-swap] MTR pool wallet: 0x75376BC58830f27415402875D26B73A6BE8E2253
+[mtr-swap] Swap wallet: 0x0000000000000000000000000000000000000001
+[mtr-swap] MTR pool wallet: 0x0000000000000000000000000000000000000001
 ```
 
 Y también:
@@ -79,7 +79,7 @@ O si el buffer está bajo:
 
 1. **Deposita una cantidad pequeña** (10-20 USDC) a la wallet de plataforma:
    ```
-   0x75376BC58830f27415402875D26B73A6BE8E2253
+   0x0000000000000000000000000000000000000001
    ```
 
 2. **Revisa los logs** - Deberías ver:

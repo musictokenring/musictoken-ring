@@ -11,12 +11,22 @@ const SUPABASE_URL = process.env.SUPABASE_URL || 'https://bscmgcnynbxalcuwdqlm.s
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
 
-// NOWPayments Configuration
-const NOWPAYMENTS_API_KEY = process.env.NOWPAYMENTS_API_KEY || '6E9NYFF-NGT4FRR-P03J9RP-EA4FXYF';
-const NOWPAYMENTS_IPN_SECRET = process.env.IPN_SECRET || process.env.NOWPAYMENTS_IPN_SECRET || ''; // IPN Secret de NOWPayments Dashboard
+// NOWPayments: claves solo vía entorno (NOWPAYMENTS_WEBHOOK_SECRET = firma IPN)
+const NOWPAYMENTS_API_KEY = process.env.NOWPAYMENTS_API_KEY || '';
+const NOWPAYMENTS_IPN_SECRET =
+    process.env.NOWPAYMENTS_WEBHOOK_SECRET ||
+    process.env.IPN_SECRET ||
+    process.env.NOWPAYMENTS_IPN_SECRET ||
+    '';
 const NOWPAYMENTS_API_URL = 'https://api.nowpayments.io/v1';
-const VAULT_WALLET = process.env.VAULT_WALLET_ADDRESS || '0x75376BC58830f27415402875D26B73A6BE8E2253';
 const TRADING_FUND_WALLET = process.env.TRADING_FUND_WALLET || '';
+const CUSTODY_ENABLED = process.env.CUSTODY_ENABLED === 'true';
+/** Retiros/premios: USDT TRC20 por defecto si Custody + Tron; override con NOWPAYOUT_CURRENCY */
+const NOWPAYOUT_CURRENCY = process.env.NOWPAYOUT_CURRENCY || 'USDTTRC20';
+const NOWPAYOUT_CHAIN = process.env.NOWPAYOUT_CHAIN || '';
+const MIN_DEPOSIT_UNITS = parseFloat(process.env.NOWPAYMENTS_MIN_PAY_AMOUNT || '0.01');
+
+const { isValidPayoutAddress } = require('./platform-addresses');
 
 // Fee distribution: 75% vault, 25% trading fund
 const VAULT_FEE_PERCENTAGE = 75;
@@ -32,6 +42,25 @@ class NOWPaymentsService {
         this.tradingFundService = new TradingFundService();
     }
 
+    normalizeIncomingAmount(data) {
+        const candidates = [
+            data.actually_paid,
+            data.pay_amount,
+            data.price_amount,
+            data.outcome_amount
+        ];
+        for (const c of candidates) {
+            const n = parseFloat(c);
+            if (Number.isFinite(n) && n > 0) return n;
+        }
+        return 0;
+    }
+
+    isFinishedPaymentStatus(status) {
+        const s = (status || '').toLowerCase();
+        return s === 'finished' || s === 'confirmed' || s === 'completed';
+    }
+
     /**
      * Verify IPN signature using HMAC-SHA512
      * @param {string} payload - Raw request body
@@ -39,19 +68,21 @@ class NOWPaymentsService {
      * @returns {boolean}
      */
     verifyIPNSignature(payload, signature) {
-        if (!NOWPAYMENTS_IPN_SECRET) {
-            console.error('[nowpayments] ⚠️ IPN_SECRET not configured');
+        if (!NOWPAYMENTS_IPN_SECRET || !signature) {
+            console.error('[nowpayments] ⚠️ IPN secret or signature missing');
             return false;
         }
 
         const hmac = crypto.createHmac('sha512', NOWPAYMENTS_IPN_SECRET);
-        hmac.update(payload);
-        const expectedSignature = hmac.digest('hex');
-
-        return crypto.timingSafeEqual(
-            Buffer.from(signature),
-            Buffer.from(expectedSignature)
-        );
+        hmac.update(typeof payload === 'string' ? payload : String(payload));
+        const expectedHex = hmac.digest('hex');
+        const sig = String(signature).trim();
+        const a = Buffer.from(sig, 'hex');
+        const b = Buffer.from(expectedHex, 'hex');
+        if (a.length !== b.length || a.length === 0) {
+            return false;
+        }
+        return crypto.timingSafeEqual(a, b);
     }
 
     /**
@@ -68,8 +99,7 @@ class NOWPaymentsService {
                 currency: paymentData.pay_currency
             });
 
-            // Only process finished payments
-            if (paymentData.payment_status !== 'finished') {
+            if (!this.isFinishedPaymentStatus(paymentData.payment_status)) {
                 console.log('[nowpayments] Payment not finished, status:', paymentData.payment_status);
                 return { processed: false, reason: 'Payment not finished' };
             }
@@ -92,10 +122,9 @@ class NOWPaymentsService {
             const userWallet = paymentData.wallet || paymentData.pay_currency_extra_id || null;
             const userIdFromOrder = paymentData.order_id || null; // order_id contiene el user_id interno
 
-            // Calculate amounts
-            const depositAmount = parseFloat(paymentData.pay_amount || 0);
-            if (depositAmount < 1) {
-                throw new Error('Deposit amount must be at least 1 USDC');
+            const depositAmount = this.normalizeIncomingAmount(paymentData);
+            if (depositAmount < MIN_DEPOSIT_UNITS) {
+                throw new Error(`Deposit amount too small (min ${MIN_DEPOSIT_UNITS})`);
             }
 
             const depositFee = depositAmount * DEPOSIT_FEE_RATE; // 5%
@@ -168,7 +197,7 @@ class NOWPaymentsService {
                         tx_hash: paymentData.payment_id,
                         wallet_address: userWallet || null,
                         amount: depositAmount,
-                        token: 'USDC',
+                        token: (paymentData.pay_currency || 'USDT').toString().slice(0, 32),
                         credits_awarded: 0,
                         status: 'rejected_no_user',
                         payment_id: paymentData.payment_id,
@@ -208,7 +237,7 @@ class NOWPaymentsService {
                     wallet_address: userWallet || null,
                     user_id: userId,
                     amount: depositAmount,
-                    token: 'USDC',
+                    token: (paymentData.pay_currency || 'USDT').toString().slice(0, 32),
                     credits_awarded: creditsAwarded,
                     fee_amount: depositFee,
                     vault_fee: vaultFeeAmount,
@@ -287,6 +316,10 @@ class NOWPaymentsService {
                 userId
             });
 
+            if (!isValidPayoutAddress(userWallet)) {
+                throw new Error('Invalid payout address (use Base 0x… o Tron T…)');
+            }
+
             // Validate user balance
             const { data: userCredits } = await supabase
                 .from('user_credits')
@@ -316,23 +349,34 @@ class NOWPaymentsService {
             const vaultFeeAmount = withdrawalFee * (VAULT_FEE_PERCENTAGE / 100);
             const tradingFundFeeAmount = withdrawalFee * (TRADING_FUND_FEE_PERCENTAGE / 100);
 
-            // Call NOWPayments Mass Payouts API
+            const payoutBody =
+                process.env.NOWPAYOUT_USE_USDC_BASE === 'true'
+                    ? {
+                          currency: 'USDC',
+                          chain: 'BASE',
+                          recipients: [
+                              { address: userWallet, amount: payoutAmount.toFixed(6) }
+                          ]
+                      }
+                    : {
+                          currency: NOWPAYOUT_CURRENCY,
+                          ...(NOWPAYOUT_CHAIN ? { chain: NOWPAYOUT_CHAIN } : {}),
+                          recipients: [
+                              { address: userWallet, amount: payoutAmount.toFixed(8) }
+                          ]
+                      };
+
+            if (CUSTODY_ENABLED) {
+                console.log('[nowpayments] Custody payout currency:', payoutBody.currency);
+            }
+
             const payoutResponse = await fetch(`${NOWPAYMENTS_API_URL}/payout/create`, {
                 method: 'POST',
                 headers: {
                     'x-api-key': NOWPAYMENTS_API_KEY,
                     'Content-Type': 'application/json'
                 },
-                body: JSON.stringify({
-                    currency: 'USDC',
-                    chain: 'BASE',
-                    recipients: [
-                        {
-                            address: userWallet,
-                            amount: payoutAmount.toFixed(6) // USDC has 6 decimals
-                        }
-                    ]
-                })
+                body: JSON.stringify(payoutBody)
             });
 
             if (!payoutResponse.ok) {
@@ -418,6 +462,55 @@ class NOWPaymentsService {
             console.error('[nowpayments] ❌ Error creating withdrawal:', error);
             throw error;
         }
+    }
+
+    /**
+     * Envío desde Custody (premios): no descuenta créditos de usuario en Supabase.
+     */
+    async createCustodyPayout(recipientAddress, amountUsd, metadata = {}) {
+        if (!NOWPAYMENTS_API_KEY) {
+            throw new Error('NOWPAYMENTS_API_KEY is required');
+        }
+        if (!CUSTODY_ENABLED) {
+            console.warn('[nowpayments] CUSTODY_ENABLED is not true — el payout puede fallar en NOWPayments');
+        }
+        if (!isValidPayoutAddress(recipientAddress)) {
+            throw new Error('Invalid recipient for Custody payout');
+        }
+        const amt = Number(amountUsd);
+        if (!Number.isFinite(amt) || amt <= 0) {
+            throw new Error('Invalid payout amount');
+        }
+        const payoutBody =
+            process.env.NOWPAYOUT_USE_USDC_BASE === 'true'
+                ? {
+                      currency: 'USDC',
+                      chain: 'BASE',
+                      recipients: [{ address: recipientAddress, amount: amt.toFixed(6) }]
+                  }
+                : {
+                      currency: NOWPAYOUT_CURRENCY,
+                      ...(NOWPAYOUT_CHAIN ? { chain: NOWPAYOUT_CHAIN } : {}),
+                      recipients: [{ address: recipientAddress, amount: amt.toFixed(8) }]
+                  };
+
+        const payoutResponse = await fetch(`${NOWPAYMENTS_API_URL}/payout/create`, {
+            method: 'POST',
+            headers: {
+                'x-api-key': NOWPAYMENTS_API_KEY,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ ...payoutBody, metadata })
+        });
+
+        if (!payoutResponse.ok) {
+            const err = await payoutResponse.json().catch(() => ({}));
+            throw new Error(`NOWPayments Custody payout: ${payoutResponse.status} ${JSON.stringify(err)}`);
+        }
+        const data = await payoutResponse.json();
+        const payoutId = data.payout_id || data.id;
+        console.log('[nowpayments] Custody payout created:', payoutId, metadata);
+        return { payoutId, data };
     }
 
     /**

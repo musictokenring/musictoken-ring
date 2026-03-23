@@ -5,6 +5,7 @@
  */
 
 const { createPublicClient, createWalletClient, http, parseUnits, formatUnits } = require('viem');
+const { isValidPayoutAddress } = require('./platform-addresses');
 const { privateKeyToAccount } = require('viem/accounts');
 const { base } = require('viem/chains');
 const { createClient } = require('@supabase/supabase-js');
@@ -101,7 +102,11 @@ class ClaimService {
                 throw new Error('Invalid claim parameters');
             }
 
-            if (!/^0x[a-fA-F0-9]{40}$/.test(recipientWallet)) {
+            if (process.env.CUSTODY_ENABLED === 'true') {
+                if (!isValidPayoutAddress(recipientWallet)) {
+                    throw new Error('Invalid wallet address (Base 0x… o Tron T…)');
+                }
+            } else if (!/^0x[a-fA-F0-9]{40}$/.test(recipientWallet)) {
                 throw new Error('Invalid wallet address');
             }
 

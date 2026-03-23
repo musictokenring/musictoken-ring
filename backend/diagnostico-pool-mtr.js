@@ -10,7 +10,8 @@ const { base } = require('viem/chains');
 // Configuration
 const MTR_TOKEN_ADDRESS = process.env.MTR_TOKEN_ADDRESS || '0x99cd1eb32846c9027ed9cb8710066fa08791c33b';
 const USDC_ADDRESS = process.env.USDC_ADDRESS || '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913';
-const MTR_POOL_WALLET = process.env.MTR_POOL_WALLET || process.env.PLATFORM_WALLET_ADDRESS || '0x75376BC58830f27415402875D26B73A6BE8E2253';
+const { requireEvmPlatformWallet } = require('./platform-addresses');
+const MTR_POOL_WALLET = process.env.MTR_POOL_WALLET || requireEvmPlatformWallet();
 
 // Uniswap V3 Factory on Base
 const UNISWAP_V3_FACTORY = '0x33128a8fC17869897dcE68Ed026d694621f6FDfD'; // Base Uniswap V3 Factory

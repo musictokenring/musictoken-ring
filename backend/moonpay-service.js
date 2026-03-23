@@ -11,11 +11,11 @@ const SUPABASE_URL = process.env.SUPABASE_URL || 'https://bscmgcnynbxalcuwdqlm.s
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
 
-// MoonPay Configuration
-const MOONPAY_API_KEY = process.env.MOONPAY_API_KEY || 'pk_test_ABC123DEF456GHI789JKL0MNOPQRSTUV';
-const MOONPAY_SECRET_KEY = process.env.MOONPAY_SECRET_KEY || ''; // Para verificar webhooks
+// MoonPay (legacy desactivado en servidor; mantener solo si se reactiva con env)
+const MOONPAY_API_KEY = process.env.MOONPAY_API_KEY || '';
+const MOONPAY_SECRET_KEY = process.env.MOONPAY_SECRET_KEY || '';
 const MOONPAY_API_URL = 'https://api.moonpay.com/v1';
-const VAULT_WALLET = process.env.VAULT_WALLET_ADDRESS || '0x75376BC58830f27415402875D26B73A6BE8E2253';
+const VAULT_WALLET = process.env.VAULT_WALLET_ADDRESS || '';
 const TRADING_FUND_WALLET = process.env.TRADING_FUND_WALLET || '';
 
 // Fee distribution: 75% vault, 25% trading fund

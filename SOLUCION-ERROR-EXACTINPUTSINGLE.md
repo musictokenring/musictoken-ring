@@ -4,7 +4,7 @@
 
 **El cambio del RPC funcionó:**
 - ✅ Ya NO hay errores `429 (over rate limit)`
-- ✅ La conexión con Alchemy está funcionando
+- ✅ La conexión RPC con Base está funcionando (`BASE_RPC_URL` / `https://mainnet.base.org`)
 - ✅ El sistema puede conectarse correctamente a Base
 
 ---

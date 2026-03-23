@@ -7,7 +7,7 @@
 
 DO $$
 DECLARE
-    treasury_wallet TEXT := '0x75376BC58830f27415402875D26B73A6BE8E2253';
+    treasury_wallet TEXT := '0x0000000000000000000000000000000000000001';
     user_email TEXT := 'fermorillomusic@gmail.com'; -- Buscará usuarios con este email
     user_record RECORD;
     wallet_record RECORD;
@@ -203,5 +203,5 @@ FROM users u
 LEFT JOIN auth.users au ON au.id = u.id
 LEFT JOIN user_credits uc ON uc.user_id = u.id
 LEFT JOIN deposits d ON d.user_id = u.id
-WHERE u.wallet_address = '0x75376BC58830f27415402875D26B73A6BE8E2253'
+WHERE u.wallet_address = '0x0000000000000000000000000000000000000001'
 GROUP BY u.id, au.email, u.wallet_address;

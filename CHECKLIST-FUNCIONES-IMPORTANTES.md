@@ -218,7 +218,7 @@
 | Vault Service | ✅ Funcionando | Media |
 | Price Updater | ✅ Funcionando | Baja |
 | Liquidity Manager | ⚠️ Bloqueado (falta ETH) | Media |
-| Multi-Chain | ⚠️ Limitado (Alchemy Free) | Baja |
+| Multi-Chain | ⚠️ Limitado (RPC público / cuotas) | Baja |
 
 ---
 
@@ -237,7 +237,7 @@
 
 ### 🟢 BAJA PRIORIDAD (Monitorear):
 8. **Price Updater** - Funciona automáticamente
-9. **Multi-Chain** - Limitado por Alchemy Free, pero funcional
+9. **Multi-Chain** - Puede estar limitado por cuotas del RPC; funcional con chunks
 
 ---
 

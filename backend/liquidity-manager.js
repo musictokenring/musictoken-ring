@@ -11,7 +11,8 @@ const { createClient } = require('@supabase/supabase-js');
 const { MTRSwapService } = require('./mtr-swap-service');
 
 // Configuration
-const PLATFORM_WALLET = process.env.PLATFORM_WALLET_ADDRESS || '0x75376BC58830f27415402875D26B73A6BE8E2253';
+const { resolveEvmPlatformWallet } = require('./platform-addresses');
+const PLATFORM_WALLET = resolveEvmPlatformWallet();
 const USDC_ADDRESS = process.env.USDC_ADDRESS || '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913';
 const MTR_TOKEN_ADDRESS = process.env.MTR_TOKEN_ADDRESS || '0x99cd1eb32846c9027ed9cb8710066fa08791c33b';
 const MTR_POOL_WALLET = process.env.MTR_POOL_WALLET || PLATFORM_WALLET;
@@ -145,6 +146,9 @@ class LiquidityManager {
      */
     async getBalances() {
         try {
+            if (!PLATFORM_WALLET || !MTR_POOL_WALLET) {
+                return { usdc: 0, mtr: 0 };
+            }
             const [usdcBalance, mtrBalance] = await Promise.all([
                 this.publicClient.readContract({
                     address: USDC_ADDRESS,

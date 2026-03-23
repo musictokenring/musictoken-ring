@@ -6,7 +6,7 @@ Estas variables **YA DEBEN ESTAR** configuradas en Render. Solo verifica que exi
 
 ```
 SWAP_WALLET_PRIVATE_KEY=<tu_clave_privada_de_PLATFORM_WALLET>
-BASE_RPC_URL=https://base-mainnet.g.alchemy.com/v2/tu-api-key
+BASE_RPC_URL=https://mainnet.base.org
 MIN_USDC_BUFFER=1000
 ```
 
@@ -101,7 +101,7 @@ MTR_POOL_WALLET=<dirección_wallet_separada>
 
 ```env
 SWAP_WALLET_PRIVATE_KEY=<tu_clave_privada>
-BASE_RPC_URL=https://base-mainnet.g.alchemy.com/v2/tu-api-key
+BASE_RPC_URL=https://mainnet.base.org
 MIN_USDC_BUFFER=1000
 ```
 
@@ -153,7 +153,7 @@ Si NO configuras las variables opcionales, el sistema usará:
 
 ### Paso 1: Verificar Variables Existentes
 - [ ] `SWAP_WALLET_PRIVATE_KEY` existe
-- [ ] `BASE_RPC_URL` existe (con Alchemy)
+- [ ] `BASE_RPC_URL` existe (`https://mainnet.base.org`)
 - [ ] `MIN_USDC_BUFFER` existe
 
 ### Paso 2: Agregar Variable Nueva

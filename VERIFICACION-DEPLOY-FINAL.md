@@ -16,8 +16,8 @@ MIN_MTR_RESERVE_USDC_VALUE=1000000 ✅
 [mtr-swap] 🔄 Initializing MTR swap service...
 [mtr-swap] ✅ Service initialized
 [mtr-swap] Swap wallet: 0x...
-[mtr-swap] MTR pool wallet: 0x75376BC58830f27415402875D26B73A6BE8E2253
-[mtr-swap] Platform wallet (tesorería): 0x75376BC58830f27415402875D26B73A6BE8E2253
+[mtr-swap] MTR pool wallet: 0x0000000000000000000000000000000000000001
+[mtr-swap] Platform wallet (tesorería): 0x0000000000000000000000000000000000000001
 [mtr-swap] 🔍 Detecting MTR/USDC pool fee tier...
 [mtr-swap] ✅ Pool encontrado con fee tier: 3000 (0.3%)
 [mtr-swap] 🛡️ Treasury protection updated:
@@ -126,7 +126,7 @@ MIN_MTR_RESERVE_USDC_VALUE=1000000 ✅
 
 2. **Otras variables existentes**:
    - `SWAP_WALLET_PRIVATE_KEY` existe
-   - `BASE_RPC_URL` existe (con Alchemy)
+   - `BASE_RPC_URL` existe (`https://mainnet.base.org`)
 
 3. **Logs del servidor**:
    - Busca errores relacionados con `mtr-swap`

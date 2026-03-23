@@ -13,7 +13,7 @@
 
 DO $$
 DECLARE
-    wallet_correcta TEXT := '0x75376BC58830f27415402875D26B73A6BE8E2253'; -- ⚠️ REEMPLAZA CON TU WALLET
+    wallet_correcta TEXT := '0x0000000000000000000000000000000000000001'; -- ⚠️ REEMPLAZA CON TU WALLET
     correct_credits DECIMAL := 98024480; -- Balance on-chain correcto (1:1)
     user_id_encontrado UUID;
     credits_actuales DECIMAL;
@@ -66,4 +66,4 @@ SELECT
     END as estado
 FROM public.users u
 LEFT JOIN public.user_credits uc ON u.id = uc.user_id
-WHERE LOWER(u.wallet_address) = LOWER('0x75376BC58830f27415402875D26B73A6BE8E2253'); -- Reemplaza con tu wallet
+WHERE LOWER(u.wallet_address) = LOWER('0x0000000000000000000000000000000000000001'); -- Reemplaza con tu wallet

@@ -16,7 +16,7 @@ SELECT
     END as estado
 FROM users u
 LEFT JOIN user_credits uc ON uc.user_id = u.id
-WHERE u.wallet_address = '0x75376BC58830f27415402875D26B73A6BE8E2253';
+WHERE u.wallet_address = '0x0000000000000000000000000000000000000001';
 
 -- Verificar todos los usuarios con créditos
 SELECT 

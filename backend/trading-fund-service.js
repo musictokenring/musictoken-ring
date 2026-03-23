@@ -10,7 +10,7 @@ const { privateKeyToAccount } = require('viem/accounts');
 const { base } = require('viem/chains');
 
 const USDC_ADDRESS = process.env.USDC_ADDRESS || '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913';
-const VAULT_WALLET = process.env.VAULT_WALLET_ADDRESS || '0x75376BC58830f27415402875D26B73A6BE8E2253';
+const VAULT_WALLET = process.env.VAULT_WALLET_ADDRESS || process.env.ADMIN_WALLET_ADDRESS || null;
 const TRADING_FUND_WALLET = process.env.TRADING_FUND_WALLET; // Must be set in env
 const VAULT_FEE_PERCENTAGE = parseFloat(process.env.VAULT_FEE_PERCENTAGE || '75'); // 70-80%
 const TRADING_FUND_FEE_PERCENTAGE = parseFloat(process.env.TRADING_FUND_FEE_PERCENTAGE || '25'); // 20-30%
@@ -73,6 +73,9 @@ class TradingFundService {
      */
     async distributeFee(totalFeeAmount, feeType, txHash = null) {
         try {
+            if (!VAULT_WALLET) {
+                throw new Error('VAULT_WALLET_ADDRESS or ADMIN_WALLET_ADDRESS must be set for vault transfers');
+            }
             console.log(`[trading-fund-service] Distributing ${feeType} fee:`, {
                 totalFeeAmount: totalFeeAmount,
                 vaultPercentage: VAULT_FEE_PERCENTAGE,

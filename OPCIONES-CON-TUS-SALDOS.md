@@ -12,7 +12,7 @@
 
 ## 🎯 PROBLEMA ACTUAL
 
-La wallet de tesorería (`0x75376BC58830f27415402875D26B73A6BE8E2253`) necesita **ETH en Base Network** para pagar gas y ejecutar swaps.
+La wallet de tesorería (`0x0000000000000000000000000000000000000001`) necesita **ETH en Base Network** para pagar gas y ejecutar swaps.
 
 ---
 
@@ -36,7 +36,7 @@ La wallet de tesorería (`0x75376BC58830f27415402875D26B73A6BE8E2253`) necesita 
 2. Ve a "Operar" o "Swap"
 3. Cambia: **9.7128 USDC → ETH** (Base Network)
 4. Recibirás ~0.004-0.005 ETH
-5. Envía ese ETH a: `0x75376BC58830f27415402875D26B73A6BE8E2253`
+5. Envía ese ETH a: `0x0000000000000000000000000000000000000001`
 6. Red: **Base Network**
 
 **Costo**: ~$8-10 USD (del USDC que tienes)
@@ -58,7 +58,7 @@ La wallet de tesorería (`0x75376BC58830f27415402875D26B73A6BE8E2253`) necesita 
 - ⚠️ No resuelve el problema inmediato de gas
 
 **Pasos**:
-1. Envía **9.7128 USDC** a: `0x75376BC58830f27415402875D26B73A6BE8E2253`
+1. Envía **9.7128 USDC** a: `0x0000000000000000000000000000000000000001`
 2. Red: **Base Network**
 3. Luego compra ETH por separado para gas futuro
 
@@ -92,7 +92,7 @@ La wallet de tesorería (`0x75376BC58830f27415402875D26B73A6BE8E2253`) necesita 
    - Red: Base Network
 
 2. **Envía ETH a tesorería**:
-   - Dirección: `0x75376BC58830f27415402875D26B73A6BE8E2253`
+   - Dirección: `0x0000000000000000000000000000000000000001`
    - Red: **Base Network** (MUY IMPORTANTE)
    - Cantidad: Todo el ETH que compraste (~0.004-0.005 ETH)
 
@@ -141,7 +141,7 @@ Una vez que envíes el ETH, el sistema automáticamente:
 - Obtendrás: ~0.004-0.0045 ETH
 
 **PASO 2**: Envía ETH a tesorería
-- Dirección: `0x75376BC58830f27415402875D26B73A6BE8E2253`
+- Dirección: `0x0000000000000000000000000000000000000001`
 - Red: **Base Network** ⚠️
 - Cantidad: Todo el ETH que compraste
 

@@ -20,10 +20,12 @@ async function prizeRouteHandler(req, res) {
 
     return res.status(200).json({
       ok: true,
-      txHash: result.txHash,
-      status: result.status,
+      method: result.method || null,
+      payoutId: result.payoutId || null,
+      txHash: result.txHash || null,
+      status: result.status || null,
       matchId: matchId || null,
-      token: token || 'MTR',
+      token: token || (result.method === 'nowpayments_custody' ? 'USDT' : 'MTR'),
       tokenAddress: tokenAddress || '0x99cd1eb32846c9027ed9cb8710066fa08791c33b'
     })
   } catch (error) {

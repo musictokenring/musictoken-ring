@@ -2,7 +2,7 @@
 
 ## 🔍 PROBLEMA IDENTIFICADO
 
-Tu transacción de USDC llegó correctamente a la wallet de la plataforma (`0x75376BC58830f27415402875D26B73A6BE8E2253`) y se refleja en el vault (5.29 USDC), pero **NO se acreditó a tu saldo de créditos**.
+Tu transacción de USDC llegó correctamente a la wallet de la plataforma (`0x0000000000000000000000000000000000000001`) y se refleja en el vault (5.29 USDC), pero **NO se acreditó a tu saldo de créditos**.
 
 **Causas posibles:**
 1. El `DepositListener` no detectó la transacción (problema de sincronización)
@@ -74,7 +74,7 @@ Para ejecutar los scripts, necesitas:
 1. Ve a: https://basescan.org/tx/<TX_HASH>
 2. Verifica:
    - ✅ Status: Success
-   - ✅ To: `0x75376BC58830f27415402875D26B73A6BE8E2253`
+   - ✅ To: `0x0000000000000000000000000000000000000001`
    - ✅ Token: USDC (`0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913`)
    - ✅ Amount: Debe coincidir con lo que enviaste
 
@@ -159,7 +159,7 @@ Si después de ejecutar los scripts el problema persiste:
 ## 📝 CHECKLIST DE VERIFICACIÓN
 
 - [ ] Transacción visible en BaseScan
-- [ ] Transacción llegó a `0x75376BC58830f27415402875D26B73A6BE8E2253`
+- [ ] Transacción llegó a `0x0000000000000000000000000000000000000001`
 - [ ] Ejecuté `diagnose-deposit.js` y confirmé que NO está procesado
 - [ ] Ejecuté `fix-deposit.js` exitosamente
 - [ ] Verifiqué que los créditos aparecen en mi balance

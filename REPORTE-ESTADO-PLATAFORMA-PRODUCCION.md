@@ -28,7 +28,7 @@ La plataforma está **funcionando correctamente** en producción con las siguien
 ### 1. **Arquitectura del Sistema**
 
 #### Wallet de Tesorería (Única)
-- **Address:** `0x75376BC58830f27415402875D26B73A6BE8E2253`
+- **Address:** `0x0000000000000000000000000000000000000001`
 - **Red:** Base Network (Chain ID: 8453)
 - **Propósito:** 
   - Recibir todos los depósitos (USDC y MTR)
@@ -183,16 +183,14 @@ have 9716519589076 want 2250000000000000
 - **URGENTE:** Agregar mínimo 0.01 ETH a wallet de tesorería
 - **Recomendado:** 0.05 ETH para operaciones continuas
 
-**Wallet:** `0x75376BC58830f27415402875D26B73A6BE8E2253`
+**Wallet:** `0x0000000000000000000000000000000000000001`
 
 ---
 
-#### 2. **ADVERTENCIA: Límite de Alchemy Free Tier**
+#### 2. **ADVERTENCIA: Límite de `eth_getLogs` (RPC)**
 
 **Problema:**
-```
-Under the Free tier plan, you can make eth_getLogs requests with up to a 10 block range.
-```
+Algunos endpoints limitan el rango de bloques por petición en `eth_getLogs`.
 
 **Impacto:**
 - ⚠️ Servicios de sincronización de depósitos pueden fallar
@@ -200,8 +198,8 @@ Under the Free tier plan, you can make eth_getLogs requests with up to a 10 bloc
 - ⚠️ No crítico para operación básica
 
 **Soluciones:**
-- **Opción A:** Actualizar a Alchemy PAYG (~$0.10 por 1M requests)
-- **Opción B:** Ajustar código para usar chunks de 10 bloques
+- **Opción A:** Usar `BASE_RPC_URL=https://mainnet.base.org` (oficial) y/o un endpoint con mayor capacidad (configuración externa)
+- **Opción B:** Ajustar código para usar chunks de pocos bloques por petición
 
 ---
 
@@ -312,8 +310,8 @@ Under the Free tier plan, you can make eth_getLogs requests with up to a 10 bloc
    - Reemplazar rate temporal 1:1
 
 5. **Mejorar Sincronización de Depósitos**
-   - Actualizar a Alchemy PAYG O
-   - Implementar chunks de 10 bloques
+   - Revisar `BASE_RPC_URL` (`https://mainnet.base.org` por defecto) o endpoint con más cuota
+   - Implementar chunks de pocos bloques por petición
    - Reducir riesgo de depósitos perdidos
 
 6. **Agregar Link a BaseScan en UI**

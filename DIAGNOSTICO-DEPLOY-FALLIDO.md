@@ -95,7 +95,7 @@ Error: Cannot find module 'express-rate-limit'
 
 2. **`PLATFORM_WALLET_ADDRESS`** ⚠️ CRÍTICA
    - Debe estar configurada
-   - Valor esperado: `0x75376BC58830f27415402875D26B73A6BE8E2253`
+   - Valor esperado: `0x0000000000000000000000000000000000000001`
    - Formato: Dirección Ethereum válida (0x + 40 caracteres hex)
 
 3. **`SUPABASE_SERVICE_ROLE_KEY`** ⚠️ CRÍTICA
@@ -132,7 +132,7 @@ Después del deploy, los logs deberían mostrar:
 ```
 [server] 🔒 Validating environment variables...
 [server] ✅ Environment variables validated
-[server] 🔒 Platform Wallet: 0x75376BC58830f27415402875D26B73A6BE8E2253
+[server] 🔒 Platform Wallet: 0x0000000000000000000000000000000000000001
 [server] Initializing automated services...
 [server] ✅ All services initialized
 [server] ✅ Server ready and all services initialized

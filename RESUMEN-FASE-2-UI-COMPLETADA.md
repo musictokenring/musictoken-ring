@@ -72,7 +72,7 @@
 ### Depósito:
 - "Créditos MTR Nominales: Estas fichas valen siempre $1 cada una (1:1 USDC estable)"
 - "Depositar USDC Directo (Recomendado)"
-- "Wallet de depósito: 0x75376BC58830f27415402875D26B73A6BE8E2253"
+- "Wallet de depósito: 0x0000000000000000000000000000000000000001"
 - "Ejemplo: Envías 100 USDC → Recibes 95 créditos nominales (5% fee)"
 
 ### Retiro:

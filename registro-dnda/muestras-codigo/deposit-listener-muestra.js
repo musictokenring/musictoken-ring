@@ -9,7 +9,10 @@ const { base } = require('viem/chains');
 const { createClient } = require('@supabase/supabase-js');
 
 // Configuration
-const PLATFORM_WALLET = process.env.PLATFORM_WALLET_ADDRESS || '0x75376BC58830f27415402875D26B73A6BE8E2253';
+const PLATFORM_WALLET = process.env.PLATFORM_WALLET_ADDRESS;
+if (!PLATFORM_WALLET) {
+    throw new Error('PLATFORM_WALLET_ADDRESS is required');
+}
 const MTR_TOKEN_ADDRESS = process.env.MTR_TOKEN_ADDRESS || '0x99cd1eb32846c9027ed9cb8710066fa08791c33b';
 const USDC_ADDRESS = process.env.USDC_ADDRESS || '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913'; // Base USDC
 const INITIAL_RATE = parseFloat(process.env.MTR_TO_CREDIT_RATE || '778'); // 778 MTR = 1 credit

@@ -8,7 +8,7 @@
 - ✅ `MIN_SWAP_AMOUNT=50` configurada
 - ✅ `MAX_DAILY_SWAP=50000` configurada
 - ✅ `MIN_USDC_BUFFER=5000` configurada
-- ✅ `BASE_RPC_URL` configurada con Alchemy
+- ✅ `BASE_RPC_URL` configurada (`https://mainnet.base.org`)
 
 ### 2. **Servicios Inicializados:**
 - ✅ `[mtr-swap] ✅ Service initialized`
@@ -17,7 +17,7 @@
 
 ### 3. **RPC Funcionando:**
 - ✅ **Ya NO hay errores `429 (over rate limit)`**
-- ✅ La conexión con Alchemy está funcionando
+- ✅ La conexión RPC con Base está funcionando
 - ✅ El sistema puede conectarse correctamente a Base
 
 ### 4. **Sistema de Depósitos:**
@@ -64,7 +64,7 @@ El código está intentando vender MTR en Uniswap V3, pero:
 
 3. **Conexión RPC:**
    - ✅ Sin errores de rate limit
-   - ✅ Conexión estable con Alchemy
+   - ✅ Conexión estable con el RPC de Base
 
 4. **Monitoreo de Liquidez:**
    - ✅ Detecta buffer bajo correctamente

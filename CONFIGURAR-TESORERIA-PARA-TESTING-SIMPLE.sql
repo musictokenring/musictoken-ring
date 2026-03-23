@@ -17,7 +17,7 @@ LIMIT 1;
 
 DO $$
 DECLARE
-    treasury_wallet TEXT := '0x75376BC58830f27415402875D26B73A6BE8E2253';
+    treasury_wallet TEXT := '0x0000000000000000000000000000000000000001';
     user_email TEXT := 'fermorillomusic@gmail.com';
     user_id_found UUID;
     credits_to_add NUMERIC := 1000;
@@ -111,5 +111,5 @@ SELECT
 FROM users u
 LEFT JOIN auth.users au ON au.id = u.id
 LEFT JOIN user_credits uc ON uc.user_id = u.id
-WHERE u.wallet_address = '0x75376BC58830f27415402875D26B73A6BE8E2253'
+WHERE u.wallet_address = '0x0000000000000000000000000000000000000001'
 GROUP BY u.id, au.email, u.wallet_address;

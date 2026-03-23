@@ -18,39 +18,34 @@ El sistema intenta vender MTR para obtener USDC (porque el buffer USDC está baj
 
 ### Solución:
 **Agregar ETH a la wallet de tesorería**:
-- Wallet: `0x75376BC58830f27415402875D26B73A6BE8E2253`
+- Wallet: `0x0000000000000000000000000000000000000001`
 - Cantidad necesaria: **Mínimo 0.01 ETH** (recomendado para varios swaps)
 - Puedes enviar desde cualquier exchange o wallet
 
 ---
 
-## 🟡 PROBLEMA 2: Límite de Alchemy Free Tier
+## 🟡 PROBLEMA 2: Límite de `eth_getLogs` (rango de bloques)
 
-### Error:
-```
-Under the Free tier plan, you can make eth_getLogs requests with up to a 10 block range.
-Based on your parameters, this block range should work: [0x2909bba, 0x2909bc3]
-```
+### Error típico:
+Algunos proveedores RPC limitan el rango de bloques en `eth_getLogs` (p. ej. mensajes sobre rangos máximos permitidos).
 
 ### Análisis:
-- Alchemy Free Tier solo permite rangos de **10 bloques** en `eth_getLogs`
-- El código está intentando escanear rangos más grandes
-- Esto afecta a `deposit-sync-service` y `multi-chain-deposit-listener`
+- El endpoint puede imponer un máximo de bloques por petición
+- Si el código escanea rangos grandes, la llamada puede fallar
+- Afecta a `deposit-sync-service` y `multi-chain-deposit-listener`
 
 ### Impacto:
-- Los servicios de sincronización de depósitos pueden fallar
-- No crítico para operación básica, pero puede perder depósitos si no se detectan
+- La sincronización de depósitos puede fallar o requerir reintentos
+- No siempre crítico, pero conviene vigilar
 
 ### Soluciones:
 
-#### Opción A: Actualizar a Alchemy PAYG (Recomendado)
-- Costo: ~$0.10 por 1M requests
-- Permite rangos ilimitados de bloques
-- Mejor rendimiento
+#### Opción A: Endpoint con cuotas más altas
+- Configurar `BASE_RPC_URL` a un proveedor compatible con Base que permita rangos mayores (fuera de este repo).
 
-#### Opción B: Ajustar Código para Usar Chunks de 10 Bloques
-- Modificar servicios para dividir búsquedas en chunks de 10 bloques
-- Más lento pero funciona con Free Tier
+#### Opción B: Chunks de bloques más pequeños
+- Dividir búsquedas en trozos (p. ej. 10 bloques) en el código
+- Más lento pero más compatible con RPC público (`https://mainnet.base.org`)
 
 ---
 
@@ -77,7 +72,7 @@ Based on your parameters, this block range should work: [0x2909bba, 0x2909bc3]
 
 ### 1. Agregar ETH a la Wallet (URGENTE) ⚠️
 
-**Wallet**: `0x75376BC58830f27415402875D26B73A6BE8E2253`
+**Wallet**: `0x0000000000000000000000000000000000000001`
 
 **Cantidad recomendada**: 
 - **Mínimo**: 0.01 ETH (~$25-30)
@@ -85,16 +80,13 @@ Based on your parameters, this block range should work: [0x2909bba, 0x2909bc3]
 
 **Cómo hacerlo**:
 1. Ve a tu exchange o wallet
-2. Envía ETH a: `0x75376BC58830f27415402875D26B73A6BE8E2253`
+2. Envía ETH a: `0x0000000000000000000000000000000000000001`
 3. Red: Base Network
 4. Espera confirmación (1-2 minutos)
 
-### 2. (Opcional) Actualizar Alchemy a PAYG
+### 2. (Opcional) Ajustar RPC o chunks
 
-Si quieres eliminar los errores de límite de bloques:
-1. Ve a tu cuenta de Alchemy
-2. Actualiza el plan a PAYG
-3. Los errores desaparecerán
+Si persisten límites de `eth_getLogs`, reduce el rango por petición en el código o usa un endpoint con mayor capacidad (variable `BASE_RPC_URL`).
 
 ---
 
@@ -106,7 +98,7 @@ Si quieres eliminar los errores de límite de bloques:
 | Liquidity Manager | ✅ Funcionando | Ninguno |
 | Protección Tesorería | ✅ Funcionando | Ninguno |
 | Swap de MTR | ❌ Bloqueado | Falta ETH para gas |
-| Sincronización Depósitos | ⚠️ Limitado | Alchemy Free Tier |
+| Sincronización Depósitos | ⚠️ Limitado | Cuotas / rango `eth_getLogs` del RPC |
 
 ---
 

@@ -38,7 +38,8 @@ try {
 }
 
 // Configuration
-const PLATFORM_WALLET = process.env.PLATFORM_WALLET_ADDRESS || '0x75376BC58830f27415402875D26B73A6BE8E2253';
+const { requireEvmPlatformWallet } = require('./platform-addresses');
+let PLATFORM_WALLET;
 const DEPOSIT_FEE_RATE = 0.05; // 5%
 
 // USDC addresses on different networks
@@ -175,6 +176,7 @@ class MultiChainDepositListener {
      * Initialize multi-chain deposit listener
      */
     async init() {
+        PLATFORM_WALLET = requireEvmPlatformWallet();
         console.log('[multi-chain] ==========================================');
         console.log('[multi-chain] 🚀 Initializing multi-chain deposit listener...');
         console.log('[multi-chain] ==========================================');

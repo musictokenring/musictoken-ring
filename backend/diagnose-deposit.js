@@ -7,7 +7,8 @@ const { createPublicClient, http, formatUnits } = require('viem');
 const { base } = require('viem/chains');
 const { createClient } = require('@supabase/supabase-js');
 
-const PLATFORM_WALLET = process.env.PLATFORM_WALLET_ADDRESS || '0x75376BC58830f27415402875D26B73A6BE8E2253';
+const { requireEvmPlatformWallet } = require('./platform-addresses');
+const PLATFORM_WALLET = requireEvmPlatformWallet();
 const USDC_ADDRESS = process.env.USDC_ADDRESS || '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913';
 const SUPABASE_URL = process.env.SUPABASE_URL || 'https://bscmgcnynbxalcuwdqlm.supabase.co';
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;

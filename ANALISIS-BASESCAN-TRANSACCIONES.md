@@ -2,7 +2,7 @@
 
 ## 📋 Información de la Wallet de la Plataforma
 
-**Dirección:** `0x75376BC58830f27415402875D26B73A6BE8E2253`
+**Dirección:** `0x0000000000000000000000000000000000000001`
 
 **Dirección USDC en Base:** `0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913`
 
@@ -14,7 +14,7 @@
 
 **URL para ver transferencias de USDC:**
 ```
-https://basescan.org/token/0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913?a=0x75376BC58830f27415402875D26B73A6BE8E2253
+https://basescan.org/token/0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913?a=0x0000000000000000000000000000000000000001
 ```
 
 **Filtros a aplicar:**
@@ -55,7 +55,7 @@ https://basescan.org/token/0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913?a=0x75376B
 
 ### Paso 1: Ver Todas las Transferencias de USDC
 
-1. Ve a: `https://basescan.org/token/0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913?a=0x75376BC58830f27415402875D26B73A6BE8E2253`
+1. Ve a: `https://basescan.org/token/0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913?a=0x0000000000000000000000000000000000000001`
 2. Haz clic en la pestaña **"Token Transfers"**
 3. Filtra por **"OUT"** (salientes)
 4. Ordena por **"Value"** (mayor a menor)
@@ -87,7 +87,7 @@ https://basescan.org/token/0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913?a=0x75376B
 
 1. Haz clic en el hash de la transacción
 2. Revisa:
-   - **From:** Debe ser `0x75376BC58830f27415402875D26B73A6BE8E2253`
+   - **From:** Debe ser `0x0000000000000000000000000000000000000001`
    - **To:** Dirección sospechosa
    - **Value:** Monto en USDC
    - **Timestamp:** Fecha y hora exacta
@@ -138,9 +138,9 @@ https://basescan.org/token/0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913?a=0x75376B
 
 ## 🔗 Enlaces Útiles
 
-- **Wallet de la Plataforma:** https://basescan.org/address/0x75376BC58830f27415402875D26B73A6BE8E2253
+- **Wallet de la Plataforma:** https://basescan.org/address/0x0000000000000000000000000000000000000001
 - **USDC Token:** https://basescan.org/token/0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913
-- **Transferencias de USDC:** https://basescan.org/token/0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913?a=0x75376BC58830f27415402875D26B73A6BE8E2253
+- **Transferencias de USDC:** https://basescan.org/token/0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913?a=0x0000000000000000000000000000000000000001
 
 ---
 

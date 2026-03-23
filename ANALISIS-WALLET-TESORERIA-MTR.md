@@ -4,7 +4,7 @@
 
 ### Configuración del Código:
 ```javascript
-const PLATFORM_WALLET = '0x75376BC58830f27415402875D26B73A6BE8E2253';
+const PLATFORM_WALLET = '0x0000000000000000000000000000000000000001';
 const MTR_POOL_WALLET = process.env.MTR_POOL_WALLET || PLATFORM_WALLET;
 ```
 
@@ -15,7 +15,7 @@ const MTR_POOL_WALLET = process.env.MTR_POOL_WALLET || PLATFORM_WALLET;
 ## ⚠️ PROBLEMA IDENTIFICADO
 
 ### Escenario Actual:
-1. **Wallet de Tesorería** (`0x75376BC58830f27415402875D26B73A6BE8E2253`) tiene **99 millones de MTR**
+1. **Wallet de Tesorería** (`0x0000000000000000000000000000000000000001`) tiene **99 millones de MTR**
 2. **MTR_POOL_WALLET** = misma wallet (por defecto)
 3. **El código consulta el balance total** de MTR en esa wallet
 

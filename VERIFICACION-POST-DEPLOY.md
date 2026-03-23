@@ -31,7 +31,7 @@ En Render Dashboard → Logs, deberías ver:
 ```
 [server] 🔒 Validating environment variables...
 [server] ✅ Environment variables validated
-[server] 🔒 Platform Wallet: 0x75376BC58830f27415402875D26B73A6BE8E2253
+[server] 🔒 Platform Wallet: 0x0000000000000000000000000000000000000001
 [server] Initializing automated services...
 [server] ✅ All services initialized
 [server] ✅ Server ready and all services initialized
@@ -155,7 +155,7 @@ LIMIT 10;
 ### 1. Endpoint de Créditos del Usuario
 
 ```bash
-curl https://musictoken-ring.onrender.com/api/user/credits/0x75376BC58830f27415402875D26B73A6BE8E2253
+curl https://musictoken-ring.onrender.com/api/user/credits/0x0000000000000000000000000000000000000001
 ```
 
 **Respuesta esperada:**

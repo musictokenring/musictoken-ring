@@ -80,7 +80,7 @@ En tu servidor (Render, etc.), agrega estas variables si quieres habilitar todas
 ```env
 # Ya configuradas (Base)
 BASE_RPC_URL=https://mainnet.base.org
-PLATFORM_WALLET_ADDRESS=0x75376BC58830f27415402875D26B73A6BE8E2253
+PLATFORM_WALLET_ADDRESS=0x0000000000000000000000000000000000000001
 USDC_ADDRESS=0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913
 
 # Nuevas (opcionales - el sistema funcionará solo con Base si no las configuras)
@@ -128,7 +128,7 @@ Esto es normal y el sistema seguirá funcionando con las redes disponibles.
 
 ### **Flujo Automático:**
 
-1. **Usuario envía USDC** desde cualquier red (Base, Ethereum, Polygon, etc.) → a la wallet `0x75376BC58830f27415402875D26B73A6BE8E2253`
+1. **Usuario envía USDC** desde cualquier red (Base, Ethereum, Polygon, etc.) → a la wallet `0x0000000000000000000000000000000000000001`
 
 2. **Sistema detecta automáticamente:**
    - Escanea todas las redes configuradas simultáneamente

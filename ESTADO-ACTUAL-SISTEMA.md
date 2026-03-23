@@ -70,7 +70,7 @@
 
 ### Configuración:
 - **Trading Fund Wallet:** Configurada ✅
-- **Vault Wallet:** 0x75376BC58830f27415402875D26B73A6BE8E2253 ✅
+- **Vault Wallet:** 0x0000000000000000000000000000000000000001 ✅
 - **Fee Distribution:** 75% vault / 25% trading fund ✅
 
 ---

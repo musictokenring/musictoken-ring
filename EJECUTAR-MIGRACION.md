@@ -78,7 +78,7 @@ SUPABASE_SERVICE_ROLE_KEY=[TU_CLAVE_AQUI]
 
 # Base (ya configurado)
 BASE_RPC_URL=https://mainnet.base.org
-PLATFORM_WALLET_ADDRESS=0x75376BC58830f27415402875D26B73A6BE8E2253
+PLATFORM_WALLET_ADDRESS=0x0000000000000000000000000000000000000001
 USDC_ADDRESS=0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913
 
 # Ethereum (nuevo - opcional pero recomendado)
@@ -95,7 +95,7 @@ ARBITRUM_RPC_URL=https://arb1.arbitrum.io/rpc
 ```
 
 **Nota:** Los RPCs públicos pueden tener límites de rate. Para producción, considera usar servicios como:
-- Alchemy (https://www.alchemy.com/)
+- RPC Base oficial: `https://mainnet.base.org`
 - Infura (https://www.infura.io/)
 - QuickNode (https://www.quicknode.com/)
 

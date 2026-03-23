@@ -27,7 +27,7 @@
 
 ### Paso 1: Usuario Deposita
 ```
-Usuario → Transfiere USDC → PLATFORM_WALLET (0x75376BC58830f27415402875D26B73A6BE8E2253)
+Usuario → Transfiere USDC → PLATFORM_WALLET (0x0000000000000000000000000000000000000001)
 ```
 
 ### Paso 2: Sistema Detecta y Procesa
@@ -170,7 +170,7 @@ ORDER BY c.usdc_amount DESC, c.created_at DESC;
 
 **Ve a Render → Environment y verifica:**
 
-- `PLATFORM_WALLET_ADDRESS` = `0x75376BC58830f27415402875D26B73A6BE8E2253` ✅
+- `PLATFORM_WALLET_ADDRESS` = `0x0000000000000000000000000000000000000001` ✅
 - `MTR_POOL_WALLET` = ¿? (debe ser tu wallet o vacía) ⚠️
 - `ADMIN_WALLET_PRIVATE_KEY` = ¿? (debe ser la clave de PLATFORM_WALLET) ⚠️
 - `SWAP_WALLET_PRIVATE_KEY` = ¿? (debe ser una wallet que controles) ⚠️
@@ -183,7 +183,7 @@ ORDER BY c.usdc_amount DESC, c.created_at DESC;
 
 **Ve a:**
 ```
-https://basescan.org/address/0x75376BC58830f27415402875D26B73A6BE8E2253
+https://basescan.org/address/0x0000000000000000000000000000000000000001
 ```
 
 **Busca:**

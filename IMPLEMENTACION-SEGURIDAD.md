@@ -119,7 +119,7 @@ O si estás en Render, el `package.json` ya está actualizado y Render lo instal
 Verificar que las siguientes variables estén correctamente configuradas:
 
 - `ADMIN_WALLET_PRIVATE_KEY` ✅ Requerida
-- `PLATFORM_WALLET_ADDRESS` ✅ Requerida (debe ser `0x75376BC58830f27415402875D26B73A6BE8E2253`)
+- `PLATFORM_WALLET_ADDRESS` ✅ Requerida (debe ser `0x0000000000000000000000000000000000000001`)
 - `SUPABASE_SERVICE_ROLE_KEY` ✅ Requerida
 - `VAULT_WALLET_ADDRESS` (opcional, pero recomendado)
 - `SWAP_WALLET_PRIVATE_KEY` (opcional)

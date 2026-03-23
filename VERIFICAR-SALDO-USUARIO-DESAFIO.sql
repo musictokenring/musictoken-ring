@@ -8,13 +8,13 @@
 -- - Estado del desafío
 
 -- PASO 1: Verificar usuario por wallet address
--- ⚠️ IMPORTANTE: NO usar la wallet de tesorería (0x75376BC58830f27415402875D26B73A6BE8E2253)
+-- ⚠️ IMPORTANTE: NO usar la wallet de tesorería (0x0000000000000000000000000000000000000001)
 -- Esa wallet es del sistema, no de usuarios individuales
 -- Reemplaza con la wallet REAL del usuario que está aceptando el desafío
 DO $$
 DECLARE
     target_wallet TEXT := '0x7537...2253'; -- ⚠️ CAMBIAR ESTA WALLET (NO usar wallet de tesorería)
-    treasury_wallet TEXT := '0x75376BC58830f27415402875D26B73A6BE8E2253'; -- Wallet de tesorería
+    treasury_wallet TEXT := '0x0000000000000000000000000000000000000001'; -- Wallet de tesorería
     user_record RECORD;
     credits_record RECORD;
     deposits_record RECORD;

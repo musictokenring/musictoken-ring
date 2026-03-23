@@ -93,7 +93,7 @@ MTR_POOL_WALLET=0x1234567890123456789012345678901234567890
    [mtr-swap] ✅ MTR_POOL_WALLET configurada separadamente
    [mtr-swap] Swap wallet: 0x...
    [mtr-swap] MTR pool wallet: 0x... (diferente de PLATFORM_WALLET)
-   [mtr-swap] Platform wallet (tesorería): 0x75376BC58830f27415402875D26B73A6BE8E2253
+   [mtr-swap] Platform wallet (tesorería): 0x0000000000000000000000000000000000000001
    ```
 
 2. **Si ves advertencia**, significa que `MTR_POOL_WALLET === PLATFORM_WALLET`

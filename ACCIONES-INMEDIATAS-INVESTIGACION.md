@@ -3,7 +3,7 @@
 ## ✅ CONFIRMACIÓN
 
 **Variables de entorno verificadas:**
-- ✅ `ADMIN_WALLET_ADDRESS` = `0x75376BC58830f27415402875D26B73A6BE8E2253` (CORRECTO)
+- ✅ `ADMIN_WALLET_ADDRESS` = `0x0000000000000000000000000000000000000001` (CORRECTO)
 - ✅ `MTR_POOL_WALLET` no existe → Usa `PLATFORM_WALLET` como fallback (SEGURO)
 - ⚠️ `PLATFORM_WALLET_ADDRESS` no existe → Agregar explícitamente (RECOMENDADO)
 
@@ -137,7 +137,7 @@ LIMIT 50;
 
 **Ve a:**
 ```
-https://basescan.org/address/0x75376BC58830f27415402875D26B73A6BE8E2253
+https://basescan.org/address/0x0000000000000000000000000000000000000001
 ```
 
 **Busca:**
@@ -194,7 +194,7 @@ https://basescan.org/address/0x75376BC58830f27415402875D26B73A6BE8E2253
 2. Haz clic en "Add Environment Variable"
 3. Agrega:
    - **KEY:** `PLATFORM_WALLET_ADDRESS`
-   - **VALUE:** `0x75376BC58830f27415402875D26B73A6BE8E2253`
+   - **VALUE:** `0x0000000000000000000000000000000000000001`
 
 **Nota:** Esto no es crítico porque el código tiene fallback, pero es mejor práctica tenerlo explícito.
 

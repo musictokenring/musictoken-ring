@@ -36,7 +36,7 @@ setup_vercel() {
     vercel env add BASE_RPC_URL production <<< "${BASE_RPC_URL:-https://mainnet.base.org}" || true
     vercel env add MTR_TOKEN_ADDRESS production <<< "${MTR_TOKEN_ADDRESS:-0x99cd1eb32846c9027ed9cb8710066fa08791c33b}" || true
     vercel env add USDC_ADDRESS production <<< "${USDC_ADDRESS:-0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913}" || true
-    vercel env add PLATFORM_WALLET_ADDRESS production <<< "${PLATFORM_WALLET_ADDRESS:-0x75376BC58830f27415402875D26B73A6BE8E2253}" || true
+    vercel env add PLATFORM_WALLET_ADDRESS production <<< "${PLATFORM_WALLET_ADDRESS:-}" || true
     vercel env add ADMIN_WALLET_PRIVATE_KEY production <<< "$ADMIN_WALLET_PRIVATE_KEY" || true
     vercel env add ADMIN_WALLET_ADDRESS production <<< "$ADMIN_WALLET_ADDRESS" || true
     vercel env add MTR_TO_CREDIT_RATE production <<< "${MTR_TO_CREDIT_RATE:-778}" || true
@@ -67,7 +67,7 @@ setup_render() {
                 \"BASE_RPC_URL\": \"${BASE_RPC_URL:-https://mainnet.base.org}\",
                 \"MTR_TOKEN_ADDRESS\": \"${MTR_TOKEN_ADDRESS:-0x99cd1eb32846c9027ed9cb8710066fa08791c33b}\",
                 \"USDC_ADDRESS\": \"${USDC_ADDRESS:-0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913}\",
-                \"PLATFORM_WALLET_ADDRESS\": \"${PLATFORM_WALLET_ADDRESS:-0x75376BC58830f27415402875D26B73A6BE8E2253}\",
+                \"PLATFORM_WALLET_ADDRESS\": \"${PLATFORM_WALLET_ADDRESS:-}\",
                 \"ADMIN_WALLET_PRIVATE_KEY\": \"$ADMIN_WALLET_PRIVATE_KEY\",
                 \"ADMIN_WALLET_ADDRESS\": \"$ADMIN_WALLET_ADDRESS\",
                 \"MTR_TO_CREDIT_RATE\": \"${MTR_TO_CREDIT_RATE:-778}\",

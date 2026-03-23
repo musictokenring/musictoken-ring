@@ -204,7 +204,7 @@ const CONFIG = {
     
     // Blockchain
     CHAIN_ID: 80001,  // 80001 = Mumbai, 137 = Polygon Mainnet
-    RPC_URL: 'https://polygon-mumbai.g.alchemy.com/v2/YOUR_KEY',
+    RPC_URL: 'https://polygon-mumbai-bor.publicnode.com', // ejemplo testnet; en Base usa https://mainnet.base.org
     
     // Contratos
     CONTRACT_ADDRESS: '0xYourBattleContract',

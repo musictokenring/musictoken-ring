@@ -48,7 +48,7 @@ Falta:      0.00223 ETH        (~$5-6)
 
 ### Opción 1: Enviar Más ETH (Recomendado)
 1. Envía **mínimo 0.003 ETH** a la misma wallet
-2. Wallet: `0x75376BC58830f27415402875D26B73A6BE8E2253`
+2. Wallet: `0x0000000000000000000000000000000000000001`
 3. Red: Base Network
 4. Esto permitirá ejecutar el swap inmediatamente
 

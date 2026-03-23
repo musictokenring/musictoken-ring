@@ -126,7 +126,7 @@ const response = await fetch(`${backendUrl}/api/vault/add-fee`, {
 
 **⚠️ REQUIERE VERIFICACIÓN BACKEND:**
 - El endpoint `/api/vault/add-fee` debe acumular fees en la wallet de tesorería
-- Wallet de tesorería: `0x75376BC58830f27415402875D26B73A6BE8E2253`
+- Wallet de tesorería: `0x0000000000000000000000000000000000000001`
 - Debe haber un registro de todos los fees acumulados
 
 **RECOMENDACIÓN:** Crear script SQL para verificar fees acumulados:
@@ -336,7 +336,7 @@ this.currentUsdcValue = this.currentCredits; // 1:1 fijo
    ```
 
 2. **Verificar wallet de tesorería:**
-   - Balance USDC en `0x75376BC58830f27415402875D26B73A6BE8E2253`
+   - Balance USDC en `0x0000000000000000000000000000000000000001`
    - Debe coincidir con suma de fees acumulados
 
 3. **Verificar conversión USDC → Créditos:**

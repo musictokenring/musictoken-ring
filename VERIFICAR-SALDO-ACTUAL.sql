@@ -3,8 +3,8 @@
 -- Ejecuta este script para ver tu saldo actual antes de corregir
 -- ==========================================
 
--- Reemplaza '0x75376BC58830f27415402875D26B73A6BE8E2253' con tu dirección de wallet
--- Ejemplo: '0x75376BC58830f27415402875D26B73A6BE8E2253'
+-- Reemplaza '0x0000000000000000000000000000000000000001' con tu dirección de wallet
+-- Ejemplo: '0x0000000000000000000000000000000000000001'
 
 SELECT 
     u.wallet_address,

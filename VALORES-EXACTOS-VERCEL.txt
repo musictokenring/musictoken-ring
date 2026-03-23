@@ -30,7 +30,7 @@ Copia y pega estos valores EXACTOS en Vercel Environment Variables:
 
 6. PLATFORM_WALLET_ADDRESS
    Key: PLATFORM_WALLET_ADDRESS
-   Value: 0x75376BC58830f27415402875D26B73A6BE8E2253
+   Value: 0x0000000000000000000000000000000000000001
    Environment: Production, Preview, Development
 
 7. ADMIN_WALLET_ADDRESS

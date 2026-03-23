@@ -23,7 +23,7 @@
 
 ### 1. Conversión Automática MTR → Créditos Estables
 **Ubicación:** Backend (listener de eventos / indexer)  
-**Requisito:** Cuando usuario deposita MTR a la wallet de tesorería (0x75376BC58830f27415402875D26B73A6BE8E2253):
+**Requisito:** Cuando usuario deposita MTR a la wallet de tesorería (0x0000000000000000000000000000000000000001):
 - Detectar Transfer de MTR
 - Obtener precio actual (oracle: Chainlink USDC/USD o TWAP Aerodrome)
 - Convertir MTR → créditos estables equivalentes
@@ -49,11 +49,11 @@
 **Requisito:**
 - Usuario solicita retiro de créditos estables
 - Fee: 5% → acumula en wallet de tesorería
-- Transferir USDC neto desde wallet de tesorería (0x75376BC58830f27415402875D26B73A6BE8E2253) a wallet del usuario
+- Transferir USDC neto desde wallet de tesorería (0x0000000000000000000000000000000000000001) a wallet del usuario
 - Mensaje UI: "Fondos enviados automáticamente desde la wallet de tesorería segura y transparente"
 
 ### 5. Wallet de Tesorería
-**Address:** 0x75376BC58830f27415402875D26B73A6BE8E2253  
+**Address:** 0x0000000000000000000000000000000000000001  
 **Uso:**
 - Recibir depósitos (USDC/MTR)
 - Acumular fees (5% dep + 2% apuesta + 5% ret)
@@ -102,7 +102,7 @@
 
 - **Créditos estables:** Internamente son uint256, 1 crédito = 1 USDC fijo (decimals 6). Visualmente se muestran como "MTR créditos jugables" (alias gráfico).
 
-- **Wallet única de tesorería:** Usar SOLO UNA wallet (0x75376BC58830f27415402875D26B73A6BE8E2253) para TODO: recibir depósitos, fees, manejar pagos/retiros, acumular comisiones.
+- **Wallet única de tesorería:** Usar SOLO UNA wallet (0x0000000000000000000000000000000000000001) para TODO: recibir depósitos, fees, manejar pagos/retiros, acumular comisiones.
 
 - **Reversibilidad:** Todos los cambios están en commits separados y pueden revertirse si es necesario:
   - `211e07d` - FASE 1: Actualizar UI

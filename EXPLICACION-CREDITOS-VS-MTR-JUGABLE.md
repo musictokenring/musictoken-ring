@@ -105,7 +105,7 @@ Sistema paga en USDC real desde tesorería ✅
    ```
 
 3. **Verificar Wallet de Tesorería**:
-   - Wallet: `0x75376BC58830f27415402875D26B73A6BE8E2253`
+   - Wallet: `0x0000000000000000000000000000000000000001`
    - Verificar balance de MTR en esa wallet
    - Si hay MTR → El auto-swap funcionó ✅
 

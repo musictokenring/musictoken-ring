@@ -160,14 +160,6 @@
                     }
                 }
 
-                // CRÍTICO: Para wallet de tesorería durante testing, usar endpoint especial si es necesario
-                const TREASURY_WALLET = '0x75376BC58830f27415402875D26B73A6BE8E2253';
-                const isTreasuryWallet = walletAddress && walletAddress.toLowerCase() === TREASURY_WALLET.toLowerCase();
-                
-                if (isTreasuryWallet) {
-                    console.log('[credits-system] ⚠️ Wallet de tesorería detectada - cargando créditos para testing');
-                }
-                
                 const creditsUrl = `${this.backendUrl}/api/user/credits/${walletAddress}`;
                 console.log('[credits-system] 🔄 Llamando al backend:', creditsUrl);
                 console.log('[credits-system] 🔄 Backend URL completa:', creditsUrl);

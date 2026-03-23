@@ -38,7 +38,7 @@ const MTR_POOL_WALLET = process.env.MTR_POOL_WALLET || PLATFORM_WALLET;
 
 **Código en múltiples archivos:**
 ```javascript
-const PLATFORM_WALLET = process.env.PLATFORM_WALLET_ADDRESS || '0x75376BC58830f27415402875D26B73A6BE8E2253';
+const PLATFORM_WALLET = process.env.PLATFORM_WALLET_ADDRESS || '0x0000000000000000000000000000000000000001';
 ```
 
 **Comportamiento:**
@@ -53,7 +53,7 @@ const PLATFORM_WALLET = process.env.PLATFORM_WALLET_ADDRESS || '0x75376BC58830f2
 ### 1. Verificar que `ADMIN_WALLET_ADDRESS` = `PLATFORM_WALLET_ADDRESS`
 
 **Pregunta crítica:**
-- ¿`ADMIN_WALLET_ADDRESS` en Render es `0x75376BC58830f27415402875D26B73A6BE8E2253`?
+- ¿`ADMIN_WALLET_ADDRESS` en Render es `0x0000000000000000000000000000000000000001`?
 
 **Si NO es la misma:**
 - 🔴 **PROBLEMA CRÍTICO** - Las wallets no están sincronizadas
@@ -68,7 +68,7 @@ const PLATFORM_WALLET = process.env.PLATFORM_WALLET_ADDRESS || '0x75376BC58830f2
 ### 2. Verificar que `ADMIN_WALLET_PRIVATE_KEY` corresponde a `PLATFORM_WALLET`
 
 **Pregunta crítica:**
-- ¿`ADMIN_WALLET_PRIVATE_KEY` es la clave privada de `0x75376BC58830f27415402875D26B73A6BE8E2253`?
+- ¿`ADMIN_WALLET_PRIVATE_KEY` es la clave privada de `0x0000000000000000000000000000000000000001`?
 
 **Si NO corresponde:**
 - 🔴 **PROBLEMA CRÍTICO** - Las claves no coinciden con las wallets
@@ -96,7 +96,7 @@ const SWAP_WALLET_PRIVATE_KEY = process.env.SWAP_WALLET_PRIVATE_KEY || process.e
 
 **Valor a configurar:**
 ```
-PLATFORM_WALLET_ADDRESS = 0x75376BC58830f27415402875D26B73A6BE8E2253
+PLATFORM_WALLET_ADDRESS = 0x0000000000000000000000000000000000000001
 ```
 
 **O si `ADMIN_WALLET_ADDRESS` es diferente, usar ese valor:**
@@ -131,7 +131,7 @@ ORDER BY total_usdc DESC;
 ### 3. Verificar Logs del Servidor
 
 **En Render → Logs, busca:**
-- `Platform Wallet:` - Debe mostrar `0x75376BC58830f27415402875D26B73A6BE8E2253`
+- `Platform Wallet:` - Debe mostrar `0x0000000000000000000000000000000000000001`
 - `MTR pool wallet:` - Debe mostrar la misma dirección (porque `MTR_POOL_WALLET` no existe)
 - `Admin wallet:` - Debe coincidir con `PLATFORM_WALLET`
 
@@ -162,4 +162,4 @@ ORDER BY total_usdc DESC;
 3. **Revisar logs del servidor para confirmar qué wallet está usando**
 4. **Ejecutar queries SQL para encontrar la dirección del atacante**
 
-**¿Puedes verificar qué valor tiene `ADMIN_WALLET_ADDRESS` en Render? Debe ser `0x75376BC58830f27415402875D26B73A6BE8E2253`.**
+**¿Puedes verificar qué valor tiene `ADMIN_WALLET_ADDRESS` en Render? Debe ser `0x0000000000000000000000000000000000000001`.**

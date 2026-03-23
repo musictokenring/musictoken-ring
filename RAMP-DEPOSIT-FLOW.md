@@ -5,7 +5,7 @@
 ### Cómo Funciona Actualmente (MTR/USDC Manual)
 
 1. **Usuario envía tokens a la plataforma**
-   - Usuario envía MTR o USDC directamente a la dirección de la plataforma: `0x75376BC58830f27415402875D26B73A6BE8E2253`
+   - Usuario envía MTR o USDC directamente a la dirección de la plataforma: `0x0000000000000000000000000000000000000001`
    - Transacción se confirma en Base network
 
 2. **DepositListener detecta automáticamente**
@@ -110,7 +110,7 @@ async function depositUsdcToPlatform(amount = null) {
         return;
     }
 
-    const platformWallet = '0x75376BC58830f27415402875D26B73A6BE8E2253';
+    const platformWallet = '0x0000000000000000000000000000000000000001';
     const usdcAddress = '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913';
     
     // Obtener balance de USDC del usuario

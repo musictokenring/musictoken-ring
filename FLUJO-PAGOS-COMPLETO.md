@@ -15,7 +15,7 @@ El sistema utiliza un modelo de **créditos estables** donde:
 
 ### Wallet Principal de la Plataforma (Recibe Depósitos)
 ```
-Dirección: 0x75376BC58830f27415402875D26B73A6BE8E2253
+Dirección: 0x0000000000000000000000000000000000000001
 Red: Base Network (Chain ID: 8453)
 Propósito: Recibir todos los depósitos de usuarios (MTR y USDC)
 ```
@@ -26,7 +26,7 @@ Propósito: Recibir todos los depósitos de usuarios (MTR y USDC)
 
 ### Wallet Admin (Para Retiros)
 ```
-Dirección: 0x75376BC58830f27415402875D26B73A6BE8E2253
+Dirección: 0x0000000000000000000000000000000000000001
 (Actualmente la misma que la wallet de depósitos)
 Propósito: Enviar USDC a usuarios cuando reclaman créditos
 ```
@@ -39,7 +39,7 @@ Propósito: Enviar USDC a usuarios cuando reclaman créditos
 
 **Opción A: Depósito Directo**
 - Usuario envía MTR o USDC desde su wallet personal a la dirección de la plataforma
-- Dirección destino: `0x75376BC58830f27415402875D26B73A6BE8E2253`
+- Dirección destino: `0x0000000000000000000000000000000000000001`
 - Transacción se confirma en Base Network
 
 **Opción B: Depósito vía Ramp Network**
@@ -482,14 +482,14 @@ Ejemplo: Usuario retira 100 créditos
 
 ### Dirección de Plataforma (Depósitos)
 ```
-✅ Verificada: 0x75376BC58830f27415402875D26B73A6BE8E2253
+✅ Verificada: 0x0000000000000000000000000000000000000001
 Red: Base Network (8453)
 Tokens aceptados: MTR, USDC
 ```
 
 ### Dirección Admin (Retiros)
 ```
-✅ Verificada: 0x75376BC58830f27415402875D26B73A6BE8E2253
+✅ Verificada: 0x0000000000000000000000000000000000000001
 (Actualmente la misma que depósitos)
 Red: Base Network (8453)
 Token enviado: USDC

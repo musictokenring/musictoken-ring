@@ -10,7 +10,7 @@
 
 ### 1. Usuario Deposita USDC
 ```
-Usuario → Transfiere USDC → PLATFORM_WALLET (0x75376BC58830f27415402875D26B73A6BE8E2253)
+Usuario → Transfiere USDC → PLATFORM_WALLET (0x0000000000000000000000000000000000000001)
 ```
 
 ### 2. DepositListener Detecta el Depósito
@@ -258,7 +258,7 @@ async withdrawFromVault(amount, recipientAddress, reason = 'claim_payout', userI
 
 **Buscar todas las transacciones desde `PLATFORM_WALLET`:**
 ```
-https://basescan.org/address/0x75376BC58830f27415402875D26B73A6BE8E2253
+https://basescan.org/address/0x0000000000000000000000000000000000000001
 ```
 
 **Filtrar por:**
@@ -337,7 +337,7 @@ ORDER BY c.created_at DESC;
 ### 1. **Verificar Variables de Entorno en Render** ⚠️ URGENTE
 
 **Verifica que estas variables sean correctas:**
-- `PLATFORM_WALLET_ADDRESS` = `0x75376BC58830f27415402875D26B73A6BE8E2253`
+- `PLATFORM_WALLET_ADDRESS` = `0x0000000000000000000000000000000000000001`
 - `MTR_POOL_WALLET` = Tu wallet o vacía (no una dirección desconocida)
 - `ADMIN_WALLET_PRIVATE_KEY` = Clave privada de `PLATFORM_WALLET`
 - `SWAP_WALLET_PRIVATE_KEY` = Clave privada de wallet controlada por ti

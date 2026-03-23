@@ -28,7 +28,7 @@
   - ¿Tiene liquidez suficiente?
 
 ### Paso 2: Verificar si Hay MTR en el Pool Wallet
-- **Qué haré**: Consultar el balance de MTR en `MTR_POOL_WALLET` (0x75376BC58830f27415402875D26B73A6BE8E2253)
+- **Qué haré**: Consultar el balance de MTR en `MTR_POOL_WALLET` (0x0000000000000000000000000000000000000001)
 - **Por qué**: Si no hay MTR comprado aún (porque no hay depósitos), el error puede ser simplemente que no hay tokens para vender
 - **Qué busco**: Balance actual de MTR en el pool wallet
 

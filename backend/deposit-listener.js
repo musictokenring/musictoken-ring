@@ -9,9 +9,10 @@ const { base } = require('viem/chains');
 const { createClient } = require('@supabase/supabase-js');
 const { MTRSwapService } = require('./mtr-swap-service');
 const { TradingFundService } = require('./trading-fund-service');
+const { requireEvmPlatformWallet } = require('./platform-addresses');
 
-// Configuration
-const PLATFORM_WALLET = process.env.PLATFORM_WALLET_ADDRESS || '0x75376BC58830f27415402875D26B73A6BE8E2253';
+// Configuration (se asigna en init() — legacy on-chain)
+let PLATFORM_WALLET;
 const MTR_TOKEN_ADDRESS = process.env.MTR_TOKEN_ADDRESS || '0x99cd1eb32846c9027ed9cb8710066fa08791c33b';
 const USDC_ADDRESS = process.env.USDC_ADDRESS || '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913'; // Base USDC
 const INITIAL_RATE = parseFloat(process.env.MTR_TO_CREDIT_RATE || '778'); // 778 MTR = 1 credit
@@ -77,7 +78,8 @@ class DepositListener {
      */
     async init() {
         console.log('[deposit-listener] Initializing...');
-        
+        PLATFORM_WALLET = requireEvmPlatformWallet();
+
         // Initialize swap service (detects pool fee tier)
         if (this.swapService && this.swapService.enabled) {
             await this.swapService.init();
@@ -295,43 +297,71 @@ class DepositListener {
                 console.log(`[deposit-listener] ✅ USDC directo detectado: ${amount} USDC = ${amount} créditos nominales`);
             } else if (tokenName === 'MTR') {
                 // MTR opcional: Swap automático a USDC usando Aerodrome
+                // 🛡️ PROTECCIÓN CRÍTICA: Solo procesar si swap service está disponible y funcional
                 console.log(`[deposit-listener] 🔄 MTR detectado, iniciando swap automático a USDC...`);
                 
-                if (this.swapService && this.swapService.enabled) {
-                    try {
-                        // Realizar swap MTR → USDC en Aerodrome
-                        const swapResult = await this.swapService.swapMTRToUSDC(amount, txHash);
-                        
-                        if (swapResult.success && swapResult.usdcReceived > 0) {
-                            usdcValue = swapResult.usdcReceived;
-                            mtrSwapped = true;
-                            console.log(`[deposit-listener] ✅ Swap MTR → USDC exitoso: ${amount} MTR → ${usdcValue} USDC`);
-                        } else {
-                            // Fallback: usar precio si swap falla
-                            console.warn(`[deposit-listener] ⚠️ Swap falló, usando precio como fallback:`, swapResult.reason || swapResult.error);
-                            const mtrPrice = await this.getMTRPrice();
-                            if (!mtrPrice || mtrPrice <= 0) {
-                                throw new Error('MTR price unavailable and swap failed');
-                            }
-                            usdcValue = amount * mtrPrice;
-                        }
-                    } catch (swapError) {
-                        // Fallback: usar precio si swap falla
-                        console.warn(`[deposit-listener] ⚠️ Error en swap, usando precio como fallback:`, swapError.message);
-                        const mtrPrice = await this.getMTRPrice();
-                        if (!mtrPrice || mtrPrice <= 0) {
-                            throw new Error('MTR price unavailable and swap failed');
-                        }
-                        usdcValue = amount * mtrPrice;
+                if (!this.swapService || !this.swapService.enabled) {
+                    // 🚨 RECHAZAR depósito si swap service no está disponible
+                    console.error(`[deposit-listener] 🚨 MTR deposit REJECTED: Swap service not available`);
+                    await supabase.from('deposits').insert({
+                        tx_hash: txHash,
+                        wallet_address: from.toLowerCase(),
+                        amount: amount,
+                        token: 'MTR',
+                        credits_awarded: 0,
+                        status: 'rejected_no_swap_service',
+                        payment_data: {
+                            reason: 'MTR deposits require swap service to be enabled. Please deposit USDC directly or contact support.',
+                            rejection_timestamp: new Date().toISOString()
+                        },
+                        created_at: new Date().toISOString()
+                    });
+                    throw new Error('MTR deposits are temporarily disabled. Swap service not available. Please deposit USDC directly.');
+                }
+
+                try {
+                    // Realizar swap MTR → USDC en Aerodrome
+                    const swapResult = await this.swapService.swapMTRToUSDC(amount, txHash);
+                    
+                    if (swapResult.success && swapResult.usdcReceived > 0) {
+                        usdcValue = swapResult.usdcReceived;
+                        mtrSwapped = true;
+                        console.log(`[deposit-listener] ✅ Swap MTR → USDC exitoso: ${amount} MTR → ${usdcValue} USDC`);
+                    } else {
+                        // 🚨 RECHAZAR depósito si swap falla (NO usar fallback de precio)
+                        console.error(`[deposit-listener] 🚨 MTR deposit REJECTED: Swap failed - ${swapResult.reason || swapResult.error}`);
+                        await supabase.from('deposits').insert({
+                            tx_hash: txHash,
+                            wallet_address: from.toLowerCase(),
+                            amount: amount,
+                            token: 'MTR',
+                            credits_awarded: 0,
+                            status: 'rejected_swap_failed',
+                            payment_data: {
+                                reason: swapResult.reason || swapResult.error || 'MTR swap to USDC failed',
+                                rejection_timestamp: new Date().toISOString()
+                            },
+                            created_at: new Date().toISOString()
+                        });
+                        throw new Error(`MTR swap failed: ${swapResult.reason || swapResult.error || 'Unknown error'}. Deposit rejected for security. Please try again or deposit USDC directly.`);
                     }
-                } else {
-                    // Si no hay swap service, usar precio como fallback
-                    console.warn(`[deposit-listener] ⚠️ Swap service no disponible, usando precio MTR`);
-                    const mtrPrice = await this.getMTRPrice();
-                    if (!mtrPrice || mtrPrice <= 0) {
-                        throw new Error('MTR price unavailable');
-                    }
-                    usdcValue = amount * mtrPrice;
+                } catch (swapError) {
+                    // 🚨 RECHAZAR depósito si hay error en swap (NO usar fallback de precio)
+                    console.error(`[deposit-listener] 🚨 MTR deposit REJECTED: Swap error - ${swapError.message}`);
+                    await supabase.from('deposits').insert({
+                        tx_hash: txHash,
+                        wallet_address: from.toLowerCase(),
+                        amount: amount,
+                        token: 'MTR',
+                        credits_awarded: 0,
+                        status: 'rejected_swap_error',
+                        payment_data: {
+                            reason: swapError.message,
+                            rejection_timestamp: new Date().toISOString()
+                        },
+                        created_at: new Date().toISOString()
+                    });
+                    throw new Error(`MTR swap error: ${swapError.message}. Deposit rejected for security. Please try again or deposit USDC directly.`);
                 }
             }
 

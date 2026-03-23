@@ -25,8 +25,8 @@ Deberías ver:
 [mtr-swap] SWAP_WALLET_PRIVATE_KEY exists: true
 [mtr-swap] SWAP_WALLET_PRIVATE_KEY length: 66
 [mtr-swap] ✅ Service initialized
-[mtr-swap] Swap wallet: 0x75376BC58830f27415402875D26B73A6BE8E2253
-[mtr-swap] MTR pool wallet: 0x75376BC58830f27415402875D26B73A6BE8E2253
+[mtr-swap] Swap wallet: 0x0000000000000000000000000000000000000001
+[mtr-swap] MTR pool wallet: 0x0000000000000000000000000000000000000001
 ```
 
 ### 2. Inicialización del Liquidity Manager
