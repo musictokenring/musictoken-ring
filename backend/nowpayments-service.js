@@ -327,6 +327,77 @@ function throwNowpaymentsHttpError(res, data) {
     throw err;
 }
 
+function extractMinimalErrorMessage(data) {
+    if (!data) return '';
+    if (typeof data === 'string') return data;
+    const msg =
+        data.message ||
+        data.error ||
+        (typeof data.errors === 'string' ? data.errors : null);
+    if (msg) return String(msg);
+    try {
+        return JSON.stringify(data);
+    } catch {
+        return '';
+    }
+}
+
+function parseFailingCryptoAmountFromMinimalError(msg) {
+    const s = String(msg || '');
+    const m = s.match(/crypto amount\s*([0-9]+(?:\.[0-9]+)?)/i);
+    if (!m) return null;
+    const n = parseFloat(m[1]);
+    return Number.isFinite(n) && n > 0 ? n : null;
+}
+
+async function bumpUsdAfterMinimalError(currentUsd, payCurrency, errorMsg) {
+    const usd = Number(currentUsd);
+    if (!Number.isFinite(usd) || usd <= 0) return currentUsd;
+    const baseMin = defaultMinCryptoUnits(payCurrency);
+    const failedCrypto = parseFailingCryptoAmountFromMinimalError(errorMsg);
+    const targetCrypto = Math.max(
+        effectiveMinCryptoTarget(baseMin, payCurrency) + 0.8,
+        (failedCrypto || 0) + 1.2
+    );
+    const estCurrent = await nowpaymentsEstimateCryptoForUsd(usd, payCurrency);
+    if (estCurrent != null && estCurrent > 0) {
+        const factor = Math.max(1.14, (targetCrypto / estCurrent) * 1.04);
+        return Math.round(usd * factor * 100) / 100;
+    }
+    return Math.round((usd * 1.25 + 0.5) * 100) / 100;
+}
+
+async function createNowpaymentsWithMinimalRetries({
+    path,
+    buildBody,
+    payCurrency,
+    priceAmountUsd
+}) {
+    let amountUsd = Number(priceAmountUsd);
+    let res;
+    let data;
+    for (let attempt = 0; attempt < 4; attempt++) {
+        ({ res, data } = await postNowpaymentsApi(path, buildBody(amountUsd)));
+        if (res.ok) {
+            return { res, data, priceAmountUsd: amountUsd };
+        }
+        const msg = extractMinimalErrorMessage(data);
+        if (!/less than minimal/i.test(msg)) {
+            break;
+        }
+        const bumped = await bumpUsdAfterMinimalError(amountUsd, payCurrency, msg);
+        if (!(Number.isFinite(bumped) && bumped > amountUsd + 0.01)) {
+            amountUsd = Math.round((amountUsd * 1.2 + 0.5) * 100) / 100;
+        } else {
+            amountUsd = bumped;
+        }
+        console.warn(
+            `[nowpayments] mínimo dinámico detectado (${path}); reintento ${attempt + 2}/4 con USD ${amountUsd}`
+        );
+    }
+    return { res, data, priceAmountUsd: amountUsd };
+}
+
 /**
  * POST /v1/payment o /v1/invoice (path sin slash inicial).
  */
@@ -478,42 +549,32 @@ class NOWPaymentsService {
             String(process.env.NOWPAYMENTS_COMMERCIAL_USE_INVOICE || 'true').toLowerCase() !==
             'false';
 
-        const runMinimalBump = (msgStr) => /less than minimal/i.test(String(msgStr));
-
         let priceAmountFinal = priceAmountToSend;
         let path = preferInvoice ? 'invoice' : 'payment';
-        let body = preferInvoice ? buildInvoiceBody(priceAmountFinal) : buildPaymentBody(priceAmountFinal);
-        let { res, data } = await postNowpaymentsApi(path, body);
-        if (!res.ok) {
-            const msg0 =
-                data.message ||
-                data.error ||
-                (typeof data === 'string' ? data : JSON.stringify(data));
-            if (runMinimalBump(msg0)) {
-                priceAmountFinal = Math.round((priceAmountFinal * 1.05 + 0.2) * 100) / 100;
-                body = preferInvoice ? buildInvoiceBody(priceAmountFinal) : buildPaymentBody(priceAmountFinal);
-                ({ res, data } = await postNowpaymentsApi(path, body));
-            }
-        }
+        let buildBody = preferInvoice ? buildInvoiceBody : buildPaymentBody;
+        let { res, data, priceAmountUsd: adjustedAmountUsd } =
+            await createNowpaymentsWithMinimalRetries({
+            path,
+            buildBody,
+            payCurrency: payCur,
+            priceAmountUsd: priceAmountFinal
+        });
+        priceAmountFinal = adjustedAmountUsd;
         if (!res.ok && preferInvoice && path === 'invoice') {
             console.warn(
                 '[nowpayments] POST /invoice no OK; reintento con POST /payment (nuevo order_id)'
             );
             orderId = `mtr_${publicUserId}_${Date.now()}`;
             path = 'payment';
-            body = buildPaymentBody(priceAmountFinal);
-            ({ res, data } = await postNowpaymentsApi(path, body));
-            if (!res.ok) {
-                const msg1 =
-                    data.message ||
-                    data.error ||
-                    (typeof data === 'string' ? data : JSON.stringify(data));
-                if (runMinimalBump(msg1)) {
-                    priceAmountFinal = Math.round((priceAmountFinal * 1.05 + 0.2) * 100) / 100;
-                    body = buildPaymentBody(priceAmountFinal);
-                    ({ res, data } = await postNowpaymentsApi(path, body));
-                }
-            }
+            buildBody = buildPaymentBody;
+            ({ res, data, priceAmountUsd: adjustedAmountUsd } =
+                await createNowpaymentsWithMinimalRetries({
+                path,
+                buildBody,
+                payCurrency: payCur,
+                priceAmountUsd: priceAmountFinal
+            }));
+            priceAmountFinal = adjustedAmountUsd;
         }
         if (!res.ok) {
             throwNowpaymentsHttpError(res, data);
