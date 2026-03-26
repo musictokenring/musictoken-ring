@@ -153,16 +153,21 @@ function defaultMinCryptoUnits(payCurrency) {
     if (Number.isFinite(env) && env > 0) return env;
     const c = String(payCurrency || '').toLowerCase();
     if (c.includes('usdt') || c === 'usdttrc20' || c === 'usdterc20') {
-        return 6;
+        return 7;
     }
     return 1;
 }
 
-/** Margen sobre el mínimo: /estimate y el checkout suelen diferir hasta ~0,2 USDT. */
+/**
+ * Margen sobre minCrypto: /estimate suele dar más que el monto que aplica invoice-payment
+ * (ej. 6,73 vs 6,71 fallando). +1 USDT en stables reduce rechazos.
+ */
 function effectiveMinCryptoTarget(minCrypto, payCurrency) {
     const c = String(payCurrency || '').toLowerCase();
-    const slip = /usdt|usdc|dai|busd|tusd/.test(c) ? 0.55 : 0.02;
-    return minCrypto + slip;
+    if (/usdt|usdc|dai|busd|tusd/.test(c)) {
+        return minCrypto + 1;
+    }
+    return minCrypto + 0.02;
 }
 
 /**
@@ -173,7 +178,7 @@ function sanitizeMinAmountCrypto(raw, payCurrency) {
     if (raw == null || !Number.isFinite(raw) || raw <= 0) return null;
     const c = String(payCurrency || '').toLowerCase();
     const isStable = /usdt|usdc|dai|busd|tusd/.test(c);
-    if (isStable && raw > 12) {
+    if (isStable && raw > 18) {
         console.warn(
             '[nowpayments] min-amount ignorado (no plausible como USDT/USDC):',
             raw,
@@ -241,7 +246,7 @@ async function ensureUsdMeetsPayCurrencyMinimum(requestedUsd, payCurrency) {
 
     let est = await nowpaymentsEstimateCryptoForUsd(usd, payCurrency);
     if (est == null) {
-        const bump = Math.max(requested * 1.5, 6.85);
+        const bump = Math.max(requested * 1.5, 8.75);
         console.warn(
             '[nowpayments] estimate no disponible; usando USD mínimo conservador:',
             bump
