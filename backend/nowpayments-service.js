@@ -135,6 +135,99 @@ function adjustUsdForNowpaymentsCryptoMinimum(usd) {
     return Math.round(out * 100) / 100;
 }
 
+/**
+ * Mínimo en unidades de pay_currency (p. ej. USDT en TRC20). Fallback si /min-amount falla.
+ */
+function defaultMinCryptoUnits(payCurrency) {
+    const env = parseFloat(process.env.NOWPAYMENTS_MIN_CRYPTO_UNITS || '');
+    if (Number.isFinite(env) && env > 0) return env;
+    const c = String(payCurrency || '').toLowerCase();
+    if (c.includes('usdt') || c === 'usdttrc20' || c === 'usdterc20') {
+        return 3;
+    }
+    return 1;
+}
+
+async function nowpaymentsGetMinCryptoAmount(payCurrency) {
+    if (!NOWPAYMENTS_API_KEY) return null;
+    const cur = String(payCurrency || 'usdttrc20').toLowerCase();
+    const url = `${NOWPAYMENTS_API_URL}/min-amount?currency_from=usd&currency_to=${encodeURIComponent(cur)}`;
+    const res = await fetch(url, {
+        headers: { 'x-api-key': NOWPAYMENTS_API_KEY }
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) return null;
+    const m = parseFloat(data.min_amount ?? data.minAmount);
+    return Number.isFinite(m) && m > 0 ? m : null;
+}
+
+async function nowpaymentsEstimateCryptoForUsd(usd, payCurrency) {
+    if (!NOWPAYMENTS_API_KEY) return null;
+    const cur = String(payCurrency || 'usdttrc20').toLowerCase();
+    const u = Number(usd);
+    if (!Number.isFinite(u) || u <= 0) return null;
+    const url = `${NOWPAYMENTS_API_URL}/estimate?amount=${encodeURIComponent(u)}&currency_from=usd&currency_to=${encodeURIComponent(cur)}`;
+    const res = await fetch(url, {
+        headers: { 'x-api-key': NOWPAYMENTS_API_KEY }
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) return null;
+    const e = parseFloat(
+        data.estimated_amount ??
+            data.estimatedAmount ??
+            data.estimated_amount_sell ??
+            data.estimation
+    );
+    return Number.isFinite(e) && e > 0 ? e : null;
+}
+
+/**
+ * Sube el USD enviado hasta que /estimate indique pay_currency >= mínimo (evita error en
+ * account-api invoice-payment: "Crypto amount X is less than minimal").
+ */
+async function ensureUsdMeetsPayCurrencyMinimum(requestedUsd, payCurrency) {
+    const requested = Number(requestedUsd);
+    if (!Number.isFinite(requested) || requested <= 0) return requested;
+    let usd = adjustUsdForNowpaymentsCryptoMinimum(requested);
+    let minCrypto = defaultMinCryptoUnits(payCurrency);
+    const apiMin = await nowpaymentsGetMinCryptoAmount(payCurrency);
+    if (apiMin != null) {
+        minCrypto = Math.max(minCrypto, apiMin);
+    }
+    const minUsdFloor = parseFloat(process.env.NOWPAYMENTS_MIN_SEND_USD || '0') || 0;
+    if (minUsdFloor > 0) {
+        usd = Math.max(usd, minUsdFloor);
+    }
+
+    let est = await nowpaymentsEstimateCryptoForUsd(usd, payCurrency);
+    if (est == null) {
+        const bump = Math.max(requested * 1.5, 3.25);
+        console.warn(
+            '[nowpayments] estimate no disponible; usando USD mínimo conservador:',
+            bump
+        );
+        return Math.round(Math.max(usd, bump) * 100) / 100;
+    }
+    if (est + 1e-12 >= minCrypto) {
+        return Math.round(usd * 100) / 100;
+    }
+
+    const factor = (minCrypto / est) * 1.015;
+    usd = Math.round(usd * factor * 100) / 100;
+    est = await nowpaymentsEstimateCryptoForUsd(usd, payCurrency);
+    for (let i = 0; i < 10 && est != null && est + 1e-12 < minCrypto; i++) {
+        usd = Math.round((usd + 0.15) * 100) / 100;
+        est = await nowpaymentsEstimateCryptoForUsd(usd, payCurrency);
+    }
+    const out = Math.round(usd * 100) / 100;
+    if (Math.abs(out - requested) > 0.02) {
+        console.log(
+            `[nowpayments] USD ajustado para mínimo cripto (~${minCrypto} ${payCurrency}): ${requested} → ${out}`
+        );
+    }
+    return out;
+}
+
 function sleep(ms) {
     return new Promise((resolve) => setTimeout(resolve, ms));
 }
@@ -283,7 +376,6 @@ class NOWPaymentsService {
             throw new Error('Amount exceeds maximum (500000 USD)');
         }
         const requestedUsd = amount;
-        const priceAmountToSend = adjustUsdForNowpaymentsCryptoMinimum(amount);
         const baseUrl =
             process.env.BACKEND_URL ||
             process.env.RENDER_EXTERNAL_URL ||
@@ -294,6 +386,7 @@ class NOWPaymentsService {
         if (!payCur) {
             throw new Error('pay_currency is required (set NOWPAYMENTS_PAY_CURRENCY on server)');
         }
+        const priceAmountToSend = await ensureUsdMeetsPayCurrencyMinimum(amount, payCur);
         /**
          * POST /v1/payment: orden con moneda de pago fija (a veces solo pay_address, sin página con botón).
          */
