@@ -176,9 +176,13 @@ function throwNowpaymentsHttpError(res, data) {
     throw err;
 }
 
-async function postNowpaymentsCreatePayment(bodyObj) {
+/**
+ * POST /v1/payment o /v1/invoice (path sin slash inicial).
+ */
+async function postNowpaymentsApi(path, bodyObj) {
+    const p = String(path || 'payment').replace(/^\//, '');
     const doFetch = () =>
-        fetch(`${NOWPAYMENTS_API_URL}/payment`, {
+        fetch(`${NOWPAYMENTS_API_URL}/${p}`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -251,8 +255,8 @@ class NOWPaymentsService {
     }
 
     /**
-     * Pago comercial vía API oficial POST /v1/payment (Postman / documentación NOWPayments).
-     * Devuelve URL de checkout (invoice) para iframe o nueva pestaña.
+     * Pago comercial: por defecto POST /v1/invoice (invoice_url, página de pago en NOWPayments);
+     * si falla, POST /v1/payment. Ver NOWPAYMENTS_COMMERCIAL_USE_INVOICE.
      * @param {Object} p
      * @param {string} p.publicUserId - users.id (UUID)
      * @param {number} p.priceAmountUsd
@@ -285,11 +289,14 @@ class NOWPaymentsService {
             process.env.RENDER_EXTERNAL_URL ||
             'https://musictoken-ring.onrender.com';
         const ipnUrl = `${String(baseUrl).replace(/\/$/, '')}/webhook/nowpayments`;
-        const orderId = `mtr_${publicUserId}_${Date.now()}`;
+        let orderId = `mtr_${publicUserId}_${Date.now()}`;
         const payCur = (payCurrency && String(payCurrency).trim()) || NOWPAYMENTS_PAY_CURRENCY;
         if (!payCur) {
             throw new Error('pay_currency is required (set NOWPAYMENTS_PAY_CURRENCY on server)');
         }
+        /**
+         * POST /v1/payment: orden con moneda de pago fija (a veces solo pay_address, sin página con botón).
+         */
         const buildPaymentBody = (usd) => ({
             price_amount: usd,
             price_currency: 'usd',
@@ -302,18 +309,59 @@ class NOWPaymentsService {
             is_fixed_rate: false,
             is_fee_paid_by_user: false
         });
+        /**
+         * POST /v1/invoice: página hospedada con invoice_url (flujo “pagar” en NOWPayments).
+         * @see https://github.com/NowPaymentsIO/nowpayments-api-js#createInvoice
+         */
+        const buildInvoiceBody = (usd) => ({
+            price_amount: usd,
+            price_currency: 'usd',
+            pay_currency: payCur,
+            ipn_callback_url: ipnUrl,
+            order_id: orderId,
+            order_description: 'MusicToken Ring — depósito de saldo',
+            success_url: successUrl,
+            cancel_url: cancelUrl
+        });
+        const preferInvoice =
+            String(process.env.NOWPAYMENTS_COMMERCIAL_USE_INVOICE || 'true').toLowerCase() !==
+            'false';
+
+        const runMinimalBump = (msgStr) => /less than minimal/i.test(String(msgStr));
+
         let priceAmountFinal = priceAmountToSend;
-        let body = buildPaymentBody(priceAmountFinal);
-        let { res, data } = await postNowpaymentsCreatePayment(body);
+        let path = preferInvoice ? 'invoice' : 'payment';
+        let body = preferInvoice ? buildInvoiceBody(priceAmountFinal) : buildPaymentBody(priceAmountFinal);
+        let { res, data } = await postNowpaymentsApi(path, body);
         if (!res.ok) {
             const msg0 =
                 data.message ||
                 data.error ||
                 (typeof data === 'string' ? data : JSON.stringify(data));
-            if (/less than minimal/i.test(String(msg0))) {
+            if (runMinimalBump(msg0)) {
                 priceAmountFinal = Math.round((priceAmountFinal * 1.05 + 0.2) * 100) / 100;
-                body = buildPaymentBody(priceAmountFinal);
-                ({ res, data } = await postNowpaymentsCreatePayment(body));
+                body = preferInvoice ? buildInvoiceBody(priceAmountFinal) : buildPaymentBody(priceAmountFinal);
+                ({ res, data } = await postNowpaymentsApi(path, body));
+            }
+        }
+        if (!res.ok && preferInvoice && path === 'invoice') {
+            console.warn(
+                '[nowpayments] POST /invoice no OK; reintento con POST /payment (nuevo order_id)'
+            );
+            orderId = `mtr_${publicUserId}_${Date.now()}`;
+            path = 'payment';
+            body = buildPaymentBody(priceAmountFinal);
+            ({ res, data } = await postNowpaymentsApi(path, body));
+            if (!res.ok) {
+                const msg1 =
+                    data.message ||
+                    data.error ||
+                    (typeof data === 'string' ? data : JSON.stringify(data));
+                if (runMinimalBump(msg1)) {
+                    priceAmountFinal = Math.round((priceAmountFinal * 1.05 + 0.2) * 100) / 100;
+                    body = buildPaymentBody(priceAmountFinal);
+                    ({ res, data } = await postNowpaymentsApi(path, body));
+                }
             }
         }
         if (!res.ok) {
@@ -321,7 +369,7 @@ class NOWPaymentsService {
         }
         let payUrl =
             extractNowpaymentsCheckoutUrl(data) || deepFindNowpaymentsCheckoutUrl(data);
-        const paymentId = data.payment_id;
+        const paymentId = data.payment_id ?? data.id;
         if (!payUrl && paymentId != null && paymentId !== '') {
             const resPoll = await fetch(
                 `${NOWPAYMENTS_API_URL}/payment/${encodeURIComponent(String(paymentId))}`,
@@ -353,7 +401,7 @@ class NOWPaymentsService {
             throw new Error('NOWPayments did not return invoice_url / pay_url');
         }
         return {
-            payment_id: data.payment_id,
+            payment_id: paymentId,
             pay_url: payUrl,
             order_id: orderId,
             payment_status: data.payment_status,
