@@ -136,13 +136,22 @@ function adjustUsdForNowpaymentsCryptoMinimum(usd) {
 }
 
 /**
- * Mínimo en unidades de pay_currency (p. ej. USDT en TRC20). Fallback si /min-amount falla.
+ * Fallback cuando GET /v1/min-amount no aporta un valor usable (o difiere del checkout).
+ *
+ * Documentación NOWPayments (no fija un número único para todos los pares):
+ * - Ayuda: https://nowpayments.io/help/payments/common/what-is-the-minimum-payment-amount
+ * - API Postman, sección "Get the minimum payment amount":
+ *   https://documenter.getpostman.com/view/7907941/S1a32n38
+ * - Status / calculadora de mínimos por par: https://nowpayments.io/status-page
+ *
+ * El código usa primero nowpaymentsGetMinCryptoAmount(). Los enteros altos para USDT
+ * en el fallback vienen de ajuste empírico ante errores de invoice-payment ("less than minimal"),
+ * no de una tabla fija en PDF; override recomendado: NOWPAYMENTS_MIN_CRYPTO_UNITS en servidor.
  */
 function defaultMinCryptoUnits(payCurrency) {
     const env = parseFloat(process.env.NOWPAYMENTS_MIN_CRYPTO_UNITS || '');
     if (Number.isFinite(env) && env > 0) return env;
     const c = String(payCurrency || '').toLowerCase();
-    /** USDT (TRC20/ERC20): invoice-payment puede exigir ≥6 USDT; ~5,4x USDT aún falla. */
     if (c.includes('usdt') || c === 'usdttrc20' || c === 'usdterc20') {
         return 6;
     }
