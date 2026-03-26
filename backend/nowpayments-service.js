@@ -148,6 +148,26 @@ function defaultMinCryptoUnits(payCurrency) {
     return 1;
 }
 
+/**
+ * El API a veces devuelve mínimos en escala distinta; valores ~15–20 en stablecoins
+ * suelen ser equivalentes en USD mal interpretados como “USDT” y disparan el importe.
+ */
+function sanitizeMinAmountCrypto(raw, payCurrency) {
+    if (raw == null || !Number.isFinite(raw) || raw <= 0) return null;
+    const c = String(payCurrency || '').toLowerCase();
+    const isStable = /usdt|usdc|dai|busd|tusd/.test(c);
+    if (isStable && raw > 8) {
+        console.warn(
+            '[nowpayments] min-amount ignorado (no plausible como USDT/USDC):',
+            raw,
+            payCurrency
+        );
+        return null;
+    }
+    if (raw > 1e7) return null;
+    return raw;
+}
+
 async function nowpaymentsGetMinCryptoAmount(payCurrency) {
     if (!NOWPAYMENTS_API_KEY) return null;
     const cur = String(payCurrency || 'usdttrc20').toLowerCase();
@@ -158,7 +178,8 @@ async function nowpaymentsGetMinCryptoAmount(payCurrency) {
     const data = await res.json().catch(() => ({}));
     if (!res.ok) return null;
     const m = parseFloat(data.min_amount ?? data.minAmount);
-    return Number.isFinite(m) && m > 0 ? m : null;
+    if (!Number.isFinite(m) || m <= 0) return null;
+    return sanitizeMinAmountCrypto(m, payCurrency);
 }
 
 async function nowpaymentsEstimateCryptoForUsd(usd, payCurrency) {
@@ -212,7 +233,15 @@ async function ensureUsdMeetsPayCurrencyMinimum(requestedUsd, payCurrency) {
         return Math.round(usd * 100) / 100;
     }
 
-    const factor = (minCrypto / est) * 1.015;
+    let factor = (minCrypto / est) * 1.015;
+    if (factor > 3) {
+        console.warn(
+            '[nowpayments] factor de ajuste muy alto; se acota (estaba mal min-amount o estimate):',
+            factor,
+            { requested, est, minCrypto }
+        );
+        factor = Math.min(factor, 1.35);
+    }
     usd = Math.round(usd * factor * 100) / 100;
     est = await nowpaymentsEstimateCryptoForUsd(usd, payCurrency);
     for (let i = 0; i < 10 && est != null && est + 1e-12 < minCrypto; i++) {
