@@ -170,24 +170,25 @@ function invoicePaymentCryptoBuffer(payCurrency) {
     const c = String(payCurrency || '').toLowerCase();
     if (!/usdt|usdc|dai|busd|tusd/.test(c)) return 0;
     const raw = process.env.NOWPAYMENTS_INVOICE_PAYMENT_CRYPTO_BUFFER;
-    // Compromiso: margen menor para acercarnos a depósitos pequeños.
-    // Si vuelve a fallar "invoice-payment: crypto amount ... less than minimal",
-    // sube temporalmente este valor.
-    const b = raw != null && String(raw).trim() !== '' ? parseFloat(raw) : 0.25;
-    return Number.isFinite(b) && b >= 0 ? b : 0.25;
+    // Valor conservador (reduce rechazos en invoice-payment).
+    const b = raw != null && String(raw).trim() !== '' ? parseFloat(raw) : 0.55;
+    return Number.isFinite(b) && b >= 0 ? b : 0.55;
 }
 
 function stableInvoicePaymentTargetOffset() {
     const raw = process.env.NOWPAYMENTS_STABLE_INVOICE_TARGET_OFFSET;
-    const v = raw != null && String(raw).trim() !== '' ? parseFloat(raw) : 1.0;
-    return Number.isFinite(v) ? v : 1.0;
+    const v = raw != null && String(raw).trim() !== '' ? parseFloat(raw) : 2.0;
+    return Number.isFinite(v) ? v : 2.0;
 }
 
 function effectiveMinCryptoTarget(minCrypto, payCurrency) {
     const c = String(payCurrency || '').toLowerCase();
     if (/usdt|usdc|dai|busd|tusd/.test(c)) {
-        // Antes era minCrypto + 2 + buffer; lo reducimos para permitir importes menores.
-        return minCrypto + stableInvoicePaymentTargetOffset() + invoicePaymentCryptoBuffer(payCurrency);
+        return (
+            minCrypto +
+            stableInvoicePaymentTargetOffset() +
+            invoicePaymentCryptoBuffer(payCurrency)
+        );
     }
     return minCrypto + 0.02;
 }
@@ -268,7 +269,7 @@ async function ensureUsdMeetsPayCurrencyMinimum(requestedUsd, payCurrency) {
 
     let est = await nowpaymentsEstimateCryptoForUsd(usd, payCurrency);
     if (est == null) {
-        const bump = Math.max(requested * 1.4, 9.5);
+        const bump = Math.max(requested * 1.5, 11.5);
         console.warn(
             '[nowpayments] estimate no disponible; usando USD mínimo conservador:',
             bump
@@ -378,15 +379,15 @@ async function bumpUsdAfterMinimalError(currentUsd, payCurrency, errorMsg) {
     const baseMin = defaultMinCryptoUnits(payCurrency);
     const failedCrypto = parseFailingCryptoAmountFromMinimalError(errorMsg);
     const targetCrypto = Math.max(
-        effectiveMinCryptoTarget(baseMin, payCurrency) + 0.3,
-        (failedCrypto || 0) + 1.0
+        effectiveMinCryptoTarget(baseMin, payCurrency) + 0.5,
+        (failedCrypto || 0) + 1.5
     );
     const estCurrent = await nowpaymentsEstimateCryptoForUsd(usd, payCurrency);
     if (estCurrent != null && estCurrent > 0) {
-        const factor = Math.max(1.14, (targetCrypto / estCurrent) * 1.04);
+        const factor = Math.max(1.18, (targetCrypto / estCurrent) * 1.06);
         return Math.round(usd * factor * 100) / 100;
     }
-    return Math.round((usd * 1.18 + 0.35) * 100) / 100;
+    return Math.round((usd * 1.25 + 0.5) * 100) / 100;
 }
 
 async function createNowpaymentsWithMinimalRetries({
