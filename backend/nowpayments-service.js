@@ -142,10 +142,18 @@ function defaultMinCryptoUnits(payCurrency) {
     const env = parseFloat(process.env.NOWPAYMENTS_MIN_CRYPTO_UNITS || '');
     if (Number.isFinite(env) && env > 0) return env;
     const c = String(payCurrency || '').toLowerCase();
+    /** USDT (TRC20/ERC20): el checkout invoice-payment suele exigir ≥4 USDT; 3,0x USDT falla. */
     if (c.includes('usdt') || c === 'usdttrc20' || c === 'usdterc20') {
-        return 3;
+        return 4;
     }
     return 1;
+}
+
+/** Margen sobre el mínimo para cubrir redondeos entre /estimate y el paso invoice-payment. */
+function effectiveMinCryptoTarget(minCrypto, payCurrency) {
+    const c = String(payCurrency || '').toLowerCase();
+    const slip = /usdt|usdc|dai|busd|tusd/.test(c) ? 0.08 : 0.02;
+    return minCrypto + slip;
 }
 
 /**
@@ -220,20 +228,22 @@ async function ensureUsdMeetsPayCurrencyMinimum(requestedUsd, payCurrency) {
         usd = Math.max(usd, minUsdFloor);
     }
 
+    const target = effectiveMinCryptoTarget(minCrypto, payCurrency);
+
     let est = await nowpaymentsEstimateCryptoForUsd(usd, payCurrency);
     if (est == null) {
-        const bump = Math.max(requested * 1.5, 3.25);
+        const bump = Math.max(requested * 1.5, 4.35);
         console.warn(
             '[nowpayments] estimate no disponible; usando USD mínimo conservador:',
             bump
         );
         return Math.round(Math.max(usd, bump) * 100) / 100;
     }
-    if (est + 1e-12 >= minCrypto) {
+    if (est + 1e-12 >= target) {
         return Math.round(usd * 100) / 100;
     }
 
-    let factor = (minCrypto / est) * 1.015;
+    let factor = (target / est) * 1.02;
     if (factor > 3) {
         console.warn(
             '[nowpayments] factor de ajuste muy alto; se acota (estaba mal min-amount o estimate):',
@@ -244,14 +254,14 @@ async function ensureUsdMeetsPayCurrencyMinimum(requestedUsd, payCurrency) {
     }
     usd = Math.round(usd * factor * 100) / 100;
     est = await nowpaymentsEstimateCryptoForUsd(usd, payCurrency);
-    for (let i = 0; i < 10 && est != null && est + 1e-12 < minCrypto; i++) {
+    for (let i = 0; i < 14 && est != null && est + 1e-12 < target; i++) {
         usd = Math.round((usd + 0.15) * 100) / 100;
         est = await nowpaymentsEstimateCryptoForUsd(usd, payCurrency);
     }
     const out = Math.round(usd * 100) / 100;
     if (Math.abs(out - requested) > 0.02) {
         console.log(
-            `[nowpayments] USD ajustado para mínimo cripto (~${minCrypto} ${payCurrency}): ${requested} → ${out}`
+            `[nowpayments] USD ajustado para objetivo cripto (~${target.toFixed(2)} ${payCurrency}, base mín. ${minCrypto}): ${requested} → ${out}`
         );
     }
     return out;
