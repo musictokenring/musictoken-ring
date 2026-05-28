@@ -657,9 +657,15 @@ class DepositListener {
             const backendUrl = process.env.BACKEND_API_URL || 'http://localhost:3001';
             
             try {
+                const internalSecret = process.env.BACKEND_INTERNAL_SECRET;
+                const headers = { 'Content-Type': 'application/json' };
+                if (internalSecret) {
+                    headers['X-Internal-Secret'] = internalSecret;
+                }
+
                 const response = await fetch(`${backendUrl}/api/vault/add-fee`, {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers,
                     body: JSON.stringify({
                         feeType: feeType,
                         amount: feeAmount,

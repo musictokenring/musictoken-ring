@@ -4464,6 +4464,25 @@ const GameEngine = {
     },
     
     /**
+     * Headers autenticados para llamadas al backend (Supabase Bearer).
+     */
+    async getBackendAuthHeaders(extraHeaders = {}) {
+        const headers = {
+            'Content-Type': 'application/json',
+            ...extraHeaders
+        };
+        const supabase = window.supabaseClient ||
+            (typeof supabaseClient !== 'undefined' ? supabaseClient : null);
+        if (supabase) {
+            const { data: { session } } = await supabase.auth.getSession();
+            if (session?.access_token) {
+                headers.Authorization = `Bearer ${session.access_token}`;
+            }
+        }
+        return headers;
+    },
+
+    /**
      * Send bet fee to vault (2% del pozo)
      */
     async sendBetFeeToVault(feeAmount, matchId) {
@@ -4473,7 +4492,7 @@ const GameEngine = {
             // Registrar fee en backend para que se envíe al vault
             const response = await fetch(`${backendUrl}/api/vault/add-fee`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: await this.getBackendAuthHeaders(),
                 body: JSON.stringify({
                     feeType: 'bet',
                     amount: feeAmount,
@@ -4659,7 +4678,7 @@ const GameEngine = {
                         
                         const response = await fetch(`${backendUrl}/api/user/deduct-credits`, {
                             method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
+                            headers: await this.getBackendAuthHeaders(),
                             body: JSON.stringify(requestBody)
                         });
 
@@ -4697,7 +4716,7 @@ const GameEngine = {
                             
                             // CRÍTICO: Si hay suficientes créditos pero el backend rechaza con 400,
                             // intentar fallback RPC INMEDIATAMENTE sin esperar retry
-                            if (hasEnoughCredits && response.status === 400) {
+                            if (hasEnoughCredits && (response.status === 400 || response.status === 401)) {
                                 console.warn('[updateBalance] ⚠️⚠️⚠️ BACKEND RECHAZÓ CON 400 PERO HAY CRÉDITOS SUFICIENTES');
                                 console.warn('[updateBalance] ⚠️ Créditos disponibles:', credits, 'Necesarios:', creditsToDeduct);
                                 console.warn('[updateBalance] ⚠️ Intentando fallback RPC INMEDIATAMENTE...');
@@ -4749,7 +4768,7 @@ const GameEngine = {
                                     
                                     const retryResponse = await fetch(`${backendUrl}/api/user/deduct-credits`, {
                                         method: 'POST',
-                                        headers: { 'Content-Type': 'application/json' },
+                                        headers: await this.getBackendAuthHeaders(),
                                         body: JSON.stringify(retryRequestBody)
                                     });
                                     
@@ -4922,7 +4941,7 @@ const GameEngine = {
                                         // Ahora intentar descontar nuevamente
                                         const retryResponse = await fetch(`${backendUrl}/api/user/deduct-credits`, {
                                                 method: 'POST',
-                                                headers: { 'Content-Type': 'application/json' },
+                                                headers: await this.getBackendAuthHeaders(),
                                                 body: JSON.stringify({
                                                     userId,
                                                     credits: creditsToDeduct,

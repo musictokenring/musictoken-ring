@@ -19,6 +19,12 @@ const { TradingFundService } = require('./trading-fund-service');
 const { NOWPaymentsService } = require('./nowpayments-service');
 const { requireEvmPlatformWallet, getNowPaymentsSettlementAddress, isEvmAddress, resolveEvmPlatformWallet } = require('./platform-addresses');
 const { createClient } = require('@supabase/supabase-js');
+const {
+    createCreditMutationGuard,
+    createVaultFeeGuard,
+    requireInternalSecret,
+    verifyUserCanMutateCredits
+} = require('./auth-middleware');
 
 const LEGACY_CHAIN_DEPOSITS = process.env.ENABLE_LEGACY_CHAIN_DEPOSITS === 'true';
 
@@ -99,6 +105,14 @@ const SUPABASE_URL = process.env.SUPABASE_URL || 'https://bscmgcnynbxalcuwdqlm.s
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
 
+const requireCreditMutationAuth = createCreditMutationGuard(supabase, {
+    getUserIdFromWallet: (walletAddress) => {
+        if (!walletLinkService) return null;
+        return walletLinkService.getUserIdFromWallet(walletAddress);
+    }
+});
+const requireVaultFeeAuth = createVaultFeeGuard(supabase);
+
 // Initialize services
 let depositListener;
 let multiChainDepositListener;
@@ -166,6 +180,9 @@ function validateEnvironmentVariables() {
     console.log(`[server] 🔒 NOWPayments / liquidación: ${settlement}`);
     console.log(`[server] 🔒 EVM Base (swaps/listeners): ${resolveEvmPlatformWallet() || 'no configurada'}`);
     console.log(`[server] 🔒 Vault Wallet: ${process.env.VAULT_WALLET_ADDRESS || 'not set'}`);
+    if (!process.env.BACKEND_INTERNAL_SECRET) {
+        console.warn('[SECURITY] ⚠️ BACKEND_INTERNAL_SECRET not set — internal-only routes will reject requests');
+    }
     return true;
 }
 
@@ -458,7 +475,7 @@ app.get('/api/user/balance/:userId', async (req, res) => {
  * Supports both userId and walletAddress for wallet-only operations
  * NEW: Supports fiat balance deduction
  */
-app.post('/api/user/deduct-credits', async (req, res) => {
+app.post('/api/user/deduct-credits', requireCreditMutationAuth, async (req, res) => {
     try {
         const { userId, credits, walletAddress } = req.body;
 
@@ -499,6 +516,21 @@ app.post('/api/user/deduct-credits', async (req, res) => {
 
         if (!targetUserId) {
             return res.status(400).json({ error: 'userId or walletAddress required' });
+        }
+
+        if (req.authMode === 'user') {
+            const allowed = await verifyUserCanMutateCredits(
+                supabase,
+                {
+                    getUserIdFromWallet: (addr) =>
+                        walletLinkService ? walletLinkService.getUserIdFromWallet(addr) : null
+                },
+                req.authUser,
+                { userId: targetUserId, walletAddress }
+            );
+            if (!allowed) {
+                return res.status(403).json({ error: 'Forbidden' });
+            }
         }
 
         // Get current balance
@@ -1276,7 +1308,7 @@ app.get('/api/deposits/diagnose/:txHash', async (req, res) => {
 /**
  * Trigger manual deposit sync
  */
-app.post('/api/deposits/sync', async (req, res) => {
+app.post('/api/deposits/sync', requireInternalSecret, async (req, res) => {
     try {
         if (!LEGACY_CHAIN_DEPOSITS) return legacyDepositsGone(res);
         if (!depositSyncService) {
@@ -1294,7 +1326,7 @@ app.post('/api/deposits/sync', async (req, res) => {
 /**
  * Sync specific transaction
  */
-app.post('/api/deposits/sync-transaction', async (req, res) => {
+app.post('/api/deposits/sync-transaction', requireInternalSecret, async (req, res) => {
     try {
         if (!LEGACY_CHAIN_DEPOSITS) return legacyDepositsGone(res);
         const { txHash } = req.body;
@@ -1318,7 +1350,7 @@ app.post('/api/deposits/sync-transaction', async (req, res) => {
 /**
  * Manually process a deposit
  */
-app.post('/api/deposits/process', async (req, res) => {
+app.post('/api/deposits/process', requireInternalSecret, async (req, res) => {
     try {
         if (!LEGACY_CHAIN_DEPOSITS) return legacyDepositsGone(res);
         const { txHash, walletAddress } = req.body;
@@ -1647,7 +1679,7 @@ app.get('/api/claims/:walletAddress', async (req, res) => {
 /**
  * Add credits (for wins)
  */
-app.post('/api/user/add-credits', async (req, res) => {
+app.post('/api/user/add-credits', requireInternalSecret, async (req, res) => {
     try {
         const { userId, credits, reason, matchId } = req.body;
 
@@ -1732,7 +1764,7 @@ app.get('/api/vault/balance', async (req, res) => {
 /**
  * Add fee to vault
  */
-app.post('/api/vault/add-fee', async (req, res) => {
+app.post('/api/vault/add-fee', requireVaultFeeAuth, async (req, res) => {
     try {
         const { feeType, amount, matchId, source, sourceTxHash } = req.body;
 
