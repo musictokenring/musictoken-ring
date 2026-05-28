@@ -899,9 +899,9 @@
                     <div class="relative flex-1 min-h-[400px] bg-gray-950">
                         <div id="npAmountStep" class="flex flex-col gap-4 p-5 sm:p-6">
                             <label class="text-xs text-gray-400" for="npUsdAmount">Importe a depositar (USD)</label>
-                            <input id="npUsdAmount" type="number" min="1" step="0.01" value="3" placeholder="3" inputmode="decimal" class="w-full rounded-lg border border-white/15 bg-gray-900/80 px-3 py-2.5 text-white text-base focus:border-cyan-500/50 focus:outline-none" />
-                            <p class="text-[11px] text-gray-500">Debes tener sesión iniciada (misma cuenta que en MusicToken Ring). <strong class="text-gray-400">Mínimo 1 USD</strong>. Se abrirá el checkout NOWPayments en una <strong class="text-gray-400">nueva pestaña</strong> (muchas veces el iframe queda vacío por seguridad del proveedor). El servidor puede ajustar unos céntimos el importe para el mínimo en cripto.</p>
-                            <button type="button" id="npStartCheckoutBtn" class="w-full rounded-xl bg-gradient-to-r from-cyan-600 to-fuchsia-600 py-3 text-sm font-bold text-white shadow-lg shadow-cyan-900/30 hover:opacity-95 transition">Continuar al pago</button>
+                            <input id="npUsdAmount" type="number" min="12" step="0.01" value="12" placeholder="12" inputmode="decimal" class="w-full rounded-lg border border-white/15 bg-gray-900/80 px-3 py-2.5 text-white text-base focus:border-cyan-500/50 focus:outline-none" aria-describedby="npMinDepositHint npCheckoutErr" />
+                            <p id="npMinDepositHint" class="text-[11px] text-gray-500">Debes tener sesión iniciada (misma cuenta que en MusicToken Ring). <strong class="text-cyan-400/90">Depósito mínimo: 12 USD</strong>. Se abrirá el checkout NOWPayments en una <strong class="text-gray-400">nueva pestaña</strong> (muchas veces el iframe queda vacío por seguridad del proveedor). El servidor puede ajustar unos céntimos el importe para el mínimo en cripto.</p>
+                            <button type="button" id="npStartCheckoutBtn" class="w-full rounded-xl bg-gradient-to-r from-cyan-600 to-fuchsia-600 py-3 text-sm font-bold text-white shadow-lg shadow-cyan-900/30 hover:opacity-95 transition disabled:opacity-40 disabled:cursor-not-allowed" disabled>Continuar al pago</button>
                             <p id="npCheckoutErr" class="hidden text-red-300 text-sm"></p>
                         </div>
                         <p id="npCheckoutAdjustNote" class="hidden px-5 sm:px-6 pt-2 text-amber-200/90 text-[11px] leading-snug"></p>
@@ -922,6 +922,42 @@
 
         <script>
         (function () {
+            var MIN_NP_DEPOSIT_USD = 12;
+
+            function parseNpUsdAmount(raw) {
+                return parseFloat(String(raw == null ? '' : raw).replace(',', '.'), 10);
+            }
+
+            function validateNpDepositAmount(showError) {
+                var inp = document.getElementById('npUsdAmount');
+                var errEl = document.getElementById('npCheckoutErr');
+                var btn = document.getElementById('npStartCheckoutBtn');
+                var amt = inp ? parseNpUsdAmount(inp.value) : NaN;
+                var valid = Number.isFinite(amt) && amt >= MIN_NP_DEPOSIT_USD;
+
+                if (btn) btn.disabled = !valid;
+
+                if (!showError || !errEl) return valid;
+
+                if (!Number.isFinite(amt)) {
+                    errEl.textContent = 'Indica un importe válido en USD.';
+                    errEl.classList.remove('hidden');
+                    return false;
+                }
+                if (amt < MIN_NP_DEPOSIT_USD) {
+                    errEl.textContent =
+                        'Importe insuficiente. El depósito mínimo es ' +
+                        MIN_NP_DEPOSIT_USD +
+                        ' USD.';
+                    errEl.classList.remove('hidden');
+                    return false;
+                }
+
+                errEl.textContent = '';
+                errEl.classList.add('hidden');
+                return true;
+            }
+
             function resetNpModalUi() {
                 var iframe = document.getElementById('nowpaymentsWidgetIframe');
                 var step = document.getElementById('npAmountStep');
@@ -949,6 +985,12 @@
                 var modal = document.getElementById('nowpaymentsModal');
                 if (!modal) return;
                 resetNpModalUi();
+                var inp = document.getElementById('npUsdAmount');
+                if (inp) {
+                    inp.value = String(MIN_NP_DEPOSIT_USD);
+                    inp.min = String(MIN_NP_DEPOSIT_USD);
+                }
+                validateNpDepositAmount(false);
                 modal.classList.remove('hidden');
                 modal.setAttribute('aria-hidden', 'false');
                 document.body.style.overflow = 'hidden';
@@ -967,6 +1009,14 @@
                 resetNpModalUi();
                 document.body.style.overflow = '';
             };
+            document.addEventListener('input', function (ev) {
+                if (!ev.target || ev.target.id !== 'npUsdAmount') return;
+                validateNpDepositAmount(true);
+            });
+            document.addEventListener('blur', function (ev) {
+                if (!ev.target || ev.target.id !== 'npUsdAmount') return;
+                validateNpDepositAmount(true);
+            }, true);
             document.addEventListener('click', async function (ev) {
                 var t = ev.target;
                 if (!t || !t.id || t.id !== 'npStartCheckoutBtn') return;
@@ -987,12 +1037,8 @@
                     adjustNote.textContent = '';
                     adjustNote.classList.add('hidden');
                 }
-                var amt = inp ? parseFloat(String(inp.value).replace(',', '.'), 10) : NaN;
-                if (!Number.isFinite(amt) || amt < 1) {
-                    if (errEl) {
-                        errEl.textContent = 'Indica un importe válido (mín. 1 USD).';
-                        errEl.classList.remove('hidden');
-                    }
+                var amt = inp ? parseNpUsdAmount(inp.value) : NaN;
+                if (!validateNpDepositAmount(true)) {
                     return;
                 }
                 var supa = window.supabaseClient;
@@ -1115,6 +1161,7 @@
                     closeNowPaymentsModal();
                 }
             });
+            validateNpDepositAmount(false);
         })();
         </script>
 

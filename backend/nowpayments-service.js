@@ -28,7 +28,7 @@ const NOWPAYOUT_CHAIN = process.env.NOWPAYOUT_CHAIN || '';
  * Piso en USD solicitado por el usuario (antes del ajuste de red). El servidor puede subir
  * ligeramente el importe enviado a NOWPayments (ver adjustUsdForNowpaymentsCryptoMinimum).
  */
-const MIN_DEPOSIT_USD_FLOOR = 1;
+const MIN_DEPOSIT_USD_FLOOR = 12;
 const MIN_DEPOSIT_UNITS = Math.max(
     MIN_DEPOSIT_USD_FLOOR,
     parseFloat(process.env.NOWPAYMENTS_MIN_PAY_AMOUNT || String(MIN_DEPOSIT_USD_FLOOR)) ||
