@@ -24,7 +24,8 @@ const {
     createVaultFeeGuard,
     requireInternalSecret,
     verifyUserCanMutateCredits,
-    resolvePublicUserId
+    resolvePublicUserId,
+    resolveCreditsUserId
 } = require('./auth-middleware');
 const { startTournamentScheduler } = require('./tournament-scheduler');
 const { deductUnifiedBalance } = require('./unified-balance');
@@ -497,7 +498,11 @@ app.post('/api/user/deduct-credits', requireCreditMutationAuth, async (req, res)
         let targetUserId = userId;
 
         if (req.authUser) {
-            targetUserId = await resolvePublicUserId(supabase, req.authUser);
+            const resolved = await resolveCreditsUserId(supabase, {
+                getUserIdFromWallet: (addr) =>
+                    walletLinkService ? walletLinkService.getUserIdFromWallet(addr) : null
+            }, req.authUser, walletAddress || null);
+            targetUserId = resolved.userId;
         }
 
         // 🔗 NUEVO: Si no hay userId pero hay walletAddress, buscar userId desde wallet
@@ -2032,14 +2037,38 @@ app.post('/api/tournaments/:id/join', requireCreditMutationAuth, async (req, res
         if (!tournamentScheduler?.service) {
             return res.status(503).json({ ok: false, error: 'Tournament service unavailable' });
         }
-        const publicUserId = await resolvePublicUserId(supabase, req.authUser);
+        const walletAddress = req.body?.walletAddress || null;
+        const resolved = await resolveCreditsUserId(supabase, {
+            getUserIdFromWallet: (addr) =>
+                walletLinkService ? walletLinkService.getUserIdFromWallet(addr) : null
+        }, req.authUser, walletAddress);
+
+        const allowed = await verifyUserCanMutateCredits(
+            supabase,
+            {
+                getUserIdFromWallet: (addr) =>
+                    walletLinkService ? walletLinkService.getUserIdFromWallet(addr) : null
+            },
+            req.authUser,
+            { userId: resolved.userId, walletAddress }
+        );
+        if (!allowed) {
+            return res.status(403).json({ error: 'Forbidden' });
+        }
+
+        console.log('[tournament] join userId:', resolved.userId, 'balance:', resolved.total);
+
         const result = await tournamentScheduler.service.joinTournament(
-            publicUserId,
+            resolved.userId,
             req.params.id,
             req.body?.song || null
         );
         if (!result.ok) {
-            return res.status(400).json(result);
+            return res.status(400).json({
+                ...result,
+                resolved_user_id: resolved.userId,
+                resolved_balance: resolved.total
+            });
         }
         res.json(result);
     } catch (error) {

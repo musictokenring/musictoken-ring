@@ -1,19 +1,7 @@
 /**
- * Deducción del balance unificado (user_credits + saldo_fiat + saldo_onchain).
+ * Balance y deducción unificados (user_credits + saldo_fiat + saldo_onchain).
  */
-async function deductUnifiedBalance(client, targetUserId, amount) {
-  let rpcTotal = null;
-  try {
-    const { data: rpcBalance } = await client.rpc('get_user_unified_balance', {
-      user_id_param: targetUserId
-    });
-    if (rpcBalance !== null && rpcBalance !== undefined) {
-      rpcTotal = parseFloat(rpcBalance) || 0;
-    }
-  } catch (_rpcErr) {
-    /* usar lectura por tablas */
-  }
-
+async function readColumnBalances(client, targetUserId) {
   const { data: userData } = await client
     .from('users')
     .select('saldo_fiat, saldo_onchain')
@@ -29,26 +17,84 @@ async function deductUnifiedBalance(client, targetUserId, amount) {
   const fiat = parseFloat(userData?.saldo_fiat || 0);
   const onchain = parseFloat(userData?.saldo_onchain || 0);
   const creditsBal = parseFloat(creditsRow?.credits || 0);
-  const columnTotal = fiat + onchain + creditsBal;
-  const total = rpcTotal !== null ? Math.max(rpcTotal, columnTotal) : columnTotal;
+  return { fiat, onchain, creditsBal, columnTotal: fiat + onchain + creditsBal };
+}
 
-  if (total < amount) {
+async function readUnifiedTotal(client, targetUserId) {
+  let rpcTotal = null;
+  try {
+    const { data: rpcBalance } = await client.rpc('get_user_unified_balance', {
+      user_id_param: targetUserId
+    });
+    if (rpcBalance !== null && rpcBalance !== undefined) {
+      rpcTotal = parseFloat(rpcBalance) || 0;
+    }
+  } catch (_rpcErr) {
+    /* usar columnas */
+  }
+
+  const cols = await readColumnBalances(client, targetUserId);
+  const total = rpcTotal !== null
+    ? Math.max(rpcTotal, cols.columnTotal)
+    : cols.columnTotal;
+
+  return { ...cols, rpcTotal, total };
+}
+
+async function ensureUserCreditsRow(client, targetUserId) {
+  const { data: existing } = await client
+    .from('user_credits')
+    .select('user_id')
+    .eq('user_id', targetUserId)
+    .maybeSingle();
+
+  if (existing) return;
+
+  await client.from('user_credits').insert({
+    user_id: targetUserId,
+    credits: 0,
+    updated_at: new Date().toISOString()
+  });
+}
+
+async function deductUnifiedBalance(client, targetUserId, amount) {
+  const balances = await readUnifiedTotal(client, targetUserId);
+
+  if (balances.total < amount) {
     return {
       ok: false,
       error: 'Insufficient credits',
-      total,
-      creditsBal,
-      fiat,
-      onchain
+      total: balances.total,
+      creditsBal: balances.creditsBal,
+      fiat: balances.fiat,
+      onchain: balances.onchain
     };
   }
 
   let remaining = amount;
-  const fromCredits = Math.min(creditsBal, remaining);
+  let fromCredits = Math.min(balances.creditsBal, remaining);
   remaining -= fromCredits;
-  const fromFiat = Math.min(fiat, remaining);
+  let fromFiat = Math.min(balances.fiat, remaining);
   remaining -= fromFiat;
-  const fromOnchain = remaining;
+  let fromOnchain = remaining;
+
+  if (balances.columnTotal < amount && balances.total >= amount) {
+    const playable = balances.rpcTotal !== null ? balances.rpcTotal : balances.total;
+    const newCredits = Math.max(0, playable - amount);
+    await ensureUserCreditsRow(client, targetUserId);
+    await client
+      .from('user_credits')
+      .update({ credits: newCredits, updated_at: new Date().toISOString() })
+      .eq('user_id', targetUserId);
+    return {
+      ok: true,
+      fromCredits: amount,
+      fromFiat: 0,
+      fromOnchain: 0,
+      totalBefore: balances.total,
+      syncedFromRpc: true
+    };
+  }
 
   if (fromCredits > 0) {
     const { error: creditsError } = await client.rpc('decrement_user_credits', {
@@ -56,10 +102,13 @@ async function deductUnifiedBalance(client, targetUserId, amount) {
       credits_to_subtract: fromCredits
     });
     if (creditsError) {
-      const newCredits = Math.max(0, creditsBal - fromCredits);
+      await ensureUserCreditsRow(client, targetUserId);
       await client
         .from('user_credits')
-        .update({ credits: newCredits, updated_at: new Date().toISOString() })
+        .update({
+          credits: Math.max(0, balances.creditsBal - fromCredits),
+          updated_at: new Date().toISOString()
+        })
         .eq('user_id', targetUserId);
     }
   }
@@ -73,7 +122,7 @@ async function deductUnifiedBalance(client, targetUserId, amount) {
       await client
         .from('users')
         .update({
-          saldo_fiat: Math.max(0, fiat - fromFiat),
+          saldo_fiat: Math.max(0, balances.fiat - fromFiat),
           updated_at: new Date().toISOString()
         })
         .eq('id', targetUserId);
@@ -84,13 +133,22 @@ async function deductUnifiedBalance(client, targetUserId, amount) {
     await client
       .from('users')
       .update({
-        saldo_onchain: Math.max(0, onchain - fromOnchain),
+        saldo_onchain: Math.max(0, balances.onchain - fromOnchain),
         updated_at: new Date().toISOString()
       })
       .eq('id', targetUserId);
   }
 
-  return { ok: true, fromCredits, fromFiat, fromOnchain, totalBefore: total };
+  return {
+    ok: true,
+    fromCredits,
+    fromFiat,
+    fromOnchain,
+    totalBefore: balances.total
+  };
 }
 
-module.exports = { deductUnifiedBalance };
+module.exports = {
+  deductUnifiedBalance,
+  readUnifiedTotal
+};

@@ -446,8 +446,12 @@ class TournamentService {
     if (!deduction.ok) {
       return {
         ok: false,
-        error: deduction.error || 'Saldo insuficiente',
-        total_balance: deduction.total
+        error: 'Saldo insuficiente para la inscripción (' + entryFee + ' cr). Saldo detectado: ' +
+          (deduction.total != null ? Number(deduction.total).toFixed(2) : '0') + ' cr',
+        total_balance: deduction.total,
+        credits_balance: deduction.creditsBal,
+        fiat_balance: deduction.fiat,
+        onchain_balance: deduction.onchain
       };
     }
 

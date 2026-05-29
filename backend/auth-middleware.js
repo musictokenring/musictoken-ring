@@ -75,6 +75,78 @@ async function resolvePublicUserId(supabase, authUser) {
   return authUser.id;
 }
 
+async function readUnifiedTotal(supabase, userId) {
+  try {
+    const { data: rpcBalance } = await supabase.rpc('get_user_unified_balance', {
+      user_id_param: userId
+    });
+    if (rpcBalance !== null && rpcBalance !== undefined) {
+      return parseFloat(rpcBalance) || 0;
+    }
+  } catch (_err) {
+    /* fallback columnas */
+  }
+
+  const { data: userData } = await supabase
+    .from('users')
+    .select('saldo_fiat, saldo_onchain')
+    .eq('id', userId)
+    .maybeSingle();
+
+  const { data: creditsRow } = await supabase
+    .from('user_credits')
+    .select('credits')
+    .eq('user_id', userId)
+    .maybeSingle();
+
+  const fiat = parseFloat(userData?.saldo_fiat || 0);
+  const onchain = parseFloat(userData?.saldo_onchain || 0);
+  const creditsBal = parseFloat(creditsRow?.credits || 0);
+  return fiat + onchain + creditsBal;
+}
+
+/**
+ * Elige el userId con mayor saldo jugable entre sesión Supabase y wallet vinculada.
+ */
+async function resolveCreditsUserId(supabase, walletLinkAdapter, authUser, walletAddress) {
+  const candidates = new Set();
+  const publicId = await resolvePublicUserId(supabase, authUser);
+  candidates.add(publicId);
+  candidates.add(authUser.id);
+
+  const normalized = walletAddress && /^0x[a-fA-F0-9]{40}$/.test(walletAddress)
+    ? walletAddress.toLowerCase()
+    : null;
+
+  if (normalized) {
+    const { data: byWallet } = await supabase
+      .from('users')
+      .select('id')
+      .ilike('wallet_address', normalized)
+      .maybeSingle();
+    if (byWallet?.id) candidates.add(byWallet.id);
+
+    if (walletLinkAdapter?.getUserIdFromWallet) {
+      const linked = await walletLinkAdapter.getUserIdFromWallet(normalized);
+      if (linked) candidates.add(linked);
+    }
+  }
+
+  let bestId = publicId;
+  let bestTotal = 0;
+
+  for (const uid of candidates) {
+    if (!uid) continue;
+    const total = await readUnifiedTotal(supabase, uid);
+    if (total > bestTotal) {
+      bestTotal = total;
+      bestId = uid;
+    }
+  }
+
+  return { userId: bestId, total: bestTotal, candidates: [...candidates] };
+}
+
 async function userOwnsWallet(supabase, walletLinkAdapter, authUserId, walletAddress) {
   if (!walletAddress || !/^0x[a-fA-F0-9]{40}$/.test(walletAddress)) {
     return false;
@@ -203,6 +275,8 @@ module.exports = {
   hasValidInternalSecret,
   requireInternalSecret,
   resolvePublicUserId,
+  resolveCreditsUserId,
+  readUnifiedTotal,
   verifyUserCanMutateCredits,
   verifyUserInMatch
 };

@@ -2323,10 +2323,14 @@ const GameEngine = {
                 preview: song.preview
             } : null;
 
+            const walletAddress = this.connectedWallet || localStorage.getItem('mtr_wallet');
             const response = await fetch(backendUrl + '/api/tournaments/' + tournamentId + '/join', {
                 method: 'POST',
                 headers: await this.getBackendAuthHeaders({ 'Content-Type': 'application/json' }),
-                body: JSON.stringify({ song: songPayload })
+                body: JSON.stringify({
+                    song: songPayload,
+                    walletAddress: walletAddress || null
+                })
             });
 
             const result = await response.json().catch(function () { return {}; });
@@ -2349,15 +2353,35 @@ const GameEngine = {
                         return;
                     }
                 }
-                const msg = result.error || 'Error al inscribirte en el torneo';
+                let msg = result.error || 'Error al inscribirte en el torneo';
+                if (result.total_balance != null && msg.indexOf('insuficiente') !== -1) {
+                    msg += ' (servidor ve ' + Number(result.total_balance).toFixed(2) + ' cr)';
+                }
                 console.error('[joinTournament] falló:', result);
+                if (response.status === 400 && walletAddress) {
+                    const localOk = await this.joinTournamentLocalFallback(
+                        session.user.id,
+                        tournamentId,
+                        song,
+                        entryFee
+                    );
+                    if (localOk) {
+                        showToast('¡Inscrito en el torneo!', 'success');
+                        window.tournamentEnrollment = null;
+                        localStorage.setItem('mtr_watch_tournament', tournamentId);
+                        if (window.TournamentBracket) {
+                            window.TournamentBracket.watch(tournamentId);
+                        }
+                        return;
+                    }
+                }
                 showToast(msg, 'error');
                 return;
             }
 
-            const walletAddress = this.connectedWallet || localStorage.getItem('mtr_wallet');
-            if (walletAddress && window.CreditsSystem) {
-                await window.CreditsSystem.loadBalance(walletAddress);
+            const walletAddressAfter = this.connectedWallet || localStorage.getItem('mtr_wallet');
+            if (walletAddressAfter && window.CreditsSystem) {
+                await window.CreditsSystem.loadBalance(walletAddressAfter);
                 this.updateBalanceDisplay();
             }
 
@@ -2386,15 +2410,23 @@ const GameEngine = {
 
     async joinTournamentLocalFallback(userId, tournamentId, song, entryFee) {
         try {
-            const deducted = await this.tryUnifiedRpcFallback(userId, entryFee);
+            const walletAddress = this.connectedWallet || localStorage.getItem('mtr_wallet');
+            let debitUserId = userId;
+            if (walletAddress && window.CreditsSystem) {
+                const walletUserId = await window.CreditsSystem.getUserId(walletAddress);
+                if (walletUserId) debitUserId = walletUserId;
+            }
+
+            const deducted = await this.tryUnifiedRpcFallback(debitUserId, entryFee);
             if (!deducted) {
                 const ok = await this.updateBalance(-entryFee, 'bet', null);
                 if (!ok) return false;
             }
 
+            const { data: { session } } = await supabaseClient.auth.getSession();
             const participantRow = {
                 tournament_id: tournamentId,
-                user_id: userId,
+                user_id: session?.user?.id || userId,
                 is_cpu: false
             };
             if (song) {
