@@ -112,8 +112,11 @@ async function main() {
     console.log('     lifecycleError:', startBattle.result.lifecycleError || 'none');
     console.log('     participants:', startBattle.result.bracket?.participants?.length || 0);
     console.log('     duels:', startBattle.result.bracket?.duels?.length || 0);
-    if (startBattle.result.lifecycleError?.indexOf('016') !== -1) {
-      console.error('\n⚠️  MIGRACIÓN 016 NO APLICADA EN SUPABASE');
+    if (startBattle.result.lifecycleError) {
+      console.log('     ⚠️', startBattle.result.lifecycleError);
+    }
+    if (startBattle.result.bracket?.duels?.length > 0) {
+      console.log('     ✓ batalla generada');
     }
   }
 

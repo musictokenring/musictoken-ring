@@ -248,21 +248,29 @@ class TournamentService {
 
   async syncTournamentParticipantCount(tournamentId) {
     const humanCount = await this.countHumanParticipants(tournamentId);
-    const { count: cpuCount } = await this.supabase
+    let cpuCount = 0;
+    const cpuRes = await this.supabase
       .from('tournament_participants')
       .select('id', { count: 'exact', head: true })
       .eq('tournament_id', tournamentId)
       .eq('is_cpu', true);
+    if (!cpuRes.error) cpuCount = cpuRes.count || 0;
 
-    const total = humanCount + (cpuCount || 0);
-    await this.supabase
+    const total = humanCount + cpuCount;
+    const patch = {
+      current_participants: total,
+      updated_at: new Date().toISOString()
+    };
+    if (!cpuRes.error) patch.human_participants = humanCount;
+
+    const { error: updErr } = await this.supabase
       .from('tournaments')
-      .update({
-        current_participants: total,
-        human_participants: humanCount,
-        updated_at: new Date().toISOString()
-      })
+      .update(patch)
       .eq('id', tournamentId);
+
+    if (updErr) {
+      console.warn('[tournament] syncParticipantCount:', tournamentId, updErr.message);
+    }
 
     return { humanCount, total };
   }
@@ -336,7 +344,8 @@ class TournamentService {
    * Cierra inscripción vencida e inicia bracket (no esperar al scheduler).
    */
   async advanceTournamentLifecycle(tournamentId) {
-    const nowIso = new Date().toISOString();
+    const nowMs = Date.now();
+    const nowIso = new Date(nowMs).toISOString();
     const { data: t, error } = await this.supabase
       .from('tournaments')
       .select('*')
@@ -358,23 +367,57 @@ class TournamentService {
     const { humanCount } = await this.syncTournamentParticipantCount(tournamentId);
 
     if (t.status === 'registration') {
-      const closesMs = new Date(t.registration_closes_at).getTime();
-      if (closesMs <= Date.now()) {
-        if (this.expressAlwaysStartsBattle(t, humanCount)) {
-          await this.supabase
-            .from('tournaments')
-            .update({ status: 'locked', updated_at: nowIso })
-            .eq('id', t.id);
-          console.log('[tournament] 🔒 Cierre inmediato:', t.name, 'humanos:', humanCount);
+      const closesMs = Date.parse(t.registration_closes_at || '');
+      const expired = Number.isFinite(closesMs) && closesMs <= nowMs;
+
+      if (!expired) {
+        return { ok: true, stage: 'registration', humanCount };
+      }
+
+      if (!this.expressAlwaysStartsBattle(t, humanCount)) {
+        await this.supabase
+          .from('tournaments')
+          .update({ status: 'cancelled', updated_at: nowIso })
+          .eq('id', t.id);
+        return { ok: false, error: 'Torneo cancelado sin participantes', stage: 'cancelled' };
+      }
+
+      const { data: lockedRows, error: lockErr } = await this.supabase
+        .from('tournaments')
+        .update({ status: 'locked', updated_at: nowIso })
+        .eq('id', t.id)
+        .eq('status', 'registration')
+        .select('*');
+
+      if (lockErr) {
+        console.error('[tournament] lock failed:', t.id, lockErr.message);
+        return {
+          ok: false,
+          error: 'No se pudo cerrar inscripción: ' + lockErr.message,
+          stage: 'registration'
+        };
+      }
+
+      const locked = lockedRows?.[0] || null;
+      if (!locked) {
+        const { data: refetch } = await this.supabase
+          .from('tournaments')
+          .select('*')
+          .eq('id', tournamentId)
+          .maybeSingle();
+        if (refetch && refetch.status !== 'registration') {
+          t.status = refetch.status;
         } else {
-          await this.supabase
-            .from('tournaments')
-            .update({ status: 'cancelled', updated_at: nowIso })
-            .eq('id', t.id);
-          return { ok: false, error: 'Torneo cancelado sin participantes', stage: 'cancelled' };
+          console.error('[tournament] lock no rows:', t.id, 'closes', t.registration_closes_at);
+          return {
+            ok: false,
+            error: 'Inscripción vencida pero el torneo no pudo cerrarse. Reintenta en unos segundos.',
+            stage: 'registration'
+          };
         }
       } else {
-        return { ok: true, stage: 'registration', humanCount };
+        console.log('[tournament] 🔒 Cierre inmediato:', locked.name, 'humanos:', humanCount);
+        return this.startLockedTournament(locked);
       }
     }
 
@@ -385,47 +428,51 @@ class TournamentService {
       .maybeSingle();
 
     if (updated?.status === 'locked') {
-      let bracket = null;
-      try {
-        if (updated.tournament_type === 'express') {
-          bracket = await this.battleEngine.startExpressTournament(updated);
-        } else if (updated.tournament_type === 'weekly') {
-          bracket = await this.battleEngine.startWeeklyTournament(updated);
-        }
-      } catch (err) {
-        console.error('[tournament] Error iniciando torneo:', tournamentId, err.message);
-        return { ok: false, error: err.message, stage: 'locked' };
-      }
-
-      if (!bracket) {
-        const { data: after } = await this.supabase
-          .from('tournaments')
-          .select('status, bracket_state')
-          .eq('id', tournamentId)
-          .maybeSingle();
-
-        if (after?.status === 'cancelled') {
-          return {
-            ok: false,
-            error: 'No se pudo completar el torneo (¿migración 016 aplicada?)',
-            stage: 'cancelled'
-          };
-        }
-        if (after?.status === 'in_progress' && after.bracket_state) {
-          return { ok: true, stage: 'in_progress' };
-        }
-
-        return {
-          ok: false,
-          error: 'No se pudo generar el bracket. Revisa migración 016 en Supabase.',
-          stage: 'locked'
-        };
-      }
-
-      return { ok: true, stage: 'in_progress' };
+      return this.startLockedTournament(updated);
     }
 
     return { ok: true, stage: updated?.status || t.status };
+  }
+
+  async startLockedTournament(locked) {
+    let bracket = null;
+    try {
+      if (locked.tournament_type === 'express') {
+        bracket = await this.battleEngine.startExpressTournament(locked);
+      } else if (locked.tournament_type === 'weekly') {
+        bracket = await this.battleEngine.startWeeklyTournament(locked);
+      }
+    } catch (err) {
+      console.error('[tournament] Error iniciando torneo:', locked.id, err.message);
+      return { ok: false, error: err.message, stage: 'locked' };
+    }
+
+    if (!bracket) {
+      const { data: after } = await this.supabase
+        .from('tournaments')
+        .select('status, bracket_state')
+        .eq('id', locked.id)
+        .maybeSingle();
+
+      if (after?.status === 'cancelled') {
+        return {
+          ok: false,
+          error: 'No se pudo completar el torneo. ¿Migración 016 aplicada en Supabase?',
+          stage: 'cancelled'
+        };
+      }
+      if (after?.status === 'in_progress' && after.bracket_state) {
+        return { ok: true, stage: 'in_progress' };
+      }
+
+      return {
+        ok: false,
+        error: 'No se pudo generar el bracket. Aplica migración 016 en Supabase (is_cpu, bracket_state).',
+        stage: 'locked'
+      };
+    }
+
+    return { ok: true, stage: 'in_progress' };
   }
 
   async resolveJoinableTournament(tournament) {
@@ -568,10 +615,10 @@ class TournamentService {
     const prizeContribution = entryFee * (1 - platformRate);
     const updatePayload = {
       current_participants: newHumanCount,
-      human_participants: newHumanCount,
       prize_pool: Number(tournament.prize_pool || 0) + prizeContribution,
       updated_at: new Date().toISOString()
     };
+    updatePayload.human_participants = newHumanCount;
     if (newHumanCount >= tournament.max_participants) {
       updatePayload.status = 'locked';
     }

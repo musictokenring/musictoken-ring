@@ -22,8 +22,10 @@
   var kickCooldownUntil = 0;
   var arenaPollController = null;
   var arenaKickController = null;
+  var kickInFlightPromise = null;
   var KICK_TIMEOUT_MS = 120000;
   var POLL_TIMEOUT_MS = 45000;
+  var KICK_COOLDOWN_MS = 25000;
   var API_TIMEOUT_MS = 55000;
   var MAX_KICK_ATTEMPTS = 8;
 
@@ -213,37 +215,58 @@
     }
   }
 
-  async function fetchApi(path, options, timeoutMs, kind) {
-    var isKick = kind === 'kick';
-    var controller = new AbortController();
-    if (isKick) {
-      if (arenaKickController) {
-        try { arenaKickController.abort(); } catch (e) { /* ignore */ }
-      }
-      arenaKickController = controller;
-    } else {
-      if (arenaPollController) {
-        try { arenaPollController.abort(); } catch (e) { /* ignore */ }
-      }
-      arenaPollController = controller;
-    }
-    var timer = setTimeout(function () { controller.abort(); }, timeoutMs || API_TIMEOUT_MS);
+  async function safeJson(res) {
+    if (!res) return null;
     try {
-      var res = await fetch(backendUrl() + path, Object.assign({}, options || {}, {
-        signal: controller.signal,
-        cache: 'no-store'
-      }));
-      clearTimeout(timer);
-      if (isKick && arenaKickController === controller) arenaKickController = null;
-      if (!isKick && arenaPollController === controller) arenaPollController = null;
-      return res;
+      return await res.json();
     } catch (err) {
-      clearTimeout(timer);
-      if (isKick && arenaKickController === controller) arenaKickController = null;
-      if (!isKick && arenaPollController === controller) arenaPollController = null;
       if (err && err.name === 'AbortError') return null;
       throw err;
     }
+  }
+
+  async function fetchApi(path, options, timeoutMs, kind) {
+    var isKick = kind === 'kick';
+    if (isKick && kickInFlightPromise) return kickInFlightPromise;
+
+    var controller = new AbortController();
+    var run = (async function () {
+      if (isKick) {
+        arenaKickController = controller;
+      } else if (battleKickInFlight) {
+        return null;
+      } else {
+        if (arenaPollController) {
+          try { arenaPollController.abort(); } catch (e) { /* ignore */ }
+        }
+        arenaPollController = controller;
+      }
+      var timer = setTimeout(function () { controller.abort(); }, timeoutMs || API_TIMEOUT_MS);
+      try {
+        var res = await fetch(backendUrl() + path, Object.assign({}, options || {}, {
+          signal: controller.signal,
+          cache: 'no-store'
+        }));
+        clearTimeout(timer);
+        if (isKick && arenaKickController === controller) arenaKickController = null;
+        if (!isKick && arenaPollController === controller) arenaPollController = null;
+        return res;
+      } catch (err) {
+        clearTimeout(timer);
+        if (isKick && arenaKickController === controller) arenaKickController = null;
+        if (!isKick && arenaPollController === controller) arenaPollController = null;
+        if (err && err.name === 'AbortError') return null;
+        throw err;
+      }
+    })();
+
+    if (isKick) {
+      kickInFlightPromise = run.finally(function () {
+        kickInFlightPromise = null;
+      });
+      return kickInFlightPromise;
+    }
+    return run;
   }
 
   function abortArenaFetches() {
@@ -268,12 +291,9 @@
   async function fetchBracket(id) {
     var res = await fetchApi('/api/tournaments/' + id + '/bracket', { method: 'GET' }, POLL_TIMEOUT_MS, 'poll');
     if (!res) return { ok: false, error: 'timeout' };
-    try {
-      return await res.json();
-    } catch (err) {
-      if (err && err.name === 'AbortError') return { ok: false, error: 'timeout' };
-      throw err;
-    }
+    var data = await safeJson(res);
+    if (!data) return { ok: false, error: 'timeout' };
+    return data;
   }
 
   async function triggerStartBattle(id) {
@@ -283,19 +303,9 @@
         headers: { 'Content-Type': 'application/json' }
       }, KICK_TIMEOUT_MS, 'kick');
       if (!res) return { ok: false, error: 'timeout' };
-      if (res.status === 404) {
-        await fetchApi('/api/tournaments/' + id + '/kick', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' }
-        }, KICK_TIMEOUT_MS, 'kick');
-        return fetchBracket(id);
-      }
-      try {
-        return await res.json();
-      } catch (err) {
-        if (err && err.name === 'AbortError') return { ok: false, error: 'timeout' };
-        throw err;
-      }
+      var data = await safeJson(res);
+      if (!data) return { ok: false, error: 'timeout' };
+      return data;
     } catch (e) {
       console.error('[tournament-bracket] start-battle:', e);
       return { ok: false, error: e.message || 'error' };
@@ -357,13 +367,15 @@
     if (!watchId || battleKickInFlight || Date.now() < kickCooldownUntil) return;
     if (startBattleAttempts >= MAX_KICK_ATTEMPTS) {
       lastLifecycleError =
-        'No se pudo iniciar. Vuelve al hub o aplica migración 016 en Supabase.';
+        lastLifecycleError ||
+        'No se pudo iniciar la batalla. Aplica migración 016 en Supabase o vuelve al hub.';
+      toast(lastLifecycleError, 'error');
       if (watchGenreId) await redirectToActiveExpress(watchGenreId);
       return;
     }
     battleKickInFlight = true;
     startBattleAttempts += 1;
-    kickCooldownUntil = Date.now() + 10000;
+    kickCooldownUntil = Date.now() + KICK_COOLDOWN_MS;
     if (lastLobbyData) renderLobby(lastLobbyData);
     try {
       if (startBattleAttempts === 1) await wakeBackend();
@@ -391,11 +403,18 @@
         }
       } else if (!battleReady) {
         zeroKickSent = false;
+        if (lastLifecycleError) toast(lastLifecycleError, 'error');
       }
+    } catch (e) {
+      console.error('[tournament-bracket] kick:', e);
+      lastLifecycleError = e.message || 'Error al iniciar batalla';
+      zeroKickSent = false;
+    }
+    try {
+      await refresh();
     } finally {
       battleKickInFlight = false;
     }
-    await refresh();
   }
 
   function playDuelsSequentially(data) {
