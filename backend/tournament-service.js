@@ -275,7 +275,7 @@ class TournamentService {
   async countHumanParticipants(tournamentId) {
     const { data, error } = await this.supabase
       .from('tournament_participants')
-      .select('id, user_id, is_cpu')
+      .select('user_id, is_cpu, tournament_id')
       .eq('tournament_id', tournamentId);
 
     if (error) {
@@ -288,7 +288,7 @@ class TournamentService {
   async syncTournamentParticipantCount(tournamentId) {
     const { data: rows, error } = await this.supabase
       .from('tournament_participants')
-      .select('id, user_id, is_cpu')
+      .select('user_id, is_cpu, tournament_id')
       .eq('tournament_id', tournamentId);
 
     if (error) {
@@ -659,7 +659,7 @@ class TournamentService {
 
     const { data: existingRows } = await this.supabase
       .from('tournament_participants')
-      .select('id, user_id, is_cpu')
+      .select('user_id, is_cpu, tournament_id')
       .eq('tournament_id', tournamentId)
       .eq('user_id', playerUserId);
 
@@ -700,15 +700,13 @@ class TournamentService {
       participantRow.song_preview = song.preview || '';
     }
 
-    const { data: inserted, error: insertError } = await this.supabase
+    const { error: insertError } = await this.supabase
       .from('tournament_participants')
-      .insert([participantRow])
-      .select('id, user_id, is_cpu')
-      .single();
+      .insert([participantRow]);
 
-    if (insertError || !inserted) {
-      console.error('[tournament] join insert error:', insertError?.message || 'no row');
-      return { ok: false, error: insertError?.message || 'No se pudo inscribir' };
+    if (insertError) {
+      console.error('[tournament] join insert error:', insertError.message);
+      return { ok: false, error: insertError.message };
     }
 
     const newHumanCount = humanCount + 1;
@@ -1044,7 +1042,7 @@ class TournamentService {
   async isUserRegistered(tournamentId, userId) {
     const { data } = await this.supabase
       .from('tournament_participants')
-      .select('id')
+      .select('user_id')
       .eq('tournament_id', tournamentId)
       .eq('user_id', userId)
       .maybeSingle();

@@ -113,9 +113,14 @@ function simulateDuel(p1, p2) {
   };
 }
 
+function participantStableId(row) {
+  if (row?.id) return row.id;
+  return String(row.tournament_id || '') + ':' + String(row.user_id || '');
+}
+
 function participantPayload(row) {
   return {
-    id: row.id,
+    id: participantStableId(row),
     userId: row.user_id,
     isCpu: isCpuParticipantRow(row),
     displayName: row.display_name || (isCpuParticipantRow(row) ? 'CPU' : 'Jugador'),
@@ -267,7 +272,7 @@ class TournamentBattleEngine {
     for (let i = 0; i < slotsNeeded; i++) {
       const track = tracks[i] || await fetchDeezerTrack(query, i + humanRows.length);
       const cpuIndex = i;
-      const { data: inserted, error } = await this.supabase
+      const { error } = await this.supabase
         .from('tournament_participants')
         .insert([{
           tournament_id: tournament.id,
@@ -279,16 +284,25 @@ class TournamentBattleEngine {
           song_artist: track.song_artist,
           song_image: track.song_image,
           song_preview: track.song_preview
-        }])
-        .select()
-        .single();
+        }]);
 
       if (error) {
         console.error('[tournament-battle] CPU insert error:', error.message);
         insertErrors.push(error.message);
         continue;
       }
-      cpuRows.push(inserted);
+      cpuRows.push({
+        tournament_id: tournament.id,
+        user_id: cpuUserId(cpuIndex),
+        is_cpu: true,
+        display_name: CPU_NAME_POOL[cpuIndex % CPU_NAME_POOL.length],
+        song_id: track.song_id,
+        song_name: track.song_name,
+        song_artist: track.song_artist,
+        song_image: track.song_image,
+        song_preview: track.song_preview,
+        bracket_slot: null
+      });
     }
 
     if (cpuRows.length < slotsNeeded && insertErrors.length) {
@@ -302,13 +316,14 @@ class TournamentBattleEngine {
     return humanRows.concat(cpuRows).slice(0, maxPlayers);
   }
 
-  async assignBracketSlots(allParticipants) {
+  async assignBracketSlots(tournamentId, allParticipants) {
     await Promise.all(allParticipants.map(function (participant, slot) {
       participant.bracket_slot = slot;
       return this.supabase
         .from('tournament_participants')
         .update({ bracket_slot: slot })
-        .eq('id', participant.id);
+        .eq('tournament_id', tournamentId)
+        .eq('user_id', participant.user_id);
     }, this));
     return allParticipants;
   }
@@ -375,17 +390,18 @@ class TournamentBattleEngine {
       championSong: champion?.songName
     };
 
-    if (champion?.id) {
+    if (champion?.userId) {
       await this.supabase
         .from('tournament_participants')
         .update({ placement: 2, eliminated: true })
         .eq('tournament_id', tournament.id)
-        .neq('id', champion.id);
+        .neq('user_id', champion.userId);
 
       await this.supabase
         .from('tournament_participants')
         .update({ placement: 1, eliminated: false })
-        .eq('id', champion.id);
+        .eq('tournament_id', tournament.id)
+        .eq('user_id', champion.userId);
     }
 
     await this.supabase.from('tournaments').update({
@@ -465,7 +481,7 @@ class TournamentBattleEngine {
       await this.cancelTournament(tournament.id, fillErr.message);
       throw fillErr;
     }
-    allParticipants = await this.assignBracketSlots(allParticipants);
+    allParticipants = await this.assignBracketSlots(tournament.id, allParticipants);
 
     if (allParticipants.length < maxPlayers) {
       const reason =

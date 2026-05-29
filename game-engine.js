@@ -2408,7 +2408,6 @@ const GameEngine = {
             }
 
             if (window.tournamentEnrollment?.type === 'express') {
-                await this.unlockBattleAudio();
                 const refreshedId = await this.refreshExpressEnrollmentId();
                 if (refreshedId) tournamentId = refreshedId;
             }
@@ -3839,77 +3838,16 @@ const GameEngine = {
     // AUDIO
     // ==========================================
 
-    unlockBattleAudio() {
-        if (this._audioUnlocked) return Promise.resolve(true);
-        var self = this;
-        return new Promise(function (resolve) {
-            try {
-                if (!self._silentUnlockAudio) {
-                    self._silentUnlockAudio = new Audio();
-                    self._silentUnlockAudio.src =
-                        'data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQAAAAA=';
-                    self._silentUnlockAudio.volume = 0.001;
-                }
-                var playAttempt = self._silentUnlockAudio.play();
-                if (playAttempt && typeof playAttempt.then === 'function') {
-                    playAttempt.then(function () {
-                        self._audioUnlocked = true;
-                        resolve(true);
-                    }).catch(function () { resolve(false); });
-                } else {
-                    self._audioUnlocked = true;
-                    resolve(true);
-                }
-            } catch (e) {
-                resolve(false);
-            }
-        });
-    },
-
-    showAudioUnlockPrompt() {
-        if (document.getElementById('mtrAudioUnlock')) return;
-        var btn = document.createElement('button');
-        btn.id = 'mtrAudioUnlock';
-        btn.type = 'button';
-        btn.className =
-            'fixed bottom-24 left-1/2 -translate-x-1/2 z-[9999] px-6 py-3 rounded-full ' +
-            'bg-cyan-600 text-white font-bold shadow-lg animate-pulse border border-cyan-300';
-        btn.textContent = '🔊 Toca para activar audio';
-        btn.onclick = function () {
-            var ge = window.GameEngine;
-            if (!ge) return;
-            ge.unlockBattleAudio().then(function () {
-                if (ge.userAudio) {
-                    ge.userAudio.play().catch(function () { /* ignore */ });
-                }
-                btn.remove();
-            });
-        };
-        document.body.appendChild(btn);
-    },
-
     playUserSong(url) {
         if (!url) return;
-        if (this.userAudio) {
-            this.userAudio.pause();
-            this.userAudio = null;
-        }
+        if (this.userAudio) this.userAudio.pause();
         this.userAudio = new Audio(url);
         this.userAudio.loop = true;
-        var self = this;
-        var startPlayback = function () {
-            var playPromise = self.userAudio.play();
-            if (playPromise && typeof playPromise.catch === 'function') {
-                playPromise.catch(function (err) {
-                    console.warn('[audio] autoplay blocked:', err);
-                    self.showAudioUnlockPrompt();
-                });
-            }
-        };
-        if (this._audioUnlocked) {
-            startPlayback();
-        } else {
-            this.unlockBattleAudio().then(startPlayback);
+        var playPromise = this.userAudio.play();
+        if (playPromise && typeof playPromise.catch === 'function') {
+            playPromise.catch(function (err) {
+                console.warn('[audio] play:', err.message || err);
+            });
         }
     },
     
@@ -3927,7 +3865,9 @@ const GameEngine = {
         var self = this;
         var playPromise = this.victoryAudio.play();
         if (playPromise && typeof playPromise.catch === 'function') {
-            playPromise.catch(function () { self.showAudioUnlockPrompt(); });
+            playPromise.catch(function (err) {
+                console.warn('[audio] victory:', err.message || err);
+            });
         }
         setTimeout(function () {
             if (self.victoryAudio) {
