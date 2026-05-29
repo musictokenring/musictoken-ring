@@ -13,6 +13,92 @@
   var hubSyncInFlight = false;
   var zeroSinceLocal = null;
   var API_TIMEOUT_MS = 55000;
+  var HUB_GET_TIMEOUT_MS = 22000;
+
+  var FALLBACK_GENRES = [
+    { id: 'reggaeton', label: 'Reggaeton', region: 'latino', emoji: '🎤', deezerQuery: 'reggaeton' },
+    { id: 'pop_en', label: 'Pop en inglés', region: 'anglo', emoji: '🎵', deezerQuery: 'pop english' },
+    { id: 'salsa', label: 'Salsa', region: 'latino', emoji: '💃', deezerQuery: 'salsa' },
+    { id: 'rock_en', label: 'Rock en inglés', region: 'anglo', emoji: '🎸', deezerQuery: 'rock english' },
+    { id: 'cumbia', label: 'Cumbia', region: 'latino', emoji: '🪗', deezerQuery: 'cumbia' },
+    { id: 'hip_hop_en', label: 'Hip hop / R&B (EN)', region: 'anglo', emoji: '🎧', deezerQuery: 'hip hop english' },
+    { id: 'vallenato', label: 'Vallenato', region: 'latino', emoji: '🎹', deezerQuery: 'vallenato' },
+    { id: 'pop_latino', label: 'Pop latino', region: 'latino', emoji: '⭐', deezerQuery: 'pop latino' },
+    { id: 'rock_es', label: 'Rock en español', region: 'latino', emoji: '🎸', deezerQuery: 'rock en español' },
+    { id: 'electronic_en', label: 'Electrónica / EDM (EN)', region: 'anglo', emoji: '⚡', deezerQuery: 'edm electronic english' },
+    { id: 'bachata', label: 'Bachata', region: 'latino', emoji: '❤️', deezerQuery: 'bachata' },
+    { id: 'trap_latino', label: 'Trap latino', region: 'latino', emoji: '🔥', deezerQuery: 'trap latino' },
+    { id: 'merengue', label: 'Merengue', region: 'latino', emoji: '🥁', deezerQuery: 'merengue' },
+    { id: 'regional', label: 'Regional / Corridos', region: 'latino', emoji: '🤠', deezerQuery: 'corridos regional mexican' }
+  ];
+
+  function buildFallbackHubData() {
+    var closes = new Date(Date.now() + 5 * 60 * 1000).toISOString();
+    return {
+      ok: true,
+      serverTime: new Date().toISOString(),
+      config: { activeExpressCount: 14 },
+      expressRotation: {
+        activeExpressCount: 14,
+        totalGenres: 14,
+        secondsToBattle: 300,
+        secondsToNextSlot: 300
+      },
+      genres: FALLBACK_GENRES.map(function (g) {
+        return {
+          id: g.id,
+          label: g.label,
+          region: g.region,
+          emoji: g.emoji,
+          deezerQuery: g.deezerQuery,
+          express: {
+            id: null,
+            genre_id: g.id,
+            status: 'registration',
+            entry_fee: 3,
+            max_participants: 4,
+            current_participants: 0,
+            prize_pool: 0,
+            registration_closes_at: closes,
+            name: 'Express ' + g.label
+          },
+          weekly: null
+        };
+      })
+    };
+  }
+
+  function applyHubData(data) {
+    hubData = data;
+    if (data.serverTime) {
+      serverSkewMs = Date.now() - new Date(data.serverTime).getTime();
+      fetchedAtLocal = Date.now();
+    }
+    if ((data.genres || []).some(function (g) { return isOpenRegistration(g.express); })) {
+      zeroSinceLocal = null;
+    }
+  }
+
+  function renderHubLoading(message) {
+    var banner = document.getElementById('tournamentRotationBanner');
+    if (banner) {
+      banner.innerHTML =
+        '<div class="text-center text-sm text-purple-200 animate-pulse">' +
+        (message || 'Cargando torneos…') + '</div>';
+    }
+  }
+
+  function renderHubError(message) {
+    var banner = document.getElementById('tournamentRotationBanner');
+    if (!banner) return;
+    banner.innerHTML =
+      '<div class="flex flex-wrap items-center justify-between gap-3">' +
+      '<p class="text-amber-200 text-sm flex-1">' + (message || 'Servidor lento.') + '</p>' +
+      '<button type="button" id="tournamentHubRetryBtn" class="px-3 py-1.5 rounded-lg bg-cyan-600 text-white text-sm">Reintentar</button>' +
+      '</div>';
+    var btn = document.getElementById('tournamentHubRetryBtn');
+    if (btn) btn.onclick = function () { refresh(false); };
+  }
 
   function backendUrl() {
     return (window.CONFIG && window.CONFIG.BACKEND_API) || 'https://musictoken-ring.onrender.com';
@@ -77,19 +163,23 @@
   }
 
   async function fetchHub(forceSync) {
-    var path = forceSync ? '/api/tournaments/hub/sync' : '/api/tournaments/hub';
-    var res = await fetchApi(path, { method: forceSync ? 'POST' : 'GET' });
+    var timeout = forceSync ? API_TIMEOUT_MS : HUB_GET_TIMEOUT_MS;
+    if (forceSync) {
+      try {
+        var syncRes = await fetchApi('/api/tournaments/hub/sync', { method: 'POST' }, API_TIMEOUT_MS);
+        var syncData = await syncRes.json();
+        if (syncRes.ok && syncData.ok) {
+          applyHubData(syncData);
+          return syncData;
+        }
+      } catch (syncErr) {
+        console.warn('[tournament-hub] sync POST:', syncErr.message || syncErr);
+      }
+    }
+    var res = await fetchApi('/api/tournaments/hub', { method: 'GET' }, timeout);
     var data = await res.json();
     if (!res.ok || !data.ok) throw new Error(data.error || 'Error cargando torneos');
-    hubData = data;
-    if (data.serverTime) {
-      serverSkewMs = Date.now() - new Date(data.serverTime).getTime();
-      fetchedAtLocal = Date.now();
-    }
-    var anyOpen = (data.genres || []).some(function (g) {
-      return isOpenRegistration(g.express);
-    });
-    if (anyOpen) zeroSinceLocal = null;
+    applyHubData(data);
     return data;
   }
 
@@ -97,7 +187,6 @@
     if (hubSyncInFlight) return;
     hubSyncInFlight = true;
     try {
-      await wakeBackend();
       await fetchHub(true);
     } catch (e) {
       console.error('[tournament-hub] sync:', e);
@@ -163,7 +252,10 @@
 
   function renderGenreGrid(filter) {
     var grid = document.getElementById('tournamentGenreGrid');
-    if (!grid || !hubData) return;
+    if (!grid) return;
+    if (!hubData || !hubData.genres || !hubData.genres.length) {
+      hubData = buildFallbackHubData();
+    }
     var genres = hubData.genres || [];
     if (filter && filter !== 'all') {
       genres = genres.filter(function (g) { return g.region === filter; });
@@ -361,6 +453,16 @@
 
   function openGenreRoom(genreId) {
     selectedGenreId = genreId;
+    var g = (hubData?.genres || []).find(function (x) { return x.id === genreId; });
+    if (g && g.express && !g.express.id) {
+      syncHubSlots().then(function () {
+        document.getElementById('tournamentGenreListView').classList.add('hidden');
+        document.getElementById('tournamentGenreDetail').classList.remove('hidden');
+        renderGenreDetail();
+      });
+      toast('Sincronizando slot Express…', 'info');
+      return;
+    }
     document.getElementById('tournamentGenreListView').classList.add('hidden');
     document.getElementById('tournamentGenreDetail').classList.remove('hidden');
     renderGenreDetail();
@@ -374,13 +476,23 @@
 
   async function refresh(forceSync) {
     try {
-      if (forceSync) await syncHubSlots();
-      else await fetchHub(false);
+      if (forceSync) {
+        await syncHubSlots();
+      } else {
+        await fetchHub(false);
+      }
       renderRotationBanner();
       if (selectedGenreId) renderGenreDetail();
       else renderGenreGrid(document.getElementById('tournamentGenreFilter')?.value || 'all');
     } catch (e) {
       console.error('[tournament-hub]', e);
+      if (!hubData || !hubData.genres?.length) {
+        applyHubData(buildFallbackHubData());
+      }
+      renderRotationBanner();
+      renderGenreGrid(document.getElementById('tournamentGenreFilter')?.value || 'all');
+      renderHubError('Servidor lento. Mostrando categorías locales — pulsa Reintentar.');
+      toast('Torneos: conexión lenta, reintentando…', 'warning');
     }
   }
 
@@ -394,15 +506,18 @@
     if (hub) hub.classList.remove('hidden');
     showGenreList();
     zeroSinceLocal = null;
-    wakeBackend().then(function () { return refresh(true); });
+    applyHubData(buildFallbackHubData());
+    renderHubLoading('Cargando 14 categorías…');
+    renderGenreGrid('all');
     startCountdownLoop();
-    if (pollTimer) clearInterval(pollTimer);
-    pollTimer = setInterval(function () {
-      var stuck = (hubData?.genres || []).every(function (g) {
-        return !isOpenRegistration(g.express);
+    refresh(false).then(function () {
+      syncHubSlots().then(function () {
+        renderRotationBanner();
+        renderGenreGrid(document.getElementById('tournamentGenreFilter')?.value || 'all');
       });
-      refresh(stuck);
-    }, 8000);
+    });
+    if (pollTimer) clearInterval(pollTimer);
+    pollTimer = setInterval(function () { refresh(false); }, 15000);
   }
 
   function close() {

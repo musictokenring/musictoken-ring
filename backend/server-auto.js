@@ -1993,7 +1993,8 @@ app.get('/api/tournaments/hub', async (req, res) => {
         if (!tournamentScheduler?.service) {
             return res.status(503).json({ ok: false, error: 'Tournament service unavailable' });
         }
-        const payload = await tournamentScheduler.service.getHubPayload();
+        const syncSlots = req.query.sync === '1';
+        const payload = await tournamentScheduler.service.getHubPayload({ syncSlots });
         res.json(payload);
     } catch (error) {
         console.error('[server] tournaments hub error:', error);
@@ -2006,7 +2007,7 @@ app.post('/api/tournaments/hub/sync', async (req, res) => {
         if (!tournamentScheduler?.service) {
             return res.status(503).json({ ok: false, error: 'Tournament service unavailable' });
         }
-        const payload = await tournamentScheduler.service.getHubPayload();
+        const payload = await tournamentScheduler.service.getHubPayload({ syncSlots: true });
         res.json(payload);
     } catch (error) {
         console.error('[server] tournaments hub sync error:', error);

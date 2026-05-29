@@ -531,9 +531,35 @@ class TournamentService {
     return now;
   }
 
-  async getHubPayload() {
+  buildTimingExpressPlaceholder(genre, serverNow = new Date()) {
+    const timing = getExpressTimingForGenre(genre.id, serverNow);
+    const ts = serverNow.getTime();
+    let regOpens = timing.registrationOpensAt;
+    let regCloses = timing.registrationClosesAt;
+    if (ts >= timing.registrationClosesMs) {
+      regOpens = serverNow.toISOString();
+      regCloses = new Date(ts + EXPRESS_REGISTRATION_MS).toISOString();
+    }
+    return enrichExpressRow({
+      id: null,
+      genre_id: genre.id,
+      entry_fee: EXPRESS_ENTRY_FEE,
+      max_participants: EXPRESS_MAX_PLAYERS,
+      current_participants: 0,
+      prize_pool: 0,
+      status: 'registration',
+      registration_opens_at: regOpens,
+      registration_closes_at: regCloses,
+      name: 'Express ' + genre.label
+    }, serverNow);
+  }
+
+  async getHubPayload(options = {}) {
+    const syncSlots = Boolean(options.syncSlots);
     const serverNow = new Date();
-    await this.syncExpressHubSlots(serverNow);
+    if (syncSlots) {
+      await this.syncExpressHubSlots(serverNow);
+    }
 
     const weekKey = getIsoWeekKey();
     const globalWindow = getExpressSlot(serverNow);
@@ -590,9 +616,13 @@ class TournamentService {
         (current.status === 'registration' && closesMs <= nowMs);
 
       if (needsFreshSlot) {
-        const row = await this.ensureExpressForGenre(genre, serverNow);
-        if (row) {
-          expressByGenre[genre.id] = enrichExpressRow(row, serverNow);
+        if (syncSlots) {
+          const row = await this.ensureExpressForGenre(genre, serverNow);
+          if (row) {
+            expressByGenre[genre.id] = enrichExpressRow(row, serverNow);
+          }
+        } else {
+          expressByGenre[genre.id] = this.buildTimingExpressPlaceholder(genre, serverNow);
         }
       }
     }
