@@ -393,7 +393,7 @@ class TournamentService {
         console.error('[tournament] lock failed:', t.id, lockErr.message);
         return {
           ok: false,
-          error: 'No se pudo cerrar inscripción: ' + lockErr.message,
+          error: 'No se pudo cerrar inscripción. Ejecuta migración 017_tournament_status_check.sql en Supabase.',
           stage: 'registration'
         };
       }
