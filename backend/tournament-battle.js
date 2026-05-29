@@ -187,11 +187,24 @@ class TournamentBattleEngine {
     return humans || [];
   }
 
+  async clearCpuParticipants(tournamentId) {
+    const { error } = await this.supabase
+      .from('tournament_participants')
+      .delete()
+      .eq('tournament_id', tournamentId)
+      .eq('is_cpu', true);
+    if (error) {
+      console.warn('[tournament-battle] clearCpu:', tournamentId, error.message);
+    }
+  }
+
   async fillCpuSlots(tournament, humanRows, maxPlayers) {
     const genre = getGenreById(tournament.genre_id);
     const query = genre?.deezerQuery || genre?.label || 'pop';
     const slotsNeeded = maxPlayers - humanRows.length;
     if (slotsNeeded <= 0) return humanRows.slice(0, maxPlayers);
+
+    await this.clearCpuParticipants(tournament.id);
 
     const tracks = await Promise.all(
       Array.from({ length: slotsNeeded }, function (_, i) {
@@ -200,6 +213,7 @@ class TournamentBattleEngine {
     );
 
     const cpuRows = [];
+    const insertErrors = [];
     for (let i = 0; i < slotsNeeded; i++) {
       const track = tracks[i] || await fetchDeezerTrack(query, i + humanRows.length);
       const cpuIndex = i;
@@ -221,9 +235,18 @@ class TournamentBattleEngine {
 
       if (error) {
         console.error('[tournament-battle] CPU insert error:', error.message);
+        insertErrors.push(error.message);
         continue;
       }
       cpuRows.push(inserted);
+    }
+
+    if (cpuRows.length < slotsNeeded && insertErrors.length) {
+      const err = new Error(
+        'CPU fill ' + cpuRows.length + '/' + slotsNeeded + ': ' + insertErrors[0]
+      );
+      err.cpuFillErrors = insertErrors;
+      throw err;
     }
 
     return humanRows.concat(cpuRows).slice(0, maxPlayers);
@@ -359,16 +382,23 @@ class TournamentBattleEngine {
       return null;
     }
 
-    let allParticipants = await this.fillCpuSlots(tournament, humanRows, maxPlayers);
+    let allParticipants;
+    try {
+      allParticipants = await this.fillCpuSlots(tournament, humanRows, maxPlayers);
+    } catch (fillErr) {
+      await this.cancelTournament(tournament.id, fillErr.message);
+      throw fillErr;
+    }
     allParticipants = await this.assignBracketSlots(allParticipants);
 
     if (allParticipants.length < maxPlayers) {
-      await this.cancelTournament(
-        tournament.id,
+      const reason =
         'plazas incompletas ' + allParticipants.length + '/' + maxPlayers +
-        ' (¿migración 016 en Supabase?)'
-      );
-      return null;
+        ' (¿migración 016 en Supabase?)';
+      await this.cancelTournament(tournament.id, reason);
+      const err = new Error(reason);
+      err.stage = 'cpu_fill_failed';
+      throw err;
     }
 
     const payloads = allParticipants

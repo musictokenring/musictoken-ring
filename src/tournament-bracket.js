@@ -345,6 +345,9 @@
 
   async function resolveLiveExpressId(genreId) {
     if (!genreId) return null;
+    if (watchId && (lobbyStatus === 'locked' || lobbyStatus === 'in_progress')) {
+      return watchId;
+    }
     var res = await fetchApi(
       '/api/tournaments/genre/' + genreId + '/ensure-express',
       { method: 'POST', headers: { 'Content-Type': 'application/json' } },
@@ -357,7 +360,8 @@
   }
 
   async function redirectToActiveExpress(genreId) {
-    if (!genreId || redirecting || arenaBlocked) return false;
+    if (!genreId || redirecting || arenaBlocked || battleKickInFlight) return false;
+    if (lobbyStatus === 'locked' || lobbyStatus === 'in_progress') return false;
     redirecting = true;
     try {
       var newId = await resolveLiveExpressId(genreId);
@@ -559,11 +563,11 @@
       lastLobbyData = data;
 
       if (isStaleRegistration(data.tournament)) {
-        if (arenaBlocked) {
+        if (arenaBlocked || battleKickInFlight) {
           renderLobby(data);
           return;
         }
-        if (watchGenreId) {
+        if (watchGenreId && lobbyStatus !== 'locked' && lobbyStatus !== 'in_progress') {
           await redirectToActiveExpress(watchGenreId);
           return;
         }
@@ -576,7 +580,7 @@
       if (data.tournament.status === 'cancelled') {
         lastLifecycleError = data.lifecycleError || 'Ronda cancelada';
         toast(lastLifecycleError, 'warning');
-        if (watchGenreId) await redirectToActiveExpress(watchGenreId);
+        renderLobby(data);
         return;
       }
 

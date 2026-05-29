@@ -113,12 +113,26 @@ class TournamentService {
       .eq('status', 'locked');
 
     for (const row of stuckLocked || []) {
-      const humans = await this.countHumanParticipants(row.id);
-      if (humans < 1) {
-        await this.supabase
-          .from('tournaments')
-          .update({ status: 'cancelled', updated_at: nowIso })
-          .eq('id', row.id);
+      const { data: locked } = await this.supabase
+        .from('tournaments')
+        .select('*')
+        .eq('id', row.id)
+        .maybeSingle();
+      if (!locked) continue;
+      try {
+        if (locked.tournament_type === 'express') {
+          await this.battleEngine.startExpressTournament(locked);
+        } else {
+          const humans = await this.countHumanParticipants(row.id);
+          if (humans < 1) {
+            await this.supabase
+              .from('tournaments')
+              .update({ status: 'cancelled', updated_at: nowIso })
+              .eq('id', row.id);
+          }
+        }
+      } catch (err) {
+        console.error('[tournament] retry locked:', row.id, err.message);
       }
     }
   }
@@ -169,9 +183,16 @@ class TournamentService {
     let open = await this.findOpenExpressForGenre(genre.id, now);
     if (open) return open;
 
+    const activeBattle = await this.findActiveExpressForGenre(genre.id);
+    if (activeBattle) return activeBattle;
+
     await this.clearStaleExpressForGenre(genre.id, now);
+
     open = await this.findOpenExpressForGenre(genre.id, now);
     if (open) return open;
+
+    const activeAfterClose = await this.findActiveExpressForGenre(genre.id);
+    if (activeAfterClose) return activeAfterClose;
 
     open = await this.createOpenExpressNow(genre, now);
     if (open) return open;
@@ -440,6 +461,7 @@ class TournamentService {
 
   async startLockedTournament(locked) {
     let bracket = null;
+    let startError = null;
     try {
       if (locked.tournament_type === 'express') {
         bracket = await this.battleEngine.startExpressTournament(locked);
@@ -447,6 +469,7 @@ class TournamentService {
         bracket = await this.battleEngine.startWeeklyTournament(locked);
       }
     } catch (err) {
+      startError = err;
       console.error('[tournament] Error iniciando torneo:', locked.id, err.message);
       return { ok: false, error: err.message, stage: 'locked' };
     }
@@ -461,7 +484,8 @@ class TournamentService {
       if (after?.status === 'cancelled') {
         return {
           ok: false,
-          error: 'No se pudo completar el torneo. ¿Migración 016 aplicada en Supabase?',
+          error: startError?.message ||
+            'No se pudo completar el torneo. ¿Migración 016 aplicada en Supabase?',
           stage: 'cancelled'
         };
       }
@@ -683,6 +707,20 @@ class TournamentService {
     return data;
   }
 
+  /** Express en locked/in_progress: no crear slot nuevo encima de una batalla. */
+  async findActiveExpressForGenre(genreId) {
+    const { data } = await this.supabase
+      .from('tournaments')
+      .select('id, genre_id, entry_fee, prize_pool, max_participants, current_participants, status, registration_opens_at, registration_closes_at, name, slot_key, updated_at')
+      .eq('tournament_type', 'express')
+      .eq('genre_id', genreId)
+      .in('status', ['locked', 'in_progress'])
+      .order('updated_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    return data;
+  }
+
   async ensureExpressForGenrePublic(genreId) {
     const genre = getGenreById(genreId);
     if (!genre) {
@@ -694,6 +732,13 @@ class TournamentService {
       return {
         ok: true,
         express: enrichExpressRow(open, serverNow)
+      };
+    }
+    const active = await this.findActiveExpressForGenre(genreId);
+    if (active) {
+      return {
+        ok: true,
+        express: enrichExpressRow(active, serverNow)
       };
     }
     const row = await this.openExpressForJoin(genre, serverNow);
