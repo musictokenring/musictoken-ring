@@ -2233,11 +2233,7 @@ const GameEngine = {
                 return;
             }
 
-            const entryFee = Number(tournament.entry_fee) || Number(betAmount) || 3;
-            if (Number(betAmount) < entryFee) {
-                showToast(`Entry fee: ${entryFee} créditos`, 'error');
-                return;
-            }
+            const entryFee = Number(tournament.entry_fee) || 3;
 
             if (!(await this.hasSufficientCredits(entryFee))) {
                 return;
@@ -4559,60 +4555,41 @@ const GameEngine = {
                 return false;
             }
             
-            // CRÍTICO: Obtener publicUserId (de public.users) no authUserId (de auth.users)
-            let publicUserIdForRpc = null;
-            
-            try {
-                console.log('[tryRpcFallback] 🔍 Buscando usuario con wallet:', walletAddress.toLowerCase());
-                
-                // Buscar si ya existe un usuario con esta wallet (case-insensitive)
-                const { data: existingUser, error: findError } = await supabase
-                    .from('users')
-                    .select('id')
-                    .ilike('wallet_address', walletAddress) // Case-insensitive search
-                    .maybeSingle();
-                
-                if (existingUser && !findError) {
-                    publicUserIdForRpc = existingUser.id;
-                    console.log('[tryRpcFallback] ✅✅✅ Usuario encontrado:', publicUserIdForRpc);
-                } else {
-                    console.log('[tryRpcFallback] ⚠️ Usuario no encontrado, intentando crear...');
-                    console.log('[tryRpcFallback] ⚠️ Find error:', findError);
-                    
-                    // Si no existe, intentar crear uno
-                    const { data: newUser, error: insertError } = await supabase
+            // CRÍTICO: Usar userId de sesión si ya está disponible (torneos, email login)
+            let publicUserIdForRpc = userId || null;
+
+            if (!publicUserIdForRpc && walletAddress) {
+                try {
+                    console.log('[tryRpcFallback] 🔍 Buscando usuario con wallet:', walletAddress.toLowerCase());
+
+                    const { data: existingUser, error: findError } = await supabase
                         .from('users')
-                        .insert([{ wallet_address: walletAddress.toLowerCase() }])
                         .select('id')
-                        .single();
-                    
-                    if (newUser && !insertError) {
-                        publicUserIdForRpc = newUser.id;
-                        console.log('[tryRpcFallback] ✅✅✅ Usuario creado:', publicUserIdForRpc);
+                        .ilike('wallet_address', walletAddress)
+                        .maybeSingle();
+
+                    if (existingUser && !findError) {
+                        publicUserIdForRpc = existingUser.id;
+                        console.log('[tryRpcFallback] ✅ Usuario encontrado:', publicUserIdForRpc);
                     } else {
-                        console.error('[tryRpcFallback] ❌❌❌ No se pudo obtener ni crear publicUserId');
-                        console.error('[tryRpcFallback] ❌ Insert error:', insertError);
-                        
-                        // Último intento: buscar sin case-sensitive
                         const { data: retryUser } = await supabase
                             .from('users')
                             .select('id')
                             .eq('wallet_address', walletAddress.toLowerCase())
                             .maybeSingle();
-                        
+
                         if (retryUser) {
                             publicUserIdForRpc = retryUser.id;
                             console.log('[tryRpcFallback] ✅ Usuario encontrado en segundo intento:', publicUserIdForRpc);
                         }
                     }
+                } catch (userLookupError) {
+                    console.error('[tryRpcFallback] ❌ Error buscando usuario:', userLookupError);
                 }
-            } catch (userLookupError) {
-                console.error('[tryRpcFallback] ❌❌❌ Error buscando usuario:', userLookupError);
-                return false;
             }
-            
+
             if (!publicUserIdForRpc) {
-                console.error('[tryRpcFallback] ❌❌❌ NO SE PUDO OBTENER publicUserId');
+                console.error('[tryRpcFallback] ❌ NO SE PUDO OBTENER publicUserId');
                 return false;
             }
             

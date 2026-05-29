@@ -480,6 +480,89 @@ app.get('/api/user/balance/:userId', async (req, res) => {
 });
 
 /**
+ * Deduce del balance unificado (user_credits + saldo_fiat + saldo_onchain).
+ * Alineado con get_user_unified_balance usado en el frontend.
+ */
+async function deductUnifiedBalance(client, targetUserId, amount) {
+    const { data: userData } = await client
+        .from('users')
+        .select('saldo_fiat, saldo_onchain')
+        .eq('id', targetUserId)
+        .maybeSingle();
+
+    const { data: creditsRow } = await client
+        .from('user_credits')
+        .select('credits')
+        .eq('user_id', targetUserId)
+        .maybeSingle();
+
+    const fiat = parseFloat(userData?.saldo_fiat || 0);
+    const onchain = parseFloat(userData?.saldo_onchain || 0);
+    const creditsBal = parseFloat(creditsRow?.credits || 0);
+    const total = fiat + onchain + creditsBal;
+
+    if (total < amount) {
+        return {
+            ok: false,
+            error: 'Insufficient credits',
+            total,
+            creditsBal,
+            fiat,
+            onchain
+        };
+    }
+
+    let remaining = amount;
+    const fromCredits = Math.min(creditsBal, remaining);
+    remaining -= fromCredits;
+    const fromFiat = Math.min(fiat, remaining);
+    remaining -= fromFiat;
+    const fromOnchain = remaining;
+
+    if (fromCredits > 0) {
+        const { error: creditsError } = await client.rpc('decrement_user_credits', {
+            user_id_param: targetUserId,
+            credits_to_subtract: fromCredits
+        });
+        if (creditsError) {
+            const newCredits = Math.max(0, creditsBal - fromCredits);
+            await client
+                .from('user_credits')
+                .update({ credits: newCredits, updated_at: new Date().toISOString() })
+                .eq('user_id', targetUserId);
+        }
+    }
+
+    if (fromFiat > 0) {
+        const { error: fiatError } = await client.rpc('decrement_user_fiat_balance', {
+            user_id_param: targetUserId,
+            amount_to_subtract: fromFiat
+        });
+        if (fiatError) {
+            await client
+                .from('users')
+                .update({
+                    saldo_fiat: Math.max(0, fiat - fromFiat),
+                    updated_at: new Date().toISOString()
+                })
+                .eq('id', targetUserId);
+        }
+    }
+
+    if (fromOnchain > 0) {
+        await client
+            .from('users')
+            .update({
+                saldo_onchain: Math.max(0, onchain - fromOnchain),
+                updated_at: new Date().toISOString()
+            })
+            .eq('id', targetUserId);
+    }
+
+    return { ok: true, fromCredits, fromFiat, fromOnchain, totalBefore: total };
+}
+
+/**
  * Deduct credits (for betting)
  * Supports both userId and walletAddress for wallet-only operations
  * NEW: Supports fiat balance deduction
@@ -542,33 +625,28 @@ app.post('/api/user/deduct-credits', requireCreditMutationAuth, async (req, res)
             }
         }
 
-        // Get current balance
-        const { data: currentBalance } = await supabase
-            .from('user_credits')
-            .select('credits')
-            .eq('user_id', targetUserId)
-            .single();
-
-        if (!currentBalance || currentBalance.credits < credits) {
-            return res.status(400).json({ error: 'Insufficient credits' });
+        // Balance unificado (misma fuente que muestra el frontend)
+        const deduction = await deductUnifiedBalance(supabase, targetUserId, credits);
+        if (!deduction.ok) {
+            return res.status(400).json({
+                error: deduction.error || 'Insufficient credits',
+                total_balance: deduction.total,
+                credits_balance: deduction.creditsBal,
+                fiat_balance: deduction.fiat,
+                onchain_balance: deduction.onchain
+            });
         }
 
-        // Deduct credits
-        const { error: deductError } = await supabase.rpc('decrement_user_credits', {
-            user_id_param: targetUserId,
-            credits_to_subtract: credits
+        res.json({
+            success: true,
+            creditsDeducted: credits,
+            userId: targetUserId,
+            breakdown: {
+                fromCredits: deduction.fromCredits,
+                fromFiat: deduction.fromFiat,
+                fromOnchain: deduction.fromOnchain
+            }
         });
-
-        if (deductError) {
-            // Fallback: direct update
-            const newBalance = currentBalance.credits - credits;
-            await supabase
-                .from('user_credits')
-                .update({ credits: newBalance, updated_at: new Date().toISOString() })
-                .eq('user_id', targetUserId);
-        }
-
-        res.json({ success: true, creditsDeducted: credits, userId: targetUserId });
     } catch (error) {
         console.error('[server] Error deducting credits:', error);
         res.status(500).json({ error: error.message });

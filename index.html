@@ -1763,7 +1763,7 @@
     <!-- Ramp Network removido - ya no se usa -->
     <script src="./src/tournament-hub.js?v=v1.0"></script>
     <script src="./src/claim-ui.js?v=v2.7" defer></script>
-    <script src="./game-engine.js?v=v2.7"></script>
+    <script src="./game-engine.js?v=v2.8-unified-deduct"></script>
     <script>window.MTR_INLINE_TOP_STREAMS_ACTIVE = true;</script>
     <!-- DEFINIR quickBet INMEDIATAMENTE - ANTES DE CUALQUIER OTRO SCRIPT -->
     <script>
@@ -4965,9 +4965,8 @@
                 selectMode('tournament');
                 return;
             }
-            var bet = enrollment.entryFee || parseInt(document.getElementById('betAmount').value, 10) || 3;
             if (typeof GameEngine !== 'undefined') {
-                await GameEngine.joinTournament(enrollment.id, selectedSong, bet);
+                await GameEngine.joinTournament(enrollment.id, selectedSong, enrollment.entryFee);
             } else {
                 showToast('Modo torneo no disponible. Recarga la página.', 'error');
             }
