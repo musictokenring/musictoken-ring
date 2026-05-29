@@ -2104,6 +2104,22 @@ app.get('/api/tournaments/:id/bracket', async (req, res) => {
     }
 });
 
+app.post('/api/tournaments/:id/start-battle', async (req, res) => {
+    try {
+        if (!tournamentScheduler?.service) {
+            return res.status(503).json({ ok: false, error: 'Tournament service unavailable' });
+        }
+        const payload = await tournamentScheduler.service.getBracketPayload(req.params.id);
+        if (!payload.ok) {
+            return res.status(404).json(payload);
+        }
+        res.json(payload);
+    } catch (error) {
+        console.error('[server] tournaments start-battle error:', error);
+        res.status(500).json({ ok: false, error: error.message });
+    }
+});
+
 app.post('/api/tournaments/:id/advance-playback', async (req, res) => {
     try {
         if (!tournamentScheduler?.service) {

@@ -56,7 +56,20 @@ class TournamentService {
       .order('registration_opens_at', { ascending: false })
       .limit(1);
 
-    if (activeList?.length) return activeList[0];
+    if (activeList?.length) {
+      const active = activeList[0];
+      const closesMs = new Date(active.registration_closes_at).getTime();
+      if (active.status === 'registration' && closesMs <= now.getTime()) {
+        await this.advanceTournamentLifecycle(active.id);
+        const { data: refreshed } = await this.supabase
+          .from('tournaments')
+          .select('*')
+          .eq('id', active.id)
+          .maybeSingle();
+        return refreshed || active;
+      }
+      return active;
+    }
 
     const timing = getExpressTimingForGenre(genre.id, now);
     const ts = now.getTime();
@@ -206,7 +219,64 @@ class TournamentService {
     }
   }
 
+  /**
+   * Cierra inscripción vencida e inicia bracket (no esperar al scheduler).
+   */
+  async advanceTournamentLifecycle(tournamentId) {
+    const nowIso = new Date().toISOString();
+    const { data: t, error } = await this.supabase
+      .from('tournaments')
+      .select('*')
+      .eq('id', tournamentId)
+      .maybeSingle();
+
+    if (error || !t) {
+      return { ok: false, error: 'Torneo no encontrado' };
+    }
+
+    if (t.status === 'registration') {
+      const closesMs = new Date(t.registration_closes_at).getTime();
+      if (closesMs <= Date.now()) {
+        if (t.current_participants >= 1) {
+          await this.supabase
+            .from('tournaments')
+            .update({ status: 'locked', updated_at: nowIso })
+            .eq('id', t.id);
+          console.log('[tournament] 🔒 Cierre inmediato:', t.name);
+        } else {
+          await this.supabase
+            .from('tournaments')
+            .update({ status: 'cancelled', updated_at: nowIso })
+            .eq('id', t.id);
+          return { ok: false, error: 'Torneo cancelado sin participantes' };
+        }
+      }
+    }
+
+    const { data: updated } = await this.supabase
+      .from('tournaments')
+      .select('*')
+      .eq('id', tournamentId)
+      .maybeSingle();
+
+    if (updated?.status === 'locked') {
+      try {
+        if (updated.tournament_type === 'express') {
+          await this.battleEngine.startExpressTournament(updated);
+        } else if (updated.tournament_type === 'weekly') {
+          await this.battleEngine.startWeeklyTournament(updated);
+        }
+      } catch (err) {
+        console.error('[tournament] Error iniciando torneo:', tournamentId, err.message);
+        return { ok: false, error: err.message };
+      }
+    }
+
+    return { ok: true };
+  }
+
   async getBracketPayload(tournamentId) {
+    await this.advanceTournamentLifecycle(tournamentId);
     return this.battleEngine.getBracketPayload(tournamentId);
   }
 

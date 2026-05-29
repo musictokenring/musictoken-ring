@@ -57,19 +57,38 @@
     if (title) title.textContent = t.name || (t.tournament_type === 'weekly' ? 'Grand Prix' : 'Torneo Express');
     if (sub) {
       var typeLabel = t.tournament_type === 'weekly' ? 'Grand Prix semanal' : 'Express';
-      sub.textContent = t.status === 'registration'
-        ? typeLabel + ' · inscripción abierta'
-        : (b ? b.humanCount + ' humanos · ' + b.cpuCount + ' CPU · ' + (b.totalDuels || b.duels?.length || 0) + ' duelos' : typeLabel);
+      var secSub = lobbyClosesAt ? Math.max(0, Math.floor((lobbyClosesAt - serverNowMs()) / 1000)) : 0;
+      if (t.status === 'registration' && secSub > 0) {
+        sub.textContent = typeLabel + ' · inscripción abierta · batalla en ' + fmtClock(secSub);
+      } else if (t.status === 'registration') {
+        sub.textContent = typeLabel + ' · cerrando inscripción…';
+      } else if (t.status === 'locked') {
+        sub.textContent = typeLabel + ' · preparando batalla…';
+      } else {
+        sub.textContent = b
+          ? (b.humanCount + ' humanos · ' + b.cpuCount + ' CPU · ' + (b.totalDuels || b.duels?.length || 0) + ' duelos')
+          : typeLabel;
+      }
     }
 
     if (status) {
       if (lobbyStatus === 'registration' && lobbyClosesAt) {
         var sec = Math.max(0, Math.floor((lobbyClosesAt - serverNowMs()) / 1000));
+        if (sec > 0) {
+          status.innerHTML =
+            '<div class="text-center">' +
+            '<div class="text-xs text-gray-400 mb-2">Batalla inicia cuando el cronómetro llegue a 0</div>' +
+            '<div class="text-4xl font-black tabular-nums text-cyan-400 ' + (sec <= 60 ? 'animate-pulse text-red-400' : '') + '">' +
+            fmtClock(sec) + '</div></div>';
+        } else {
+          status.innerHTML =
+            '<div class="text-center">' +
+            '<div class="text-sm text-amber-300 animate-pulse mb-2">⏳ Cerrando inscripción e iniciando batalla…</div>' +
+            '<div class="text-4xl font-black tabular-nums text-cyan-400">00:00</div></div>';
+        }
+      } else if (lobbyStatus === 'locked') {
         status.innerHTML =
-          '<div class="text-center">' +
-          '<div class="text-xs text-gray-400 mb-2">Batalla inicia cuando el cronómetro llegue a 0</div>' +
-          '<div class="text-4xl font-black tabular-nums text-cyan-400 ' + (sec <= 60 ? 'animate-pulse text-red-400' : '') + '">' +
-          fmtClock(sec) + '</div></div>';
+          '<div class="text-center text-amber-300 animate-pulse">🔒 Generando bracket y rival CPU…</div>';
       } else if (lobbyStatus) {
         var statusMap = {
           registration: '⏳ Esperando cierre de inscripción…',
@@ -135,6 +154,32 @@
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ duelIndex: duelIndex })
     });
+  }
+
+  async function triggerStartBattle(id) {
+    try {
+      var res = await fetch(backendUrl() + '/api/tournaments/' + id + '/start-battle', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' }
+      });
+      return res.json();
+    } catch (e) {
+      console.error('[tournament-bracket] start-battle:', e);
+      return { ok: false };
+    }
+  }
+
+  var startingBattle = false;
+
+  async function ensureBattleStarted() {
+    if (!watchId || startingBattle) return;
+    startingBattle = true;
+    try {
+      await triggerStartBattle(watchId);
+      await refresh();
+    } finally {
+      startingBattle = false;
+    }
   }
 
   function playDuelsSequentially(data) {
@@ -214,6 +259,19 @@
 
       renderLobby(data);
 
+      if (data.tournament.status === 'registration' && lobbyClosesAt) {
+        var secLeft = Math.max(0, Math.floor((lobbyClosesAt - serverNowMs()) / 1000));
+        if (secLeft === 0) {
+          await ensureBattleStarted();
+          return;
+        }
+      }
+
+      if (data.tournament.status === 'locked') {
+        await ensureBattleStarted();
+        return;
+      }
+
       if (data.tournament.status === 'in_progress' && data.bracket) {
         if (data.bracket.playbackStatus === 'ready' && !playing) {
           playDuelsSequentially(data);
@@ -236,15 +294,16 @@
     showArena();
     refresh();
     if (pollTimer) clearInterval(pollTimer);
-    pollTimer = setInterval(refresh, 4000);
+    pollTimer = setInterval(refresh, 3000);
     if (countdownTimer) clearInterval(countdownTimer);
     countdownTimer = setInterval(function () {
       if (!watchId || !lastLobbyData) return;
-      if (lobbyStatus === 'registration' && lobbyClosesAt) {
-        renderLobby(lastLobbyData);
-        if (Math.max(0, Math.floor((lobbyClosesAt - serverNowMs()) / 1000)) === 0) {
-          refresh();
-        }
+      renderLobby(lastLobbyData);
+      var sec = lobbyClosesAt
+        ? Math.max(0, Math.floor((lobbyClosesAt - serverNowMs()) / 1000))
+        : 0;
+      if ((lobbyStatus === 'registration' && sec === 0) || lobbyStatus === 'locked') {
+        ensureBattleStarted();
       }
     }, 1000);
   }

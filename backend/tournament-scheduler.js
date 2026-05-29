@@ -20,8 +20,8 @@ function startTournamentScheduler(supabase) {
   }
 
   runTick();
-  const intervalId = setInterval(runTick, 30 * 1000);
-  console.log('[tournament-scheduler] ✅ Started (30s tick, Express slots every 10 min)');
+  const intervalId = setInterval(runTick, 10 * 1000);
+  console.log('[tournament-scheduler] ✅ Started (10s tick, Express en 14 géneros)');
 
   return { service, intervalId, runTick };
 }
