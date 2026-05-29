@@ -2063,67 +2063,90 @@ app.get('/api/tournaments/:id/bracket', async (req, res) => {
     }
 });
 
+async function handleTournamentJoinRequest(req, res, tournamentId, genreId) {
+    if (!tournamentScheduler?.service) {
+        return res.status(503).json({ ok: false, error: 'Tournament service unavailable' });
+    }
+    const walletAddress = (req.body?.walletAddress || '').trim() || null;
+    const participantUserId = await resolvePublicUserId(supabase, req.authUser);
+
+    if (walletLinkService && walletAddress && /^0x[a-fA-F0-9]{40}$/.test(walletAddress)) {
+        try {
+            await walletLinkService.linkWallet(participantUserId, walletAddress, {
+                ip: req.ip || req.headers['x-forwarded-for'] || 'unknown',
+                userAgent: req.headers['user-agent'] || 'unknown',
+                linkedVia: 'tournament_join'
+            });
+        } catch (linkErr) {
+            console.warn('[tournament] wallet link on join:', linkErr.message);
+        }
+    }
+
+    const resolved = await resolveCreditsUserId(supabase, {
+        getUserIdFromWallet: (addr) =>
+            walletLinkService ? walletLinkService.getUserIdFromWallet(addr) : null
+    }, req.authUser, walletAddress);
+
+    const authz = await authorizeTournamentJoin(
+        supabase,
+        req.authUser,
+        resolved,
+        walletAddress
+    );
+
+    if (!authz.ok) {
+        console.warn('[tournament] join forbidden:', {
+            reason: authz.reason,
+            resolvedUserId: resolved.userId,
+            participantUserId,
+            wallet: walletAddress ? walletAddress.slice(0, 10) + '...' : null
+        });
+        const msg = authz.reason === 'wallet_required'
+            ? 'Conecta tu wallet antes de inscribirte.'
+            : 'No se pudo validar tu wallet. Reconéctala e intenta de nuevo.';
+        return res.status(403).json({ error: msg, reason: authz.reason });
+    }
+
+    console.log('[tournament] join debit:', resolved.userId, 'player:', authz.participantUserId, 'balance:', resolved.total);
+
+    const result = await tournamentScheduler.service.joinTournament(
+        resolved.userId,
+        tournamentId,
+        req.body?.song || null,
+        authz.participantUserId,
+        { genreId: genreId || null }
+    );
+    if (!result.ok) {
+        return res.status(400).json({
+            ...result,
+            resolved_user_id: resolved.userId,
+            resolved_balance: resolved.total
+        });
+    }
+    return res.json(result);
+}
+
+app.post('/api/tournaments/express/join', requireCreditMutationAuth, async (req, res) => {
+    try {
+        const genreId = (req.body?.genreId || '').trim();
+        if (!genreId) {
+            return res.status(400).json({ ok: false, error: 'genreId requerido para Express' });
+        }
+        await handleTournamentJoinRequest(req, res, null, genreId);
+    } catch (error) {
+        console.error('[server] express join error:', error);
+        res.status(500).json({ ok: false, error: error.message });
+    }
+});
+
 app.post('/api/tournaments/:id/join', requireCreditMutationAuth, async (req, res) => {
     try {
-        if (!tournamentScheduler?.service) {
-            return res.status(503).json({ ok: false, error: 'Tournament service unavailable' });
-        }
-        const walletAddress = (req.body?.walletAddress || '').trim() || null;
-        const participantUserId = await resolvePublicUserId(supabase, req.authUser);
-
-        if (walletLinkService && walletAddress && /^0x[a-fA-F0-9]{40}$/.test(walletAddress)) {
-            try {
-                await walletLinkService.linkWallet(participantUserId, walletAddress, {
-                    ip: req.ip || req.headers['x-forwarded-for'] || 'unknown',
-                    userAgent: req.headers['user-agent'] || 'unknown',
-                    linkedVia: 'tournament_join'
-                });
-            } catch (linkErr) {
-                console.warn('[tournament] wallet link on join:', linkErr.message);
-            }
-        }
-
-        const resolved = await resolveCreditsUserId(supabase, {
-            getUserIdFromWallet: (addr) =>
-                walletLinkService ? walletLinkService.getUserIdFromWallet(addr) : null
-        }, req.authUser, walletAddress);
-
-        const authz = await authorizeTournamentJoin(
-            supabase,
-            req.authUser,
-            resolved,
-            walletAddress
-        );
-
-        if (!authz.ok) {
-            console.warn('[tournament] join forbidden:', {
-                reason: authz.reason,
-                resolvedUserId: resolved.userId,
-                participantUserId,
-                wallet: walletAddress ? walletAddress.slice(0, 10) + '...' : null
-            });
-            const msg = authz.reason === 'wallet_required'
-                ? 'Conecta tu wallet antes de inscribirte.'
-                : 'No se pudo validar tu wallet. Reconéctala e intenta de nuevo.';
-            return res.status(403).json({ error: msg, reason: authz.reason });
-        }
-
-        console.log('[tournament] join debit:', resolved.userId, 'player:', authz.participantUserId, 'balance:', resolved.total);
-
-        const result = await tournamentScheduler.service.joinTournament(
-            resolved.userId,
+        await handleTournamentJoinRequest(
+            req,
+            res,
             req.params.id,
-            req.body?.song || null,
-            authz.participantUserId
+            req.body?.genreId || null
         );
-        if (!result.ok) {
-            return res.status(400).json({
-                ...result,
-                resolved_user_id: resolved.userId,
-                resolved_balance: resolved.total
-            });
-        }
-        res.json(result);
     } catch (error) {
         console.error('[server] tournaments join error:', error);
         res.status(500).json({ ok: false, error: error.message });

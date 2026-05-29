@@ -79,106 +79,92 @@ class TournamentService {
       .eq('id', tournamentId);
   }
 
-  async ensureExpressForGenre(genre, now = new Date()) {
+  async clearStaleExpressForGenre(genreId, now = new Date()) {
     const nowMs = now.getTime();
     const nowIso = now.toISOString();
-
     const { data: staleRegs } = await this.supabase
       .from('tournaments')
       .select('id')
       .eq('tournament_type', 'express')
-      .eq('genre_id', genre.id)
+      .eq('genre_id', genreId)
       .eq('status', 'registration')
       .lt('registration_closes_at', nowIso);
 
     for (const row of staleRegs || []) {
-      await this.advanceTournamentLifecycle(row.id);
-      const { data: check } = await this.supabase
-        .from('tournaments')
-        .select('status, registration_closes_at')
-        .eq('id', row.id)
-        .maybeSingle();
-      const stillStale = check?.status === 'registration' &&
-        new Date(check.registration_closes_at).getTime() <= nowMs;
-      if (stillStale) {
-        await this.forceCloseStaleRegistration(row.id);
-      }
+      await this.forceCloseStaleRegistration(row.id);
     }
 
-    const { data: activeList } = await this.supabase
+    const { data: stuckLocked } = await this.supabase
       .from('tournaments')
-      .select('*')
+      .select('id')
       .eq('tournament_type', 'express')
-      .eq('genre_id', genre.id)
-      .in('status', ['registration', 'locked', 'in_progress'])
-      .order('registration_opens_at', { ascending: false })
-      .limit(1);
+      .eq('genre_id', genreId)
+      .eq('status', 'locked');
 
-    if (activeList?.length) {
-      const active = activeList[0];
-      const closesMs = new Date(active.registration_closes_at).getTime();
-      if (active.status === 'registration' && closesMs <= nowMs) {
-        await this.forceCloseStaleRegistration(active.id);
-        const { data: refreshed } = await this.supabase
+    for (const row of stuckLocked || []) {
+      const humans = await this.countHumanParticipants(row.id);
+      if (humans < 1) {
+        await this.supabase
           .from('tournaments')
-          .select('*')
-          .eq('id', active.id)
-          .maybeSingle();
-        if (refreshed && refreshed.status !== 'cancelled') {
-          return refreshed;
-        }
-      } else {
-        return active;
+          .update({ status: 'cancelled', updated_at: nowIso })
+          .eq('id', row.id);
       }
     }
+  }
 
-    const timing = getExpressTimingForGenre(genre.id, now);
-    const ts = now.getTime();
-    let slotKey = timing.slotKey;
-    let regOpens = timing.registrationOpensAt;
-    let regCloses = timing.registrationClosesAt;
-
-    if (ts >= timing.registrationClosesMs) {
-      regOpens = now.toISOString();
-      regCloses = new Date(ts + EXPRESS_REGISTRATION_MS).toISOString();
-      slotKey = `express_${genre.id}_${ts}`;
-    }
-
+  async createOpenExpressNow(genre, now = new Date()) {
+    const nowMs = now.getTime();
+    const regOpens = now.toISOString();
+    const regCloses = new Date(nowMs + EXPRESS_REGISTRATION_MS).toISOString();
     const name = `Express ${genre.label}`;
-    const { data: created, error } = await this.supabase
-      .from('tournaments')
-      .insert([{
-        name,
-        tournament_type: 'express',
-        genre_id: genre.id,
-        entry_fee: EXPRESS_ENTRY_FEE,
-        prize_pool: 0,
-        max_participants: EXPRESS_MAX_PLAYERS,
-        min_participants: EXPRESS_MAX_PLAYERS,
-        current_participants: 0,
-        status: 'registration',
-        slot_key: slotKey,
-        registration_opens_at: regOpens,
-        registration_closes_at: regCloses
-      }])
-      .select()
-      .single();
 
-    if (error) {
-      if (String(error.message).includes('duplicate') || error.code === '23505') {
-        const { data: retry } = await this.supabase
-          .from('tournaments')
-          .select('*')
-          .eq('slot_key', slotKey)
-          .maybeSingle();
-        return retry;
+    for (let attempt = 0; attempt < 4; attempt += 1) {
+      const slotKey = `express_${genre.id}_${nowMs}_${attempt}`;
+      const { data: created, error } = await this.supabase
+        .from('tournaments')
+        .insert([{
+          name,
+          tournament_type: 'express',
+          genre_id: genre.id,
+          entry_fee: EXPRESS_ENTRY_FEE,
+          prize_pool: 0,
+          max_participants: EXPRESS_MAX_PLAYERS,
+          min_participants: EXPRESS_MAX_PLAYERS,
+          current_participants: 0,
+          status: 'registration',
+          slot_key: slotKey,
+          registration_opens_at: regOpens,
+          registration_closes_at: regCloses
+        }])
+        .select()
+        .single();
+
+      if (!error && created) {
+        console.log('[tournament] ✅ Express abierto:', name, slotKey);
+        return created;
       }
-      console.error('[tournament] Error creating express:', genre.id, error.message);
-      return null;
+
+      if (String(error?.message || '').includes('duplicate') || error?.code === '23505') {
+        const existing = await this.findOpenExpressForGenre(genre.id, now);
+        if (existing) return existing;
+      }
+      console.error('[tournament] createOpenExpressNow:', genre.id, attempt, error?.message);
     }
 
-    console.log('[tournament] ✅ Express creado:', name, slotKey);
-    return created;
+    return null;
+  }
+
+  async openExpressForJoin(genre, now = new Date()) {
+    await this.clearStaleExpressForGenre(genre.id, now);
+    let open = await this.findOpenExpressForGenre(genre.id, now);
+    if (open) return open;
+    open = await this.createOpenExpressNow(genre, now);
+    if (open) return open;
+    return this.createOpenExpressNow(genre, now);
+  }
+
+  async ensureExpressForGenre(genre, now = new Date()) {
+    return this.openExpressForJoin(genre, now);
   }
 
   async ensureAllExpressSlots() {
@@ -427,38 +413,68 @@ class TournamentService {
     const genre = getGenreById(tournament.genre_id);
     if (!genre) return null;
 
-    let fresh = await this.findOpenExpressForGenre(genre.id);
-    if (!fresh) {
-      fresh = await this.ensureExpressForGenre(genre);
+    let fresh = await this.ensureExpressForGenre(genre);
+    if (fresh?.status === 'registration') {
+      const freshCloses = new Date(fresh.registration_closes_at).getTime();
+      if (freshCloses > nowMs) return fresh;
     }
-    if (!fresh || fresh.status !== 'registration') return null;
-    const freshCloses = new Date(fresh.registration_closes_at).getTime();
-    if (freshCloses <= nowMs) return null;
-    return fresh;
+
+    fresh = await this.createOpenExpressNow(genre);
+    if (fresh?.status === 'registration') {
+      const freshCloses = new Date(fresh.registration_closes_at).getTime();
+      if (freshCloses > nowMs) return fresh;
+    }
+
+    return null;
   }
 
-  async joinTournament(creditsUserId, tournamentId, song, participantUserId) {
+  async joinTournament(creditsUserId, tournamentId, song, participantUserId, options = {}) {
     const debitUserId = creditsUserId;
     const playerUserId = participantUserId || creditsUserId;
     const originalTournamentId = tournamentId;
-    const { data: tournamentRow, error } = await this.supabase
-      .from('tournaments')
-      .select('*')
-      .eq('id', tournamentId)
-      .maybeSingle();
+    let tournamentRow = null;
 
-    if (error || !tournamentRow) {
+    if (options.genreId) {
+      const genre = getGenreById(options.genreId);
+      if (genre) {
+        tournamentRow = await this.openExpressForJoin(genre);
+        if (tournamentRow?.id) tournamentId = tournamentRow.id;
+      }
+    }
+
+    if (!tournamentRow && tournamentId) {
+      const { data, error } = await this.supabase
+        .from('tournaments')
+        .select('*')
+        .eq('id', tournamentId)
+        .maybeSingle();
+      if (!error && data) tournamentRow = data;
+    }
+
+    if (!tournamentRow) {
       return { ok: false, error: 'Torneo no encontrado' };
     }
 
-    const tournament = await this.resolveJoinableTournament(tournamentRow);
-    if (!tournament) {
-      if (tournamentRow.status !== 'registration') {
+    let tournament = tournamentRow;
+    if (tournamentRow.tournament_type === 'express') {
+      const genre = getGenreById(tournamentRow.genre_id || options.genreId);
+      if (genre) {
+        tournament = await this.openExpressForJoin(genre) || tournamentRow;
+      } else {
+        tournament = await this.resolveJoinableTournament(tournamentRow);
+      }
+    } else {
+      const closesMs = new Date(tournamentRow.registration_closes_at).getTime();
+      if (tournamentRow.status !== 'registration' || closesMs <= Date.now()) {
         return { ok: false, error: 'Inscripción cerrada para este torneo' };
       }
+      tournament = tournamentRow;
+    }
+
+    if (!tournament || !tournament.id) {
       return {
         ok: false,
-        error: 'No hay ronda Express abierta ahora. Vuelve al hub y elige el género de nuevo.'
+        error: 'Express no disponible temporalmente. Espera 10 s y pulsa de nuevo.'
       };
     }
 
@@ -588,9 +604,9 @@ class TournamentService {
     if (!genre) {
       return { ok: false, error: 'Género no encontrado' };
     }
-    const row = await this.ensureExpressForGenre(genre);
+    const row = await this.openExpressForJoin(genre);
     if (!row) {
-      return { ok: false, error: 'No se pudo crear el Express' };
+      return { ok: false, error: 'No se pudo crear el Express (revisa Supabase)' };
     }
     return {
       ok: true,

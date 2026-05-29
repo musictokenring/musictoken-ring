@@ -2411,12 +2411,18 @@ const GameEngine = {
                 showToast('Conecta tu wallet antes de inscribirte en el torneo.', 'error');
                 return;
             }
-            const response = await fetch(backendUrl + '/api/tournaments/' + tournamentId + '/join', {
+            const enrollment = window.tournamentEnrollment;
+            const isExpressJoin = enrollment?.type === 'express' && enrollment?.genreId;
+            const joinUrl = isExpressJoin
+                ? backendUrl + '/api/tournaments/express/join'
+                : backendUrl + '/api/tournaments/' + tournamentId + '/join';
+            const response = await fetch(joinUrl, {
                 method: 'POST',
                 headers: await this.getBackendAuthHeaders({ 'Content-Type': 'application/json' }),
                 body: JSON.stringify({
                     song: songPayload,
-                    walletAddress: walletAddress.toLowerCase()
+                    walletAddress: walletAddress.toLowerCase(),
+                    genreId: enrollment?.genreId || null
                 })
             });
 
@@ -2461,8 +2467,11 @@ const GameEngine = {
                 }
                 if (
                     !this._expressJoinRetried &&
+                    enrollment?.type === 'express' &&
                     (msg.indexOf('inscripción ya terminó') !== -1 ||
-                    msg.indexOf('ronda Express abierta') !== -1)
+                    msg.indexOf('ronda Express') !== -1 ||
+                    msg.indexOf('Express no disponible') !== -1 ||
+                    msg.indexOf('No se pudo abrir') !== -1)
                 ) {
                     this._expressJoinRetried = true;
                     try {
