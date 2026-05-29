@@ -2052,7 +2052,10 @@ app.get('/api/tournaments/:id/bracket', async (req, res) => {
         if (!tournamentScheduler?.service) {
             return res.status(503).json({ ok: false, error: 'Tournament service unavailable' });
         }
-        const payload = await tournamentScheduler.service.getBracketPayload(req.params.id);
+        const payload = await tournamentScheduler.service.getBracketPayload(
+            req.params.id,
+            { readOnly: true }
+        );
         if (!payload.ok) {
             return res.status(404).json(payload);
         }

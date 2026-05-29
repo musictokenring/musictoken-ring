@@ -587,8 +587,11 @@ class TournamentService {
     };
   }
 
-  async getBracketPayload(tournamentId) {
-    const lifecycle = await this.advanceTournamentLifecycle(tournamentId);
+  async getBracketPayload(tournamentId, options = {}) {
+    let lifecycle = null;
+    if (!options.readOnly) {
+      lifecycle = await this.advanceTournamentLifecycle(tournamentId);
+    }
     const payload = await this.battleEngine.getBracketPayload(tournamentId);
     if (lifecycle && !lifecycle.ok) {
       payload.lifecycleError = lifecycle.error;

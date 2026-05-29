@@ -20,7 +20,10 @@
   var zeroKickSent = false;
   var redirecting = false;
   var kickCooldownUntil = 0;
-  var arenaFetchController = null;
+  var arenaPollController = null;
+  var arenaKickController = null;
+  var KICK_TIMEOUT_MS = 120000;
+  var POLL_TIMEOUT_MS = 45000;
   var API_TIMEOUT_MS = 55000;
   var MAX_KICK_ATTEMPTS = 8;
 
@@ -210,12 +213,20 @@
     }
   }
 
-  async function fetchApi(path, options, timeoutMs) {
-    if (arenaFetchController) {
-      try { arenaFetchController.abort(); } catch (e) { /* ignore */ }
+  async function fetchApi(path, options, timeoutMs, kind) {
+    var isKick = kind === 'kick';
+    var controller = new AbortController();
+    if (isKick) {
+      if (arenaKickController) {
+        try { arenaKickController.abort(); } catch (e) { /* ignore */ }
+      }
+      arenaKickController = controller;
+    } else {
+      if (arenaPollController) {
+        try { arenaPollController.abort(); } catch (e) { /* ignore */ }
+      }
+      arenaPollController = controller;
     }
-    arenaFetchController = new AbortController();
-    var controller = arenaFetchController;
     var timer = setTimeout(function () { controller.abort(); }, timeoutMs || API_TIMEOUT_MS);
     try {
       var res = await fetch(backendUrl() + path, Object.assign({}, options || {}, {
@@ -223,26 +234,39 @@
         cache: 'no-store'
       }));
       clearTimeout(timer);
-      if (arenaFetchController === controller) arenaFetchController = null;
+      if (isKick && arenaKickController === controller) arenaKickController = null;
+      if (!isKick && arenaPollController === controller) arenaPollController = null;
       return res;
     } catch (err) {
       clearTimeout(timer);
-      if (arenaFetchController === controller) arenaFetchController = null;
+      if (isKick && arenaKickController === controller) arenaKickController = null;
+      if (!isKick && arenaPollController === controller) arenaPollController = null;
       if (err && err.name === 'AbortError') return null;
       throw err;
     }
   }
 
+  function abortArenaFetches() {
+    if (arenaPollController) {
+      try { arenaPollController.abort(); } catch (e) { /* ignore */ }
+      arenaPollController = null;
+    }
+    if (arenaKickController) {
+      try { arenaKickController.abort(); } catch (e) { /* ignore */ }
+      arenaKickController = null;
+    }
+  }
+
   async function wakeBackend() {
     try {
-      await fetchApi('/api/health', { method: 'GET' }, 25000);
+      await fetchApi('/api/health', { method: 'GET' }, 60000, 'kick');
     } catch (e) {
       console.warn('[tournament-bracket] wake:', e.message || e);
     }
   }
 
   async function fetchBracket(id) {
-    var res = await fetchApi('/api/tournaments/' + id + '/bracket', { method: 'GET' }, 30000);
+    var res = await fetchApi('/api/tournaments/' + id + '/bracket', { method: 'GET' }, POLL_TIMEOUT_MS, 'poll');
     if (!res) return { ok: false, error: 'timeout' };
     try {
       return await res.json();
@@ -257,16 +281,21 @@
       var res = await fetchApi('/api/tournaments/' + id + '/start-battle', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' }
-      }, API_TIMEOUT_MS);
+      }, KICK_TIMEOUT_MS, 'kick');
       if (!res) return { ok: false, error: 'timeout' };
       if (res.status === 404) {
         await fetchApi('/api/tournaments/' + id + '/kick', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' }
-        }, API_TIMEOUT_MS);
+        }, KICK_TIMEOUT_MS, 'kick');
         return fetchBracket(id);
       }
-      return res.json();
+      try {
+        return await res.json();
+      } catch (err) {
+        if (err && err.name === 'AbortError') return { ok: false, error: 'timeout' };
+        throw err;
+      }
     } catch (e) {
       console.error('[tournament-bracket] start-battle:', e);
       return { ok: false, error: e.message || 'error' };
@@ -278,7 +307,8 @@
     var res = await fetchApi(
       '/api/tournaments/genre/' + genreId + '/ensure-express',
       { method: 'POST', headers: { 'Content-Type': 'application/json' } },
-      30000
+      30000,
+      'poll'
     );
     if (!res) return null;
     var data = await res.json().catch(function () { return {}; });
@@ -340,16 +370,32 @@
       var result = await triggerStartBattle(watchId);
       if (result && result.lifecycleError) {
         lastLifecycleError = result.lifecycleError;
+      } else if (result && result.error && !result.ok) {
+        lastLifecycleError = result.error;
       }
-      if (result && result.ok && result.tournament && result.tournament.status === 'in_progress') {
+      var battleReady = result && result.ok && result.tournament &&
+        (result.tournament.status === 'in_progress' || result.tournament.status === 'locked');
+      if (battleReady && result.tournament.status === 'in_progress') {
         zeroKickSent = true;
         stuckAtZeroSince = null;
         startBattleAttempts = 0;
+        lastLifecycleError = null;
+        lastLobbyData = result;
+        lobbyStatus = result.tournament.status;
+        if (result.bracket && result.bracket.participants && result.bracket.participants.length) {
+          renderBracketRoster(result.bracket);
+        }
+        if (!playing && result.bracket && result.bracket.duels && result.bracket.duels.length &&
+            result.bracket.playbackStatus !== 'completed') {
+          playDuelsSequentially(result);
+        }
+      } else if (!battleReady) {
+        zeroKickSent = false;
       }
-      await refresh();
     } finally {
       battleKickInFlight = false;
     }
+    await refresh();
   }
 
   function playDuelsSequentially(data) {
@@ -425,7 +471,7 @@
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ duelIndex: idx })
-          }, API_TIMEOUT_MS).then(function () {
+          }, API_TIMEOUT_MS, 'kick').then(function () {
             setTimeout(function () { playNext(idx + 1); }, duels.length > 5 ? 600 : 1200);
           });
         }
@@ -437,12 +483,16 @@
 
   async function refresh() {
     if (!watchId) return;
+    if (battleKickInFlight) return;
     try {
       var data = await fetchBracket(watchId);
       if (!data.ok) {
         if (data.error) {
           lastLifecycleError = data.error;
           if (startBattleAttempts >= 2) toast(data.error, 'error');
+        }
+        if (lobbyStatus === 'registration' && secondsLeft() === 0 && !battleKickInFlight) {
+          await kickBattleOnce();
         }
         return;
       }
@@ -479,7 +529,7 @@
 
       if (data.tournament.status === 'registration') {
         var secLeft = secondsLeft();
-        if (secLeft === 0 && !zeroKickSent) {
+        if (secLeft === 0 && !battleKickInFlight && (!zeroKickSent || startBattleAttempts < MAX_KICK_ATTEMPTS)) {
           if (!stuckAtZeroSince) stuckAtZeroSince = Date.now();
           zeroKickSent = true;
           await kickBattleOnce();
@@ -532,7 +582,7 @@
       if (lobbyStatus === 'registration') {
         renderLobby(lastLobbyData);
         var sec = secondsLeft();
-        if (sec === 0 && !zeroKickSent && !battleKickInFlight) {
+        if (sec === 0 && !battleKickInFlight && (!zeroKickSent || startBattleAttempts < MAX_KICK_ATTEMPTS)) {
           zeroKickSent = true;
           kickBattleOnce();
         }
@@ -578,10 +628,7 @@
     playing = false;
     lobbyClosesAt = null;
     zeroKickSent = false;
-    if (arenaFetchController) {
-      try { arenaFetchController.abort(); } catch (e) { /* ignore */ }
-      arenaFetchController = null;
-    }
+    abortArenaFetches();
     localStorage.removeItem('mtr_watch_tournament');
     document.getElementById('depositSectionMain')?.classList.remove('hidden');
     document.getElementById('contactSection')?.classList.remove('hidden');

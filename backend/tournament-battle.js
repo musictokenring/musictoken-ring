@@ -191,10 +191,17 @@ class TournamentBattleEngine {
     const genre = getGenreById(tournament.genre_id);
     const query = genre?.deezerQuery || genre?.label || 'pop';
     const slotsNeeded = maxPlayers - humanRows.length;
-    const cpuRows = [];
+    if (slotsNeeded <= 0) return humanRows.slice(0, maxPlayers);
 
+    const tracks = await Promise.all(
+      Array.from({ length: slotsNeeded }, function (_, i) {
+        return fetchDeezerTrack(query, i + humanRows.length);
+      })
+    );
+
+    const cpuRows = [];
     for (let i = 0; i < slotsNeeded; i++) {
-      const track = await fetchDeezerTrack(query, i + humanRows.length);
+      const track = tracks[i] || await fetchDeezerTrack(query, i + humanRows.length);
       const cpuIndex = i;
       const { data: inserted, error } = await this.supabase
         .from('tournament_participants')
@@ -223,13 +230,13 @@ class TournamentBattleEngine {
   }
 
   async assignBracketSlots(allParticipants) {
-    for (let s = 0; s < allParticipants.length; s++) {
-      await this.supabase
+    await Promise.all(allParticipants.map(function (participant, slot) {
+      participant.bracket_slot = slot;
+      return this.supabase
         .from('tournament_participants')
-        .update({ bracket_slot: s })
-        .eq('id', allParticipants[s].id);
-      allParticipants[s].bracket_slot = s;
-    }
+        .update({ bracket_slot: slot })
+        .eq('id', participant.id);
+    }, this));
     return allParticipants;
   }
 
