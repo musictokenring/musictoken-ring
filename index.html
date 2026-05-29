@@ -1267,6 +1267,20 @@
             </div>
         </section>
 
+        <!-- TOURNAMENT ARENA (lobby + bracket + resultados) -->
+        <section id="tournamentArena" class="hidden mb-16">
+            <div class="flex items-center gap-4 mb-6">
+                <button type="button" onclick="TournamentBracket.close(); selectMode('tournament')" class="px-4 py-2 rounded-lg text-sm font-medium bg-white/5 border border-white/10 text-gray-300 hover:text-white cursor-pointer">← Hub</button>
+                <div>
+                    <h2 class="text-2xl font-bold text-white" id="tournamentArenaTitle">Torneo Express</h2>
+                    <p class="text-gray-400 text-sm" id="tournamentArenaSubtitle"></p>
+                </div>
+            </div>
+            <div id="tournamentArenaStatus" class="mb-4 p-3 rounded-xl border border-cyan-500/20 bg-cyan-500/5 text-sm text-cyan-200"></div>
+            <div id="tournamentBracketGrid" class="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-6"></div>
+            <div id="tournamentResultPanel" class="hidden"></div>
+        </section>
+
         <!-- SONG SELECTION & BET -->
         <section id="songSelection" class="hidden mb-16">
             <div class="flex items-center gap-4 mb-8">
@@ -1761,9 +1775,10 @@
     <!-- Scripts que pueden cargarse después del render inicial -->
     <script src="./src/streams-realtime.js?v=v2.7" defer></script>
     <!-- Ramp Network removido - ya no se usa -->
-    <script src="./src/tournament-hub.js?v=v1.0"></script>
+    <script src="./src/tournament-hub.js?v=v1.1"></script>
+    <script src="./src/tournament-bracket.js?v=v1.0"></script>
     <script src="./src/claim-ui.js?v=v2.7" defer></script>
-    <script src="./game-engine.js?v=v2.8-unified-deduct"></script>
+    <script src="./game-engine.js?v=v2.9-tournament-battle"></script>
     <script>window.MTR_INLINE_TOP_STREAMS_ACTIVE = true;</script>
     <!-- DEFINIR quickBet INMEDIATAMENTE - ANTES DE CUALQUIER OTRO SCRIPT -->
     <script>

@@ -2088,6 +2088,42 @@ app.get('/api/tournaments/genre/:genreId', async (req, res) => {
     }
 });
 
+app.get('/api/tournaments/:id/bracket', async (req, res) => {
+    try {
+        if (!tournamentScheduler?.service) {
+            return res.status(503).json({ ok: false, error: 'Tournament service unavailable' });
+        }
+        const payload = await tournamentScheduler.service.getBracketPayload(req.params.id);
+        if (!payload.ok) {
+            return res.status(404).json(payload);
+        }
+        res.json(payload);
+    } catch (error) {
+        console.error('[server] tournaments bracket error:', error);
+        res.status(500).json({ ok: false, error: error.message });
+    }
+});
+
+app.post('/api/tournaments/:id/advance-playback', async (req, res) => {
+    try {
+        if (!tournamentScheduler?.service) {
+            return res.status(503).json({ ok: false, error: 'Tournament service unavailable' });
+        }
+        const duelIndex = Number(req.body?.duelIndex);
+        const payload = await tournamentScheduler.service.advanceTournamentPlayback(
+            req.params.id,
+            Number.isFinite(duelIndex) ? duelIndex : 0
+        );
+        if (!payload.ok) {
+            return res.status(400).json(payload);
+        }
+        res.json(payload);
+    } catch (error) {
+        console.error('[server] tournaments advance-playback error:', error);
+        res.status(500).json({ ok: false, error: error.message });
+    }
+});
+
 app.get('/api/tournaments/:id', async (req, res) => {
     try {
         if (!tournamentScheduler?.service) {

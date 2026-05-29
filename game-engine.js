@@ -2025,6 +2025,103 @@ const GameEngine = {
         }, 1000);
     },
 
+    /**
+     * Batalla de torneo Express con streams pre-calculados (animación hacia preset).
+     */
+    async startTournamentPlayback(match, options) {
+        options = options || {};
+        if (!match) return;
+
+        document.getElementById('songSelection')?.classList.add('hidden');
+        document.getElementById('waitingScreen')?.classList.add('hidden');
+        document.getElementById('roomScreen')?.classList.add('hidden');
+        document.getElementById('modeSelector')?.classList.add('hidden');
+        document.getElementById('tournamentHub')?.classList.add('hidden');
+        document.getElementById('tournamentArena')?.classList.add('hidden');
+
+        this.currentMatch = match;
+
+        try {
+            this.createBattleUI(match);
+        } catch (uiError) {
+            showToast('Error al crear batalla de torneo', 'error');
+            if (options.onComplete) options.onComplete();
+            return;
+        }
+
+        var duelLabelEl = document.getElementById('battleDuelLabel');
+        if (duelLabelEl && match.duel_label) {
+            duelLabelEl.textContent = match.duel_label;
+        }
+
+        await new Promise(function (resolve) { setTimeout(resolve, 200); });
+
+        var target1 = Number(match.preset_plays1) || 500000;
+        var target2 = Number(match.preset_plays2) || 480000;
+        var timeLeft = this.battleDuration;
+        var self = this;
+        var statusEl = document.getElementById('battleStatusText');
+
+        var battleInterval = setInterval(function () {
+            timeLeft--;
+            var timerEl = document.getElementById('battleTimer');
+            if (timerEl) timerEl.textContent = timeLeft;
+
+            var progress = 1 - (timeLeft / self.battleDuration);
+            var plays1 = Math.floor(target1 * progress);
+            var plays2 = Math.floor(target2 * progress);
+
+            var totalPlays = plays1 + plays2 || 1;
+            var health1 = Math.max(0, Math.min(100, (plays1 / totalPlays) * 100));
+            var health2 = 100 - health1;
+
+            if (self.battleAnimState) {
+                self.battleAnimState.h1 = health1;
+                self.battleAnimState.h2 = health2;
+                self.battleAnimState.time = timeLeft;
+            }
+
+            var h1f = document.getElementById('health1Fill');
+            var h2f = document.getElementById('health2Fill');
+            if (h1f) h1f.style.width = health1 + '%';
+            if (h2f) h2f.style.width = health2 + '%';
+            var p1 = document.getElementById('plays1');
+            var p2 = document.getElementById('plays2');
+            if (p1) p1.textContent = plays1.toLocaleString('es-ES');
+            if (p2) p2.textContent = plays2.toLocaleString('es-ES');
+
+            if (statusEl) {
+                if (timeLeft <= 5) {
+                    statusEl.innerHTML = '<span class="text-red-400 font-bold animate-pulse">⚡ FINAL EXPRESS</span>';
+                } else if (health1 > health2) {
+                    statusEl.innerHTML = '<span class="text-cyan-400">🎵 ' + (match.player1_label || 'Jugador 1') + ' domina</span>';
+                } else {
+                    statusEl.innerHTML = '<span class="text-fuchsia-400">🎵 ' + (match.player2_label || 'Jugador 2') + ' domina</span>';
+                }
+            }
+
+            if (timeLeft <= 0) {
+                clearInterval(battleInterval);
+                var winner = target1 >= target2 ? 1 : 2;
+                if (self.battleAnimState) {
+                    self.battleAnimState.finished = true;
+                    self.battleAnimState.winner = winner;
+                }
+                self.spawnVictoryParticles(winner);
+                if (statusEl) {
+                    statusEl.innerHTML = winner === 1
+                        ? '<span class="text-cyan-300 font-bold">🏆 Gana ' + (match.player1_label || 'Lado 1') + '</span>'
+                        : '<span class="text-fuchsia-300 font-bold">🏆 Gana ' + (match.player2_label || 'Lado 2') + '</span>';
+                }
+                setTimeout(function () {
+                    var arena = document.getElementById('battleArena');
+                    if (arena) arena.remove();
+                    if (options.onComplete) options.onComplete({ winner: winner });
+                }, 1800);
+            }
+        }, 1000);
+    },
+
     async endPracticeLocally(match, plays1, plays2) {
         var winner = plays1 > plays2 ? 1 : 2;
         var userWon = winner === 1;
@@ -2302,8 +2399,11 @@ const GameEngine = {
 
             showToast('¡Inscrito en el torneo!', 'success');
             window.tournamentEnrollment = null;
+            localStorage.setItem('mtr_watch_tournament', tournamentId);
 
-            if (window.TournamentHub) {
+            if (window.TournamentBracket) {
+                window.TournamentBracket.watch(tournamentId);
+            } else if (window.TournamentHub) {
                 setTimeout(function () { selectMode('tournament'); }, 800);
             }
 
@@ -2633,7 +2733,7 @@ const GameEngine = {
         battleSection.innerHTML = `
             <div class="text-center mb-4">
                 <div class="inline-flex items-center gap-3 px-6 py-2 rounded-full bg-white/5 border border-white/10 mb-2">
-                    <span class="text-xs text-gray-400 uppercase tracking-widest">Batalla en curso</span>
+                    <span class="text-xs text-gray-400 uppercase tracking-widest" id="battleDuelLabel">Batalla en curso</span>
                     <span class="text-3xl font-black text-white tabular-nums" id="battleTimer">${this.battleDuration}</span>
                     <span class="text-xs text-gray-400">seg</span>
                 </div>

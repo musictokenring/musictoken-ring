@@ -13,10 +13,12 @@ const {
   getExpressSlot,
   getIsoWeekKey
 } = require('./tournament-genres');
+const { TournamentBattleEngine } = require('./tournament-battle');
 
 class TournamentService {
   constructor(supabase) {
     this.supabase = supabase;
+    this.battleEngine = new TournamentBattleEngine(supabase);
   }
 
   async ensureSchemaReady() {
@@ -35,6 +37,7 @@ class TournamentService {
     await this.ensureCurrentExpress();
     await this.ensureWeeklyTournaments();
     await this.processExpiredRegistrations();
+    await this.processLockedTournaments();
   }
 
   getExpressSlotInfo(now = new Date()) {
@@ -139,7 +142,8 @@ class TournamentService {
     if (!expired?.length) return;
 
     for (const t of expired) {
-      if (t.current_participants >= t.min_participants) {
+      const minRequired = t.tournament_type === 'express' ? 1 : t.min_participants;
+      if (t.current_participants >= minRequired) {
         await this.supabase
           .from('tournaments')
           .update({ status: 'locked', updated_at: nowIso })
@@ -155,6 +159,32 @@ class TournamentService {
     }
   }
 
+  async processLockedTournaments() {
+    const { data: locked } = await this.supabase
+      .from('tournaments')
+      .select('*')
+      .eq('status', 'locked');
+
+    if (!locked?.length) return;
+
+    for (const t of locked) {
+      if (t.tournament_type !== 'express') continue;
+      try {
+        await this.battleEngine.startExpressTournament(t);
+      } catch (err) {
+        console.error('[tournament] Error iniciando Express:', t.id, err.message);
+      }
+    }
+  }
+
+  async getBracketPayload(tournamentId) {
+    return this.battleEngine.getBracketPayload(tournamentId);
+  }
+
+  async advanceTournamentPlayback(tournamentId, duelIndex) {
+    return this.battleEngine.advancePlayback(tournamentId, duelIndex);
+  }
+
   async getHubPayload() {
     const slot = getExpressSlot();
     await this.ensureCurrentExpress();
@@ -162,10 +192,10 @@ class TournamentService {
     const weekKey = getIsoWeekKey();
     const { data: expressRows } = await this.supabase
       .from('tournaments')
-      .select('id, genre_id, entry_fee, prize_pool, max_participants, current_participants, status, registration_closes_at, name')
+      .select('id, genre_id, entry_fee, prize_pool, max_participants, current_participants, status, registration_closes_at, name, slot_key')
       .eq('tournament_type', 'express')
-      .eq('status', 'registration')
-      .gte('registration_closes_at', new Date().toISOString());
+      .eq('slot_key', slot.slotKey)
+      .in('status', ['registration', 'locked', 'in_progress']);
 
     const { data: weeklyRows } = await this.supabase
       .from('tournaments')
