@@ -391,6 +391,10 @@ class TournamentService {
 
       if (lockErr) {
         console.error('[tournament] lock failed:', t.id, lockErr.message);
+        if (String(lockErr.message || '').indexOf('tournaments_status_check') !== -1) {
+          console.warn('[tournament] bypass DB lock → inicia batalla directa');
+          return this.startLockedTournament(Object.assign({}, t, { status: 'locked' }));
+        }
         return {
           ok: false,
           error: 'No se pudo cerrar inscripción. Ejecuta migración 017_tournament_status_check.sql en Supabase.',

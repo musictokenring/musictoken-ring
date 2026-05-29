@@ -20,6 +20,7 @@
   var zeroKickSent = false;
   var redirecting = false;
   var kickCooldownUntil = 0;
+  var arenaBlocked = false;
   var arenaPollController = null;
   var arenaKickController = null;
   var kickInFlightPromise = null;
@@ -94,13 +95,25 @@
       }).join('');
   }
 
+  function isMigrationBlockError(msg) {
+    if (!msg) return false;
+    var m = String(msg).toLowerCase();
+    return m.indexOf('016') !== -1 || m.indexOf('017') !== -1 ||
+      m.indexOf('migraci') !== -1 || m.indexOf('status_check') !== -1 ||
+      m.indexOf('bracket') !== -1 || m.indexOf('is_cpu') !== -1;
+  }
+
   function applyLobbyTiming(data) {
     var t = data.tournament;
     if (!t || !t.registration_closes_at) return;
     var newCloses = new Date(t.registration_closes_at).getTime();
-    if (t.id && t.id !== watchId) {
+    if (t.id && t.id !== watchId && redirecting) {
       watchId = t.id;
       localStorage.setItem('mtr_watch_tournament', watchId);
+      lobbyClosesAt = newCloses;
+      startBattleAttempts = 0;
+      zeroKickSent = false;
+      return;
     }
     if (!lobbyClosesAt) {
       lobbyClosesAt = newCloses;
@@ -108,6 +121,9 @@
     }
     if (t.status !== 'registration') {
       lobbyClosesAt = newCloses;
+      return;
+    }
+    if (secondsLeft() === 0 && startBattleAttempts > 0) {
       return;
     }
     if (newCloses >= lobbyClosesAt) {
@@ -142,7 +158,22 @@
     }
 
     if (status) {
-      if (battleKickInFlight || (lobbyStatus === 'registration' && sec === 0)) {
+      if (arenaBlocked && lastLifecycleError) {
+        status.innerHTML =
+          '<div class="text-center p-4">' +
+          '<div class="text-sm text-red-300 font-bold mb-2">⚠️ Configuración de torneos incompleta</div>' +
+          '<p class="text-xs text-gray-300 mb-3">' + lastLifecycleError + '</p>' +
+          '<p class="text-xs text-amber-200 mb-3">Aplica migraciones 016 y 017 en Supabase SQL Editor.</p>' +
+          '<button type="button" id="tournamentForceHubBtn" class="px-4 py-2 rounded-lg bg-cyan-600 text-white text-sm">Volver al hub</button>' +
+          '</div>';
+        var blockBtn = document.getElementById('tournamentForceHubBtn');
+        if (blockBtn) {
+          blockBtn.onclick = function () {
+            close();
+            if (typeof selectMode === 'function') selectMode('tournament');
+          };
+        }
+      } else if (battleKickInFlight || (lobbyStatus === 'registration' && sec === 0)) {
         status.innerHTML =
           '<div class="text-center p-4">' +
           '<div class="text-sm text-amber-300 animate-pulse mb-2">⏳ Iniciando batalla (CPU + jugadores)…</div>' +
@@ -326,7 +357,7 @@
   }
 
   async function redirectToActiveExpress(genreId) {
-    if (!genreId || redirecting) return false;
+    if (!genreId || redirecting || arenaBlocked) return false;
     redirecting = true;
     try {
       var newId = await resolveLiveExpressId(genreId);
@@ -364,13 +395,15 @@
   }
 
   async function kickBattleOnce() {
-    if (!watchId || battleKickInFlight || Date.now() < kickCooldownUntil) return;
+    if (!watchId || battleKickInFlight || arenaBlocked || Date.now() < kickCooldownUntil) return;
     if (startBattleAttempts >= MAX_KICK_ATTEMPTS) {
       lastLifecycleError =
         lastLifecycleError ||
-        'No se pudo iniciar la batalla. Aplica migración 016 en Supabase o vuelve al hub.';
+        'No se pudo iniciar la batalla tras ' + MAX_KICK_ATTEMPTS + ' intentos.';
+      arenaBlocked = isMigrationBlockError(lastLifecycleError);
       toast(lastLifecycleError, 'error');
-      if (watchGenreId) await redirectToActiveExpress(watchGenreId);
+      if (!arenaBlocked && watchGenreId) await redirectToActiveExpress(watchGenreId);
+      if (lastLobbyData) renderLobby(lastLobbyData);
       return;
     }
     battleKickInFlight = true;
@@ -382,8 +415,10 @@
       var result = await triggerStartBattle(watchId);
       if (result && result.lifecycleError) {
         lastLifecycleError = result.lifecycleError;
+        if (isMigrationBlockError(result.lifecycleError)) arenaBlocked = true;
       } else if (result && result.error && !result.ok) {
         lastLifecycleError = result.error;
+        if (isMigrationBlockError(result.error)) arenaBlocked = true;
       }
       var battleReady = result && result.ok && result.tournament &&
         (result.tournament.status === 'in_progress' || result.tournament.status === 'locked');
@@ -524,6 +559,10 @@
       lastLobbyData = data;
 
       if (isStaleRegistration(data.tournament)) {
+        if (arenaBlocked) {
+          renderLobby(data);
+          return;
+        }
         if (watchGenreId) {
           await redirectToActiveExpress(watchGenreId);
           return;
@@ -548,13 +587,16 @@
 
       if (data.tournament.status === 'registration') {
         var secLeft = secondsLeft();
+        if (arenaBlocked) {
+          renderLobby(data);
+          return;
+        }
         if (secLeft === 0 && !battleKickInFlight && (!zeroKickSent || startBattleAttempts < MAX_KICK_ATTEMPTS)) {
           if (!stuckAtZeroSince) stuckAtZeroSince = Date.now();
           zeroKickSent = true;
           await kickBattleOnce();
-        } else if (secLeft > 0) {
+        } else if (secLeft > 0 && !stuckAtZeroSince) {
           zeroKickSent = false;
-          stuckAtZeroSince = null;
           startBattleAttempts = 0;
         }
         return;
@@ -597,7 +639,7 @@
     pollTimer = setInterval(refresh, 6000);
     if (countdownTimer) clearInterval(countdownTimer);
     countdownTimer = setInterval(function () {
-      if (!watchId || !lastLobbyData || playing) return;
+      if (!watchId || !lastLobbyData || playing || arenaBlocked) return;
       if (lobbyStatus === 'registration') {
         renderLobby(lastLobbyData);
         var sec = secondsLeft();
@@ -618,6 +660,7 @@
     zeroKickSent = false;
     stuckAtZeroSince = null;
     lastLifecycleError = null;
+    arenaBlocked = false;
     if (watchGenreId) localStorage.setItem('mtr_watch_genre', watchGenreId);
     showArena();
     var status = document.getElementById('tournamentArenaStatus');
@@ -627,9 +670,12 @@
 
     (async function () {
       try {
-        if (watchGenreId) {
-          var liveId = await resolveLiveExpressId(watchGenreId);
-          if (liveId) tournamentId = liveId;
+        if (watchGenreId && tournamentId) {
+          var probe = await fetchBracket(tournamentId);
+          if (probe.ok && isStaleRegistration(probe.tournament)) {
+            var liveId = await resolveLiveExpressId(watchGenreId);
+            if (liveId && liveId !== tournamentId) tournamentId = liveId;
+          }
         }
         watchId = tournamentId;
         localStorage.setItem('mtr_watch_tournament', watchId);

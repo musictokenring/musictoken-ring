@@ -339,16 +339,19 @@ class TournamentBattleEngine {
 
     const isExpress = tournament.tournament_type === 'express';
     if (tournament.status === 'registration') {
-      const closesMs = new Date(tournament.registration_closes_at).getTime();
-      if (closesMs > Date.now()) return null;
-      await this.supabase.from('tournaments').update({
+      const closesMs = Date.parse(tournament.registration_closes_at || '');
+      if (!Number.isFinite(closesMs) || closesMs > Date.now()) return null;
+      const { error: lockErr } = await this.supabase.from('tournaments').update({
         status: 'locked',
         updated_at: new Date().toISOString()
       }).eq('id', tournament.id);
+      if (lockErr) {
+        console.warn('[tournament-battle] lock DB skip:', tournament.id, lockErr.message);
+      }
       tournament = { ...tournament, status: 'locked' };
     }
 
-    if (tournament.status !== 'locked') return null;
+    if (tournament.status !== 'locked' && tournament.status !== 'registration') return null;
 
     const humanRows = await this.loadHumans(tournament.id);
     if (!humanRows.length && !isExpress) {
