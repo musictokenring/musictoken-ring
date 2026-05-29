@@ -2344,6 +2344,9 @@ const GameEngine = {
     },
     
     watchTournamentArena(tournamentId) {
+        if (window.TournamentHub && typeof window.TournamentHub.stopEnrollmentCountdown === 'function') {
+            window.TournamentHub.stopEnrollmentCountdown();
+        }
         const genreId =
             window.tournamentEnrollment?.genreId ||
             localStorage.getItem('mtr_watch_genre') ||

@@ -244,7 +244,12 @@
   async function fetchBracket(id) {
     var res = await fetchApi('/api/tournaments/' + id + '/bracket', { method: 'GET' }, 30000);
     if (!res) return { ok: false, error: 'timeout' };
-    return res.json();
+    try {
+      return await res.json();
+    } catch (err) {
+      if (err && err.name === 'AbortError') return { ok: false, error: 'timeout' };
+      throw err;
+    }
   }
 
   async function triggerStartBattle(id) {
@@ -552,14 +557,19 @@
     }
 
     (async function () {
-      if (watchGenreId) {
-        var liveId = await resolveLiveExpressId(watchGenreId);
-        if (liveId) tournamentId = liveId;
+      try {
+        if (watchGenreId) {
+          var liveId = await resolveLiveExpressId(watchGenreId);
+          if (liveId) tournamentId = liveId;
+        }
+        watchId = tournamentId;
+        localStorage.setItem('mtr_watch_tournament', watchId);
+        await refresh();
+        startArenaTimers();
+      } catch (e) {
+        console.error('[tournament-bracket] watch:', e);
+        toast('No se pudo cargar la arena. Reintenta desde el hub.', 'error');
       }
-      watchId = tournamentId;
-      localStorage.setItem('mtr_watch_tournament', watchId);
-      await refresh();
-      startArenaTimers();
     })();
   }
 

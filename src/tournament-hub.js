@@ -6,6 +6,7 @@
 
   var pollTimer = null;
   var countdownTimer = null;
+  var enrollmentCountdownTimer = null;
   var hubData = null;
   var selectedGenreId = null;
   var serverSkewMs = 0;
@@ -102,7 +103,13 @@
       '<button type="button" id="tournamentHubRetryBtn" class="px-3 py-1.5 rounded-lg bg-cyan-600 text-white text-sm">Reintentar</button>' +
       '</div>';
     var btn = document.getElementById('tournamentHubRetryBtn');
-    if (btn) btn.onclick = function () { refresh(false); };
+    if (btn) {
+      btn.onclick = function () {
+        refresh(false).catch(function (e) {
+          console.warn('[tournament-hub] retry:', e);
+        });
+      };
+    }
   }
 
   function backendUrl() {
@@ -141,6 +148,16 @@
   function isArenaVisible() {
     var arena = document.getElementById('tournamentArena');
     return arena && !arena.classList.contains('hidden');
+  }
+
+  async function safeJson(res) {
+    if (!res) return null;
+    try {
+      return await res.json();
+    } catch (err) {
+      if (err && err.name === 'AbortError') return null;
+      throw err;
+    }
   }
 
   async function fetchApi(path, options, timeoutMs) {
@@ -199,7 +216,8 @@
       try {
         var syncRes = await fetchApi('/api/tournaments/hub/sync', { method: 'POST' }, API_TIMEOUT_MS);
         if (!syncRes) return hubData || buildFallbackHubData();
-        var syncData = await syncRes.json();
+        var syncData = await safeJson(syncRes);
+        if (!syncData) return hubData || buildFallbackHubData();
         if (syncRes.ok && syncData.ok) {
           lastHubSyncAt = Date.now();
           applyHubData(syncData);
@@ -213,7 +231,8 @@
     }
     var res = await fetchApi('/api/tournaments/hub', { method: 'GET' }, timeout);
     if (!res) return hubData || buildFallbackHubData();
-    var data = await res.json();
+    var data = await safeJson(res);
+    if (!data) return hubData || buildFallbackHubData();
     if (!res.ok || !data.ok) throw new Error(data.error || 'Error cargando torneos');
     applyHubData(data);
     return data;
@@ -247,10 +266,9 @@
           { method: 'POST', headers: { 'Content-Type': 'application/json' } },
           30000
         );
-        if (!res) {
-          throw new Error('Servidor no respondió. Espera unos segundos e inténtalo de nuevo.');
-        }
-        var data = await res.json().catch(function () { return {}; });
+        if (!res) return null;
+        var data = await safeJson(res);
+        if (!data) return null;
         if (!res.ok || !data.ok || !data.express) {
           throw new Error(data.error || 'No se pudo abrir el Express');
         }
@@ -268,7 +286,12 @@
   }
 
   async function handleExpressJoin(exp, genre) {
-    await beginEnrollment(exp, genre, 'express');
+    try {
+      await beginEnrollment(exp, genre, 'express');
+    } catch (e) {
+      console.error('[tournament-hub] express join:', e);
+      toast('No se pudo abrir la inscripción. Reintenta.', 'error');
+    }
   }
 
   function countdownHtml(seconds, sizeClass) {
@@ -466,11 +489,35 @@
     if (countdownTimer) clearInterval(countdownTimer);
     pollTimer = null;
     countdownTimer = null;
+  }
+
+  function abortHubFetches() {
     if (hubPollController) {
       try { hubPollController.abort(); } catch (e) { /* ignore */ }
       hubPollController = null;
     }
+    if (hubEnsureController) {
+      try { hubEnsureController.abort(); } catch (e) { /* ignore */ }
+      hubEnsureController = null;
+    }
     hubSyncInFlight = false;
+  }
+
+  function stopEnrollmentCountdown() {
+    if (enrollmentCountdownTimer) clearInterval(enrollmentCountdownTimer);
+    enrollmentCountdownTimer = null;
+  }
+
+  function startEnrollmentCountdown(genreLabel, type, tournament) {
+    stopEnrollmentCountdown();
+    if (type !== 'express' || !tournament?.registration_closes_at) return;
+    enrollmentCountdownTimer = setInterval(function () {
+      if (!window.tournamentEnrollment) {
+        stopEnrollmentCountdown();
+        return;
+      }
+      updateEnrollmentSubtitle(genreLabel, type, tournament);
+    }, 1000);
   }
 
   function tickCountdowns() {
@@ -563,6 +610,7 @@
     }
 
     if (typeof updateActionButtons === 'function') updateActionButtons('tournament');
+    startEnrollmentCountdown(genre.label, type, tournament);
     toast('Elige tu canción (' + genre.label + ') y confirma inscripción', 'info');
   }
 
@@ -621,17 +669,29 @@
     renderGenreGrid('all');
     startCountdownLoop();
     refresh(false).then(function () {
-      syncHubSlots().then(function () {
-        renderRotationBanner();
-        renderGenreGrid(document.getElementById('tournamentGenreFilter')?.value || 'all');
-      });
+      return syncHubSlots();
+    }).then(function () {
+      renderRotationBanner();
+      renderGenreGrid(document.getElementById('tournamentGenreFilter')?.value || 'all');
+    }).catch(function (e) {
+      if (!e || e.name !== 'AbortError') {
+        console.warn('[tournament-hub] open refresh:', e);
+      }
     });
     if (pollTimer) clearInterval(pollTimer);
-    pollTimer = setInterval(function () { refresh(false); }, 15000);
+    pollTimer = setInterval(function () {
+      refresh(false).catch(function (e) {
+        if (!e || e.name !== 'AbortError') {
+          console.warn('[tournament-hub] poll refresh:', e);
+        }
+      });
+    }, 15000);
   }
 
   function close() {
     pauseTimers();
+    stopEnrollmentCountdown();
+    abortHubFetches();
     var hub = document.getElementById('tournamentHub');
     if (hub) hub.classList.add('hidden');
     window.tournamentEnrollment = null;
@@ -657,6 +717,7 @@
     open: open,
     close: close,
     pauseTimers: pauseTimers,
+    stopEnrollmentCountdown: stopEnrollmentCountdown,
     refresh: refresh,
     beginEnrollment: beginEnrollment,
     secondsToBattle: secondsToBattle
