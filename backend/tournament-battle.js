@@ -19,6 +19,16 @@ function cpuUserId(index) {
   return '00000000-0000-4000-8000-' + suffix;
 }
 
+function isCpuParticipantRow(row) {
+  if (!row) return false;
+  if (row.is_cpu === true) return true;
+  return String(row.user_id || '').indexOf('00000000-0000-4000-8000-') === 0;
+}
+
+function isHumanParticipantRow(row) {
+  return !isCpuParticipantRow(row);
+}
+
 function pickPayoutMode(humanCount, cpuCount) {
   if (humanCount < 2 || humanCount <= cpuCount) return 'no_payout';
   return 'human_pool';
@@ -58,13 +68,11 @@ async function fetchDeezerTrack(query, index) {
     const tracks = (data.data || []).filter(function (t) { return t.preview; });
     if (!tracks.length) return null;
     const track = tracks[index % tracks.length];
-    return {
-      song_id: String(track.id),
-      song_name: track.title || 'CPU Track',
-      song_artist: track.artist?.name || 'CPU Artist',
-      song_image: track.album?.cover_medium || track.album?.cover || '',
-      song_preview: track.preview || ''
-    };
+    if (!track.preview && tracks.length > 1) {
+      const alt = tracks.find(function (t) { return t.preview; });
+      if (alt) return formatDeezerTrack(alt, query, index);
+    }
+    return formatDeezerTrack(track, query, index);
   } catch (err) {
     console.warn('[tournament-battle] Deezer fallback:', err.message);
     return {
@@ -75,6 +83,16 @@ async function fetchDeezerTrack(query, index) {
       song_preview: ''
     };
   }
+}
+
+function formatDeezerTrack(track, query, index) {
+  return {
+    song_id: String(track.id),
+    song_name: track.title || 'CPU Track',
+    song_artist: track.artist?.name || 'CPU Artist',
+    song_image: track.album?.cover_medium || track.album?.cover || '',
+    song_preview: track.preview || ''
+  };
 }
 
 function simulateDuel(p1, p2) {
@@ -99,8 +117,8 @@ function participantPayload(row) {
   return {
     id: row.id,
     userId: row.user_id,
-    isCpu: Boolean(row.is_cpu),
-    displayName: row.display_name || (row.is_cpu ? 'CPU' : 'Jugador'),
+    isCpu: isCpuParticipantRow(row),
+    displayName: row.display_name || (isCpuParticipantRow(row) ? 'CPU' : 'Jugador'),
     songId: row.song_id,
     songName: row.song_name || 'Sin título',
     songArtist: row.song_artist || '',
@@ -178,13 +196,16 @@ class TournamentBattleEngine {
   }
 
   async loadHumans(tournamentId) {
-    const { data: humans } = await this.supabase
+    const { data, error } = await this.supabase
       .from('tournament_participants')
       .select('*')
       .eq('tournament_id', tournamentId)
-      .neq('is_cpu', true)
       .order('joined_at', { ascending: true });
-    return humans || [];
+    if (error) {
+      console.error('[tournament-battle] loadHumans:', error.message);
+      return [];
+    }
+    return (data || []).filter(isHumanParticipantRow);
   }
 
   async clearCpuParticipants(tournamentId) {
@@ -555,4 +576,10 @@ class TournamentBattleEngine {
   }
 }
 
-module.exports = { TournamentBattleEngine, duelToMatchShape, pickPayoutMode };
+module.exports = {
+  TournamentBattleEngine,
+  duelToMatchShape,
+  pickPayoutMode,
+  isCpuParticipantRow,
+  isHumanParticipantRow
+};

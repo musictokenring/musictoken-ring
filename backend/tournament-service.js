@@ -16,7 +16,7 @@ const {
   enrichExpressRow,
   getIsoWeekKey
 } = require('./tournament-genres');
-const { TournamentBattleEngine } = require('./tournament-battle');
+const { TournamentBattleEngine, isHumanParticipantRow, isCpuParticipantRow } = require('./tournament-battle');
 const { deductUnifiedBalance } = require('./unified-balance');
 
 class TournamentService {
@@ -273,35 +273,38 @@ class TournamentService {
   }
 
   async countHumanParticipants(tournamentId) {
-    const { count, error } = await this.supabase
+    const { data, error } = await this.supabase
       .from('tournament_participants')
-      .select('id', { count: 'exact', head: true })
-      .eq('tournament_id', tournamentId)
-      .neq('is_cpu', true);
+      .select('id, user_id, is_cpu')
+      .eq('tournament_id', tournamentId);
 
     if (error) {
       console.error('[tournament] countHumanParticipants:', error.message);
       return 0;
     }
-    return count || 0;
+    return (data || []).filter(isHumanParticipantRow).length;
   }
 
   async syncTournamentParticipantCount(tournamentId) {
-    const humanCount = await this.countHumanParticipants(tournamentId);
-    let cpuCount = 0;
-    const cpuRes = await this.supabase
+    const { data: rows, error } = await this.supabase
       .from('tournament_participants')
-      .select('id', { count: 'exact', head: true })
-      .eq('tournament_id', tournamentId)
-      .eq('is_cpu', true);
-    if (!cpuRes.error) cpuCount = cpuRes.count || 0;
+      .select('id, user_id, is_cpu')
+      .eq('tournament_id', tournamentId);
 
+    if (error) {
+      console.warn('[tournament] syncParticipantCount read:', tournamentId, error.message);
+      return { humanCount: 0, total: 0 };
+    }
+
+    const all = rows || [];
+    const humanCount = all.filter(isHumanParticipantRow).length;
+    const cpuCount = all.filter(isCpuParticipantRow).length;
     const total = humanCount + cpuCount;
     const patch = {
       current_participants: total,
+      human_participants: humanCount,
       updated_at: new Date().toISOString()
     };
-    if (!cpuRes.error) patch.human_participants = humanCount;
 
     const { error: updErr } = await this.supabase
       .from('tournaments')
@@ -581,10 +584,10 @@ class TournamentService {
       if (
         pref &&
         pref.tournament_type === 'express' &&
-        pref.genre_id === genre.id &&
-        this.registrationOpenForJoin(pref, nowMs)
+        pref.genre_id === genre.id
       ) {
-        return pref;
+        if (this.registrationOpenForJoin(pref, nowMs)) return pref;
+        return null;
       }
     }
     return this.findOpenExpressForGenre(genre.id, now);
@@ -652,19 +655,17 @@ class TournamentService {
 
     tournamentId = tournament.id;
 
-    const { data: existing } = await this.supabase
-      .from('tournament_participants')
-      .select('id')
-      .eq('tournament_id', tournamentId)
-      .eq('user_id', playerUserId)
-      .neq('is_cpu', true)
-      .maybeSingle();
-
-    if (existing) {
-      return { ok: true, alreadyJoined: true, tournamentId };
-    }
-
     const humanCount = await this.countHumanParticipants(tournamentId);
+
+    const { data: existingRows } = await this.supabase
+      .from('tournament_participants')
+      .select('id, user_id, is_cpu')
+      .eq('tournament_id', tournamentId)
+      .eq('user_id', playerUserId);
+
+    if ((existingRows || []).some(isHumanParticipantRow)) {
+      return { ok: true, alreadyJoined: true, tournamentId, humanCount: humanCount };
+    }
     if (humanCount >= tournament.max_participants) {
       return { ok: false, error: 'Torneo lleno' };
     }
@@ -699,26 +700,15 @@ class TournamentService {
       participantRow.song_preview = song.preview || '';
     }
 
-    const { error: insertError } = await this.supabase
+    const { data: inserted, error: insertError } = await this.supabase
       .from('tournament_participants')
-      .insert([participantRow]);
+      .insert([participantRow])
+      .select('id, user_id, is_cpu')
+      .single();
 
-    if (insertError) {
-      console.error('[tournament] join insert error:', insertError.message);
-      return { ok: false, error: insertError.message };
-    }
-
-    const { data: verified } = await this.supabase
-      .from('tournament_participants')
-      .select('id')
-      .eq('tournament_id', tournamentId)
-      .eq('user_id', playerUserId)
-      .neq('is_cpu', true)
-      .maybeSingle();
-
-    if (!verified) {
-      console.error('[tournament] join verify failed:', tournamentId, playerUserId);
-      return { ok: false, error: 'Inscripción no confirmada en el servidor. Reintenta.' };
+    if (insertError || !inserted) {
+      console.error('[tournament] join insert error:', insertError?.message || 'no row');
+      return { ok: false, error: insertError?.message || 'No se pudo inscribir' };
     }
 
     const newHumanCount = humanCount + 1;

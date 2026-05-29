@@ -466,6 +466,10 @@
       return;
     }
 
+    if (window.GameEngine.unlockBattleAudio) {
+      window.GameEngine.unlockBattleAudio();
+    }
+
     playing = true;
     var duels = data.bracket.duels;
     var startIdx = data.currentDuelIndex || 0;
