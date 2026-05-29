@@ -198,6 +198,34 @@ class TournamentBattleEngine {
     }
   }
 
+  /** Filas en users(id) para bots CPU — requerido si existe FK user_id en participantes. */
+  async ensureCpuUsersExist(maxIndex) {
+    const count = Math.min(Math.max(maxIndex, 1), WEEKLY_MAX_PLAYERS);
+    for (let i = 0; i < count; i += 1) {
+      const id = cpuUserId(i);
+      const { data: existing } = await this.supabase
+        .from('users')
+        .select('id')
+        .eq('id', id)
+        .maybeSingle();
+      if (existing) continue;
+
+      const { error } = await this.supabase.from('users').insert([{
+        id,
+        wallet_address: null,
+        email: 'cpu-bot-' + String(i + 1).padStart(2, '0') + '@arena.musictokenring.internal',
+        auth_provider: 'cpu',
+        saldo_fiat: 0,
+        saldo_onchain: 0,
+        updated_at: new Date().toISOString()
+      }]);
+
+      if (error && error.code !== '23505') {
+        console.warn('[tournament-battle] ensureCpuUser:', id, error.message);
+      }
+    }
+  }
+
   async fillCpuSlots(tournament, humanRows, maxPlayers) {
     const genre = getGenreById(tournament.genre_id);
     const query = genre?.deezerQuery || genre?.label || 'pop';
@@ -205,6 +233,7 @@ class TournamentBattleEngine {
     if (slotsNeeded <= 0) return humanRows.slice(0, maxPlayers);
 
     await this.clearCpuParticipants(tournament.id);
+    await this.ensureCpuUsersExist(maxPlayers);
 
     const tracks = await Promise.all(
       Array.from({ length: slotsNeeded }, function (_, i) {
