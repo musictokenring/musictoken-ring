@@ -41,12 +41,40 @@
 
   function showArena() {
     hideSections();
+    document.getElementById('depositSectionMain')?.classList.add('hidden');
+    document.getElementById('contactSection')?.classList.add('hidden');
     var arena = document.getElementById('tournamentArena');
     if (arena) arena.classList.remove('hidden');
   }
 
+  function renderBracketRoster(b) {
+    var grid = document.getElementById('tournamentBracketGrid');
+    if (!grid || !b || !b.participants || !b.participants.length) return;
+    var cols = b.participants.length > 6
+      ? 'grid-cols-2 sm:grid-cols-4'
+      : 'grid-cols-2 sm:grid-cols-2';
+    grid.className = 'grid ' + cols + ' gap-4 mb-6';
+    grid.innerHTML =
+      '<div class="col-span-full text-center mb-2">' +
+      '<h3 class="text-lg font-bold text-white">⚔️ Competidores del torneo</h3>' +
+      '<p class="text-xs text-gray-400">' + b.humanCount + ' humanos · ' + b.cpuCount + ' CPU</p></div>' +
+      b.participants.map(function (p) {
+        return (
+          '<div class="p-4 rounded-2xl border-2 ' +
+          (p.isCpu ? 'border-gray-600/50 bg-gray-900/60' : 'border-cyan-500/40 bg-cyan-500/10') + '">' +
+          '<div class="flex flex-col items-center text-center gap-2">' +
+          '<img src="' + (p.songImage || '') + '" alt="" class="w-24 h-24 sm:w-28 sm:h-28 rounded-xl object-cover shadow-lg bg-black/50" onerror="this.src=\'https://e-cdns-images.dzcdn.net/images/cover/2646329172/250x250-000000-80-0-0.jpg\'">' +
+          '<div class="text-xs font-bold ' + (p.isCpu ? 'text-gray-400' : 'text-cyan-400') + '">' +
+          (p.isCpu ? '🤖 ' : '👤 ') + (p.displayName || 'Jugador') + '</div>' +
+          '<div class="text-sm font-bold text-white leading-tight">' + (p.songName || '—') + '</div>' +
+          '<div class="text-[11px] text-gray-500">' + (p.songArtist || '') + '</div>' +
+          '</div></div>'
+        );
+      }).join('');
+  }
+
   function renderLobby(data) {
-    showArena();
+    if (!playing) showArena();
     var title = document.getElementById('tournamentArenaTitle');
     var sub = document.getElementById('tournamentArenaSubtitle');
     var grid = document.getElementById('tournamentBracketGrid');
@@ -110,23 +138,11 @@
       }
     }
 
-    if (!grid || !b || !b.participants) return;
-    var cols = b.participants.length > 8
-      ? 'grid-cols-2 sm:grid-cols-3 lg:grid-cols-4'
-      : 'grid-cols-1 sm:grid-cols-2';
-    grid.className = 'grid ' + cols + ' gap-3 mb-6';
-    grid.innerHTML = b.participants.map(function (p) {
-      return (
-        '<div class="p-3 rounded-xl border ' + (p.isCpu ? 'border-gray-600/40 bg-gray-900/40' : 'border-cyan-500/30 bg-cyan-500/5') + '">' +
-        '<div class="flex items-center gap-3">' +
-        '<img src="' + (p.songImage || '') + '" alt="" class="w-12 h-12 rounded-lg object-cover bg-black/40" onerror="this.style.display=\'none\'">' +
-        '<div class="min-w-0 flex-1">' +
-        '<div class="text-xs ' + (p.isCpu ? 'text-gray-500' : 'text-cyan-400') + '">' + (p.isCpu ? '🤖 CPU' : '👤 Humano') + ' · ' + p.displayName + '</div>' +
-        '<div class="text-sm font-bold text-white truncate">' + p.songName + '</div>' +
-        '<div class="text-[11px] text-gray-500 truncate">' + p.songArtist + '</div>' +
-        '</div></div></div>'
-      );
-    }).join('');
+    if (b && b.participants && b.participants.length) {
+      renderBracketRoster(b);
+    } else if (grid) {
+      grid.innerHTML = '';
+    }
   }
 
   function renderResult(b) {
@@ -218,7 +234,7 @@
   }
 
   function playDuelsSequentially(data) {
-    if (playing || !data.bracket || !data.bracket.duels) return;
+    if (playing || !data.bracket || !data.bracket.duels || !data.bracket.duels.length) return;
     if (!window.GameEngine || typeof window.GameEngine.startTournamentPlayback !== 'function') {
       toast('Motor de batalla no disponible. Recarga la página.', 'error');
       return;
@@ -228,20 +244,40 @@
     var duels = data.bracket.duels;
     var startIdx = data.currentDuelIndex || 0;
     var tournamentId = data.tournament.id;
+    var bracket = data.bracket;
 
     function playNext(idx) {
       if (idx >= duels.length) {
         playing = false;
+        var champPreview = '';
+        if (bracket.participants && bracket.winnerParticipantId) {
+          var champ = bracket.participants.find(function (p) {
+            return p.id === bracket.winnerParticipantId;
+          });
+          if (champ && champ.songPreview && window.GameEngine.playVictorySong) {
+            window.GameEngine.playVictorySong(champ.songPreview);
+            champPreview = champ.songName;
+          }
+        }
         renderResult(data.bracket);
+        if (champPreview) {
+          toast('🏆 Campeón: ' + champPreview, 'success');
+        }
         if (window.CreditsSystem && window.connectedAddress) {
           window.CreditsSystem.loadBalance(window.connectedAddress);
         }
+        document.getElementById('depositSectionMain')?.classList.remove('hidden');
+        document.getElementById('contactSection')?.classList.remove('hidden');
         return;
       }
 
+      showArena();
       var progress = document.getElementById('tournamentArenaStatus');
       if (progress) {
-        progress.textContent = '⚔️ Duelo ' + (idx + 1) + ' / ' + duels.length + ' · ' + (duels[idx].label || '');
+        progress.innerHTML =
+          '<div class="text-center py-2">' +
+          '<div class="text-sm text-cyan-300 font-bold">⚔️ Duelo ' + (idx + 1) + ' / ' + duels.length + '</div>' +
+          '<div class="text-xs text-gray-400">' + (duels[idx].label || '') + '</div></div>';
       }
 
       var duel = duels[idx];
@@ -317,6 +353,10 @@
         var secLeft = Math.max(0, Math.floor((lobbyClosesAt - serverNowMs()) / 1000));
         if (secLeft === 0) {
           await ensureBattleStarted();
+          if (startBattleAttempts >= 6 && lobbyStatus === 'registration') {
+            var gid = data.tournament.genre_id;
+            if (gid) await redirectToActiveExpress(gid);
+          }
           return;
         }
         startBattleAttempts = 0;
@@ -330,8 +370,13 @@
       if (data.tournament.status === 'in_progress' && data.bracket) {
         startBattleAttempts = 0;
         lastLifecycleError = null;
-        if (data.bracket.playbackStatus === 'ready' && !playing) {
-          playDuelsSequentially(data);
+        if (data.bracket.participants && data.bracket.participants.length) {
+          renderBracketRoster(data.bracket);
+        }
+        if (!playing && data.bracket.duels && data.bracket.duels.length) {
+          if (data.bracket.playbackStatus !== 'completed') {
+            playDuelsSequentially(data);
+          }
         } else if (data.bracket.playbackStatus === 'completed') {
           renderResult(data.bracket);
         }
@@ -357,7 +402,7 @@
     if (countdownTimer) clearInterval(countdownTimer);
     countdownTimer = setInterval(function () {
       if (!watchId || !lastLobbyData) return;
-      renderLobby(lastLobbyData);
+      if (!playing) renderLobby(lastLobbyData);
       var sec = lobbyClosesAt
         ? Math.max(0, Math.floor((lobbyClosesAt - serverNowMs()) / 1000))
         : 0;
@@ -370,11 +415,31 @@
     }, 1000);
   }
 
+  async function redirectToActiveExpress(genreId) {
+    try {
+      var hub = await fetch(backendUrl() + '/api/tournaments/hub', { cache: 'no-store' });
+      var h = await hub.json();
+      if (!h.ok || !genreId) return false;
+      var g = (h.genres || []).find(function (x) { return x.id === genreId; });
+      if (g && g.express && g.express.id) {
+        localStorage.setItem('mtr_watch_tournament', g.express.id);
+        watch(g.express.id);
+        toast('Slot Express actualizado', 'info');
+        return true;
+      }
+    } catch (e) {
+      console.warn('[tournament-bracket] redirect hub:', e);
+    }
+    return false;
+  }
+
   function close() {
     watchId = null;
     playing = false;
     lobbyClosesAt = null;
     localStorage.removeItem('mtr_watch_tournament');
+    document.getElementById('depositSectionMain')?.classList.remove('hidden');
+    document.getElementById('contactSection')?.classList.remove('hidden');
     if (pollTimer) clearInterval(pollTimer);
     if (countdownTimer) clearInterval(countdownTimer);
     pollTimer = null;

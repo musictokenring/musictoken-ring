@@ -2026,18 +2026,19 @@ const GameEngine = {
     },
 
     /**
-     * Batalla de torneo Express con streams pre-calculados (animación hacia preset).
+     * Batalla de torneo: misma UI y audio que práctica (canción del líder activo).
      */
     async startTournamentPlayback(match, options) {
         options = options || {};
         if (!match) return;
 
-        document.getElementById('songSelection')?.classList.add('hidden');
-        document.getElementById('waitingScreen')?.classList.add('hidden');
-        document.getElementById('roomScreen')?.classList.add('hidden');
-        document.getElementById('modeSelector')?.classList.add('hidden');
-        document.getElementById('tournamentHub')?.classList.add('hidden');
+        var self = this;
+        ['songSelection', 'waitingScreen', 'roomScreen', 'modeSelector', 'tournamentHub'].forEach(function (id) {
+            document.getElementById(id)?.classList.add('hidden');
+        });
         document.getElementById('tournamentArena')?.classList.add('hidden');
+        document.getElementById('depositSectionMain')?.classList.add('hidden');
+        document.getElementById('contactSection')?.classList.add('hidden');
 
         this.currentMatch = match;
 
@@ -2058,9 +2059,22 @@ const GameEngine = {
 
         var target1 = Number(match.preset_plays1) || 500000;
         var target2 = Number(match.preset_plays2) || 480000;
+        var plays1 = 0;
+        var plays2 = 0;
         var timeLeft = this.battleDuration;
-        var self = this;
         var statusEl = document.getElementById('battleStatusText');
+        var lastAudioSide = null;
+
+        function playLeadingAudio(side) {
+            if (lastAudioSide === side) return;
+            lastAudioSide = side;
+            var url = side === 1 ? match.player1_song_preview : match.player2_song_preview;
+            if (url) {
+                try { self.playUserSong(url); } catch (_e) { /* ignore */ }
+            }
+        }
+
+        playLeadingAudio(1);
 
         var battleInterval = setInterval(function () {
             timeLeft--;
@@ -2068,12 +2082,18 @@ const GameEngine = {
             if (timerEl) timerEl.textContent = timeLeft;
 
             var progress = 1 - (timeLeft / self.battleDuration);
-            var plays1 = Math.floor(target1 * progress);
-            var plays2 = Math.floor(target2 * progress);
+            plays1 = Math.floor(target1 * progress);
+            plays2 = Math.floor(target2 * progress);
 
             var totalPlays = plays1 + plays2 || 1;
             var health1 = Math.max(0, Math.min(100, (plays1 / totalPlays) * 100));
             var health2 = 100 - health1;
+
+            if (health1 >= health2) {
+                playLeadingAudio(1);
+            } else {
+                playLeadingAudio(2);
+            }
 
             if (self.battleAnimState) {
                 self.battleAnimState.h1 = health1;
@@ -2085,14 +2105,26 @@ const GameEngine = {
             var h2f = document.getElementById('health2Fill');
             if (h1f) h1f.style.width = health1 + '%';
             if (h2f) h2f.style.width = health2 + '%';
+            var h1t = document.getElementById('health1Text');
+            var h2t = document.getElementById('health2Text');
+            if (h1t) h1t.textContent = Math.round(health1) + '%';
+            if (h2t) h2t.textContent = Math.round(health2) + '%';
             var p1 = document.getElementById('plays1');
             var p2 = document.getElementById('plays2');
             if (p1) p1.textContent = plays1.toLocaleString('es-ES');
             if (p2) p2.textContent = plays2.toLocaleString('es-ES');
 
+            var img1 = document.getElementById('fighter1Img');
+            var img2 = document.getElementById('fighter2Img');
+            if (img1) img1.style.boxShadow = '0 0 ' + (15 + health1 * 0.3) + 'px rgba(0,243,255,' + (0.3 + health1 * 0.005) + ')';
+            if (img2) img2.style.boxShadow = '0 0 ' + (15 + health2 * 0.3) + 'px rgba(236,72,153,' + (0.3 + health2 * 0.005) + ')';
+
+            var diff = Math.abs(health1 - health2);
             if (statusEl) {
                 if (timeLeft <= 5) {
                     statusEl.innerHTML = '<span class="text-red-400 font-bold animate-pulse">⚡ FINAL EXPRESS</span>';
+                } else if (diff < 5) {
+                    statusEl.innerHTML = '<span class="text-yellow-400">🔥 Empate técnico</span>';
                 } else if (health1 > health2) {
                     statusEl.innerHTML = '<span class="text-cyan-400">🎵 ' + (match.player1_label || 'Jugador 1') + ' domina</span>';
                 } else {
@@ -2102,22 +2134,32 @@ const GameEngine = {
 
             if (timeLeft <= 0) {
                 clearInterval(battleInterval);
-                var winner = target1 >= target2 ? 1 : 2;
+                var winner = plays1 >= plays2 ? 1 : 2;
+                self.stopUserSong();
                 if (self.battleAnimState) {
                     self.battleAnimState.finished = true;
                     self.battleAnimState.winner = winner;
                 }
                 self.spawnVictoryParticles(winner);
+                var winnerSong = winner === 1
+                    ? match.player1_song_preview
+                    : match.player2_song_preview;
+                if (winnerSong) {
+                    self.playVictorySong(winnerSong);
+                }
                 if (statusEl) {
                     statusEl.innerHTML = winner === 1
                         ? '<span class="text-cyan-300 font-bold">🏆 Gana ' + (match.player1_label || 'Lado 1') + '</span>'
                         : '<span class="text-fuchsia-300 font-bold">🏆 Gana ' + (match.player2_label || 'Lado 2') + '</span>';
                 }
                 setTimeout(function () {
+                    self.stopUserSong();
                     var arena = document.getElementById('battleArena');
                     if (arena) arena.remove();
+                    document.getElementById('depositSectionMain')?.classList.remove('hidden');
+                    document.getElementById('contactSection')?.classList.remove('hidden');
                     if (options.onComplete) options.onComplete({ winner: winner });
-                }, 1800);
+                }, Math.max(2000, (self.victoryAudioDuration || 15) * 1000));
             }
         }, 1000);
     },
