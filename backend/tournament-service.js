@@ -412,27 +412,57 @@ class TournamentService {
     return { ok: true, stage: updated?.status || t.status };
   }
 
+  async resolveJoinableTournament(tournament) {
+    if (!tournament) return null;
+    const nowMs = Date.now();
+    const closesMs = new Date(tournament.registration_closes_at).getTime();
+    if (tournament.status === 'registration' && closesMs > nowMs) {
+      return tournament;
+    }
+
+    if (tournament.tournament_type !== 'express' || !tournament.genre_id) {
+      return null;
+    }
+
+    const genre = getGenreById(tournament.genre_id);
+    if (!genre) return null;
+
+    let fresh = await this.findOpenExpressForGenre(genre.id);
+    if (!fresh) {
+      fresh = await this.ensureExpressForGenre(genre);
+    }
+    if (!fresh || fresh.status !== 'registration') return null;
+    const freshCloses = new Date(fresh.registration_closes_at).getTime();
+    if (freshCloses <= nowMs) return null;
+    return fresh;
+  }
+
   async joinTournament(creditsUserId, tournamentId, song, participantUserId) {
     const debitUserId = creditsUserId;
     const playerUserId = participantUserId || creditsUserId;
-    const { data: tournament, error } = await this.supabase
+    const originalTournamentId = tournamentId;
+    const { data: tournamentRow, error } = await this.supabase
       .from('tournaments')
       .select('*')
       .eq('id', tournamentId)
       .maybeSingle();
 
-    if (error || !tournament) {
+    if (error || !tournamentRow) {
       return { ok: false, error: 'Torneo no encontrado' };
     }
 
-    if (tournament.status !== 'registration') {
-      return { ok: false, error: 'Inscripción cerrada para este torneo' };
+    const tournament = await this.resolveJoinableTournament(tournamentRow);
+    if (!tournament) {
+      if (tournamentRow.status !== 'registration') {
+        return { ok: false, error: 'Inscripción cerrada para este torneo' };
+      }
+      return {
+        ok: false,
+        error: 'No hay ronda Express abierta ahora. Vuelve al hub y elige el género de nuevo.'
+      };
     }
 
-    const closesMs = new Date(tournament.registration_closes_at).getTime();
-    if (closesMs <= Date.now()) {
-      return { ok: false, error: 'El tiempo de inscripción ya terminó' };
-    }
+    tournamentId = tournament.id;
 
     const { data: existing } = await this.supabase
       .from('tournament_participants')
@@ -505,7 +535,14 @@ class TournamentService {
       .update(updatePayload)
       .eq('id', tournamentId);
 
-    return { ok: true, tournamentId, humanCount: newHumanCount, locked: Boolean(updatePayload.status) };
+    return {
+      ok: true,
+      tournamentId,
+      humanCount: newHumanCount,
+      locked: Boolean(updatePayload.status),
+      rolledToNewSlot: tournamentId !== originalTournamentId,
+      registrationClosesAt: tournament.registration_closes_at
+    };
   }
 
   async getBracketPayload(tournamentId) {

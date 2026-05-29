@@ -1775,10 +1775,10 @@
     <!-- Scripts que pueden cargarse después del render inicial -->
     <script src="./src/streams-realtime.js?v=v2.7" defer></script>
     <!-- Ramp Network removido - ya no se usa -->
-    <script src="./src/tournament-hub.js?v=v1.7-express-enroll"></script>
+    <script src="./src/tournament-hub.js?v=v1.8-express-slot-refresh"></script>
     <script src="./src/tournament-bracket.js?v=v1.6-stuck-zero-wake"></script>
     <script src="./src/claim-ui.js?v=v2.7" defer></script>
-    <script src="./game-engine.js?v=v3.5-tournament-watch-genre"></script>
+    <script src="./game-engine.js?v=v3.6-express-join-refresh"></script>
     <script>window.MTR_INLINE_TOP_STREAMS_ACTIVE = true;</script>
     <!-- DEFINIR quickBet INMEDIATAMENTE - ANTES DE CUALQUIER OTRO SCRIPT -->
     <script>
@@ -4981,6 +4981,10 @@
                 return;
             }
             if (typeof GameEngine !== 'undefined') {
+                if (enrollment.type === 'express' && typeof GameEngine.refreshExpressEnrollmentId === 'function') {
+                    var freshId = await GameEngine.refreshExpressEnrollmentId();
+                    if (freshId) enrollment.id = freshId;
+                }
                 await GameEngine.joinTournament(enrollment.id, selectedSong, enrollment.entryFee);
             } else {
                 showToast('Modo torneo no disponible. Recarga la página.', 'error');

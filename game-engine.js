@@ -2355,12 +2355,41 @@ const GameEngine = {
         }
     },
 
+    async refreshExpressEnrollmentId() {
+        const enrollment = window.tournamentEnrollment;
+        if (!enrollment || enrollment.type !== 'express' || !enrollment.genreId) {
+            return enrollment?.id || null;
+        }
+        const backendUrl = window.CONFIG?.BACKEND_API || 'https://musictoken-ring.onrender.com';
+        try {
+            const res = await fetch(
+                backendUrl + '/api/tournaments/genre/' + enrollment.genreId + '/ensure-express',
+                { method: 'POST', headers: { 'Content-Type': 'application/json' } }
+            );
+            const data = await res.json().catch(function () { return {}; });
+            if (res.ok && data.ok && data.express?.id) {
+                enrollment.id = data.express.id;
+                enrollment.closesAt = data.express.registration_closes_at;
+                window.tournamentEnrollment = enrollment;
+                return data.express.id;
+            }
+        } catch (e) {
+            console.warn('[joinTournament] refresh express slot:', e);
+        }
+        return enrollment.id || null;
+    },
+
     async joinTournament(tournamentId, song, betAmount) {
         try {
             const { data: { session } } = await supabaseClient.auth.getSession();
             if (!session) {
                 showToast('Inicia sesión para inscribirte en torneos', 'error');
                 return;
+            }
+
+            if (window.tournamentEnrollment?.type === 'express') {
+                const refreshedId = await this.refreshExpressEnrollmentId();
+                if (refreshedId) tournamentId = refreshedId;
             }
 
             const entryFee = Number(betAmount) || Number(window.tournamentEnrollment?.entryFee) || 3;
@@ -2430,6 +2459,21 @@ const GameEngine = {
                 if (response.status === 403) {
                     msg = 'Sesión o wallet no autorizada. Cierra sesión, vuelve a entrar y reconecta la wallet.';
                 }
+                if (
+                    !this._expressJoinRetried &&
+                    (msg.indexOf('inscripción ya terminó') !== -1 ||
+                    msg.indexOf('ronda Express abierta') !== -1)
+                ) {
+                    this._expressJoinRetried = true;
+                    try {
+                        const retryId = await this.refreshExpressEnrollmentId();
+                        if (retryId && retryId !== tournamentId) {
+                            return await this.joinTournament(retryId, song, betAmount);
+                        }
+                    } finally {
+                        this._expressJoinRetried = false;
+                    }
+                }
                 showToast(msg, 'error');
                 return;
             }
@@ -2447,8 +2491,13 @@ const GameEngine = {
             this.addToPlatformRevenue(platformNet);
             this.addToJackpotPool(jackpotContribution);
 
-            showToast(result.alreadyJoined ? 'Ya estabas inscrito' : '¡Inscrito en el torneo!', 'success');
-            this.watchTournamentArena(tournamentId);
+            const joinedId = result.tournamentId || tournamentId;
+            if (result.rolledToNewSlot) {
+                showToast('Nueva ronda Express — ¡inscrito!', 'success');
+            } else {
+                showToast(result.alreadyJoined ? 'Ya estabas inscrito' : '¡Inscrito en el torneo!', 'success');
+            }
+            this.watchTournamentArena(joinedId);
             window.tournamentEnrollment = null;
 
             if (!window.TournamentBracket && window.TournamentHub) {

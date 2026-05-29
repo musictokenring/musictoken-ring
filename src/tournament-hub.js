@@ -222,12 +222,13 @@
   }
 
   async function handleExpressJoin(exp, genre) {
-    var tournament = exp;
+    var tournament = await ensureExpressSlot(genre.id);
+    if (!tournament) tournament = exp;
     if (!tournament || !tournament.id) {
-      tournament = await ensureExpressSlot(genre.id);
-      if (!tournament || !tournament.id) return;
+      toast('No hay ronda Express disponible. Reintenta en unos segundos.', 'error');
+      return;
     }
-    beginEnrollment(tournament, genre, 'express');
+    await beginEnrollment(tournament, genre, 'express');
   }
 
   function countdownHtml(seconds, sizeClass) {
@@ -452,8 +453,31 @@
     }
   }
 
-  function beginEnrollment(tournament, genre, type) {
-    if (!tournament || !genre || !tournament.id) return;
+  function updateEnrollmentSubtitle(genreLabel, type, tournament) {
+    var sub = document.getElementById('socialChallengeSubtitle');
+    if (!sub) return;
+    var sec = '';
+    if (type === 'express' && tournament && tournament.registration_closes_at) {
+      var closes = new Date(tournament.registration_closes_at).getTime();
+      var left = Math.max(0, Math.floor((closes - serverNowMs()) / 1000));
+      sec = fmtClock(left);
+    }
+    sub.textContent = (type === 'express' ? 'Express' : 'Grand Prix') +
+      ' · Entry ' + (tournament?.entry_fee || 3) + ' cr' +
+      (sec ? ' · Batalla en ' + sec : '') +
+      ' · Elige canción de ' + genreLabel;
+  }
+
+  async function beginEnrollment(tournament, genre, type) {
+    if (!tournament || !genre) return;
+    if (type === 'express') {
+      var fresh = await ensureExpressSlot(genre.id);
+      if (fresh && fresh.id) tournament = fresh;
+    }
+    if (!tournament.id) {
+      toast('Abre el Express desde el hub e inténtalo de nuevo.', 'error');
+      return;
+    }
     window.tournamentEnrollment = {
       id: tournament.id,
       genreId: genre.id,
@@ -461,7 +485,8 @@
       deezerQuery: genre.deezerQuery || genre.label,
       entryFee: Number(tournament.entry_fee),
       type: type,
-      name: tournament.name
+      name: tournament.name,
+      closesAt: tournament.registration_closes_at || null
     };
     window.currentMode = 'tournament';
 
@@ -474,13 +499,7 @@
     var sub = document.getElementById('socialChallengeSubtitle');
     if (title) title.textContent = 'Torneo · ' + genre.label;
     if (sub) {
-      var sec = type === 'express' && tournament.registration_closes_at
-        ? fmtClock(secondsToBattle(tournament))
-        : '';
-      sub.textContent = (type === 'express' ? 'Express' : 'Grand Prix') +
-        ' · Entry ' + tournament.entry_fee + ' cr' +
-        (sec ? ' · Batalla en ' + sec : '') +
-        ' · Elige canción de ' + genre.label;
+      updateEnrollmentSubtitle(genre.label, type, tournament);
     }
 
     var betInput = document.getElementById('betAmount');
