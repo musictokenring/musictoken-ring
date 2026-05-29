@@ -16,7 +16,9 @@
   var lastHubSyncAt = 0;
   var hubPollController = null;
   var hubEnsureController = null;
-  var ensureExpressPromise = null;
+  var ensureByGenre = {};
+  var ensureRequested = {};
+  var ENSURE_TIMEOUT_MS = 90000;
   var API_TIMEOUT_MS = 55000;
   var HUB_GET_TIMEOUT_MS = 22000;
   var HUB_SYNC_COOLDOWN_MS = 20000;
@@ -160,13 +162,10 @@
     }
   }
 
-  async function fetchApi(path, options, timeoutMs) {
-    var isEnsure = String(path).indexOf('ensure-express') !== -1;
+  async function fetchApi(path, options, timeoutMs, kind) {
+    var isEnsure = kind === 'ensure' || String(path).indexOf('ensure-express') !== -1;
     var controller = new AbortController();
     if (isEnsure) {
-      if (hubEnsureController) {
-        try { hubEnsureController.abort(); } catch (e) { /* ignore */ }
-      }
       hubEnsureController = controller;
     } else {
       if (hubPollController) {
@@ -258,39 +257,74 @@
 
   async function ensureExpressSlot(genreId) {
     if (!genreId) return null;
-    if (ensureExpressPromise) return ensureExpressPromise;
-    ensureExpressPromise = (async function () {
+    if (ensureByGenre[genreId]) return ensureByGenre[genreId];
+
+    ensureByGenre[genreId] = (async function () {
       try {
-        var res = await fetchApi(
-          '/api/tournaments/genre/' + genreId + '/ensure-express',
-          { method: 'POST', headers: { 'Content-Type': 'application/json' } },
-          30000
-        );
-        if (!res) return null;
-        var data = await safeJson(res);
-        if (!data) return null;
-        if (!res.ok || !data.ok || !data.express) {
-          throw new Error(data.error || 'No se pudo abrir el Express');
+        await wakeBackend();
+        for (var attempt = 1; attempt <= 3; attempt++) {
+          var res = await fetchApi(
+            '/api/tournaments/genre/' + genreId + '/ensure-express',
+            { method: 'POST', headers: { 'Content-Type': 'application/json' } },
+            ENSURE_TIMEOUT_MS,
+            'ensure'
+          );
+          if (!res) {
+            if (attempt < 3) {
+              await new Promise(function (r) { setTimeout(r, 1500 * attempt); });
+              continue;
+            }
+            return null;
+          }
+          var data = await safeJson(res);
+          if (!data) continue;
+          if (res.ok && data.ok && data.express && data.express.id) {
+            patchGenreExpress(genreId, data.express);
+            ensureRequested[genreId] = true;
+            return data.express;
+          }
+          if (data.error && attempt === 3) {
+            throw new Error(data.error);
+          }
+          await new Promise(function (r) { setTimeout(r, 1500 * attempt); });
         }
-        patchGenreExpress(genreId, data.express);
-        return data.express;
+        return null;
       } catch (e) {
         console.error('[tournament-hub] ensure-express:', e);
-        toast(e.message || 'Error abriendo Express', 'error');
+        toast(e.message || 'Servidor lento. Espera unos segundos e inténtalo de nuevo.', 'error');
         return null;
       } finally {
-        ensureExpressPromise = null;
+        delete ensureByGenre[genreId];
       }
     })();
-    return ensureExpressPromise;
+
+    return ensureByGenre[genreId];
   }
 
-  async function handleExpressJoin(exp, genre) {
+  async function handleExpressJoin(exp, genre, btn) {
+    if (btn) {
+      btn.disabled = true;
+      btn.textContent = '⏳ Abriendo Express…';
+    }
     try {
-      await beginEnrollment(exp, genre, 'express');
+      var slot = exp;
+      if (!slot || !slot.id) {
+        slot = await ensureExpressSlot(genre.id);
+      }
+      if (!slot || !slot.id) {
+        toast('No se pudo abrir el Express. El servidor puede estar despertando — reintenta en 10 s.', 'error');
+        return;
+      }
+      await beginEnrollment(slot, genre, 'express');
     } catch (e) {
       console.error('[tournament-hub] express join:', e);
       toast('No se pudo abrir la inscripción. Reintenta.', 'error');
+    } finally {
+      if (btn) {
+        btn.disabled = false;
+        var fee = (exp && exp.entry_fee) || 3;
+        btn.textContent = (exp && !exp.id ? 'Abrir e inscribirme · ' : 'Inscribirme · ') + fee + ' cr';
+      }
     }
   }
 
@@ -455,13 +489,17 @@
     var joinExp = panel.querySelector('[data-join-express]');
     if (joinExp) {
       joinExp.addEventListener('click', function () {
-        handleExpressJoin(exp, g);
+        handleExpressJoin(exp, g, joinExp);
       });
     }
 
-    if (expressNeedsId && selectedGenreId) {
+    if (expressNeedsId && selectedGenreId && !ensureRequested[selectedGenreId] && !ensureByGenre[selectedGenreId]) {
+      ensureRequested[selectedGenreId] = true;
       ensureExpressSlot(selectedGenreId).then(function (ensured) {
         if (ensured && ensured.id) renderGenreDetail();
+        else ensureRequested[selectedGenreId] = false;
+      }).catch(function () {
+        ensureRequested[selectedGenreId] = false;
       });
     }
     var watchExp = panel.querySelector('[data-watch-express]');
@@ -545,7 +583,9 @@
         Date.now() - lastHubSyncAt > HUB_SYNC_COOLDOWN_MS &&
         !hubSyncInFlight
       ) {
-        refresh(false);
+        refresh(false).catch(function (e) {
+          console.warn('[tournament-hub] zero refresh:', e);
+        });
       }
     } else {
       zeroSinceLocal = null;
@@ -570,12 +610,12 @@
   async function beginEnrollment(tournament, genre, type) {
     if (!tournament || !genre) return;
     pauseTimers();
-    if (type === 'express' && !tournament.id) {
+    if (type === 'express') {
       var fresh = await ensureExpressSlot(genre.id);
       if (fresh && fresh.id) tournament = fresh;
     }
     if (!tournament.id) {
-      toast('Abre el Express desde el hub e inténtalo de nuevo.', 'error');
+      toast('Express no disponible todavía. Espera unos segundos y pulsa de nuevo.', 'error');
       return;
     }
     window.tournamentEnrollment = {
@@ -718,6 +758,7 @@
     close: close,
     pauseTimers: pauseTimers,
     stopEnrollmentCountdown: stopEnrollmentCountdown,
+    ensureExpressSlot: ensureExpressSlot,
     refresh: refresh,
     beginEnrollment: beginEnrollment,
     secondsToBattle: secondsToBattle

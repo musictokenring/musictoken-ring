@@ -1775,10 +1775,10 @@
     <!-- Scripts que pueden cargarse después del render inicial -->
     <script src="./src/streams-realtime.js?v=v2.7" defer></script>
     <!-- Ramp Network removido - ya no se usa -->
-    <script src="./src/tournament-hub.js?v=v2.2-no-abort-on-enroll"></script>
+    <script src="./src/tournament-hub.js?v=v2.3-stable-express-enroll"></script>
     <script src="./src/tournament-bracket.js?v=v2.1-kick-no-poll-abort"></script>
     <script src="./src/claim-ui.js?v=v2.7" defer></script>
-    <script src="./game-engine.js?v=v3.8-express-join-by-genre"></script>
+    <script src="./game-engine.js?v=v3.9-stable-express-enroll"></script>
     <script>window.MTR_INLINE_TOP_STREAMS_ACTIVE = true;</script>
     <!-- DEFINIR quickBet INMEDIATAMENTE - ANTES DE CUALQUIER OTRO SCRIPT -->
     <script>
@@ -5002,9 +5002,11 @@
                 console.error('[joinTournamentMode]', e);
                 showToast('Error al confirmar inscripción. Reintenta.', 'error');
             } finally {
-                if (joinBtn && window.tournamentEnrollment) {
+                if (joinBtn) {
                     joinBtn.disabled = false;
-                    joinBtn.textContent = '🏆 Confirmar inscripción · ' + window.tournamentEnrollment.entryFee + ' cr';
+                    if (window.tournamentEnrollment) {
+                        joinBtn.textContent = '🏆 Confirmar inscripción · ' + window.tournamentEnrollment.entryFee + ' cr';
+                    }
                 }
             }
         }

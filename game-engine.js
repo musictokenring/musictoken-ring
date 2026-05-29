@@ -2363,12 +2363,28 @@ const GameEngine = {
         if (!enrollment || enrollment.type !== 'express' || !enrollment.genreId) {
             return enrollment?.id || null;
         }
+        if (window.TournamentHub && typeof window.TournamentHub.ensureExpressSlot === 'function') {
+            const express = await window.TournamentHub.ensureExpressSlot(enrollment.genreId);
+            if (express?.id) {
+                enrollment.id = express.id;
+                enrollment.closesAt = express.registration_closes_at;
+                window.tournamentEnrollment = enrollment;
+                return express.id;
+            }
+        }
         const backendUrl = window.CONFIG?.BACKEND_API || 'https://musictoken-ring.onrender.com';
+        const controller = new AbortController();
+        const timer = setTimeout(function () { controller.abort(); }, 90000);
         try {
             const res = await fetch(
                 backendUrl + '/api/tournaments/genre/' + enrollment.genreId + '/ensure-express',
-                { method: 'POST', headers: { 'Content-Type': 'application/json' } }
+                {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    signal: controller.signal
+                }
             );
+            clearTimeout(timer);
             const data = await res.json().catch(function () { return {}; });
             if (res.ok && data.ok && data.express?.id) {
                 enrollment.id = data.express.id;
@@ -2377,6 +2393,7 @@ const GameEngine = {
                 return data.express.id;
             }
         } catch (e) {
+            clearTimeout(timer);
             console.warn('[joinTournament] refresh express slot:', e);
         }
         return enrollment.id || null;
