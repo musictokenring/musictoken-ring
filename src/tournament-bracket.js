@@ -410,7 +410,12 @@
       renderLobby(data);
 
       if (data.tournament.status === 'cancelled') {
-        toast(lastLifecycleError || 'Torneo cancelado', 'warning');
+        lastLifecycleError = data.lifecycleError || 'Ronda cerrada. Abriendo nueva…';
+        toast(lastLifecycleError, 'warning');
+        var gidCancel = data.tournament.genre_id || watchGenreId;
+        if (gidCancel) {
+          await redirectToActiveExpress(gidCancel);
+        }
         return;
       }
 
@@ -468,6 +473,9 @@
   }
 
   function watch(tournamentId, genreId) {
+    if (window.TournamentHub && window.TournamentHub.pauseTimers) {
+      window.TournamentHub.pauseTimers();
+    }
     watchId = tournamentId;
     watchGenreId = genreId || localStorage.getItem('mtr_watch_genre') || null;
     startBattleAttempts = 0;

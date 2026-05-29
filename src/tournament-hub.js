@@ -12,8 +12,11 @@
   var fetchedAtLocal = 0;
   var hubSyncInFlight = false;
   var zeroSinceLocal = null;
+  var lastHubSyncAt = 0;
+  var hubFetchController = null;
   var API_TIMEOUT_MS = 55000;
   var HUB_GET_TIMEOUT_MS = 22000;
+  var HUB_SYNC_COOLDOWN_MS = 20000;
 
   var FALLBACK_GENRES = [
     { id: 'reggaeton', label: 'Reggaeton', region: 'latino', emoji: '🎤', deezerQuery: 'reggaeton' },
@@ -133,8 +136,17 @@
     return exp && exp.status === 'registration' && secondsToBattle(exp) > 0;
   }
 
+  function isArenaVisible() {
+    var arena = document.getElementById('tournamentArena');
+    return arena && !arena.classList.contains('hidden');
+  }
+
   async function fetchApi(path, options, timeoutMs) {
-    var controller = new AbortController();
+    if (hubFetchController) {
+      try { hubFetchController.abort(); } catch (e) { /* ignore */ }
+    }
+    hubFetchController = new AbortController();
+    var controller = hubFetchController;
     var timer = setTimeout(function () { controller.abort(); }, timeoutMs || API_TIMEOUT_MS);
     try {
       var res = await fetch(backendUrl() + path, Object.assign({}, options || {}, {
@@ -142,9 +154,12 @@
         cache: 'no-store'
       }));
       clearTimeout(timer);
+      if (hubFetchController === controller) hubFetchController = null;
       return res;
     } catch (err) {
       clearTimeout(timer);
+      if (hubFetchController === controller) hubFetchController = null;
+      if (err && err.name === 'AbortError') return null;
       throw err;
     }
   }
@@ -163,20 +178,29 @@
   }
 
   async function fetchHub(forceSync) {
+    if (isArenaVisible()) return hubData || buildFallbackHubData();
     var timeout = forceSync ? API_TIMEOUT_MS : HUB_GET_TIMEOUT_MS;
+    if (forceSync && Date.now() - lastHubSyncAt < HUB_SYNC_COOLDOWN_MS) {
+      forceSync = false;
+    }
     if (forceSync) {
       try {
         var syncRes = await fetchApi('/api/tournaments/hub/sync', { method: 'POST' }, API_TIMEOUT_MS);
+        if (!syncRes) return hubData || buildFallbackHubData();
         var syncData = await syncRes.json();
         if (syncRes.ok && syncData.ok) {
+          lastHubSyncAt = Date.now();
           applyHubData(syncData);
           return syncData;
         }
       } catch (syncErr) {
-        console.warn('[tournament-hub] sync POST:', syncErr.message || syncErr);
+        if (syncErr && syncErr.name !== 'AbortError') {
+          console.warn('[tournament-hub] sync POST:', syncErr.message || syncErr);
+        }
       }
     }
     var res = await fetchApi('/api/tournaments/hub', { method: 'GET' }, timeout);
+    if (!res) return hubData || buildFallbackHubData();
     var data = await res.json();
     if (!res.ok || !data.ok) throw new Error(data.error || 'Error cargando torneos');
     applyHubData(data);
@@ -421,8 +445,20 @@
     }
   }
 
+  function pauseTimers() {
+    if (pollTimer) clearInterval(pollTimer);
+    if (countdownTimer) clearInterval(countdownTimer);
+    pollTimer = null;
+    countdownTimer = null;
+    if (hubFetchController) {
+      try { hubFetchController.abort(); } catch (e) { /* ignore */ }
+      hubFetchController = null;
+    }
+    hubSyncInFlight = false;
+  }
+
   function tickCountdowns() {
-    if (!hubData) return;
+    if (!hubData || isArenaVisible()) return;
     renderRotationBanner();
     if (selectedGenreId) {
       var cd = document.getElementById('genreExpressCountdown');
@@ -441,12 +477,12 @@
     });
     if (anyZero) {
       if (!zeroSinceLocal) zeroSinceLocal = Date.now();
-      if (Date.now() - zeroSinceLocal > 3000 && !hubSyncInFlight) {
-        syncHubSlots().then(function () {
-          renderRotationBanner();
-          if (selectedGenreId) renderGenreDetail();
-          else renderGenreGrid(document.getElementById('tournamentGenreFilter')?.value || 'all');
-        });
+      if (
+        Date.now() - zeroSinceLocal > 5000 &&
+        Date.now() - lastHubSyncAt > HUB_SYNC_COOLDOWN_MS &&
+        !hubSyncInFlight
+      ) {
+        refresh(false);
       }
     } else {
       zeroSinceLocal = null;
@@ -509,6 +545,7 @@
       betInput.classList.add('opacity-70');
     }
 
+    pauseTimers();
     if (typeof updateActionButtons === 'function') updateActionButtons('tournament');
     toast('Elige tu canción (' + genre.label + ') y confirma inscripción', 'info');
   }
@@ -578,10 +615,7 @@
   }
 
   function close() {
-    if (pollTimer) clearInterval(pollTimer);
-    if (countdownTimer) clearInterval(countdownTimer);
-    pollTimer = null;
-    countdownTimer = null;
+    pauseTimers();
     var hub = document.getElementById('tournamentHub');
     if (hub) hub.classList.add('hidden');
     window.tournamentEnrollment = null;
@@ -606,6 +640,7 @@
   window.TournamentHub = {
     open: open,
     close: close,
+    pauseTimers: pauseTimers,
     refresh: refresh,
     beginEnrollment: beginEnrollment,
     secondsToBattle: secondsToBattle

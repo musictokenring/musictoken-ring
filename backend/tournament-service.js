@@ -47,10 +47,21 @@ class TournamentService {
     return getExpressSlot(now);
   }
 
+  expressAlwaysStartsBattle(tournament, humanCount) {
+    return tournament?.tournament_type === 'express' || humanCount >= 1;
+  }
+
   async forceCloseStaleRegistration(tournamentId) {
     const nowIso = new Date().toISOString();
+    const { data: t } = await this.supabase
+      .from('tournaments')
+      .select('*')
+      .eq('id', tournamentId)
+      .maybeSingle();
+    if (!t) return;
+
     const humanCount = await this.countHumanParticipants(tournamentId);
-    if (humanCount >= 1) {
+    if (this.expressAlwaysStartsBattle(t, humanCount)) {
       await this.supabase
         .from('tournaments')
         .update({ status: 'locked', updated_at: nowIso })
@@ -264,13 +275,28 @@ class TournamentService {
 
     for (const t of expired) {
       const { humanCount } = await this.syncTournamentParticipantCount(t.id);
-      const minRequired = 1;
-      if (humanCount >= minRequired) {
+      if (this.expressAlwaysStartsBattle(t, humanCount)) {
         await this.supabase
           .from('tournaments')
           .update({ status: 'locked', updated_at: nowIso })
           .eq('id', t.id);
-        console.log('[tournament] 🔒 Torneo cerrado (listo):', t.name, humanCount);
+        console.log('[tournament] 🔒 Torneo cerrado (listo):', t.name, 'humanos:', humanCount);
+        const { data: locked } = await this.supabase
+          .from('tournaments')
+          .select('*')
+          .eq('id', t.id)
+          .maybeSingle();
+        if (locked) {
+          try {
+            if (locked.tournament_type === 'express') {
+              await this.battleEngine.startExpressTournament(locked);
+            } else if (locked.tournament_type === 'weekly') {
+              await this.battleEngine.startWeeklyTournament(locked);
+            }
+          } catch (err) {
+            console.error('[tournament] processExpired start:', t.id, err.message);
+          }
+        }
       } else {
         await this.supabase
           .from('tournaments')
@@ -330,7 +356,7 @@ class TournamentService {
     if (t.status === 'registration') {
       const closesMs = new Date(t.registration_closes_at).getTime();
       if (closesMs <= Date.now()) {
-        if (humanCount >= 1) {
+        if (this.expressAlwaysStartsBattle(t, humanCount)) {
           await this.supabase
             .from('tournaments')
             .update({ status: 'locked', updated_at: nowIso })
