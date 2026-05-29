@@ -20,6 +20,8 @@ const TOURNAMENT_GENRES = [
 
 const EXPRESS_SLOT_MS = 10 * 60 * 1000;
 const EXPRESS_REGISTRATION_MS = 5 * 60 * 1000;
+/** Segundos extra tras 00:00 UI para joins en vuelo antes de generar bracket. */
+const EXPRESS_JOIN_GRACE_MS = 15000;
 const EXPRESS_MAX_PLAYERS = 4;
 const EXPRESS_ENTRY_FEE = 3;
 const WEEKLY_MAX_PLAYERS = 16;
@@ -107,6 +109,7 @@ module.exports = {
   TOURNAMENT_GENRES,
   EXPRESS_SLOT_MS,
   EXPRESS_REGISTRATION_MS,
+  EXPRESS_JOIN_GRACE_MS,
   EXPRESS_MAX_PLAYERS,
   EXPRESS_ENTRY_FEE,
   WEEKLY_MAX_PLAYERS,

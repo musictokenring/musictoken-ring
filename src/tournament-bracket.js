@@ -179,7 +179,7 @@
           '<div class="text-sm text-amber-300 animate-pulse mb-2">⏳ Iniciando batalla (CPU + jugadores)…</div>' +
           '<div class="text-4xl font-black tabular-nums text-cyan-400 mb-2">00:00</div>' +
           '<p class="text-xs text-gray-400">Intento ' + startBattleAttempts + '/' + MAX_KICK_ATTEMPTS +
-          ' · el servidor puede tardar ~1 min</p>' +
+          ' · el servidor espera confirmar inscripciones (~15 s)</p>' +
           (lastLifecycleError
             ? '<p class="text-xs text-red-300 mt-2">' + lastLifecycleError + '</p>'
             : '') +
@@ -426,6 +426,9 @@
       }
       var battleReady = result && result.ok && result.tournament &&
         (result.tournament.status === 'in_progress' || result.tournament.status === 'locked');
+      if (result && result.bracketStale) {
+        zeroKickSent = false;
+      }
       if (battleReady && result.tournament.status === 'in_progress') {
         zeroKickSent = true;
         stuckAtZeroSince = null;
@@ -555,6 +558,7 @@
         return;
       }
       if (data.lifecycleError) lastLifecycleError = data.lifecycleError;
+      if (data.bracketStale) zeroKickSent = false;
       applyLobbyTiming(data);
       lobbyStatus = data.tournament?.status || null;
       if (data.serverTime) {

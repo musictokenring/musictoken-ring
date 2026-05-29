@@ -230,7 +230,7 @@ async function authorizeTournamentJoin(
 
   const publicUserId = await resolvePublicUserId(supabase, authUser);
   if (resolved.userId === publicUserId || resolved.userId === authUser.id) {
-    return { ok: true, participantUserId: publicUserId };
+    return { ok: true, participantUserId: resolved.userId };
   }
 
   if (!walletAddress || !/^0x[a-fA-F0-9]{40}$/.test(walletAddress)) {
@@ -245,7 +245,7 @@ async function authorizeTournamentJoin(
     .maybeSingle();
 
   if (walletUser?.id === resolved.userId) {
-    return { ok: true, participantUserId: publicUserId };
+    return { ok: true, participantUserId: resolved.userId };
   }
 
   const { data: walletLink } = await supabase
@@ -259,7 +259,7 @@ async function authorizeTournamentJoin(
     walletLink.user_id === resolved.userId &&
     (walletLink.user_id === publicUserId || walletLink.user_id === authUser.id)
   ) {
-    return { ok: true, participantUserId: publicUserId };
+    return { ok: true, participantUserId: resolved.userId };
   }
 
   return { ok: false, reason: 'wallet_mismatch' };

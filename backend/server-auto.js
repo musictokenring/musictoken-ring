@@ -2116,10 +2116,16 @@ async function handleTournamentJoinRequest(req, res, tournamentId, genreId) {
         resolved.userId,
         tournamentId,
         req.body?.song || null,
-        authz.participantUserId,
+        resolved.userId,
         {
             genreId: genreId || null,
-            preferredTournamentId: tournamentId || req.body?.tournamentId || null
+            preferredTournamentId: tournamentId || req.body?.tournamentId || null,
+            displayName: (
+                req.authUser?.user_metadata?.full_name ||
+                req.authUser?.user_metadata?.name ||
+                (req.authUser?.email ? req.authUser.email.split('@')[0] : null) ||
+                'Jugador'
+            )
         }
     );
     if (!result.ok) {

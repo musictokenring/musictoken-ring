@@ -6,6 +6,7 @@ const {
   EXPRESS_MAX_PLAYERS,
   EXPRESS_ENTRY_FEE,
   EXPRESS_REGISTRATION_MS,
+  EXPRESS_JOIN_GRACE_MS,
   WEEKLY_MAX_PLAYERS,
   WEEKLY_MIN_PLAYERS,
   WEEKLY_ENTRY_FEE,
@@ -49,6 +50,24 @@ class TournamentService {
 
   expressAlwaysStartsBattle(tournament, humanCount) {
     return tournament?.tournament_type === 'express' || humanCount >= 1;
+  }
+
+  registrationClosesMs(tournament) {
+    return Date.parse(tournament?.registration_closes_at || '');
+  }
+
+  registrationOpenForJoin(tournament, nowMs) {
+    if (!tournament || tournament.status !== 'registration') return false;
+    const closesMs = this.registrationClosesMs(tournament);
+    if (!Number.isFinite(closesMs)) return false;
+    return closesMs > nowMs - EXPRESS_JOIN_GRACE_MS;
+  }
+
+  registrationReadyToLock(tournament, nowMs) {
+    if (!tournament || tournament.status !== 'registration') return false;
+    const closesMs = this.registrationClosesMs(tournament);
+    if (!Number.isFinite(closesMs)) return false;
+    return closesMs <= nowMs - EXPRESS_JOIN_GRACE_MS;
   }
 
   async forceCloseStaleRegistration(tournamentId) {
@@ -297,12 +316,14 @@ class TournamentService {
   }
 
   async processExpiredRegistrations() {
-    const nowIso = new Date().toISOString();
+    const nowMs = Date.now();
+    const nowIso = new Date(nowMs).toISOString();
+    const lockCutoffIso = new Date(nowMs - EXPRESS_JOIN_GRACE_MS).toISOString();
     const { data: expired } = await this.supabase
       .from('tournaments')
       .select('*')
       .eq('status', 'registration')
-      .lt('registration_closes_at', nowIso);
+      .lt('registration_closes_at', lockCutoffIso);
 
     if (!expired?.length) return;
 
@@ -382,16 +403,32 @@ class TournamentService {
     }
 
     if (t.status === 'in_progress' && t.bracket_state) {
+      const dbHumans = await this.countHumanParticipants(tournamentId);
+      const bracketHumans = Number(t.bracket_state.humanCount) || 0;
+      if (dbHumans > bracketHumans) {
+        console.warn('[tournament] Rebuild por humanos tardíos:', tournamentId,
+          'DB:', dbHumans, 'bracket:', bracketHumans);
+        await this.supabase.from('tournaments').update({
+          status: 'locked',
+          bracket_state: null,
+          updated_at: nowIso
+        }).eq('id', tournamentId);
+        const { data: locked } = await this.supabase
+          .from('tournaments')
+          .select('*')
+          .eq('id', tournamentId)
+          .maybeSingle();
+        if (locked) return this.startLockedTournament(locked);
+      }
       return { ok: true, stage: 'in_progress' };
     }
 
     const { humanCount } = await this.syncTournamentParticipantCount(tournamentId);
 
     if (t.status === 'registration') {
-      const closesMs = Date.parse(t.registration_closes_at || '');
-      const expired = Number.isFinite(closesMs) && closesMs <= nowMs;
+      const closesMs = this.registrationClosesMs(t);
 
-      if (!expired) {
+      if (!this.registrationReadyToLock(t, nowMs)) {
         return { ok: true, stage: 'registration', humanCount };
       }
 
@@ -545,12 +582,9 @@ class TournamentService {
         pref &&
         pref.tournament_type === 'express' &&
         pref.genre_id === genre.id &&
-        pref.status === 'registration'
+        this.registrationOpenForJoin(pref, nowMs)
       ) {
-        const closesMs = new Date(pref.registration_closes_at).getTime();
-        if (closesMs > nowMs + 2000) {
-          return pref;
-        }
+        return pref;
       }
     }
     return this.findOpenExpressForGenre(genre.id, now);
@@ -558,7 +592,7 @@ class TournamentService {
 
   async joinTournament(creditsUserId, tournamentId, song, participantUserId, options = {}) {
     const debitUserId = creditsUserId;
-    const playerUserId = participantUserId || creditsUserId;
+    const playerUserId = creditsUserId || participantUserId;
     const originalTournamentId = tournamentId;
     const now = new Date();
     const nowMs = now.getTime();
@@ -608,8 +642,8 @@ class TournamentService {
       }
     }
 
-    const closesMs = new Date(tournament.registration_closes_at).getTime();
-    if (tournament.status !== 'registration' || closesMs <= nowMs) {
+    const closesMs = this.registrationClosesMs(tournament);
+    if (!this.registrationOpenForJoin(tournament, nowMs)) {
       return {
         ok: false,
         error: 'Inscripción cerrada. Elige la ronda Express activa en el hub.'
@@ -654,6 +688,9 @@ class TournamentService {
       user_id: playerUserId,
       is_cpu: false
     };
+    if (options.displayName) {
+      participantRow.display_name = String(options.displayName).slice(0, 80);
+    }
     if (song) {
       participantRow.song_id = String(song.id || '');
       participantRow.song_name = song.name || '';
@@ -669,6 +706,19 @@ class TournamentService {
     if (insertError) {
       console.error('[tournament] join insert error:', insertError.message);
       return { ok: false, error: insertError.message };
+    }
+
+    const { data: verified } = await this.supabase
+      .from('tournament_participants')
+      .select('id')
+      .eq('tournament_id', tournamentId)
+      .eq('user_id', playerUserId)
+      .neq('is_cpu', true)
+      .maybeSingle();
+
+    if (!verified) {
+      console.error('[tournament] join verify failed:', tournamentId, playerUserId);
+      return { ok: false, error: 'Inscripción no confirmada en el servidor. Reintenta.' };
     }
 
     const newHumanCount = humanCount + 1;
@@ -689,9 +739,13 @@ class TournamentService {
       .update(updatePayload)
       .eq('id', tournamentId);
 
+    console.log('[tournament] ✅ Inscrito:', tournament.name, 'id:', tournamentId,
+      'user:', playerUserId, 'humanos:', newHumanCount);
+
     return {
       ok: true,
       tournamentId,
+      participantUserId: playerUserId,
       humanCount: newHumanCount,
       locked: Boolean(updatePayload.status),
       rolledToNewSlot: tournamentId !== originalTournamentId,
@@ -705,6 +759,11 @@ class TournamentService {
       lifecycle = await this.advanceTournamentLifecycle(tournamentId);
     }
     const payload = await this.battleEngine.getBracketPayload(tournamentId);
+    const liveHumans = await this.countHumanParticipants(tournamentId);
+    payload.liveHumanCount = liveHumans;
+    if (payload.bracket && liveHumans > (Number(payload.bracket.humanCount) || 0)) {
+      payload.bracketStale = true;
+    }
     if (lifecycle && !lifecycle.ok) {
       payload.lifecycleError = lifecycle.error;
       payload.lifecycleStage = lifecycle.stage;
@@ -726,14 +785,15 @@ class TournamentService {
   }
 
   async findOpenExpressForGenre(genreId, serverNow = new Date()) {
-    const nowIso = serverNow.toISOString();
+    const nowMs = serverNow.getTime();
+    const graceFloorIso = new Date(nowMs - EXPRESS_JOIN_GRACE_MS).toISOString();
     const { data } = await this.supabase
       .from('tournaments')
       .select('id, genre_id, entry_fee, prize_pool, max_participants, current_participants, status, registration_opens_at, registration_closes_at, name, slot_key')
       .eq('tournament_type', 'express')
       .eq('genre_id', genreId)
       .eq('status', 'registration')
-      .gt('registration_closes_at', nowIso)
+      .gt('registration_closes_at', graceFloorIso)
       .order('registration_closes_at', { ascending: false })
       .limit(1)
       .maybeSingle();

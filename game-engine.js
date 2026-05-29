@@ -2524,8 +2524,14 @@ const GameEngine = {
             const joinedId = result.tournamentId || tournamentId;
             if (result.rolledToNewSlot) {
                 showToast('Nueva ronda Express — ¡inscrito!', 'success');
+            } else if (result.alreadyJoined) {
+                showToast('Ya estabas inscrito en esta ronda', 'success');
             } else {
-                showToast(result.alreadyJoined ? 'Ya estabas inscrito' : '¡Inscrito en el torneo!', 'success');
+                showToast('¡Inscrito! ' + (result.humanCount || 1) + ' jugador(es) humanos en la ronda', 'success');
+            }
+            localStorage.setItem('mtr_watch_tournament', joinedId);
+            if (enrollment?.genreId) {
+                localStorage.setItem('mtr_watch_genre', enrollment.genreId);
             }
             this.watchTournamentArena(joinedId);
             window.tournamentEnrollment = null;
@@ -2558,7 +2564,7 @@ const GameEngine = {
             const { data: { session } } = await supabaseClient.auth.getSession();
             const participantRow = {
                 tournament_id: tournamentId,
-                user_id: session?.user?.id || userId,
+                user_id: debitUserId,
                 is_cpu: false
             };
             if (song) {

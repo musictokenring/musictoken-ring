@@ -423,9 +423,14 @@ class TournamentBattleEngine {
     if (tournament.status !== 'locked' && tournament.status !== 'registration') return null;
 
     let humanRows = await this.loadHumans(tournament.id);
-    if (!humanRows.length) {
-      await new Promise(function (resolve) { setTimeout(resolve, 600); });
+    for (let attempt = 0; attempt < 5 && !humanRows.length; attempt += 1) {
+      await new Promise(function (resolve) { setTimeout(resolve, 700); });
       humanRows = await this.loadHumans(tournament.id);
+    }
+
+    if (humanRows.length) {
+      console.log('[tournament-battle] Humanos cargados:', humanRows.length,
+        'torneo:', tournament.id);
     }
     if (!humanRows.length && !isExpress) {
       await this.cancelTournament(tournament.id, 'sin humanos');
