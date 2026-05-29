@@ -11,6 +11,8 @@ const {
   WEEKLY_ENTRY_FEE,
   getGenreById,
   getExpressSlot,
+  getExpressTimingForGenre,
+  enrichExpressRow,
   getIsoWeekKey
 } = require('./tournament-genres');
 const { TournamentBattleEngine } = require('./tournament-battle');
@@ -34,7 +36,7 @@ class TournamentService {
     const ready = await this.ensureSchemaReady();
     if (!ready) return;
 
-    await this.ensureCurrentExpress();
+    await this.ensureAllExpressSlots();
     await this.ensureWeeklyTournaments();
     await this.processExpiredRegistrations();
     await this.processLockedTournaments();
@@ -44,33 +46,46 @@ class TournamentService {
     return getExpressSlot(now);
   }
 
-  async ensureCurrentExpress() {
-    const slot = getExpressSlot();
-    const name = `Express ${slot.genre.label}`;
-
-    const { data: existing } = await this.supabase
+  async ensureExpressForGenre(genre, now = new Date()) {
+    const { data: activeList } = await this.supabase
       .from('tournaments')
       .select('*')
-      .eq('slot_key', slot.slotKey)
-      .maybeSingle();
+      .eq('tournament_type', 'express')
+      .eq('genre_id', genre.id)
+      .in('status', ['registration', 'locked', 'in_progress'])
+      .order('registration_opens_at', { ascending: false })
+      .limit(1);
 
-    if (existing) return existing;
+    if (activeList?.length) return activeList[0];
 
+    const timing = getExpressTimingForGenre(genre.id, now);
+    const ts = now.getTime();
+    let slotKey = timing.slotKey;
+    let regOpens = timing.registrationOpensAt;
+    let regCloses = timing.registrationClosesAt;
+
+    if (ts >= timing.registrationClosesMs) {
+      regOpens = now.toISOString();
+      regCloses = new Date(ts + EXPRESS_REGISTRATION_MS).toISOString();
+      slotKey = `express_${genre.id}_${ts}`;
+    }
+
+    const name = `Express ${genre.label}`;
     const { data: created, error } = await this.supabase
       .from('tournaments')
       .insert([{
         name,
         tournament_type: 'express',
-        genre_id: slot.genre.id,
+        genre_id: genre.id,
         entry_fee: EXPRESS_ENTRY_FEE,
         prize_pool: 0,
         max_participants: EXPRESS_MAX_PLAYERS,
         min_participants: EXPRESS_MAX_PLAYERS,
         current_participants: 0,
         status: 'registration',
-        slot_key: slot.slotKey,
-        registration_opens_at: slot.registrationOpensAt,
-        registration_closes_at: slot.registrationClosesAt
+        slot_key: slotKey,
+        registration_opens_at: regOpens,
+        registration_closes_at: regCloses
       }])
       .select()
       .single();
@@ -80,16 +95,27 @@ class TournamentService {
         const { data: retry } = await this.supabase
           .from('tournaments')
           .select('*')
-          .eq('slot_key', slot.slotKey)
+          .eq('slot_key', slotKey)
           .maybeSingle();
         return retry;
       }
-      console.error('[tournament] Error creating express slot:', error.message);
+      console.error('[tournament] Error creating express:', genre.id, error.message);
       return null;
     }
 
-    console.log('[tournament] ✅ Express creado:', name, slot.slotKey);
+    console.log('[tournament] ✅ Express creado:', name, slotKey);
     return created;
+  }
+
+  async ensureAllExpressSlots() {
+    for (const genre of TOURNAMENT_GENRES) {
+      await this.ensureExpressForGenre(genre);
+    }
+  }
+
+  /** @deprecated use ensureAllExpressSlots */
+  async ensureCurrentExpress() {
+    return this.ensureAllExpressSlots();
   }
 
   async ensureWeeklyTournaments() {
@@ -189,15 +215,16 @@ class TournamentService {
   }
 
   async getHubPayload() {
-    const slot = getExpressSlot();
-    await this.ensureCurrentExpress();
+    const serverNow = new Date();
+    await this.ensureAllExpressSlots();
 
     const weekKey = getIsoWeekKey();
+    const globalWindow = getExpressSlot(serverNow);
+
     const { data: expressRows } = await this.supabase
       .from('tournaments')
-      .select('id, genre_id, entry_fee, prize_pool, max_participants, current_participants, status, registration_closes_at, name, slot_key')
+      .select('id, genre_id, entry_fee, prize_pool, max_participants, current_participants, status, registration_opens_at, registration_closes_at, name, slot_key')
       .eq('tournament_type', 'express')
-      .eq('slot_key', slot.slotKey)
       .in('status', ['registration', 'locked', 'in_progress']);
 
     const { data: weeklyRows } = await this.supabase
@@ -209,8 +236,29 @@ class TournamentService {
 
     const expressByGenre = {};
     (expressRows || []).forEach((row) => {
-      expressByGenre[row.genre_id] = row;
+      const enriched = enrichExpressRow(row, serverNow);
+      const prev = expressByGenre[row.genre_id];
+      if (!prev || enriched.status === 'registration') {
+        expressByGenre[row.genre_id] = enriched;
+      }
     });
+
+    for (const genre of TOURNAMENT_GENRES) {
+      if (!expressByGenre[genre.id]) {
+        const timing = getExpressTimingForGenre(genre.id, serverNow);
+        expressByGenre[genre.id] = enrichExpressRow({
+          id: null,
+          genre_id: genre.id,
+          entry_fee: EXPRESS_ENTRY_FEE,
+          max_participants: EXPRESS_MAX_PLAYERS,
+          current_participants: 0,
+          prize_pool: 0,
+          status: 'registration',
+          registration_closes_at: timing.registrationClosesAt,
+          name: 'Express ' + genre.label
+        }, serverNow);
+      }
+    }
 
     const weeklyByGenre = {};
     (weeklyRows || []).forEach((row) => {
@@ -223,26 +271,30 @@ class TournamentService {
       weekly: weeklyByGenre[g.id] || null
     }));
 
-    const nextGenre =
-      TOURNAMENT_GENRES[(slot.slotIndex + 1) % TOURNAMENT_GENRES.length];
+    const activeRegistration = genres.filter(function (g) {
+      return g.express && g.express.status === 'registration';
+    }).length;
 
     return {
       ok: true,
-      serverTime: new Date().toISOString(),
+      serverTime: serverNow.toISOString(),
       config: {
         expressIntervalMinutes: 10,
         expressRegistrationMinutes: EXPRESS_REGISTRATION_MS / 60000,
         expressEntryFee: EXPRESS_ENTRY_FEE,
         expressMaxPlayers: EXPRESS_MAX_PLAYERS,
         weeklyEntryFee: WEEKLY_ENTRY_FEE,
-        weeklyMaxPlayers: WEEKLY_MAX_PLAYERS
+        weeklyMaxPlayers: WEEKLY_MAX_PLAYERS,
+        activeExpressCount: activeRegistration
       },
       expressRotation: {
-        currentGenre: slot.genre,
-        nextGenre,
-        secondsToClose: slot.secondsToClose,
-        secondsToNextSlot: slot.secondsToNextSlot,
-        registrationClosesAt: slot.registrationClosesAt
+        allGenresActive: true,
+        activeExpressCount: activeRegistration,
+        totalGenres: TOURNAMENT_GENRES.length,
+        secondsToBattle: globalWindow.secondsToBattle,
+        secondsToNextSlot: globalWindow.secondsToNextSlot,
+        battleStartsAt: globalWindow.battleStartsAt,
+        registrationClosesAt: globalWindow.registrationClosesAt
       },
       genres,
       weekKey

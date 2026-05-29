@@ -5,11 +5,25 @@
   'use strict';
 
   var pollTimer = null;
+  var countdownTimer = null;
   var watchId = null;
   var playing = false;
+  var lobbyClosesAt = null;
+  var serverSkewMs = 0;
 
   function backendUrl() {
     return (window.CONFIG && window.CONFIG.BACKEND_API) || 'https://musictoken-ring.onrender.com';
+  }
+
+  function fmtClock(seconds) {
+    if (!Number.isFinite(seconds) || seconds < 0) seconds = 0;
+    var m = Math.floor(seconds / 60);
+    var s = seconds % 60;
+    return String(m).padStart(2, '0') + ':' + String(s).padStart(2, '0');
+  }
+
+  function serverNowMs() {
+    return Date.now() - serverSkewMs;
   }
 
   function toast(msg, type) {
@@ -47,13 +61,22 @@
     }
 
     if (status) {
-      var statusMap = {
-        registration: '⏳ Esperando cierre de inscripción…',
-        locked: '🔒 Inscripción cerrada · preparando bracket…',
-        in_progress: '⚔️ Competencia en curso',
-        completed: '🏁 Torneo finalizado'
-      };
-      status.textContent = statusMap[t.status] || t.status;
+      if (t.status === 'registration' && lobbyClosesAt) {
+        var sec = Math.max(0, Math.floor((lobbyClosesAt - serverNowMs()) / 1000));
+        status.innerHTML =
+          '<div class="text-center">' +
+          '<div class="text-xs text-gray-400 mb-2">Batalla inicia cuando el cronómetro llegue a 0</div>' +
+          '<div class="text-4xl font-black tabular-nums text-cyan-400 ' + (sec <= 60 ? 'animate-pulse text-red-400' : '') + '">' +
+          fmtClock(sec) + '</div></div>';
+      } else {
+        var statusMap = {
+          registration: '⏳ Esperando cierre de inscripción…',
+          locked: '🔒 Inscripción cerrada · preparando bracket…',
+          in_progress: '⚔️ Competencia en curso',
+          completed: '🏁 Torneo finalizado'
+        };
+        status.textContent = statusMap[t.status] || t.status;
+      }
     }
 
     if (!grid || !b || !b.participants) return;
@@ -178,6 +201,12 @@
     try {
       var data = await fetchBracket(watchId);
       if (!data.ok) return;
+      if (data.tournament?.registration_closes_at) {
+        lobbyClosesAt = new Date(data.tournament.registration_closes_at).getTime();
+      }
+      if (data.serverTime) {
+        serverSkewMs = Date.now() - new Date(data.serverTime).getTime();
+      }
 
       renderLobby(data);
 
@@ -204,14 +233,21 @@
     refresh();
     if (pollTimer) clearInterval(pollTimer);
     pollTimer = setInterval(refresh, 4000);
+    if (countdownTimer) clearInterval(countdownTimer);
+    countdownTimer = setInterval(function () {
+      if (watchId) refresh();
+    }, 1000);
   }
 
   function close() {
     watchId = null;
     playing = false;
+    lobbyClosesAt = null;
     localStorage.removeItem('mtr_watch_tournament');
     if (pollTimer) clearInterval(pollTimer);
+    if (countdownTimer) clearInterval(countdownTimer);
     pollTimer = null;
+    countdownTimer = null;
     var arena = document.getElementById('tournamentArena');
     if (arena) arena.classList.add('hidden');
     var panel = document.getElementById('tournamentResultPanel');

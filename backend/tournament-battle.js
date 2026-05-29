@@ -385,6 +385,7 @@ class TournamentBattleEngine {
 
     return {
       ok: true,
+      serverTime: new Date().toISOString(),
       tournament: {
         id: tournament.id,
         name: tournament.name,
@@ -394,7 +395,8 @@ class TournamentBattleEngine {
         entry_fee: tournament.entry_fee,
         prize_pool: tournament.prize_pool,
         human_participants: tournament.human_participants,
-        payout_mode: tournament.payout_mode
+        payout_mode: tournament.payout_mode,
+        registration_closes_at: tournament.registration_closes_at
       },
       bracket,
       currentMatch,

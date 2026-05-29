@@ -30,25 +30,67 @@ function getGenreById(id) {
   return TOURNAMENT_GENRES.find((g) => g.id === id) || null;
 }
 
-/** Slot Express alineado a reloj UTC, rotación de 14 géneros cada 10 min. */
-function getExpressSlot(now = new Date()) {
+/** Ventana Express de 10 min (5 min inscripción + batalla) por género. */
+function getExpressTimingForGenre(genreId, now = new Date()) {
   const ts = now.getTime();
   const slotStartMs = Math.floor(ts / EXPRESS_SLOT_MS) * EXPRESS_SLOT_MS;
-  const slotIndex = Math.floor(slotStartMs / EXPRESS_SLOT_MS);
-  const genre = TOURNAMENT_GENRES[slotIndex % TOURNAMENT_GENRES.length];
   const registrationClosesMs = slotStartMs + EXPRESS_REGISTRATION_MS;
-  const slotKey = `express_${genre.id}_${slotStartMs}`;
+  const battleStartsMs = registrationClosesMs;
+  const nextSlotStartMs = slotStartMs + EXPRESS_SLOT_MS;
 
   return {
+    genreId,
+    slotKey: `express_${genreId}_${slotStartMs}`,
     slotStartMs,
-    slotIndex,
-    genre,
-    slotKey,
     registrationOpensAt: new Date(slotStartMs).toISOString(),
     registrationClosesAt: new Date(registrationClosesMs).toISOString(),
-    nextSlotStartMs: slotStartMs + EXPRESS_SLOT_MS,
+    battleStartsAt: new Date(battleStartsMs).toISOString(),
+    registrationClosesMs,
+    battleStartsMs,
+    secondsToBattle: Math.max(0, Math.floor((battleStartsMs - ts) / 1000)),
     secondsToClose: Math.max(0, Math.floor((registrationClosesMs - ts) / 1000)),
-    secondsToNextSlot: Math.max(0, Math.floor((slotStartMs + EXPRESS_SLOT_MS - ts) / 1000))
+    secondsToNextSlot: Math.max(0, Math.floor((nextSlotStartMs - ts) / 1000)),
+    inRegistrationWindow: ts >= slotStartMs && ts < registrationClosesMs
+  };
+}
+
+/** @deprecated usar getExpressTimingForGenre — ventana global para banners */
+function getExpressSlot(now = new Date()) {
+  const genre = TOURNAMENT_GENRES[0];
+  const timing = getExpressTimingForGenre(genre.id, now);
+  const slotIndex = Math.floor(timing.slotStartMs / EXPRESS_SLOT_MS);
+  return {
+    slotStartMs: timing.slotStartMs,
+    slotIndex,
+    genre,
+    slotKey: timing.slotKey,
+    registrationOpensAt: timing.registrationOpensAt,
+    registrationClosesAt: timing.registrationClosesAt,
+    nextSlotStartMs: timing.slotStartMs + EXPRESS_SLOT_MS,
+    secondsToClose: timing.secondsToClose,
+    secondsToNextSlot: timing.secondsToNextSlot,
+    secondsToBattle: timing.secondsToBattle,
+    battleStartsAt: timing.battleStartsAt
+  };
+}
+
+function enrichExpressRow(row, serverNow = new Date()) {
+  if (!row) return null;
+  const ts = serverNow.getTime();
+  const closesMs = new Date(row.registration_closes_at).getTime();
+  const battleMs = closesMs;
+  const phase = row.status === 'registration'
+    ? 'registration'
+    : (row.status === 'locked' ? 'preparing' : row.status);
+
+  return {
+    ...row,
+    battle_starts_at: row.registration_closes_at,
+    phase,
+    secondsToBattle: phase === 'registration'
+      ? Math.max(0, Math.floor((battleMs - ts) / 1000))
+      : 0,
+    battleStarted: ts >= battleMs || row.status !== 'registration'
   };
 }
 
@@ -72,5 +114,7 @@ module.exports = {
   WEEKLY_ENTRY_FEE,
   getGenreById,
   getExpressSlot,
+  getExpressTimingForGenre,
+  enrichExpressRow,
   getIsoWeekKey
 };
