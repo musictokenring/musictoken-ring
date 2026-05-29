@@ -178,20 +178,54 @@ async function verifyUserCanMutateCredits(
 ) {
   const publicUserId = await resolvePublicUserId(supabase, authUser);
 
-  if (userId && userId !== publicUserId && userId !== authUser.id) {
-    return false;
-  }
-
-  // Sesión Supabase válida sobre la cuenta objetivo — no exigir wallet vinculada.
   if (userId && (userId === publicUserId || userId === authUser.id)) {
     return true;
+  }
+
+  if (walletAddress && userId && /^0x[a-fA-F0-9]{40}$/.test(walletAddress)) {
+    const normalized = walletAddress.toLowerCase();
+    const ownsWallet = await userOwnsWallet(
+      supabase,
+      walletLinkAdapter,
+      publicUserId,
+      walletAddress
+    );
+
+    if (ownsWallet) {
+      if (walletLinkAdapter?.getUserIdFromWallet) {
+        const linkedUserId = await walletLinkAdapter.getUserIdFromWallet(normalized);
+        if (linkedUserId === userId) return true;
+      }
+
+      const { data: walletUser } = await supabase
+        .from('users')
+        .select('id')
+        .ilike('wallet_address', normalized)
+        .maybeSingle();
+
+      if (walletUser?.id === userId) return true;
+    }
   }
 
   if (walletAddress) {
     return userOwnsWallet(supabase, walletLinkAdapter, publicUserId, walletAddress);
   }
 
-  return Boolean(userId);
+  return !userId;
+}
+
+/** Sesión válida + userId elegido entre candidatos de su sesión/wallet. */
+function verifyResolvedCreditsAccess(authUser, resolved, walletAddress) {
+  if (!resolved?.userId || !Array.isArray(resolved.candidates)) {
+    return false;
+  }
+  if (!resolved.candidates.includes(resolved.userId)) {
+    return false;
+  }
+  if (resolved.userId === authUser.id) {
+    return true;
+  }
+  return Boolean(walletAddress && /^0x[a-fA-F0-9]{40}$/.test(walletAddress));
 }
 
 async function verifyUserInMatch(supabase, authUser, matchId) {
@@ -277,6 +311,7 @@ module.exports = {
   resolvePublicUserId,
   resolveCreditsUserId,
   readUnifiedTotal,
+  verifyResolvedCreditsAccess,
   verifyUserCanMutateCredits,
   verifyUserInMatch
 };

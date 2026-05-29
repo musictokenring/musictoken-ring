@@ -404,7 +404,9 @@ class TournamentService {
     return { ok: true, stage: updated?.status || t.status };
   }
 
-  async joinTournament(userId, tournamentId, song) {
+  async joinTournament(creditsUserId, tournamentId, song, participantUserId) {
+    const debitUserId = creditsUserId;
+    const playerUserId = participantUserId || creditsUserId;
     const { data: tournament, error } = await this.supabase
       .from('tournaments')
       .select('*')
@@ -428,7 +430,7 @@ class TournamentService {
       .from('tournament_participants')
       .select('id')
       .eq('tournament_id', tournamentId)
-      .eq('user_id', userId)
+      .eq('user_id', playerUserId)
       .eq('is_cpu', false)
       .maybeSingle();
 
@@ -442,7 +444,7 @@ class TournamentService {
     }
 
     const entryFee = Number(tournament.entry_fee) || 3;
-    const deduction = await deductUnifiedBalance(this.supabase, userId, entryFee);
+    const deduction = await deductUnifiedBalance(this.supabase, debitUserId, entryFee);
     if (!deduction.ok) {
       return {
         ok: false,
@@ -457,7 +459,7 @@ class TournamentService {
 
     const participantRow = {
       tournament_id: tournamentId,
-      user_id: userId,
+      user_id: playerUserId,
       is_cpu: false
     };
     if (song) {

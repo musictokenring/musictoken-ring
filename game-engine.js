@@ -2375,6 +2375,9 @@ const GameEngine = {
                         return;
                     }
                 }
+                if (response.status === 403) {
+                    msg = 'Sesión o wallet no autorizada. Cierra sesión, vuelve a entrar y reconecta la wallet.';
+                }
                 showToast(msg, 'error');
                 return;
             }
