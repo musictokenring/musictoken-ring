@@ -25,6 +25,7 @@ const {
     requireInternalSecret,
     verifyUserCanMutateCredits
 } = require('./auth-middleware');
+const { startTournamentScheduler } = require('./tournament-scheduler');
 
 const LEGACY_CHAIN_DEPOSITS = process.env.ENABLE_LEGACY_CHAIN_DEPOSITS === 'true';
 
@@ -124,6 +125,7 @@ let liquidityManager;
 let walletLinkService;
 let tradingFundService;
 let nowPaymentsService;
+let tournamentScheduler;
 
 // 🔒 SEGURIDAD: Validar variables de entorno críticas
 function validateEnvironmentVariables() {
@@ -283,6 +285,13 @@ async function initializeServices() {
             console.log('[server] ✅ NOWPayments service initialized');
         } catch (npError) {
             console.error('[server] ⚠️ Error initializing NOWPayments service:', npError.message);
+        }
+
+        try {
+            tournamentScheduler = startTournamentScheduler(supabase);
+            console.log('[server] ✅ Tournament scheduler initialized');
+        } catch (tournamentError) {
+            console.error('[server] ⚠️ Error initializing tournament scheduler:', tournamentError.message);
         }
 
         console.log('[server] ✅ All services initialized');
@@ -1895,8 +1904,6 @@ app.get('/api/public/nowpayments-widget-config', (req, res) => {
 /**
  * Pago comercial NOWPayments: POST /v1/payment (documentación API).
  * Requiere Authorization: Bearer (Supabase). Body: { price_amount: number (USD) }.
- * Respuesta: { ok, pay_url, payment_id, order_id } — usar pay_url en iframe o nueva pestaña.
- * Alias: POST /nowpayments/create (compat. clientes con ruta antigua o sin prefijo /api).
  */
 const createNowpaymentsPaymentHandler = async (req, res) => {
     try {
@@ -1970,6 +1977,54 @@ const createNowpaymentsPaymentHandler = async (req, res) => {
         });
     }
 };
+
+/**
+ * Hub de torneos: 14 géneros, Express (10 min) + Grand Prix semanal.
+ */
+app.get('/api/tournaments/hub', async (req, res) => {
+    try {
+        if (!tournamentScheduler?.service) {
+            return res.status(503).json({ ok: false, error: 'Tournament service unavailable' });
+        }
+        const payload = await tournamentScheduler.service.getHubPayload();
+        res.json(payload);
+    } catch (error) {
+        console.error('[server] tournaments hub error:', error);
+        res.status(500).json({ ok: false, error: error.message });
+    }
+});
+
+app.get('/api/tournaments/genre/:genreId', async (req, res) => {
+    try {
+        if (!tournamentScheduler?.service) {
+            return res.status(503).json({ ok: false, error: 'Tournament service unavailable' });
+        }
+        const detail = await tournamentScheduler.service.getGenreDetail(req.params.genreId);
+        if (!detail) {
+            return res.status(404).json({ ok: false, error: 'Género no encontrado' });
+        }
+        res.json({ ok: true, ...detail });
+    } catch (error) {
+        console.error('[server] tournaments genre error:', error);
+        res.status(500).json({ ok: false, error: error.message });
+    }
+});
+
+app.get('/api/tournaments/:id', async (req, res) => {
+    try {
+        if (!tournamentScheduler?.service) {
+            return res.status(503).json({ ok: false, error: 'Tournament service unavailable' });
+        }
+        const tournament = await tournamentScheduler.service.getTournamentById(req.params.id);
+        if (!tournament) {
+            return res.status(404).json({ ok: false, error: 'Torneo no encontrado' });
+        }
+        res.json({ ok: true, tournament });
+    } catch (error) {
+        console.error('[server] tournaments get error:', error);
+        res.status(500).json({ ok: false, error: error.message });
+    }
+});
 
 app.post('/api/payments/nowpayments/create', depositRateLimiter, createNowpaymentsPaymentHandler);
 app.post('/nowpayments/create', depositRateLimiter, createNowpaymentsPaymentHandler);

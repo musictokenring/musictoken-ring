@@ -2207,64 +2207,93 @@ const GameEngine = {
     async joinTournament(tournamentId, song, betAmount) {
         try {
             const { data: { session } } = await supabaseClient.auth.getSession();
-            
-            // Verificar balance
+            if (!session) {
+                showToast('Inicia sesión para inscribirte en torneos', 'error');
+                return;
+            }
+
             const { data: tournament } = await supabaseClient
                 .from('tournaments')
                 .select('*')
                 .eq('id', tournamentId)
                 .single();
-            
-            if (betAmount < tournament.entry_fee) {
-                showToast(`Entry fee: ${tournament.entry_fee} créditos`, 'error');
+
+            if (!tournament) {
+                showToast('Torneo no encontrado', 'error');
                 return;
             }
 
-            // Check credits balance instead of on-chain balance
-            if (!(await this.hasSufficientCredits(betAmount))) {
+            if (tournament.status !== 'registration') {
+                showToast('Inscripción cerrada para este torneo', 'error');
                 return;
             }
 
-            // Descontar créditos ANTES de registrar participante
-            const deductionSuccess = await this.updateBalance(-betAmount, 'bet', null);
+            if (tournament.current_participants >= tournament.max_participants) {
+                showToast('Torneo lleno', 'error');
+                return;
+            }
+
+            const entryFee = Number(tournament.entry_fee) || Number(betAmount) || 3;
+            if (Number(betAmount) < entryFee) {
+                showToast(`Entry fee: ${entryFee} créditos`, 'error');
+                return;
+            }
+
+            if (!(await this.hasSufficientCredits(entryFee))) {
+                return;
+            }
+
+            const deductionSuccess = await this.updateBalance(-entryFee, 'bet', null);
             if (!deductionSuccess) {
                 showToast('Error al descontar créditos. Intenta nuevamente.', 'error');
                 return;
             }
-            
-            // Registrar participante
+
+            const participantRow = {
+                tournament_id: tournamentId,
+                user_id: session.user.id
+            };
+            if (song) {
+                participantRow.song_id = String(song.id || '');
+                participantRow.song_name = song.name || '';
+                participantRow.song_artist = song.artist || '';
+                participantRow.song_image = song.image || '';
+                participantRow.song_preview = song.preview || '';
+            }
+
             const { error } = await supabaseClient
                 .from('tournament_participants')
-                .insert([{
-                    tournament_id: tournamentId,
-                    user_id: session.user.id
-                }]);
-            
+                .insert([participantRow]);
+
             if (error) {
-                // Si falla registrar participante después de descontar, reembolsar créditos
-                await this.updateBalance(betAmount, 'refund', null);
+                await this.updateBalance(entryFee, 'refund', null);
                 throw error;
             }
-            
-            // Actualizar torneo
+
             const {
                 platformFee,
                 jackpotContribution,
                 platformNet,
                 prizeContribution
-            } = this.calculateTournamentEntry(betAmount);
-            
+            } = this.calculateTournamentEntry(entryFee);
+
+            const newCount = tournament.current_participants + 1;
+            const updatePayload = {
+                current_participants: newCount,
+                prize_pool: Number(tournament.prize_pool || 0) + prizeContribution,
+                updated_at: new Date().toISOString()
+            };
+            if (newCount >= tournament.max_participants) {
+                updatePayload.status = 'locked';
+            }
+
             const updateError = await supabaseClient
                 .from('tournaments')
-                .update({
-                    current_participants: tournament.current_participants + 1,
-                    prize_pool: tournament.prize_pool + prizeContribution
-                })
+                .update(updatePayload)
                 .eq('id', tournamentId);
 
             if (updateError.error) {
-                // Si falla actualizar torneo después de registrar participante, reembolsar créditos y eliminar participante
-                await this.updateBalance(betAmount, 'refund', null);
+                await this.updateBalance(entryFee, 'refund', null);
                 await supabaseClient.from('tournament_participants')
                     .delete()
                     .eq('tournament_id', tournamentId)
@@ -2274,9 +2303,14 @@ const GameEngine = {
 
             this.addToPlatformRevenue(platformNet);
             this.addToJackpotPool(jackpotContribution);
-            
+
             showToast('¡Inscrito en el torneo!', 'success');
-            
+            window.tournamentEnrollment = null;
+
+            if (window.TournamentHub) {
+                setTimeout(function () { selectMode('tournament'); }, 800);
+            }
+
         } catch (error) {
             console.error('Error joining tournament:', error);
             showToast('Error al unirse al torneo', 'error');
@@ -5131,7 +5165,11 @@ if (typeof window !== 'undefined') {
         } else if (mode === 'practice') {
             buttonsDiv.innerHTML = '<button onclick="startPractice()" class="btn-primary btn-large" id="startPracticeBtn">🎯 Iniciar Práctica</button>';
         } else if (mode === 'tournament') {
-            buttonsDiv.innerHTML = '<div class="join-room-group"><input type="text" id="tournamentId" placeholder="ID de torneo" class="room-code-input"><button onclick="joinTournamentMode()" class="btn-primary" id="joinTournamentBtn">🏆 Unirme</button></div>';
+            if (window.tournamentEnrollment) {
+                buttonsDiv.innerHTML = '<button onclick="joinTournamentMode()" class="btn-primary btn-large" id="joinTournamentBtn">🏆 Confirmar inscripción · ' + window.tournamentEnrollment.entryFee + ' cr</button>';
+            } else {
+                buttonsDiv.innerHTML = '<button onclick="selectMode(\'tournament\')" class="btn-primary btn-large" id="openTournamentHubBtn">🏆 Abrir hub de torneos</button>';
+            }
         }
     }
 

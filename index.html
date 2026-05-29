@@ -350,6 +350,14 @@
                 var modeTitle = document.getElementById('modeTitle');
                 var titles = { quick: 'Modo Rápido', private: 'Sala Privada', practice: 'Modo Práctica', tournament: 'Modo Torneo' };
                 window.currentMode = mode || null;
+                if (mode === 'tournament') {
+                    if (modeSelector) modeSelector.classList.add('hidden');
+                    if (songSelection) songSelection.classList.add('hidden');
+                    var hubFb = document.getElementById('tournamentHub');
+                    if (hubFb) hubFb.classList.remove('hidden');
+                    if (window.TournamentHub) window.TournamentHub.open();
+                    return;
+                }
                 if (modeSelector) modeSelector.classList.add('hidden');
                 if (songSelection) songSelection.classList.remove('hidden');
                 // CRÍTICO: Verificar si hay un desafío pendiente para actualizar título
@@ -1209,7 +1217,7 @@
                 <div class="group p-6 rounded-2xl border border-purple-500/15 bg-gray-900/50 transition-all duration-300 card-glow-purple cursor-pointer" onclick="selectMode('tournament')">
                     <div class="text-4xl mb-4">🏆</div>
                     <h3 class="text-lg font-bold text-white mb-2 group-hover:text-purple-400 transition-colors">Torneo</h3>
-                    <p class="text-gray-400 text-sm mb-4">Eliminación directa. Gana premios masivos del prize pool.</p>
+                    <p class="text-gray-400 text-sm mb-4">Express cada 10 min por género. Grand Prix semanal con premio gordo.</p>
                     <div class="flex flex-wrap gap-1.5 mb-5">
                         <span class="text-xs px-2 py-1 rounded-full bg-purple-500/10 text-purple-400 border border-purple-500/20">💎 Premios</span>
                         <span class="text-xs px-2 py-1 rounded-full bg-purple-500/10 text-purple-400 border border-purple-500/20">🏅 Ranking</span>
@@ -1228,6 +1236,34 @@
                     <button type="button" class="w-full py-2.5 rounded-lg text-sm font-bold bg-cyan-500/15 border border-cyan-500/30 text-cyan-400 hover:bg-cyan-500/25 transition-all cursor-pointer" onclick="selectMode('practice')">Practicar</button>
                 </div>
 
+            </div>
+        </section>
+
+        <!-- TOURNAMENT HUB -->
+        <section id="tournamentHub" class="hidden mb-16">
+            <div class="flex items-center gap-4 mb-6">
+                <button type="button" onclick="backToModes()" class="px-4 py-2 rounded-lg text-sm font-medium bg-white/5 border border-white/10 text-gray-300 hover:text-white hover:border-white/20 transition cursor-pointer">← Volver</button>
+                <div>
+                    <h2 class="text-2xl font-bold text-white">🏆 Arena de Torneos</h2>
+                    <p class="text-gray-400 text-sm">Express cada 10 min · Grand Prix semanal · 14 géneros</p>
+                </div>
+            </div>
+            <div id="tournamentRotationBanner" class="mb-6 p-4 rounded-xl border border-purple-500/25 bg-purple-500/5 text-sm"></div>
+            <div id="tournamentGenreListView">
+                <div class="flex flex-wrap gap-2 mb-4">
+                    <label class="text-xs text-gray-500 sr-only" for="tournamentGenreFilter">Filtrar géneros</label>
+                    <select id="tournamentGenreFilter" class="rounded-lg bg-gray-900 border border-white/10 text-sm text-white px-3 py-2">
+                        <option value="all">🌎 Todos los géneros</option>
+                        <option value="latino">🇱🇷 Latino</option>
+                        <option value="anglo">🇺🇸 Anglo</option>
+                    </select>
+                </div>
+                <div id="tournamentGenreGrid" class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3"></div>
+            </div>
+            <div id="tournamentGenreDetail" class="hidden">
+                <button type="button" id="tournamentGenreBackBtn" class="mb-4 text-sm text-purple-400 hover:text-purple-300">← Todos los géneros</button>
+                <h3 id="tournamentGenreTitle" class="text-xl font-bold text-white mb-4"></h3>
+                <div id="tournamentGenrePanels"></div>
             </div>
         </section>
 
@@ -1725,6 +1761,7 @@
     <!-- Scripts que pueden cargarse después del render inicial -->
     <script src="./src/streams-realtime.js?v=v2.7" defer></script>
     <!-- Ramp Network removido - ya no se usa -->
+    <script src="./src/tournament-hub.js?v=v1.0"></script>
     <script src="./src/claim-ui.js?v=v2.7" defer></script>
     <script src="./game-engine.js?v=v2.7"></script>
     <script>window.MTR_INLINE_TOP_STREAMS_ACTIVE = true;</script>
@@ -3338,8 +3375,20 @@
             }
             currentMode = mode;
             window.currentMode = mode;
+
+            if (mode === 'tournament') {
+                document.getElementById('modeSelector').classList.add('hidden');
+                document.getElementById('songSelection').classList.add('hidden');
+                var tournamentHubEl = document.getElementById('tournamentHub');
+                if (tournamentHubEl) tournamentHubEl.classList.remove('hidden');
+                if (window.TournamentHub) window.TournamentHub.open();
+                return;
+            }
+
             document.getElementById('modeSelector').classList.add('hidden');
             document.getElementById('songSelection').classList.remove('hidden');
+            var hideHub = document.getElementById('tournamentHub');
+            if (hideHub) hideHub.classList.add('hidden');
             // CRÍTICO: Verificar si hay un desafío pendiente para actualizar título
             var isAcceptingChallenge = window.pendingChallengeId && window.pendingChallengeId !== null;
             var challengeInfo = window.pendingChallengeInfo || null;
@@ -3630,6 +3679,10 @@
 
         function backToModes() {
             document.getElementById('songSelection').classList.add('hidden');
+            var tournamentHubEl = document.getElementById('tournamentHub');
+            if (tournamentHubEl) tournamentHubEl.classList.add('hidden');
+            if (window.TournamentHub) window.TournamentHub.close();
+            window.tournamentEnrollment = null;
             document.getElementById('modeSelector').classList.remove('hidden');
             window.currentMode = null;
             if (typeof window.GameEngine !== 'undefined' && typeof window.GameEngine.updatePracticeBetDisplay === 'function') window.GameEngine.updatePracticeBetDisplay();
@@ -3712,8 +3765,11 @@
                     updateBetEligibility();
                 }, 300);
             } else if (mode === 'tournament') {
-                buttonsDiv.innerHTML = '<div class="flex gap-2"><input type="text" id="tournamentId" placeholder="ID de torneo" class="flex-1 px-3 py-2.5 rounded-lg bg-black/40 border border-white/10 text-white text-sm">' +
-                    '<button type="button" onclick="joinTournamentMode()" class="' + btnPrimary + ' w-auto px-4" id="joinTournamentBtn" disabled>🏆 Unirme</button></div>';
+                if (window.tournamentEnrollment) {
+                    buttonsDiv.innerHTML = '<button type="button" onclick="joinTournamentMode()" class="' + btnPrimary + ' btn-large w-full" id="joinTournamentBtn">🏆 Confirmar inscripción · ' + window.tournamentEnrollment.entryFee + ' cr</button>';
+                } else {
+                    buttonsDiv.innerHTML = '<button type="button" onclick="selectMode(\'tournament\')" class="' + btnPrimary + '">🏆 Abrir hub de torneos</button>';
+                }
             } else if (mode === 'social') {
                 // REGLA: Modo social siempre muestra saldo REAL, nunca saldo demo
                 // Actualizar display con balances REALES desde la plataforma
@@ -4036,6 +4092,9 @@
             var errorFn = console.error;
             
             var query = document.getElementById('songSearch').value;
+            if (window.tournamentEnrollment && window.tournamentEnrollment.deezerQuery) {
+                query = window.tournamentEnrollment.deezerQuery + ' ' + query;
+            }
             logFn('[searchSong] ✅ Función llamada con query:', query);
             
             if (!query || !query.trim()) {
@@ -4896,12 +4955,22 @@
             }
         }
         async function joinTournamentMode() {
-            if (!selectedSong) return;
-            var tournamentId = document.getElementById('tournamentId').value;
-            if (!tournamentId) { showToast('Ingresa el ID del torneo', 'error'); return; }
-            var bet = parseInt(document.getElementById('betAmount').value) || 5;
-            if (typeof GameEngine !== 'undefined') await GameEngine.joinTournament(tournamentId, selectedSong, bet);
-            else showToast('Modo torneo en desarrollo', 'info');
+            if (!selectedSong) {
+                showToast('Selecciona una canción del género del torneo', 'error');
+                return;
+            }
+            var enrollment = window.tournamentEnrollment;
+            if (!enrollment) {
+                showToast('Elige Express o Grand Prix en el hub de torneos', 'error');
+                selectMode('tournament');
+                return;
+            }
+            var bet = enrollment.entryFee || parseInt(document.getElementById('betAmount').value, 10) || 3;
+            if (typeof GameEngine !== 'undefined') {
+                await GameEngine.joinTournament(enrollment.id, selectedSong, bet);
+            } else {
+                showToast('Modo torneo no disponible. Recarga la página.', 'error');
+            }
         }
         function cancelSearch() {
             if (typeof GameEngine !== 'undefined' && typeof GameEngine.cancelMatchmaking === 'function') GameEngine.cancelMatchmaking();
