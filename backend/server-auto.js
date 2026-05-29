@@ -2001,6 +2001,19 @@ app.get('/api/tournaments/hub', async (req, res) => {
     }
 });
 
+app.post('/api/tournaments/hub/sync', async (req, res) => {
+    try {
+        if (!tournamentScheduler?.service) {
+            return res.status(503).json({ ok: false, error: 'Tournament service unavailable' });
+        }
+        const payload = await tournamentScheduler.service.getHubPayload();
+        res.json(payload);
+    } catch (error) {
+        console.error('[server] tournaments hub sync error:', error);
+        res.status(500).json({ ok: false, error: error.message });
+    }
+});
+
 app.get('/api/tournaments/genre/:genreId', async (req, res) => {
     try {
         if (!tournamentScheduler?.service) {

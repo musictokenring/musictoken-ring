@@ -524,9 +524,16 @@ class TournamentService {
     return this.battleEngine.advancePlayback(tournamentId, duelIndex);
   }
 
+  /** Cierra inscripciones vencidas y garantiza un Express abierto por género. */
+  async syncExpressHubSlots(now = new Date()) {
+    await this.processExpiredRegistrations();
+    await this.ensureAllExpressSlots();
+    return now;
+  }
+
   async getHubPayload() {
     const serverNow = new Date();
-    await this.ensureAllExpressSlots();
+    await this.syncExpressHubSlots(serverNow);
 
     const weekKey = getIsoWeekKey();
     const globalWindow = getExpressSlot(serverNow);
@@ -546,40 +553,47 @@ class TournamentService {
 
     const expressByGenre = {};
     const nowMs = serverNow.getTime();
-    (expressRows || []).forEach((row) => {
-      const enriched = enrichExpressRow(row, serverNow);
-      const prev = expressByGenre[row.genre_id];
+
+    const pickExpressRow = (prev, row, enriched) => {
       const closesMs = new Date(row.registration_closes_at).getTime();
       const isOpenReg = row.status === 'registration' && closesMs > nowMs;
-      if (!prev) {
-        expressByGenre[row.genre_id] = enriched;
-        return;
+      if (row.status === 'registration' && closesMs <= nowMs) {
+        return prev;
       }
+      if (!prev) return enriched;
       const prevCloses = new Date(prev.registration_closes_at).getTime();
       const prevOpen = prev.status === 'registration' && prevCloses > nowMs;
-      if (isOpenReg && !prevOpen) {
-        expressByGenre[row.genre_id] = enriched;
-      } else if (!isOpenReg && !prevOpen && closesMs > prevCloses) {
-        expressByGenre[row.genre_id] = enriched;
-      } else if (isOpenReg && prevOpen && closesMs > prevCloses) {
-        expressByGenre[row.genre_id] = enriched;
+      if (isOpenReg && !prevOpen) return enriched;
+      if (isOpenReg && prevOpen && closesMs > prevCloses) return enriched;
+      if (!isOpenReg && prevOpen) return prev;
+      if (row.status === 'locked' || row.status === 'in_progress') {
+        if (!prevOpen && (prev.status !== 'locked' && prev.status !== 'in_progress')) {
+          return enriched;
+        }
+        if (prev.status === 'registration') return enriched;
       }
+      return prev;
+    };
+
+    (expressRows || []).forEach((row) => {
+      const enriched = enrichExpressRow(row, serverNow);
+      expressByGenre[row.genre_id] = pickExpressRow(expressByGenre[row.genre_id], row, enriched);
     });
 
     for (const genre of TOURNAMENT_GENRES) {
-      if (!expressByGenre[genre.id]) {
-        const timing = getExpressTimingForGenre(genre.id, serverNow);
-        expressByGenre[genre.id] = enrichExpressRow({
-          id: null,
-          genre_id: genre.id,
-          entry_fee: EXPRESS_ENTRY_FEE,
-          max_participants: EXPRESS_MAX_PLAYERS,
-          current_participants: 0,
-          prize_pool: 0,
-          status: 'registration',
-          registration_closes_at: timing.registrationClosesAt,
-          name: 'Express ' + genre.label
-        }, serverNow);
+      const current = expressByGenre[genre.id];
+      const closesMs = current?.registration_closes_at
+        ? new Date(current.registration_closes_at).getTime()
+        : 0;
+      const needsFreshSlot =
+        !current ||
+        (current.status === 'registration' && closesMs <= nowMs);
+
+      if (needsFreshSlot) {
+        const row = await this.ensureExpressForGenre(genre, serverNow);
+        if (row) {
+          expressByGenre[genre.id] = enrichExpressRow(row, serverNow);
+        }
       }
     }
 
@@ -595,8 +609,32 @@ class TournamentService {
     }));
 
     const activeRegistration = genres.filter(function (g) {
-      return g.express && g.express.status === 'registration';
+      if (!g.express || g.express.status !== 'registration') return false;
+      const closes = new Date(g.express.registration_closes_at).getTime();
+      return closes > nowMs;
     }).length;
+
+    let hubSecondsToBattle = globalWindow.secondsToBattle;
+    genres.forEach(function (g) {
+      const s = g.express?.secondsToBattle;
+      if (g.express?.status === 'registration' && Number.isFinite(s) && s > 0) {
+        hubSecondsToBattle = hubSecondsToBattle > 0
+          ? Math.min(hubSecondsToBattle, s)
+          : s;
+      }
+    });
+    if (!hubSecondsToBattle || hubSecondsToBattle <= 0) {
+      let fallback = EXPRESS_REGISTRATION_MS / 1000;
+      TOURNAMENT_GENRES.forEach(function (g) {
+        const t = getExpressTimingForGenre(g.id, serverNow);
+        if (t.secondsToClose > 0) {
+          fallback = Math.min(fallback, t.secondsToClose);
+        } else if (t.inRegistrationWindow && t.secondsToClose > 0) {
+          fallback = Math.min(fallback, t.secondsToClose);
+        }
+      });
+      hubSecondsToBattle = fallback;
+    }
 
     return {
       ok: true,
@@ -614,7 +652,7 @@ class TournamentService {
         allGenresActive: true,
         activeExpressCount: activeRegistration,
         totalGenres: TOURNAMENT_GENRES.length,
-        secondsToBattle: globalWindow.secondsToBattle,
+        secondsToBattle: hubSecondsToBattle,
         secondsToNextSlot: globalWindow.secondsToNextSlot,
         battleStartsAt: globalWindow.battleStartsAt,
         registrationClosesAt: globalWindow.registrationClosesAt

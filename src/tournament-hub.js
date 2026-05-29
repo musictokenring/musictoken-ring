@@ -10,6 +10,9 @@
   var selectedGenreId = null;
   var serverSkewMs = 0;
   var fetchedAtLocal = 0;
+  var hubSyncInFlight = false;
+  var zeroSinceLocal = null;
+  var API_TIMEOUT_MS = 55000;
 
   function backendUrl() {
     return (window.CONFIG && window.CONFIG.BACKEND_API) || 'https://musictoken-ring.onrender.com';
@@ -36,7 +39,36 @@
   function secondsToBattle(exp) {
     if (!exp || exp.status !== 'registration' || !exp.registration_closes_at) return 0;
     var closes = new Date(exp.registration_closes_at).getTime();
+    if (closes <= serverNowMs()) return 0;
     return Math.max(0, Math.floor((closes - serverNowMs()) / 1000));
+  }
+
+  function isOpenRegistration(exp) {
+    return exp && exp.status === 'registration' && secondsToBattle(exp) > 0;
+  }
+
+  async function fetchApi(path, options, timeoutMs) {
+    var controller = new AbortController();
+    var timer = setTimeout(function () { controller.abort(); }, timeoutMs || API_TIMEOUT_MS);
+    try {
+      var res = await fetch(backendUrl() + path, Object.assign({}, options || {}, {
+        signal: controller.signal,
+        cache: 'no-store'
+      }));
+      clearTimeout(timer);
+      return res;
+    } catch (err) {
+      clearTimeout(timer);
+      throw err;
+    }
+  }
+
+  async function wakeBackend() {
+    try {
+      await fetchApi('/api/health', { method: 'GET' }, 60000);
+    } catch (e) {
+      console.warn('[tournament-hub] wake:', e.message || e);
+    }
   }
 
   function toast(msg, type) {
@@ -44,8 +76,9 @@
     else console.log('[tournament-hub]', msg);
   }
 
-  async function fetchHub() {
-    var res = await fetch(backendUrl() + '/api/tournaments/hub', { cache: 'no-store' });
+  async function fetchHub(forceSync) {
+    var path = forceSync ? '/api/tournaments/hub/sync' : '/api/tournaments/hub';
+    var res = await fetchApi(path, { method: forceSync ? 'POST' : 'GET' });
     var data = await res.json();
     if (!res.ok || !data.ok) throw new Error(data.error || 'Error cargando torneos');
     hubData = data;
@@ -53,7 +86,24 @@
       serverSkewMs = Date.now() - new Date(data.serverTime).getTime();
       fetchedAtLocal = Date.now();
     }
+    var anyOpen = (data.genres || []).some(function (g) {
+      return isOpenRegistration(g.express);
+    });
+    if (anyOpen) zeroSinceLocal = null;
     return data;
+  }
+
+  async function syncHubSlots() {
+    if (hubSyncInFlight) return;
+    hubSyncInFlight = true;
+    try {
+      await wakeBackend();
+      await fetchHub(true);
+    } catch (e) {
+      console.error('[tournament-hub] sync:', e);
+    } finally {
+      hubSyncInFlight = false;
+    }
   }
 
   function countdownHtml(seconds, sizeClass) {
@@ -77,14 +127,16 @@
     var cfg = hubData.config || {};
     var active = rot.activeExpressCount || cfg.activeExpressCount || 14;
     var total = rot.totalGenres || 14;
-    var minSec = 99999;
+    var minSec = rot.secondsToBattle || 0;
     (hubData.genres || []).forEach(function (g) {
-      if (g.express && g.express.status === 'registration') {
+      if (isOpenRegistration(g.express)) {
         var s = secondsToBattle(g.express);
-        if (s < minSec) minSec = s;
+        if (s > 0 && (minSec <= 0 || s < minSec)) minSec = s;
       }
     });
-    if (minSec === 99999) minSec = rot.secondsToBattle || 0;
+    if (!minSec || minSec <= 0) {
+      minSec = rot.secondsToBattle || rot.secondsToNextSlot || 0;
+    }
 
     el.innerHTML =
       '<div class="flex flex-wrap items-center justify-between gap-4">' +
@@ -100,7 +152,9 @@
   function expressStatusLine(exp) {
     if (!exp) return 'Iniciando…';
     if (exp.status === 'registration') {
-      return '⏱ ' + fmtClock(secondsToBattle(exp)) + ' · Batalla';
+      var sec = secondsToBattle(exp);
+      if (sec <= 0) return '♻️ Reiniciando ronda…';
+      return '⏱ ' + fmtClock(sec) + ' · Batalla';
     }
     if (exp.status === 'locked') return '🔒 Preparando batalla…';
     if (exp.status === 'in_progress') return '⚔️ Batalla en curso';
@@ -249,8 +303,17 @@
     var anyZero = (hubData.genres || []).some(function (g) {
       return g.express && g.express.status === 'registration' && secondsToBattle(g.express) === 0;
     });
-    if (anyZero && Date.now() - fetchedAtLocal > 8000) {
-      refresh();
+    if (anyZero) {
+      if (!zeroSinceLocal) zeroSinceLocal = Date.now();
+      if (Date.now() - zeroSinceLocal > 3000 && !hubSyncInFlight) {
+        syncHubSlots().then(function () {
+          renderRotationBanner();
+          if (selectedGenreId) renderGenreDetail();
+          else renderGenreGrid(document.getElementById('tournamentGenreFilter')?.value || 'all');
+        });
+      }
+    } else {
+      zeroSinceLocal = null;
     }
   }
 
@@ -309,9 +372,10 @@
     document.getElementById('tournamentGenreListView').classList.remove('hidden');
   }
 
-  async function refresh() {
+  async function refresh(forceSync) {
     try {
-      await fetchHub();
+      if (forceSync) await syncHubSlots();
+      else await fetchHub(false);
       renderRotationBanner();
       if (selectedGenreId) renderGenreDetail();
       else renderGenreGrid(document.getElementById('tournamentGenreFilter')?.value || 'all');
@@ -329,10 +393,16 @@
     var hub = document.getElementById('tournamentHub');
     if (hub) hub.classList.remove('hidden');
     showGenreList();
-    refresh();
+    zeroSinceLocal = null;
+    wakeBackend().then(function () { return refresh(true); });
     startCountdownLoop();
     if (pollTimer) clearInterval(pollTimer);
-    pollTimer = setInterval(refresh, 12000);
+    pollTimer = setInterval(function () {
+      var stuck = (hubData?.genres || []).every(function (g) {
+        return !isOpenRegistration(g.express);
+      });
+      refresh(stuck);
+    }, 8000);
   }
 
   function close() {
