@@ -2323,13 +2323,17 @@ const GameEngine = {
                 preview: song.preview
             } : null;
 
-            const walletAddress = this.connectedWallet || localStorage.getItem('mtr_wallet');
+            const walletAddress = (this.connectedWallet || localStorage.getItem('mtr_wallet') || '').trim();
+            if (!walletAddress || !/^0x[a-fA-F0-9]{40}$/i.test(walletAddress)) {
+                showToast('Conecta tu wallet antes de inscribirte en el torneo.', 'error');
+                return;
+            }
             const response = await fetch(backendUrl + '/api/tournaments/' + tournamentId + '/join', {
                 method: 'POST',
                 headers: await this.getBackendAuthHeaders({ 'Content-Type': 'application/json' }),
                 body: JSON.stringify({
                     song: songPayload,
-                    walletAddress: walletAddress || null
+                    walletAddress: walletAddress.toLowerCase()
                 })
             });
 

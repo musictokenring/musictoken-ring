@@ -214,18 +214,55 @@ async function verifyUserCanMutateCredits(
   return !userId;
 }
 
-/** Sesión válida + userId elegido entre candidatos de su sesión/wallet. */
-function verifyResolvedCreditsAccess(authUser, resolved, walletAddress) {
-  if (!resolved?.userId || !Array.isArray(resolved.candidates)) {
-    return false;
+/**
+ * Autoriza inscripción a torneo: sesión Supabase + wallet presentada.
+ * Permite debitar la cuenta con saldo si la wallet del body coincide con esa cuenta.
+ */
+async function authorizeTournamentJoin(
+  supabase,
+  authUser,
+  resolved,
+  walletAddress
+) {
+  if (!resolved?.userId || !resolved.candidates?.includes(resolved.userId)) {
+    return { ok: false, reason: 'invalid_resolved_user' };
   }
-  if (!resolved.candidates.includes(resolved.userId)) {
-    return false;
+
+  const publicUserId = await resolvePublicUserId(supabase, authUser);
+  if (resolved.userId === publicUserId || resolved.userId === authUser.id) {
+    return { ok: true, participantUserId: publicUserId };
   }
-  if (resolved.userId === authUser.id) {
-    return true;
+
+  if (!walletAddress || !/^0x[a-fA-F0-9]{40}$/.test(walletAddress)) {
+    return { ok: false, reason: 'wallet_required' };
   }
-  return Boolean(walletAddress && /^0x[a-fA-F0-9]{40}$/.test(walletAddress));
+
+  const normalized = walletAddress.toLowerCase();
+  const { data: walletUser } = await supabase
+    .from('users')
+    .select('id')
+    .ilike('wallet_address', normalized)
+    .maybeSingle();
+
+  if (walletUser?.id === resolved.userId) {
+    return { ok: true, participantUserId: publicUserId };
+  }
+
+  const { data: walletLink } = await supabase
+    .from('user_wallets')
+    .select('user_id')
+    .eq('wallet_address', normalized)
+    .maybeSingle();
+
+  if (
+    walletLink &&
+    walletLink.user_id === resolved.userId &&
+    (walletLink.user_id === publicUserId || walletLink.user_id === authUser.id)
+  ) {
+    return { ok: true, participantUserId: publicUserId };
+  }
+
+  return { ok: false, reason: 'wallet_mismatch' };
 }
 
 async function verifyUserInMatch(supabase, authUser, matchId) {
@@ -311,7 +348,7 @@ module.exports = {
   resolvePublicUserId,
   resolveCreditsUserId,
   readUnifiedTotal,
-  verifyResolvedCreditsAccess,
+  authorizeTournamentJoin,
   verifyUserCanMutateCredits,
   verifyUserInMatch
 };
