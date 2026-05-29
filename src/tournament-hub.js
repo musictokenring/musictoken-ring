@@ -195,6 +195,41 @@
     }
   }
 
+  function patchGenreExpress(genreId, express) {
+    if (!hubData || !express) return;
+    var idx = (hubData.genres || []).findIndex(function (x) { return x.id === genreId; });
+    if (idx >= 0) hubData.genres[idx].express = express;
+  }
+
+  async function ensureExpressSlot(genreId) {
+    try {
+      var res = await fetchApi(
+        '/api/tournaments/genre/' + genreId + '/ensure-express',
+        { method: 'POST', headers: { 'Content-Type': 'application/json' } },
+        API_TIMEOUT_MS
+      );
+      var data = await res.json();
+      if (!res.ok || !data.ok || !data.express) {
+        throw new Error(data.error || 'No se pudo abrir el Express');
+      }
+      patchGenreExpress(genreId, data.express);
+      return data.express;
+    } catch (e) {
+      console.error('[tournament-hub] ensure-express:', e);
+      toast(e.message || 'Error abriendo Express', 'error');
+      return null;
+    }
+  }
+
+  async function handleExpressJoin(exp, genre) {
+    var tournament = exp;
+    if (!tournament || !tournament.id) {
+      tournament = await ensureExpressSlot(genre.id);
+      if (!tournament || !tournament.id) return;
+    }
+    beginEnrollment(tournament, genre, 'express');
+  }
+
   function countdownHtml(seconds, sizeClass) {
     sizeClass = sizeClass || 'text-2xl';
     var pct = Math.min(100, Math.max(0, (seconds / 300) * 100));
@@ -302,7 +337,8 @@
     var exp = g.express;
     var wk = g.weekly;
     var sec = exp ? secondsToBattle(exp) : 0;
-    var expressOpen = exp && exp.status === 'registration' && exp.id && sec > 0;
+    var expressOpen = exp && exp.status === 'registration' && sec > 0;
+    var expressNeedsId = expressOpen && !exp.id;
 
     var expressHtml = exp
       ? '<div class="p-4 rounded-xl border border-cyan-500/20 bg-cyan-500/5">' +
@@ -322,7 +358,8 @@
         Math.min(100, (exp.current_participants / exp.max_participants) * 100) + '%"></div></div>' +
         '</div>' +
         (expressOpen
-          ? '<button type="button" class="mt-3 w-full py-2.5 rounded-lg text-sm font-bold bg-gradient-to-r from-cyan-600 to-purple-600 text-white" data-join-express="' + exp.id + '">Inscribirme · ' + exp.entry_fee + ' cr</button>'
+          ? '<button type="button" class="mt-3 w-full py-2.5 rounded-lg text-sm font-bold bg-gradient-to-r from-cyan-600 to-purple-600 text-white" data-join-express="' + (exp.id || '') + '" data-genre-id="' + g.id + '">' +
+            (expressNeedsId ? 'Abrir e inscribirme · ' : 'Inscribirme · ') + exp.entry_fee + ' cr</button>'
           : (exp.status === 'in_progress' || exp.status === 'locked'
             ? '<button type="button" class="mt-3 w-full py-2.5 rounded-lg text-sm font-bold bg-cyan-600 text-white" data-watch-express="' + exp.id + '">Ver batalla Express</button>'
             : '<p class="mt-3 text-xs text-amber-300">Esperando nuevo slot…</p>')) +
@@ -354,7 +391,13 @@
     var joinExp = panel.querySelector('[data-join-express]');
     if (joinExp) {
       joinExp.addEventListener('click', function () {
-        beginEnrollment(exp, g, 'express');
+        handleExpressJoin(exp, g);
+      });
+    }
+
+    if (expressNeedsId && selectedGenreId) {
+      ensureExpressSlot(selectedGenreId).then(function (ensured) {
+        if (ensured && ensured.id) renderGenreDetail();
       });
     }
     var watchExp = panel.querySelector('[data-watch-express]');
@@ -451,21 +494,16 @@
     toast('Elige tu canción (' + genre.label + ') y confirma inscripción', 'info');
   }
 
-  function openGenreRoom(genreId) {
+  async function openGenreRoom(genreId) {
     selectedGenreId = genreId;
-    var g = (hubData?.genres || []).find(function (x) { return x.id === genreId; });
-    if (g && g.express && !g.express.id) {
-      syncHubSlots().then(function () {
-        document.getElementById('tournamentGenreListView').classList.add('hidden');
-        document.getElementById('tournamentGenreDetail').classList.remove('hidden');
-        renderGenreDetail();
-      });
-      toast('Sincronizando slot Express…', 'info');
-      return;
-    }
     document.getElementById('tournamentGenreListView').classList.add('hidden');
     document.getElementById('tournamentGenreDetail').classList.remove('hidden');
     renderGenreDetail();
+    var g = (hubData?.genres || []).find(function (x) { return x.id === genreId; });
+    if (g && g.express && g.express.status === 'registration' && !g.express.id) {
+      await ensureExpressSlot(genreId);
+      renderGenreDetail();
+    }
   }
 
   function showGenreList() {

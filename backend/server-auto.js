@@ -2015,6 +2015,22 @@ app.post('/api/tournaments/hub/sync', async (req, res) => {
     }
 });
 
+app.post('/api/tournaments/genre/:genreId/ensure-express', async (req, res) => {
+    try {
+        if (!tournamentScheduler?.service) {
+            return res.status(503).json({ ok: false, error: 'Tournament service unavailable' });
+        }
+        const result = await tournamentScheduler.service.ensureExpressForGenrePublic(req.params.genreId);
+        if (!result.ok) {
+            return res.status(400).json(result);
+        }
+        res.json(result);
+    } catch (error) {
+        console.error('[server] ensure-express error:', error);
+        res.status(500).json({ ok: false, error: error.message });
+    }
+});
+
 app.get('/api/tournaments/genre/:genreId', async (req, res) => {
     try {
         if (!tournamentScheduler?.service) {

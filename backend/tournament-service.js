@@ -531,6 +531,36 @@ class TournamentService {
     return now;
   }
 
+  async findOpenExpressForGenre(genreId, serverNow = new Date()) {
+    const nowIso = serverNow.toISOString();
+    const { data } = await this.supabase
+      .from('tournaments')
+      .select('id, genre_id, entry_fee, prize_pool, max_participants, current_participants, status, registration_opens_at, registration_closes_at, name, slot_key')
+      .eq('tournament_type', 'express')
+      .eq('genre_id', genreId)
+      .eq('status', 'registration')
+      .gt('registration_closes_at', nowIso)
+      .order('registration_closes_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    return data;
+  }
+
+  async ensureExpressForGenrePublic(genreId) {
+    const genre = getGenreById(genreId);
+    if (!genre) {
+      return { ok: false, error: 'Género no encontrado' };
+    }
+    const row = await this.ensureExpressForGenre(genre);
+    if (!row) {
+      return { ok: false, error: 'No se pudo crear el Express' };
+    }
+    return {
+      ok: true,
+      express: enrichExpressRow(row, new Date())
+    };
+  }
+
   buildTimingExpressPlaceholder(genre, serverNow = new Date()) {
     const timing = getExpressTimingForGenre(genre.id, serverNow);
     const ts = serverNow.getTime();
@@ -622,7 +652,12 @@ class TournamentService {
             expressByGenre[genre.id] = enrichExpressRow(row, serverNow);
           }
         } else {
-          expressByGenre[genre.id] = this.buildTimingExpressPlaceholder(genre, serverNow);
+          const openRow = await this.findOpenExpressForGenre(genre.id, serverNow);
+          if (openRow) {
+            expressByGenre[genre.id] = enrichExpressRow(openRow, serverNow);
+          } else {
+            expressByGenre[genre.id] = this.buildTimingExpressPlaceholder(genre, serverNow);
+          }
         }
       }
     }
@@ -696,9 +731,31 @@ class TournamentService {
     const genre = getGenreById(genreId);
     if (!genre) return null;
 
-    const hub = await this.getHubPayload();
-    const row = hub.genres.find((g) => g.id === genreId);
-    return { genre, express: row?.express || null, weekly: row?.weekly || null, rotation: hub.expressRotation };
+    const serverNow = new Date();
+    let expressRow = await this.findOpenExpressForGenre(genreId, serverNow);
+    if (!expressRow) {
+      expressRow = await this.ensureExpressForGenre(genre, serverNow);
+    }
+    const express = expressRow ? enrichExpressRow(expressRow, serverNow) : null;
+
+    const weekKey = getIsoWeekKey(serverNow);
+    const { data: weeklyRow } = await this.supabase
+      .from('tournaments')
+      .select('id, genre_id, entry_fee, prize_pool, max_participants, current_participants, status, registration_closes_at, name, week_key')
+      .eq('tournament_type', 'weekly')
+      .eq('genre_id', genreId)
+      .eq('week_key', weekKey)
+      .in('status', ['registration', 'locked', 'in_progress'])
+      .order('registration_opens_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    return {
+      genre,
+      express,
+      weekly: weeklyRow || null,
+      rotation: getExpressSlot(serverNow)
+    };
   }
 
   async getTournamentById(id) {
