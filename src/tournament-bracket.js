@@ -9,7 +9,9 @@
   var watchId = null;
   var playing = false;
   var lobbyClosesAt = null;
+  var lobbyStatus = null;
   var serverSkewMs = 0;
+  var lastLobbyData = null;
 
   function backendUrl() {
     return (window.CONFIG && window.CONFIG.BACKEND_API) || 'https://musictoken-ring.onrender.com';
@@ -61,21 +63,21 @@
     }
 
     if (status) {
-      if (t.status === 'registration' && lobbyClosesAt) {
+      if (lobbyStatus === 'registration' && lobbyClosesAt) {
         var sec = Math.max(0, Math.floor((lobbyClosesAt - serverNowMs()) / 1000));
         status.innerHTML =
           '<div class="text-center">' +
           '<div class="text-xs text-gray-400 mb-2">Batalla inicia cuando el cronómetro llegue a 0</div>' +
           '<div class="text-4xl font-black tabular-nums text-cyan-400 ' + (sec <= 60 ? 'animate-pulse text-red-400' : '') + '">' +
           fmtClock(sec) + '</div></div>';
-      } else {
+      } else if (lobbyStatus) {
         var statusMap = {
           registration: '⏳ Esperando cierre de inscripción…',
           locked: '🔒 Inscripción cerrada · preparando bracket…',
           in_progress: '⚔️ Competencia en curso',
           completed: '🏁 Torneo finalizado'
         };
-        status.textContent = statusMap[t.status] || t.status;
+        status.textContent = statusMap[lobbyStatus] || lobbyStatus;
       }
     }
 
@@ -204,9 +206,11 @@
       if (data.tournament?.registration_closes_at) {
         lobbyClosesAt = new Date(data.tournament.registration_closes_at).getTime();
       }
+      lobbyStatus = data.tournament?.status || null;
       if (data.serverTime) {
         serverSkewMs = Date.now() - new Date(data.serverTime).getTime();
       }
+      lastLobbyData = data;
 
       renderLobby(data);
 
@@ -235,7 +239,13 @@
     pollTimer = setInterval(refresh, 4000);
     if (countdownTimer) clearInterval(countdownTimer);
     countdownTimer = setInterval(function () {
-      if (watchId) refresh();
+      if (!watchId || !lastLobbyData) return;
+      if (lobbyStatus === 'registration' && lobbyClosesAt) {
+        renderLobby(lastLobbyData);
+        if (Math.max(0, Math.floor((lobbyClosesAt - serverNowMs()) / 1000)) === 0) {
+          refresh();
+        }
+      }
     }, 1000);
   }
 
