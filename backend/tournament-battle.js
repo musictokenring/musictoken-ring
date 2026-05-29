@@ -1,41 +1,57 @@
 /**
- * Express bracket: CPU fill, simulación de duelos, premios humanos.
+ * Torneos Express (4) y Grand Prix semanal (16): CPU fill, bracket, premios.
  */
-const { getGenreById, EXPRESS_MAX_PLAYERS } = require('./tournament-genres');
+const {
+  getGenreById,
+  EXPRESS_MAX_PLAYERS,
+  WEEKLY_MAX_PLAYERS
+} = require('./tournament-genres');
 
-const CPU_USER_IDS = [
-  '00000000-0000-4000-8000-000000000001',
-  '00000000-0000-4000-8000-000000000002',
-  '00000000-0000-4000-8000-000000000003',
-  '00000000-0000-4000-8000-000000000004'
+const CPU_NAME_POOL = [
+  'DJ Arena Bot', 'Beat Machine', 'Stream Master', 'Vinyl CPU',
+  'Bass Phantom', 'Drop Commander', 'Mix Bot X', 'Chart Riser',
+  'Wave Runner', 'Hit Factory', 'Groove AI', 'Peak Hunter',
+  'Tempo Ghost', 'Vibe Synth', 'Pulse Engine', 'Echo Unit'
 ];
 
-const CPU_NAMES = ['DJ Arena Bot', 'Beat Machine', 'Stream Master', 'Vinyl CPU'];
+function cpuUserId(index) {
+  const suffix = String(index + 1).padStart(12, '0');
+  return '00000000-0000-4000-8000-' + suffix;
+}
 
 function pickPayoutMode(humanCount, cpuCount) {
   if (humanCount < 2 || humanCount <= cpuCount) return 'no_payout';
   return 'human_pool';
 }
 
-function buildResultMessage(payoutMode, humanCount, cpuCount, winnerIsHuman, prizeAwarded) {
+function buildResultMessage(tournamentType, payoutMode, humanCount, cpuCount, winnerIsHuman, prizeAwarded) {
+  const label = tournamentType === 'weekly' ? 'Grand Prix' : 'Express';
   if (payoutMode === 'no_payout') {
     if (humanCount < 2) {
-      return 'No hubo otros jugadores reales. La CPU completó el slot. '
-        + 'Tu inscripción no genera premio: conservas tu saldo sin ganancia extra.';
+      return 'No hubo otros jugadores reales en este ' + label + '. '
+        + 'La CPU completó el bracket. Sin premio acreditado.';
     }
     return 'La CPU ocupó la mayoría de plazas (' + cpuCount + ' vs ' + humanCount
-      + ' humanos). Pasaste la ronda sin acreditación de premio.';
+      + ' humanos). Pasaste sin acreditación de premio.';
   }
   if (winnerIsHuman && prizeAwarded > 0) {
-    return '¡Ganaste el Express! Premio acreditado: ' + prizeAwarded.toFixed(1) + ' cr '
-      + '(solo apuestas de jugadores reales).';
+    return '¡Ganaste el ' + label + '! Premio acreditado: ' + prizeAwarded.toFixed(1)
+      + ' cr (solo apuestas de jugadores reales).';
   }
-  return 'Torneo completado. El premio fue para otro jugador humano.';
+  return label + ' completado. El premio fue para otro jugador humano.';
+}
+
+function roundLabel(playerCount) {
+  if (playerCount === 16) return 'Octavos de final';
+  if (playerCount === 8) return 'Cuartos de final';
+  if (playerCount === 4) return 'Semifinal';
+  if (playerCount === 2) return 'Final';
+  return 'Ronda';
 }
 
 async function fetchDeezerTrack(query, index) {
   try {
-    const url = 'https://api.deezer.com/search?q=' + encodeURIComponent(query) + '&limit=25';
+    const url = 'https://api.deezer.com/search?q=' + encodeURIComponent(query) + '&limit=40';
     const res = await fetch(url, { signal: AbortSignal.timeout(8000) });
     if (!res.ok) throw new Error('Deezer HTTP ' + res.status);
     const data = await res.json();
@@ -75,7 +91,7 @@ function simulateDuel(p1, p2) {
     plays1,
     plays2,
     winnerParticipantId: winner.id,
-    winnerIsCpu: Boolean(winner.is_cpu)
+    winnerIsCpu: Boolean(winner.isCpu)
   };
 }
 
@@ -121,46 +137,72 @@ function duelToMatchShape(duel, tournament) {
   };
 }
 
+function runSingleEliminationBracket(payloads) {
+  const duels = [];
+  let roundPlayers = payloads.slice();
+  let roundNum = 1;
+
+  while (roundPlayers.length > 1) {
+    const label = roundLabel(roundPlayers.length);
+    const nextRound = [];
+
+    for (let i = 0; i < roundPlayers.length; i += 2) {
+      const p1 = roundPlayers[i];
+      const p2 = roundPlayers[i + 1];
+      const result = simulateDuel(p1, p2);
+      const winner = result.winnerParticipantId === p1.id ? p1 : p2;
+      nextRound.push(winner);
+
+      duels.push({
+        id: 'r' + roundNum + 'm' + (Math.floor(i / 2) + 1),
+        round: roundNum,
+        label: label + ' · Duelo ' + (Math.floor(i / 2) + 1),
+        player1: p1,
+        player2: p2,
+        plays1: result.plays1,
+        plays2: result.plays2,
+        winnerParticipantId: result.winnerParticipantId
+      });
+    }
+
+    roundPlayers = nextRound;
+    roundNum++;
+  }
+
+  return { duels, champion: roundPlayers[0] };
+}
+
 class TournamentBattleEngine {
   constructor(supabase) {
     this.supabase = supabase;
   }
 
-  async startExpressTournament(tournament) {
-    if (!tournament || tournament.tournament_type !== 'express') return null;
-    if (tournament.status !== 'locked') return null;
-
+  async loadHumans(tournamentId) {
     const { data: humans } = await this.supabase
       .from('tournament_participants')
       .select('*')
-      .eq('tournament_id', tournament.id)
+      .eq('tournament_id', tournamentId)
       .eq('is_cpu', false)
       .order('joined_at', { ascending: true });
+    return humans || [];
+  }
 
-    const humanRows = humans || [];
-    if (!humanRows.length) {
-      await this.supabase.from('tournaments').update({
-        status: 'cancelled',
-        updated_at: new Date().toISOString()
-      }).eq('id', tournament.id);
-      return null;
-    }
-
+  async fillCpuSlots(tournament, humanRows, maxPlayers) {
     const genre = getGenreById(tournament.genre_id);
     const query = genre?.deezerQuery || genre?.label || 'pop';
-    const slotsNeeded = EXPRESS_MAX_PLAYERS - humanRows.length;
+    const slotsNeeded = maxPlayers - humanRows.length;
     const cpuRows = [];
 
     for (let i = 0; i < slotsNeeded; i++) {
       const track = await fetchDeezerTrack(query, i + humanRows.length);
-      const cpuUserId = CPU_USER_IDS[i % CPU_USER_IDS.length];
+      const cpuIndex = i;
       const { data: inserted, error } = await this.supabase
         .from('tournament_participants')
         .insert([{
           tournament_id: tournament.id,
-          user_id: cpuUserId,
+          user_id: cpuUserId(cpuIndex),
           is_cpu: true,
-          display_name: CPU_NAMES[i % CPU_NAMES.length],
+          display_name: CPU_NAME_POOL[cpuIndex % CPU_NAME_POOL.length],
           song_id: track.song_id,
           song_name: track.song_name,
           song_artist: track.song_artist,
@@ -177,7 +219,10 @@ class TournamentBattleEngine {
       cpuRows.push(inserted);
     }
 
-    const allParticipants = humanRows.concat(cpuRows).slice(0, EXPRESS_MAX_PLAYERS);
+    return humanRows.concat(cpuRows).slice(0, maxPlayers);
+  }
+
+  async assignBracketSlots(allParticipants) {
     for (let s = 0; s < allParticipants.length; s++) {
       await this.supabase
         .from('tournament_participants')
@@ -185,75 +230,25 @@ class TournamentBattleEngine {
         .eq('id', allParticipants[s].id);
       allParticipants[s].bracket_slot = s;
     }
+    return allParticipants;
+  }
 
-    if (allParticipants.length < EXPRESS_MAX_PLAYERS) {
-      console.error('[tournament-battle] No se pudieron llenar 4 plazas:', allParticipants.length);
-      await this.supabase.from('tournaments').update({
-        status: 'cancelled',
-        updated_at: new Date().toISOString()
-      }).eq('id', tournament.id);
-      return null;
-    }
+  async cancelTournament(tournamentId, reason) {
+    console.error('[tournament-battle] Cancelado:', tournamentId, reason);
+    await this.supabase.from('tournaments').update({
+      status: 'cancelled',
+      updated_at: new Date().toISOString()
+    }).eq('id', tournamentId);
+  }
 
-    const humanCount = humanRows.length;
+  async finalizeTournament(tournament, allParticipants, humanCount, bracketResult) {
     const cpuCount = allParticipants.length - humanCount;
     const payoutMode = pickPayoutMode(humanCount, cpuCount);
-
-    const bySlot = allParticipants.slice().sort(function (a, b) {
-      return (a.bracket_slot || 0) - (b.bracket_slot || 0);
-    });
-    const payloads = bySlot.map(participantPayload);
-
-    const sf1p1 = payloads[0];
-    const sf1p2 = payloads[1];
-    const sf2p1 = payloads[2];
-    const sf2p2 = payloads[3];
-
-    const sf1 = simulateDuel(sf1p1, sf1p2);
-    const sf2 = simulateDuel(sf2p1, sf2p2);
-
-    const finalP1 = sf1.winnerParticipantId === sf1p1.id ? sf1p1 : sf1p2;
-    const finalP2 = sf2.winnerParticipantId === sf2p1.id ? sf2p1 : sf2p2;
-    const finalResult = simulateDuel(finalP1, finalP2);
-    const champion = finalResult.winnerParticipantId === finalP1.id ? finalP1 : finalP2;
-
-    const duels = [
-      {
-        id: 'sf1',
-        round: 1,
-        label: 'Semifinal 1',
-        player1: sf1p1,
-        player2: sf1p2,
-        plays1: sf1.plays1,
-        plays2: sf1.plays2,
-        winnerParticipantId: sf1.winnerParticipantId
-      },
-      {
-        id: 'sf2',
-        round: 1,
-        label: 'Semifinal 2',
-        player1: sf2p1,
-        player2: sf2p2,
-        plays1: sf2.plays1,
-        plays2: sf2.plays2,
-        winnerParticipantId: sf2.winnerParticipantId
-      },
-      {
-        id: 'final',
-        round: 2,
-        label: 'Final Express',
-        player1: finalP1,
-        player2: finalP2,
-        plays1: finalResult.plays1,
-        plays2: finalResult.plays2,
-        winnerParticipantId: finalResult.winnerParticipantId
-      }
-    ];
+    const champion = bracketResult.champion;
+    const duels = bracketResult.duels;
 
     let prizeAwarded = 0;
-    let resultMessage = '';
-
-    if (payoutMode === 'human_pool' && !champion.isCpu) {
+    if (payoutMode === 'human_pool' && champion && !champion.isCpu) {
       const humanPool = humanCount * Number(tournament.entry_fee || 3);
       const platformRate = 0.08;
       prizeAwarded = Math.round(humanPool * (1 - platformRate) * 10) / 10;
@@ -267,59 +262,106 @@ class TournamentBattleEngine {
       }
     }
 
-    resultMessage = buildResultMessage(
+    const resultMessage = buildResultMessage(
+      tournament.tournament_type,
       payoutMode,
       humanCount,
       cpuCount,
-      !champion.isCpu,
+      champion && !champion.isCpu,
       prizeAwarded
     );
 
+    const payloads = allParticipants
+      .slice()
+      .sort(function (a, b) { return (a.bracket_slot || 0) - (b.bracket_slot || 0); })
+      .map(participantPayload);
+
     const bracketState = {
-      version: 1,
+      version: 2,
+      tournamentType: tournament.tournament_type,
       humanCount,
       cpuCount,
       payoutMode,
       participants: payloads,
       duels,
+      totalDuels: duels.length,
       currentDuelIndex: 0,
       playbackStatus: 'ready',
       resultMessage,
-      winnerParticipantId: champion.id,
-      winnerIsHuman: !champion.isCpu,
+      winnerParticipantId: champion?.id,
+      winnerIsHuman: champion ? !champion.isCpu : false,
       prizeAwarded,
-      championName: champion.displayName,
-      championSong: champion.songName
+      championName: champion?.displayName,
+      championSong: champion?.songName
     };
 
-    await this.supabase
-      .from('tournament_participants')
-      .update({ placement: 2, eliminated: true })
-      .eq('tournament_id', tournament.id)
-      .neq('id', champion.id);
+    if (champion?.id) {
+      await this.supabase
+        .from('tournament_participants')
+        .update({ placement: 2, eliminated: true })
+        .eq('tournament_id', tournament.id)
+        .neq('id', champion.id);
 
-    await this.supabase
-      .from('tournament_participants')
-      .update({ placement: 1, eliminated: false })
-      .eq('id', champion.id);
+      await this.supabase
+        .from('tournament_participants')
+        .update({ placement: 1, eliminated: false })
+        .eq('id', champion.id);
+    }
 
-    const nowIso = new Date().toISOString();
-    await this.supabase
-      .from('tournaments')
-      .update({
-        status: 'in_progress',
-        current_participants: allParticipants.length,
-        human_participants: humanCount,
-        payout_mode: payoutMode,
-        bracket_state: bracketState,
-        updated_at: nowIso
-      })
-      .eq('id', tournament.id);
+    await this.supabase.from('tournaments').update({
+      status: 'in_progress',
+      current_participants: allParticipants.length,
+      human_participants: humanCount,
+      payout_mode: payoutMode,
+      bracket_state: bracketState,
+      updated_at: new Date().toISOString()
+    }).eq('id', tournament.id);
 
-    console.log('[tournament-battle] ✅ Express iniciado:', tournament.name,
-      'humanos:', humanCount, 'CPU:', cpuCount, 'modo:', payoutMode);
+    console.log('[tournament-battle] ✅', tournament.tournament_type, 'iniciado:',
+      tournament.name, 'humanos:', humanCount, 'CPU:', cpuCount);
 
     return bracketState;
+  }
+
+  async startTournament(tournament, maxPlayers) {
+    if (!tournament || tournament.status !== 'locked') return null;
+
+    const humanRows = await this.loadHumans(tournament.id);
+    if (!humanRows.length) {
+      await this.cancelTournament(tournament.id, 'sin humanos');
+      return null;
+    }
+
+    let allParticipants = await this.fillCpuSlots(tournament, humanRows, maxPlayers);
+    allParticipants = await this.assignBracketSlots(allParticipants);
+
+    if (allParticipants.length < maxPlayers) {
+      await this.cancelTournament(tournament.id, 'plazas incompletas');
+      return null;
+    }
+
+    const payloads = allParticipants
+      .slice()
+      .sort(function (a, b) { return (a.bracket_slot || 0) - (b.bracket_slot || 0); })
+      .map(participantPayload);
+
+    const bracketResult = runSingleEliminationBracket(payloads);
+    return this.finalizeTournament(
+      tournament,
+      allParticipants,
+      humanRows.length,
+      bracketResult
+    );
+  }
+
+  async startExpressTournament(tournament) {
+    if (tournament?.tournament_type !== 'express') return null;
+    return this.startTournament(tournament, EXPRESS_MAX_PLAYERS);
+  }
+
+  async startWeeklyTournament(tournament) {
+    if (tournament?.tournament_type !== 'weekly') return null;
+    return this.startTournament(tournament, WEEKLY_MAX_PLAYERS);
   }
 
   async getBracketPayload(tournamentId) {
@@ -357,7 +399,7 @@ class TournamentBattleEngine {
       bracket,
       currentMatch,
       currentDuelIndex: bracket?.currentDuelIndex || 0,
-      totalDuels: bracket?.duels?.length || 0
+      totalDuels: bracket?.totalDuels || bracket?.duels?.length || 0
     };
   }
 

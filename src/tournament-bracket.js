@@ -38,11 +38,12 @@
     var t = data.tournament || {};
     var b = data.bracket;
 
-    if (title) title.textContent = t.name || 'Torneo Express';
+    if (title) title.textContent = t.name || (t.tournament_type === 'weekly' ? 'Grand Prix' : 'Torneo Express');
     if (sub) {
+      var typeLabel = t.tournament_type === 'weekly' ? 'Grand Prix semanal' : 'Express';
       sub.textContent = t.status === 'registration'
-        ? 'Inscripción abierta · esperando cierre del slot'
-        : (b ? b.humanCount + ' humanos · ' + b.cpuCount + ' CPU' : '');
+        ? typeLabel + ' · inscripción abierta'
+        : (b ? b.humanCount + ' humanos · ' + b.cpuCount + ' CPU · ' + (b.totalDuels || b.duels?.length || 0) + ' duelos' : typeLabel);
     }
 
     if (status) {
@@ -56,6 +57,10 @@
     }
 
     if (!grid || !b || !b.participants) return;
+    var cols = b.participants.length > 8
+      ? 'grid-cols-2 sm:grid-cols-3 lg:grid-cols-4'
+      : 'grid-cols-1 sm:grid-cols-2';
+    grid.className = 'grid ' + cols + ' gap-3 mb-6';
     grid.innerHTML = b.participants.map(function (p) {
       return (
         '<div class="p-3 rounded-xl border ' + (p.isCpu ? 'border-gray-600/40 bg-gray-900/40' : 'border-cyan-500/30 bg-cyan-500/5') + '">' +
@@ -129,6 +134,11 @@
         return;
       }
 
+      var progress = document.getElementById('tournamentArenaStatus');
+      if (progress) {
+        progress.textContent = '⚔️ Duelo ' + (idx + 1) + ' / ' + duels.length + ' · ' + (duels[idx].label || '');
+      }
+
       var duel = duels[idx];
       var match = {
         id: duel.id,
@@ -154,7 +164,7 @@
       window.GameEngine.startTournamentPlayback(match, {
         onComplete: function () {
           advancePlayback(tournamentId, idx).then(function () {
-            setTimeout(function () { playNext(idx + 1); }, 1200);
+            setTimeout(function () { playNext(idx + 1); }, duels.length > 5 ? 600 : 1200);
           });
         }
       });

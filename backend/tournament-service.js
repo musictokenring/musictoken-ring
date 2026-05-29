@@ -142,7 +142,7 @@ class TournamentService {
     if (!expired?.length) return;
 
     for (const t of expired) {
-      const minRequired = t.tournament_type === 'express' ? 1 : t.min_participants;
+      const minRequired = 1;
       if (t.current_participants >= minRequired) {
         await this.supabase
           .from('tournaments')
@@ -168,11 +168,14 @@ class TournamentService {
     if (!locked?.length) return;
 
     for (const t of locked) {
-      if (t.tournament_type !== 'express') continue;
       try {
-        await this.battleEngine.startExpressTournament(t);
+        if (t.tournament_type === 'express') {
+          await this.battleEngine.startExpressTournament(t);
+        } else if (t.tournament_type === 'weekly') {
+          await this.battleEngine.startWeeklyTournament(t);
+        }
       } catch (err) {
-        console.error('[tournament] Error iniciando Express:', t.id, err.message);
+        console.error('[tournament] Error iniciando torneo:', t.id, err.message);
       }
     }
   }

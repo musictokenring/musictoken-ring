@@ -120,13 +120,15 @@
         '</div>' +
         (wk.status === 'registration'
           ? '<button type="button" class="mt-3 w-full py-2.5 rounded-lg text-sm font-bold bg-purple-600/80 text-white border border-purple-400/30" data-join-weekly="' + wk.id + '">Inscribirme · ' + wk.entry_fee + ' cr</button>'
-          : '<p class="mt-3 text-xs text-amber-300">Inscripción cerrada</p>') +
+          : (wk.status === 'in_progress' || wk.status === 'locked'
+            ? '<button type="button" class="mt-3 w-full py-2.5 rounded-lg text-sm font-bold bg-purple-500 text-white" data-watch-weekly="' + wk.id + '">Ver competencia Grand Prix</button>'
+            : '<p class="mt-3 text-xs text-amber-300">Inscripción cerrada</p>')) +
         '</div>'
       : '<p class="text-sm text-gray-500">Grand Prix no disponible.</p>';
 
     document.getElementById('tournamentGenrePanels').innerHTML =
       '<div class="grid md:grid-cols-2 gap-4">' + expressHtml + weeklyHtml + '</div>' +
-      '<p class="text-[11px] text-gray-500 mt-4">Express: ventana de 10 min, 4 jugadores, ganador se lleva el pool. Semanal: Grand Prix con premio acumulado (top 4).</p>';
+      '<p class="text-[11px] text-gray-500 mt-4">Express: 4 jugadores, CPU llena vacantes. Grand Prix: 16 jugadores, bracket completo con CPU. Premio solo entre humanos si hay mayoría real.</p>';
 
     var joinExp = panel.querySelector('[data-join-express]');
     if (joinExp) {
@@ -138,6 +140,12 @@
     if (joinWk) {
       joinWk.addEventListener('click', function () {
         beginEnrollment(wk, g, 'weekly');
+      });
+    }
+    var watchWk = panel.querySelector('[data-watch-weekly]');
+    if (watchWk && window.TournamentBracket) {
+      watchWk.addEventListener('click', function () {
+        window.TournamentBracket.watch(wk.id);
       });
     }
   }
