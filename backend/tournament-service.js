@@ -166,9 +166,13 @@ class TournamentService {
   }
 
   async openExpressForJoin(genre, now = new Date()) {
-    await this.clearStaleExpressForGenre(genre.id, now);
     let open = await this.findOpenExpressForGenre(genre.id, now);
     if (open) return open;
+
+    await this.clearStaleExpressForGenre(genre.id, now);
+    open = await this.findOpenExpressForGenre(genre.id, now);
+    if (open) return open;
+
     open = await this.createOpenExpressNow(genre, now);
     if (open) return open;
     return this.createOpenExpressNow(genre, now);
@@ -633,13 +637,21 @@ class TournamentService {
     if (!genre) {
       return { ok: false, error: 'Género no encontrado' };
     }
-    const row = await this.openExpressForJoin(genre);
+    const serverNow = new Date();
+    const open = await this.findOpenExpressForGenre(genreId, serverNow);
+    if (open) {
+      return {
+        ok: true,
+        express: enrichExpressRow(open, serverNow)
+      };
+    }
+    const row = await this.openExpressForJoin(genre, serverNow);
     if (!row) {
       return { ok: false, error: 'No se pudo crear el Express (revisa Supabase)' };
     }
     return {
       ok: true,
-      express: enrichExpressRow(row, new Date())
+      express: enrichExpressRow(row, serverNow)
     };
   }
 

@@ -2408,8 +2408,13 @@ const GameEngine = {
             }
 
             if (window.tournamentEnrollment?.type === 'express') {
-                const refreshedId = await this.refreshExpressEnrollmentId();
-                if (refreshedId) tournamentId = refreshedId;
+                const enrollment = window.tournamentEnrollment;
+                const slotFresh = enrollment.id && enrollment.closesAt &&
+                    new Date(enrollment.closesAt).getTime() > Date.now() + 15000;
+                if (!slotFresh) {
+                    const refreshedId = await this.refreshExpressEnrollmentId();
+                    if (refreshedId) tournamentId = refreshedId;
+                }
             }
 
             const entryFee = Number(betAmount) || Number(window.tournamentEnrollment?.entryFee) || 3;

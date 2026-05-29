@@ -9,6 +9,7 @@
     "preview": "npx --yes serve . -l 8000",
     "check": "node --check backend/server-auto.js && node --check backend/nowpayments-service.js && node --check backend/claim-service.js",
     "check:integrity": "node scripts/verify-runtime-integrity.js",
+    "test:tournament": "node scripts/test-tournament-flow.js",
     "build": "npm run check"
   },
   "dependencies": {

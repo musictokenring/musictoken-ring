@@ -18,7 +18,9 @@
   var hubEnsureController = null;
   var ensureByGenre = {};
   var ensureRequested = {};
+  var expressSlotCache = {};
   var ENSURE_TIMEOUT_MS = 90000;
+  var EXPRESS_CACHE_MS = 45000;
   var API_TIMEOUT_MS = 55000;
   var HUB_GET_TIMEOUT_MS = 22000;
   var HUB_SYNC_COOLDOWN_MS = 20000;
@@ -255,13 +257,18 @@
     if (idx >= 0) hubData.genres[idx].express = express;
   }
 
-  async function ensureExpressSlot(genreId) {
+  async function ensureExpressSlot(genreId, options) {
     if (!genreId) return null;
+    options = options || {};
+    var cached = expressSlotCache[genreId];
+    if (!options.force && cached && Date.now() - cached.at < EXPRESS_CACHE_MS) {
+      return cached.express;
+    }
     if (ensureByGenre[genreId]) return ensureByGenre[genreId];
 
     ensureByGenre[genreId] = (async function () {
       try {
-        await wakeBackend();
+        if (!options.skipWake) await wakeBackend();
         for (var attempt = 1; attempt <= 3; attempt++) {
           var res = await fetchApi(
             '/api/tournaments/genre/' + genreId + '/ensure-express',
@@ -281,6 +288,7 @@
           if (res.ok && data.ok && data.express && data.express.id) {
             patchGenreExpress(genreId, data.express);
             ensureRequested[genreId] = true;
+            expressSlotCache[genreId] = { express: data.express, at: Date.now() };
             return data.express;
           }
           if (data.error && attempt === 3) {
@@ -610,7 +618,7 @@
   async function beginEnrollment(tournament, genre, type) {
     if (!tournament || !genre) return;
     pauseTimers();
-    if (type === 'express') {
+    if (type === 'express' && !tournament.id) {
       var fresh = await ensureExpressSlot(genre.id);
       if (fresh && fresh.id) tournament = fresh;
     }
