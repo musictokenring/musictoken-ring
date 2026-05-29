@@ -2100,6 +2100,24 @@ app.post('/api/tournaments/:id/join', requireCreditMutationAuth, async (req, res
     }
 });
 
+app.post('/api/tournaments/:id/kick', async (req, res) => {
+    try {
+        if (!tournamentScheduler?.service) {
+            return res.status(503).json({ ok: false, error: 'Tournament service unavailable' });
+        }
+        const lifecycle = await tournamentScheduler.service.advanceTournamentLifecycle(req.params.id);
+        const { data: t } = await supabase
+            .from('tournaments')
+            .select('id, status, genre_id, registration_closes_at')
+            .eq('id', req.params.id)
+            .maybeSingle();
+        res.json({ ok: true, lifecycle, tournament: t });
+    } catch (error) {
+        console.error('[server] tournaments kick error:', error);
+        res.status(500).json({ ok: false, error: error.message });
+    }
+});
+
 app.post('/api/tournaments/:id/start-battle', async (req, res) => {
     try {
         if (!tournamentScheduler?.service) {

@@ -2343,6 +2343,18 @@ const GameEngine = {
         }
     },
     
+    watchTournamentArena(tournamentId) {
+        const genreId =
+            window.tournamentEnrollment?.genreId ||
+            localStorage.getItem('mtr_watch_genre') ||
+            null;
+        localStorage.setItem('mtr_watch_tournament', tournamentId);
+        if (genreId) localStorage.setItem('mtr_watch_genre', genreId);
+        if (window.TournamentBracket) {
+            window.TournamentBracket.watch(tournamentId, genreId);
+        }
+    },
+
     async joinTournament(tournamentId, song, betAmount) {
         try {
             const { data: { session } } = await supabaseClient.auth.getSession();
@@ -2392,10 +2404,7 @@ const GameEngine = {
                     if (localOk) {
                         showToast('¡Inscrito en el torneo!', 'success');
                         window.tournamentEnrollment = null;
-                        localStorage.setItem('mtr_watch_tournament', tournamentId);
-                        if (window.TournamentBracket) {
-                            window.TournamentBracket.watch(tournamentId);
-                        }
+                        this.watchTournamentArena(tournamentId);
                         return;
                     }
                 }
@@ -2414,10 +2423,7 @@ const GameEngine = {
                     if (localOk) {
                         showToast('¡Inscrito en el torneo!', 'success');
                         window.tournamentEnrollment = null;
-                        localStorage.setItem('mtr_watch_tournament', tournamentId);
-                        if (window.TournamentBracket) {
-                            window.TournamentBracket.watch(tournamentId);
-                        }
+                        this.watchTournamentArena(tournamentId);
                         return;
                     }
                 }
@@ -2442,12 +2448,10 @@ const GameEngine = {
             this.addToJackpotPool(jackpotContribution);
 
             showToast(result.alreadyJoined ? 'Ya estabas inscrito' : '¡Inscrito en el torneo!', 'success');
+            this.watchTournamentArena(tournamentId);
             window.tournamentEnrollment = null;
-            localStorage.setItem('mtr_watch_tournament', tournamentId);
 
-            if (window.TournamentBracket) {
-                window.TournamentBracket.watch(tournamentId);
-            } else if (window.TournamentHub) {
+            if (!window.TournamentBracket && window.TournamentHub) {
                 setTimeout(function () { selectMode('tournament'); }, 800);
             }
 

@@ -168,11 +168,11 @@
                 // CRÍTICO: Agregar timeout para evitar que la promise quede colgada
                 const controller = new AbortController();
                 const timeoutId = setTimeout(() => {
-                    console.error('[credits-system] ❌ TIMEOUT: Backend no respondió después de 8 segundos');
+                    console.error('[credits-system] ❌ TIMEOUT: Backend no respondió después de 25 segundos');
                     controller.abort();
-                }, 8000);
+                }, 25000);
                 
-                console.log('[credits-system] 🔄 Iniciando fetch con timeout de 8 segundos...');
+                console.log('[credits-system] 🔄 Iniciando fetch con timeout de 25 segundos...');
                 
                 let response;
                 try {
@@ -187,7 +187,7 @@
                 } catch (fetchError) {
                     clearTimeout(timeoutId);
                     if (fetchError.name === 'AbortError') {
-                        throw new Error('Timeout: Backend no respondió después de 8 segundos. URL: ' + creditsUrl);
+                        throw new Error('Timeout: Backend no respondió después de 25 segundos. URL: ' + creditsUrl);
                     }
                     throw fetchError;
                 }

@@ -169,40 +169,18 @@
     }
   }
 
-  async function fetchBracket(id) {
-    var res = await fetch(backendUrl() + '/api/tournaments/' + id + '/bracket', { cache: 'no-store' });
-    return res.json();
-  }
-
   async function advancePlayback(id, duelIndex) {
-    await fetch(backendUrl() + '/api/tournaments/' + id + '/advance-playback', {
+    await fetchApi('/api/tournaments/' + id + '/advance-playback', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ duelIndex: duelIndex })
-    });
+    }, API_TIMEOUT_MS);
   }
 
   function isStaleRegistration(t) {
     if (!t || t.status !== 'registration' || !t.registration_closes_at) return false;
     var closes = new Date(t.registration_closes_at).getTime();
-    return closes <= serverNowMs() - 120000;
-  }
-
-  async function triggerStartBattle(id) {
-    try {
-      var res = await fetch(backendUrl() + '/api/tournaments/' + id + '/start-battle', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' }
-      });
-      if (res.status === 404) {
-        var bracketOnly = await fetchBracket(id);
-        return bracketOnly;
-      }
-      return res.json();
-    } catch (e) {
-      console.error('[tournament-bracket] start-battle:', e);
-      return { ok: false };
-    }
+    return closes <= serverNowMs() - 30000;
   }
 
   function handleStaleSlot() {
@@ -216,21 +194,108 @@
   var startingBattle = false;
   var startBattleAttempts = 0;
   var lastLifecycleError = null;
+  var stuckAtZeroSince = null;
+  var watchGenreId = null;
+  var API_TIMEOUT_MS = 55000;
+
+  async function fetchApi(path, options, timeoutMs) {
+    var controller = new AbortController();
+    var timer = setTimeout(function () { controller.abort(); }, timeoutMs || API_TIMEOUT_MS);
+    try {
+      var res = await fetch(backendUrl() + path, Object.assign({}, options || {}, {
+        signal: controller.signal,
+        cache: 'no-store'
+      }));
+      clearTimeout(timer);
+      return res;
+    } catch (err) {
+      clearTimeout(timer);
+      throw err;
+    }
+  }
+
+  async function wakeBackend() {
+    try {
+      await fetchApi('/api/health', { method: 'GET' }, 60000);
+    } catch (e) {
+      console.warn('[tournament-bracket] wake backend:', e.message || e);
+    }
+  }
+
+  async function fetchBracket(id) {
+    var res = await fetchApi('/api/tournaments/' + id + '/bracket', { method: 'GET' });
+    return res.json();
+  }
+
+  async function triggerStartBattle(id) {
+    try {
+      var res = await fetchApi('/api/tournaments/' + id + '/start-battle', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' }
+      }, API_TIMEOUT_MS);
+      if (res.status === 404) {
+        var kickRes = await fetchApi('/api/tournaments/' + id + '/kick', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' }
+        }, API_TIMEOUT_MS);
+        var kicked = await kickRes.json().catch(function () { return {}; });
+        if (kicked.tournament) {
+          return fetchBracket(id);
+        }
+        return fetchBracket(id);
+      }
+      return res.json();
+    } catch (e) {
+      console.error('[tournament-bracket] start-battle:', e);
+      return { ok: false, error: e.message || 'timeout' };
+    }
+  }
+
+  function renderStuckAtZero() {
+    var status = document.getElementById('tournamentArenaStatus');
+    if (!status) return;
+    status.innerHTML =
+      '<div class="text-center p-4">' +
+      '<div class="text-sm text-amber-300 animate-pulse mb-2">⏳ Activando servidor y batalla…</div>' +
+      '<div class="text-4xl font-black tabular-nums text-cyan-400 mb-2">00:00</div>' +
+      '<p class="text-xs text-gray-400">Intento ' + startBattleAttempts + ' · Render puede tardar ~1 min en despertar</p>' +
+      '<button type="button" id="tournamentForceHubBtn" class="mt-3 px-4 py-2 rounded-lg bg-cyan-600 text-white text-sm">Ir al Express activo</button>' +
+      '</div>';
+    var btn = document.getElementById('tournamentForceHubBtn');
+    if (btn) {
+      btn.onclick = function () {
+        if (watchGenreId) redirectToActiveExpress(watchGenreId);
+        else if (typeof selectMode === 'function') selectMode('tournament');
+      };
+    }
+  }
 
   async function ensureBattleStarted() {
     if (!watchId || startingBattle) return;
-    if (startBattleAttempts >= 8) return;
+    if (startBattleAttempts >= 25) return;
     startingBattle = true;
     startBattleAttempts += 1;
+    renderStuckAtZero();
     try {
+      if (startBattleAttempts === 1) {
+        await wakeBackend();
+      }
       var result = await triggerStartBattle(watchId);
-      if (result.lifecycleError) {
+      if (result && result.lifecycleError) {
         lastLifecycleError = result.lifecycleError;
+      }
+      if (result && result.ok && result.tournament && result.tournament.status === 'in_progress') {
+        stuckAtZeroSince = null;
       }
       await refresh();
     } finally {
       startingBattle = false;
     }
+  }
+
+  async function syncWatchToLiveExpress() {
+    if (!watchGenreId) return false;
+    return redirectToActiveExpress(watchGenreId);
   }
 
   function playDuelsSequentially(data) {
@@ -349,16 +414,23 @@
         return;
       }
 
+      if (data.tournament.genre_id) {
+        watchGenreId = data.tournament.genre_id;
+        localStorage.setItem('mtr_watch_genre', watchGenreId);
+      }
+
       if (data.tournament.status === 'registration' && lobbyClosesAt) {
         var secLeft = Math.max(0, Math.floor((lobbyClosesAt - serverNowMs()) / 1000));
         if (secLeft === 0) {
+          if (!stuckAtZeroSince) stuckAtZeroSince = Date.now();
           await ensureBattleStarted();
-          if (startBattleAttempts >= 6 && lobbyStatus === 'registration') {
-            var gid = data.tournament.genre_id;
+          if (startBattleAttempts >= 4 && lobbyStatus === 'registration') {
+            var gid = data.tournament.genre_id || watchGenreId;
             if (gid) await redirectToActiveExpress(gid);
           }
           return;
         }
+        stuckAtZeroSince = null;
         startBattleAttempts = 0;
       }
 
@@ -387,14 +459,22 @@
       }
     } catch (e) {
       console.error('[tournament-bracket]', e);
+      if (startBattleAttempts >= 2) {
+        lastLifecycleError =
+          'Servidor lento o dormido. Reintentando… (Render puede tardar ~1 min)';
+        renderStuckAtZero();
+      }
     }
   }
 
-  function watch(tournamentId) {
+  function watch(tournamentId, genreId) {
     watchId = tournamentId;
+    watchGenreId = genreId || localStorage.getItem('mtr_watch_genre') || null;
     startBattleAttempts = 0;
+    stuckAtZeroSince = null;
     lastLifecycleError = null;
     localStorage.setItem('mtr_watch_tournament', tournamentId);
+    if (watchGenreId) localStorage.setItem('mtr_watch_genre', watchGenreId);
     showArena();
     refresh();
     if (pollTimer) clearInterval(pollTimer);
@@ -407,17 +487,27 @@
         ? Math.max(0, Math.floor((lobbyClosesAt - serverNowMs()) / 1000))
         : 0;
       if (
-        startBattleAttempts < 8 &&
+        startBattleAttempts < 25 &&
         ((lobbyStatus === 'registration' && sec === 0) || lobbyStatus === 'locked')
       ) {
         ensureBattleStarted();
+      }
+      if (
+        lobbyStatus === 'registration' &&
+        sec === 0 &&
+        stuckAtZeroSince &&
+        Date.now() - stuckAtZeroSince > 20000 &&
+        watchGenreId
+      ) {
+        syncWatchToLiveExpress();
       }
     }, 1000);
   }
 
   async function redirectToActiveExpress(genreId) {
     try {
-      var hub = await fetch(backendUrl() + '/api/tournaments/hub', { cache: 'no-store' });
+      await wakeBackend();
+      var hub = await fetchApi('/api/tournaments/hub', { method: 'GET' }, API_TIMEOUT_MS);
       var h = await hub.json();
       if (!h.ok || !genreId) return false;
       var g = (h.genres || []).find(function (x) { return x.id === genreId; });
@@ -455,15 +545,28 @@
 
   document.addEventListener('DOMContentLoaded', function () {
     var saved = localStorage.getItem('mtr_watch_tournament');
+    var savedGenre = localStorage.getItem('mtr_watch_genre');
     if (!saved) return;
-    fetchBracket(saved).then(function (data) {
-      if (data.ok && data.tournament && isStaleRegistration(data.tournament)) {
-        localStorage.removeItem('mtr_watch_tournament');
-        return;
+    wakeBackend().then(function () {
+      return fetchBracket(saved);
+    }).then(function (data) {
+      if (data.ok && data.tournament) {
+        if (data.tournament.genre_id) {
+          savedGenre = data.tournament.genre_id;
+          localStorage.setItem('mtr_watch_genre', savedGenre);
+        }
+        if (isStaleRegistration(data.tournament) && savedGenre) {
+          redirectToActiveExpress(savedGenre);
+          return;
+        }
+        if (data.tournament.status === 'in_progress' && data.bracket) {
+          watch(saved, savedGenre);
+          return;
+        }
       }
-      watch(saved);
+      watch(saved, savedGenre);
     }).catch(function () {
-      watch(saved);
+      watch(saved, savedGenre);
     });
   });
 

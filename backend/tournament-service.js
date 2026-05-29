@@ -119,6 +119,14 @@ class TournamentService {
       const closesMs = new Date(active.registration_closes_at).getTime();
       if (active.status === 'registration' && closesMs <= nowMs) {
         await this.forceCloseStaleRegistration(active.id);
+        const { data: refreshed } = await this.supabase
+          .from('tournaments')
+          .select('*')
+          .eq('id', active.id)
+          .maybeSingle();
+        if (refreshed && refreshed.status !== 'cancelled') {
+          return refreshed;
+        }
       } else {
         return active;
       }
