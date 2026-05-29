@@ -110,6 +110,11 @@ async function verifyUserCanMutateCredits(
     return false;
   }
 
+  // Sesión Supabase válida sobre la cuenta objetivo — no exigir wallet vinculada.
+  if (userId && (userId === publicUserId || userId === authUser.id)) {
+    return true;
+  }
+
   if (walletAddress) {
     return userOwnsWallet(supabase, walletLinkAdapter, publicUserId, walletAddress);
   }
