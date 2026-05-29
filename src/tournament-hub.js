@@ -156,15 +156,18 @@
     var exp = g.express;
     var wk = g.weekly;
     var sec = exp ? secondsToBattle(exp) : 0;
+    var expressOpen = exp && exp.status === 'registration' && exp.id && sec > 0;
 
     var expressHtml = exp
       ? '<div class="p-4 rounded-xl border border-cyan-500/20 bg-cyan-500/5">' +
         '<div class="text-sm font-bold text-cyan-300 mb-3">⚡ Express · siempre activo</div>' +
-        (exp.status === 'registration'
+        (expressOpen
           ? '<div class="mb-4 p-4 rounded-xl border border-cyan-500/25 bg-black/30 text-center" id="genreExpressCountdown">' +
             countdownHtml(sec, 'text-4xl') +
             '<p class="text-xs text-cyan-200/80 mt-3">Inscríbete antes de que termine el cronómetro</p></div>'
-          : '<p class="text-sm text-amber-300 mb-3">' + expressStatusLine(exp) + '</p>') +
+          : (exp.status === 'registration' && sec === 0
+            ? '<p class="text-sm text-amber-300 mb-3 animate-pulse">⏳ Actualizando slot Express… recarga en unos segundos</p>'
+            : '<p class="text-sm text-amber-300 mb-3">' + expressStatusLine(exp) + '</p>')) +
         '<div class="text-xs text-gray-400 space-y-1">' +
         '<div>Entry: <strong class="text-white">' + exp.entry_fee + ' cr</strong></div>' +
         '<div>Jugadores: <strong class="text-white">' + exp.current_participants + '/' + exp.max_participants + '</strong></div>' +
@@ -172,7 +175,7 @@
         '<div class="w-full bg-gray-800 rounded-full h-2 mt-2"><div class="bg-cyan-500 h-2 rounded-full transition-all" style="width:' +
         Math.min(100, (exp.current_participants / exp.max_participants) * 100) + '%"></div></div>' +
         '</div>' +
-        (exp.status === 'registration' && exp.id
+        (expressOpen
           ? '<button type="button" class="mt-3 w-full py-2.5 rounded-lg text-sm font-bold bg-gradient-to-r from-cyan-600 to-purple-600 text-white" data-join-express="' + exp.id + '">Inscribirme · ' + exp.entry_fee + ' cr</button>'
           : (exp.status === 'in_progress' || exp.status === 'locked'
             ? '<button type="button" class="mt-3 w-full py-2.5 rounded-lg text-sm font-bold bg-cyan-600 text-white" data-watch-express="' + exp.id + '">Ver batalla Express</button>'

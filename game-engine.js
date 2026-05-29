@@ -2309,42 +2309,93 @@ const GameEngine = {
                 return;
             }
 
-            const { data: tournament } = await supabaseClient
-                .from('tournaments')
-                .select('*')
-                .eq('id', tournamentId)
-                .single();
-
-            if (!tournament) {
-                showToast('Torneo no encontrado', 'error');
-                return;
-            }
-
-            if (tournament.status !== 'registration') {
-                showToast('Inscripción cerrada para este torneo', 'error');
-                return;
-            }
-
-            if (tournament.current_participants >= tournament.max_participants) {
-                showToast('Torneo lleno', 'error');
-                return;
-            }
-
-            const entryFee = Number(tournament.entry_fee) || 3;
-
+            const entryFee = Number(betAmount) || Number(window.tournamentEnrollment?.entryFee) || 3;
             if (!(await this.hasSufficientCredits(entryFee))) {
                 return;
             }
 
-            const deductionSuccess = await this.updateBalance(-entryFee, 'bet', null);
-            if (!deductionSuccess) {
-                showToast('Error al descontar créditos. Intenta nuevamente.', 'error');
+            const backendUrl = window.CONFIG?.BACKEND_API || 'https://musictoken-ring.onrender.com';
+            const songPayload = song ? {
+                id: song.id,
+                name: song.name,
+                artist: song.artist,
+                image: song.image,
+                preview: song.preview
+            } : null;
+
+            const response = await fetch(backendUrl + '/api/tournaments/' + tournamentId + '/join', {
+                method: 'POST',
+                headers: await this.getBackendAuthHeaders({ 'Content-Type': 'application/json' }),
+                body: JSON.stringify({ song: songPayload })
+            });
+
+            const result = await response.json().catch(function () { return {}; });
+
+            if (!response.ok || !result.ok) {
+                if (response.status === 404 || response.status === 503) {
+                    const localOk = await this.joinTournamentLocalFallback(
+                        session.user.id,
+                        tournamentId,
+                        song,
+                        entryFee
+                    );
+                    if (localOk) {
+                        showToast('¡Inscrito en el torneo!', 'success');
+                        window.tournamentEnrollment = null;
+                        localStorage.setItem('mtr_watch_tournament', tournamentId);
+                        if (window.TournamentBracket) {
+                            window.TournamentBracket.watch(tournamentId);
+                        }
+                        return;
+                    }
+                }
+                const msg = result.error || 'Error al inscribirte en el torneo';
+                console.error('[joinTournament] falló:', result);
+                showToast(msg, 'error');
                 return;
+            }
+
+            const walletAddress = this.connectedWallet || localStorage.getItem('mtr_wallet');
+            if (walletAddress && window.CreditsSystem) {
+                await window.CreditsSystem.loadBalance(walletAddress);
+                this.updateBalanceDisplay();
+            }
+
+            const {
+                platformNet,
+                jackpotContribution
+            } = this.calculateTournamentEntry(entryFee);
+            this.addToPlatformRevenue(platformNet);
+            this.addToJackpotPool(jackpotContribution);
+
+            showToast(result.alreadyJoined ? 'Ya estabas inscrito' : '¡Inscrito en el torneo!', 'success');
+            window.tournamentEnrollment = null;
+            localStorage.setItem('mtr_watch_tournament', tournamentId);
+
+            if (window.TournamentBracket) {
+                window.TournamentBracket.watch(tournamentId);
+            } else if (window.TournamentHub) {
+                setTimeout(function () { selectMode('tournament'); }, 800);
+            }
+
+        } catch (error) {
+            console.error('Error joining tournament:', error);
+            showToast('Error al unirse al torneo', 'error');
+        }
+    },
+
+    async joinTournamentLocalFallback(userId, tournamentId, song, entryFee) {
+        try {
+            const deducted = await this.tryUnifiedRpcFallback(userId, entryFee);
+            if (!deducted) {
+                const ok = await this.updateBalance(-entryFee, 'bet', null);
+                if (!ok) return false;
             }
 
             const participantRow = {
                 tournament_id: tournamentId,
-                user_id: session.user.id
+                user_id: userId,
+                is_cpu: false
             };
             if (song) {
                 participantRow.song_id = String(song.id || '');
@@ -2359,57 +2410,13 @@ const GameEngine = {
                 .insert([participantRow]);
 
             if (error) {
-                await this.updateBalance(entryFee, 'refund', null);
-                throw error;
+                console.error('[joinTournamentLocalFallback] insert:', error);
+                return false;
             }
-
-            const {
-                platformFee,
-                jackpotContribution,
-                platformNet,
-                prizeContribution
-            } = this.calculateTournamentEntry(entryFee);
-
-            const newCount = tournament.current_participants + 1;
-            const updatePayload = {
-                current_participants: newCount,
-                prize_pool: Number(tournament.prize_pool || 0) + prizeContribution,
-                updated_at: new Date().toISOString()
-            };
-            if (newCount >= tournament.max_participants) {
-                updatePayload.status = 'locked';
-            }
-
-            const updateError = await supabaseClient
-                .from('tournaments')
-                .update(updatePayload)
-                .eq('id', tournamentId);
-
-            if (updateError.error) {
-                await this.updateBalance(entryFee, 'refund', null);
-                await supabaseClient.from('tournament_participants')
-                    .delete()
-                    .eq('tournament_id', tournamentId)
-                    .eq('user_id', session.user.id);
-                throw updateError.error;
-            }
-
-            this.addToPlatformRevenue(platformNet);
-            this.addToJackpotPool(jackpotContribution);
-
-            showToast('¡Inscrito en el torneo!', 'success');
-            window.tournamentEnrollment = null;
-            localStorage.setItem('mtr_watch_tournament', tournamentId);
-
-            if (window.TournamentBracket) {
-                window.TournamentBracket.watch(tournamentId);
-            } else if (window.TournamentHub) {
-                setTimeout(function () { selectMode('tournament'); }, 800);
-            }
-
-        } catch (error) {
-            console.error('Error joining tournament:', error);
-            showToast('Error al unirse al torneo', 'error');
+            return true;
+        } catch (e) {
+            console.error('[joinTournamentLocalFallback]', e);
+            return false;
         }
     },
     
@@ -4646,6 +4653,82 @@ const GameEngine = {
      * Intentar deducción de créditos vía Supabase RPC como fallback
      * cuando el backend rechaza pero hay créditos suficientes
      */
+    async tryUnifiedRpcFallback(userId, creditsToDeduct) {
+        try {
+            const supabase = window.supabaseClient || (typeof supabaseClient !== 'undefined' ? supabaseClient : null);
+            if (!supabase || !userId) return false;
+
+            const { data: userData } = await supabase
+                .from('users')
+                .select('saldo_fiat, saldo_onchain')
+                .eq('id', userId)
+                .maybeSingle();
+
+            const { data: creditsRow } = await supabase
+                .from('user_credits')
+                .select('credits')
+                .eq('user_id', userId)
+                .maybeSingle();
+
+            const fiat = parseFloat(userData?.saldo_fiat || 0);
+            const onchain = parseFloat(userData?.saldo_onchain || 0);
+            const creditsBal = parseFloat(creditsRow?.credits || 0);
+            const total = fiat + onchain + creditsBal;
+            if (total < creditsToDeduct) return false;
+
+            let remaining = creditsToDeduct;
+            const fromCredits = Math.min(creditsBal, remaining);
+            remaining -= fromCredits;
+            const fromFiat = Math.min(fiat, remaining);
+            remaining -= fromFiat;
+            const fromOnchain = remaining;
+
+            if (fromCredits > 0) {
+                const { error: rpcErr } = await supabase.rpc('decrement_user_credits', {
+                    user_id_param: userId,
+                    credits_to_subtract: fromCredits
+                });
+                if (rpcErr) {
+                    const { error: updErr } = await supabase
+                        .from('user_credits')
+                        .update({
+                            credits: Math.max(0, creditsBal - fromCredits),
+                            updated_at: new Date().toISOString()
+                        })
+                        .eq('user_id', userId);
+                    if (updErr) return false;
+                }
+            }
+            if (fromFiat > 0) {
+                const { error: fiatRpcErr } = await supabase.rpc('decrement_user_fiat_balance', {
+                    user_id_param: userId,
+                    amount_to_subtract: fromFiat
+                });
+                if (fiatRpcErr) {
+                    const { error: fiatUpdErr } = await supabase
+                        .from('users')
+                        .update({
+                            saldo_fiat: Math.max(0, fiat - fromFiat),
+                            updated_at: new Date().toISOString()
+                        })
+                        .eq('id', userId);
+                    if (fiatUpdErr) return false;
+                }
+            }
+            if (fromOnchain > 0) {
+                const { error } = await supabase
+                    .from('users')
+                    .update({ saldo_onchain: Math.max(0, onchain - fromOnchain) })
+                    .eq('id', userId);
+                if (error) return false;
+            }
+            return true;
+        } catch (e) {
+            console.error('[tryUnifiedRpcFallback]', e);
+            return false;
+        }
+    },
+
     async tryRpcFallback(walletAddress, userId, creditsToDeduct) {
         try {
             console.log('[tryRpcFallback] 🔄 Iniciando fallback RPC...');
@@ -4654,9 +4737,26 @@ const GameEngine = {
                 console.error('[tryRpcFallback] ❌ Supabase client no disponible');
                 return false;
             }
+
+            let publicUserIdForRpc = userId || null;
+            if (!publicUserIdForRpc) {
+                const { data: { session } } = await supabase.auth.getSession();
+                if (session?.user?.id) publicUserIdForRpc = session.user.id;
+            }
+
+            if (publicUserIdForRpc && typeof this.tryUnifiedRpcFallback === 'function') {
+                const unifiedOk = await this.tryUnifiedRpcFallback(publicUserIdForRpc, creditsToDeduct);
+                if (unifiedOk) {
+                    if (walletAddress && window.CreditsSystem) {
+                        await window.CreditsSystem.loadBalance(walletAddress);
+                    }
+                    console.log('[tryRpcFallback] ✅ Deducción unificada vía RPC');
+                    return true;
+                }
+            }
             
             // CRÍTICO: Usar userId de sesión si ya está disponible (torneos, email login)
-            let publicUserIdForRpc = userId || null;
+            publicUserIdForRpc = publicUserIdForRpc || userId || null;
 
             if (!publicUserIdForRpc && walletAddress) {
                 try {
@@ -4739,12 +4839,11 @@ const GameEngine = {
                 });
                 
                 if (walletAddress) {
-                    // Deduct credits via backend
                     const backendUrl = window.CONFIG?.BACKEND_API || window.CreditsSystem?.backendUrl || 'https://musictoken-ring.onrender.com';
-                    console.log('[updateBalance] 🔍 Obteniendo userId para wallet:', walletAddress);
-                    console.log('[updateBalance] 🔍 Backend URL:', backendUrl);
-                    
-                    const userId = await window.CreditsSystem.getUserId(walletAddress);
+                    let userId = session?.user?.id || null;
+                    if (!userId) {
+                        userId = await window.CreditsSystem.getUserId(walletAddress);
+                    }
                     console.log('[updateBalance] ✅ userId obtenido:', userId);
                     
                     if (!userId) {

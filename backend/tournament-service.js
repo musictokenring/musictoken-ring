@@ -16,6 +16,7 @@ const {
   getIsoWeekKey
 } = require('./tournament-genres');
 const { TournamentBattleEngine } = require('./tournament-battle');
+const { deductUnifiedBalance } = require('./unified-balance');
 
 class TournamentService {
   constructor(supabase) {
@@ -46,7 +47,64 @@ class TournamentService {
     return getExpressSlot(now);
   }
 
+  async forceCloseStaleRegistration(tournamentId) {
+    const nowIso = new Date().toISOString();
+    const humanCount = await this.countHumanParticipants(tournamentId);
+    if (humanCount >= 1) {
+      await this.supabase
+        .from('tournaments')
+        .update({ status: 'locked', updated_at: nowIso })
+        .eq('id', tournamentId);
+      const { data: locked } = await this.supabase
+        .from('tournaments')
+        .select('*')
+        .eq('id', tournamentId)
+        .maybeSingle();
+      if (locked) {
+        try {
+          if (locked.tournament_type === 'express') {
+            await this.battleEngine.startExpressTournament(locked);
+          } else if (locked.tournament_type === 'weekly') {
+            await this.battleEngine.startWeeklyTournament(locked);
+          }
+        } catch (err) {
+          console.error('[tournament] forceClose start error:', tournamentId, err.message);
+        }
+      }
+      return;
+    }
+    await this.supabase
+      .from('tournaments')
+      .update({ status: 'cancelled', updated_at: nowIso })
+      .eq('id', tournamentId);
+  }
+
   async ensureExpressForGenre(genre, now = new Date()) {
+    const nowMs = now.getTime();
+    const nowIso = now.toISOString();
+
+    const { data: staleRegs } = await this.supabase
+      .from('tournaments')
+      .select('id')
+      .eq('tournament_type', 'express')
+      .eq('genre_id', genre.id)
+      .eq('status', 'registration')
+      .lt('registration_closes_at', nowIso);
+
+    for (const row of staleRegs || []) {
+      await this.advanceTournamentLifecycle(row.id);
+      const { data: check } = await this.supabase
+        .from('tournaments')
+        .select('status, registration_closes_at')
+        .eq('id', row.id)
+        .maybeSingle();
+      const stillStale = check?.status === 'registration' &&
+        new Date(check.registration_closes_at).getTime() <= nowMs;
+      if (stillStale) {
+        await this.forceCloseStaleRegistration(row.id);
+      }
+    }
+
     const { data: activeList } = await this.supabase
       .from('tournaments')
       .select('*')
@@ -59,16 +117,11 @@ class TournamentService {
     if (activeList?.length) {
       const active = activeList[0];
       const closesMs = new Date(active.registration_closes_at).getTime();
-      if (active.status === 'registration' && closesMs <= now.getTime()) {
-        await this.advanceTournamentLifecycle(active.id);
-        const { data: refreshed } = await this.supabase
-          .from('tournaments')
-          .select('*')
-          .eq('id', active.id)
-          .maybeSingle();
-        return refreshed || active;
+      if (active.status === 'registration' && closesMs <= nowMs) {
+        await this.forceCloseStaleRegistration(active.id);
+      } else {
+        return active;
       }
-      return active;
     }
 
     const timing = getExpressTimingForGenre(genre.id, now);
@@ -170,6 +223,41 @@ class TournamentService {
     }
   }
 
+  async countHumanParticipants(tournamentId) {
+    const { count, error } = await this.supabase
+      .from('tournament_participants')
+      .select('id', { count: 'exact', head: true })
+      .eq('tournament_id', tournamentId)
+      .eq('is_cpu', false);
+
+    if (error) {
+      console.error('[tournament] countHumanParticipants:', error.message);
+      return 0;
+    }
+    return count || 0;
+  }
+
+  async syncTournamentParticipantCount(tournamentId) {
+    const humanCount = await this.countHumanParticipants(tournamentId);
+    const { count: cpuCount } = await this.supabase
+      .from('tournament_participants')
+      .select('id', { count: 'exact', head: true })
+      .eq('tournament_id', tournamentId)
+      .eq('is_cpu', true);
+
+    const total = humanCount + (cpuCount || 0);
+    await this.supabase
+      .from('tournaments')
+      .update({
+        current_participants: total,
+        human_participants: humanCount,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', tournamentId);
+
+    return { humanCount, total };
+  }
+
   async processExpiredRegistrations() {
     const nowIso = new Date().toISOString();
     const { data: expired } = await this.supabase
@@ -181,13 +269,14 @@ class TournamentService {
     if (!expired?.length) return;
 
     for (const t of expired) {
+      const { humanCount } = await this.syncTournamentParticipantCount(t.id);
       const minRequired = 1;
-      if (t.current_participants >= minRequired) {
+      if (humanCount >= minRequired) {
         await this.supabase
           .from('tournaments')
           .update({ status: 'locked', updated_at: nowIso })
           .eq('id', t.id);
-        console.log('[tournament] 🔒 Torneo cerrado (listo):', t.name, t.current_participants);
+        console.log('[tournament] 🔒 Torneo cerrado (listo):', t.name, humanCount);
       } else {
         await this.supabase
           .from('tournaments')
@@ -234,22 +323,34 @@ class TournamentService {
       return { ok: false, error: 'Torneo no encontrado' };
     }
 
+    if (t.status === 'cancelled' || t.status === 'completed') {
+      return { ok: true, stage: t.status };
+    }
+
+    if (t.status === 'in_progress' && t.bracket_state) {
+      return { ok: true, stage: 'in_progress' };
+    }
+
+    const { humanCount } = await this.syncTournamentParticipantCount(tournamentId);
+
     if (t.status === 'registration') {
       const closesMs = new Date(t.registration_closes_at).getTime();
       if (closesMs <= Date.now()) {
-        if (t.current_participants >= 1) {
+        if (humanCount >= 1) {
           await this.supabase
             .from('tournaments')
             .update({ status: 'locked', updated_at: nowIso })
             .eq('id', t.id);
-          console.log('[tournament] 🔒 Cierre inmediato:', t.name);
+          console.log('[tournament] 🔒 Cierre inmediato:', t.name, 'humanos:', humanCount);
         } else {
           await this.supabase
             .from('tournaments')
             .update({ status: 'cancelled', updated_at: nowIso })
             .eq('id', t.id);
-          return { ok: false, error: 'Torneo cancelado sin participantes' };
+          return { ok: false, error: 'Torneo cancelado sin participantes', stage: 'cancelled' };
         }
+      } else {
+        return { ok: true, stage: 'registration', humanCount };
       }
     }
 
@@ -260,24 +361,149 @@ class TournamentService {
       .maybeSingle();
 
     if (updated?.status === 'locked') {
+      let bracket = null;
       try {
         if (updated.tournament_type === 'express') {
-          await this.battleEngine.startExpressTournament(updated);
+          bracket = await this.battleEngine.startExpressTournament(updated);
         } else if (updated.tournament_type === 'weekly') {
-          await this.battleEngine.startWeeklyTournament(updated);
+          bracket = await this.battleEngine.startWeeklyTournament(updated);
         }
       } catch (err) {
         console.error('[tournament] Error iniciando torneo:', tournamentId, err.message);
-        return { ok: false, error: err.message };
+        return { ok: false, error: err.message, stage: 'locked' };
       }
+
+      if (!bracket) {
+        const { data: after } = await this.supabase
+          .from('tournaments')
+          .select('status, bracket_state')
+          .eq('id', tournamentId)
+          .maybeSingle();
+
+        if (after?.status === 'cancelled') {
+          return {
+            ok: false,
+            error: 'No se pudo completar el torneo (¿migración 016 aplicada?)',
+            stage: 'cancelled'
+          };
+        }
+        if (after?.status === 'in_progress' && after.bracket_state) {
+          return { ok: true, stage: 'in_progress' };
+        }
+
+        return {
+          ok: false,
+          error: 'No se pudo generar el bracket. Revisa migración 016 en Supabase.',
+          stage: 'locked'
+        };
+      }
+
+      return { ok: true, stage: 'in_progress' };
     }
 
-    return { ok: true };
+    return { ok: true, stage: updated?.status || t.status };
+  }
+
+  async joinTournament(userId, tournamentId, song) {
+    const { data: tournament, error } = await this.supabase
+      .from('tournaments')
+      .select('*')
+      .eq('id', tournamentId)
+      .maybeSingle();
+
+    if (error || !tournament) {
+      return { ok: false, error: 'Torneo no encontrado' };
+    }
+
+    if (tournament.status !== 'registration') {
+      return { ok: false, error: 'Inscripción cerrada para este torneo' };
+    }
+
+    const closesMs = new Date(tournament.registration_closes_at).getTime();
+    if (closesMs <= Date.now()) {
+      return { ok: false, error: 'El tiempo de inscripción ya terminó' };
+    }
+
+    const { data: existing } = await this.supabase
+      .from('tournament_participants')
+      .select('id')
+      .eq('tournament_id', tournamentId)
+      .eq('user_id', userId)
+      .eq('is_cpu', false)
+      .maybeSingle();
+
+    if (existing) {
+      return { ok: true, alreadyJoined: true, tournamentId };
+    }
+
+    const humanCount = await this.countHumanParticipants(tournamentId);
+    if (humanCount >= tournament.max_participants) {
+      return { ok: false, error: 'Torneo lleno' };
+    }
+
+    const entryFee = Number(tournament.entry_fee) || 3;
+    const deduction = await deductUnifiedBalance(this.supabase, userId, entryFee);
+    if (!deduction.ok) {
+      return {
+        ok: false,
+        error: deduction.error || 'Saldo insuficiente',
+        total_balance: deduction.total
+      };
+    }
+
+    const participantRow = {
+      tournament_id: tournamentId,
+      user_id: userId,
+      is_cpu: false
+    };
+    if (song) {
+      participantRow.song_id = String(song.id || '');
+      participantRow.song_name = song.name || '';
+      participantRow.song_artist = song.artist || '';
+      participantRow.song_image = song.image || '';
+      participantRow.song_preview = song.preview || '';
+    }
+
+    const { error: insertError } = await this.supabase
+      .from('tournament_participants')
+      .insert([participantRow]);
+
+    if (insertError) {
+      console.error('[tournament] join insert error:', insertError.message);
+      return { ok: false, error: insertError.message };
+    }
+
+    const newHumanCount = humanCount + 1;
+    const platformRate = 0.08;
+    const prizeContribution = entryFee * (1 - platformRate);
+    const updatePayload = {
+      current_participants: newHumanCount,
+      human_participants: newHumanCount,
+      prize_pool: Number(tournament.prize_pool || 0) + prizeContribution,
+      updated_at: new Date().toISOString()
+    };
+    if (newHumanCount >= tournament.max_participants) {
+      updatePayload.status = 'locked';
+    }
+
+    await this.supabase
+      .from('tournaments')
+      .update(updatePayload)
+      .eq('id', tournamentId);
+
+    return { ok: true, tournamentId, humanCount: newHumanCount, locked: Boolean(updatePayload.status) };
   }
 
   async getBracketPayload(tournamentId) {
-    await this.advanceTournamentLifecycle(tournamentId);
-    return this.battleEngine.getBracketPayload(tournamentId);
+    const lifecycle = await this.advanceTournamentLifecycle(tournamentId);
+    const payload = await this.battleEngine.getBracketPayload(tournamentId);
+    if (lifecycle && !lifecycle.ok) {
+      payload.lifecycleError = lifecycle.error;
+      payload.lifecycleStage = lifecycle.stage;
+    } else if (lifecycle?.stage) {
+      payload.lifecycleStage = lifecycle.stage;
+    }
+    return payload;
   }
 
   async advanceTournamentPlayback(tournamentId, duelIndex) {
@@ -305,10 +531,23 @@ class TournamentService {
       .in('status', ['registration', 'locked', 'in_progress']);
 
     const expressByGenre = {};
+    const nowMs = serverNow.getTime();
     (expressRows || []).forEach((row) => {
       const enriched = enrichExpressRow(row, serverNow);
       const prev = expressByGenre[row.genre_id];
-      if (!prev || enriched.status === 'registration') {
+      const closesMs = new Date(row.registration_closes_at).getTime();
+      const isOpenReg = row.status === 'registration' && closesMs > nowMs;
+      if (!prev) {
+        expressByGenre[row.genre_id] = enriched;
+        return;
+      }
+      const prevCloses = new Date(prev.registration_closes_at).getTime();
+      const prevOpen = prev.status === 'registration' && prevCloses > nowMs;
+      if (isOpenReg && !prevOpen) {
+        expressByGenre[row.genre_id] = enriched;
+      } else if (!isOpenReg && !prevOpen && closesMs > prevCloses) {
+        expressByGenre[row.genre_id] = enriched;
+      } else if (isOpenReg && prevOpen && closesMs > prevCloses) {
         expressByGenre[row.genre_id] = enriched;
       }
     });

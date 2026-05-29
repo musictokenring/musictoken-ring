@@ -23,9 +23,11 @@ const {
     createCreditMutationGuard,
     createVaultFeeGuard,
     requireInternalSecret,
-    verifyUserCanMutateCredits
+    verifyUserCanMutateCredits,
+    resolvePublicUserId
 } = require('./auth-middleware');
 const { startTournamentScheduler } = require('./tournament-scheduler');
+const { deductUnifiedBalance } = require('./unified-balance');
 
 const LEGACY_CHAIN_DEPOSITS = process.env.ENABLE_LEGACY_CHAIN_DEPOSITS === 'true';
 
@@ -480,89 +482,6 @@ app.get('/api/user/balance/:userId', async (req, res) => {
 });
 
 /**
- * Deduce del balance unificado (user_credits + saldo_fiat + saldo_onchain).
- * Alineado con get_user_unified_balance usado en el frontend.
- */
-async function deductUnifiedBalance(client, targetUserId, amount) {
-    const { data: userData } = await client
-        .from('users')
-        .select('saldo_fiat, saldo_onchain')
-        .eq('id', targetUserId)
-        .maybeSingle();
-
-    const { data: creditsRow } = await client
-        .from('user_credits')
-        .select('credits')
-        .eq('user_id', targetUserId)
-        .maybeSingle();
-
-    const fiat = parseFloat(userData?.saldo_fiat || 0);
-    const onchain = parseFloat(userData?.saldo_onchain || 0);
-    const creditsBal = parseFloat(creditsRow?.credits || 0);
-    const total = fiat + onchain + creditsBal;
-
-    if (total < amount) {
-        return {
-            ok: false,
-            error: 'Insufficient credits',
-            total,
-            creditsBal,
-            fiat,
-            onchain
-        };
-    }
-
-    let remaining = amount;
-    const fromCredits = Math.min(creditsBal, remaining);
-    remaining -= fromCredits;
-    const fromFiat = Math.min(fiat, remaining);
-    remaining -= fromFiat;
-    const fromOnchain = remaining;
-
-    if (fromCredits > 0) {
-        const { error: creditsError } = await client.rpc('decrement_user_credits', {
-            user_id_param: targetUserId,
-            credits_to_subtract: fromCredits
-        });
-        if (creditsError) {
-            const newCredits = Math.max(0, creditsBal - fromCredits);
-            await client
-                .from('user_credits')
-                .update({ credits: newCredits, updated_at: new Date().toISOString() })
-                .eq('user_id', targetUserId);
-        }
-    }
-
-    if (fromFiat > 0) {
-        const { error: fiatError } = await client.rpc('decrement_user_fiat_balance', {
-            user_id_param: targetUserId,
-            amount_to_subtract: fromFiat
-        });
-        if (fiatError) {
-            await client
-                .from('users')
-                .update({
-                    saldo_fiat: Math.max(0, fiat - fromFiat),
-                    updated_at: new Date().toISOString()
-                })
-                .eq('id', targetUserId);
-        }
-    }
-
-    if (fromOnchain > 0) {
-        await client
-            .from('users')
-            .update({
-                saldo_onchain: Math.max(0, onchain - fromOnchain),
-                updated_at: new Date().toISOString()
-            })
-            .eq('id', targetUserId);
-    }
-
-    return { ok: true, fromCredits, fromFiat, fromOnchain, totalBefore: total };
-}
-
-/**
  * Deduct credits (for betting)
  * Supports both userId and walletAddress for wallet-only operations
  * NEW: Supports fiat balance deduction
@@ -576,6 +495,10 @@ app.post('/api/user/deduct-credits', requireCreditMutationAuth, async (req, res)
         }
 
         let targetUserId = userId;
+
+        if (req.authUser) {
+            targetUserId = await resolvePublicUserId(supabase, req.authUser);
+        }
 
         // 🔗 NUEVO: Si no hay userId pero hay walletAddress, buscar userId desde wallet
         // Esto permite operaciones wallet-only (sin login con Google/Email)
@@ -2100,6 +2023,27 @@ app.get('/api/tournaments/:id/bracket', async (req, res) => {
         res.json(payload);
     } catch (error) {
         console.error('[server] tournaments bracket error:', error);
+        res.status(500).json({ ok: false, error: error.message });
+    }
+});
+
+app.post('/api/tournaments/:id/join', requireCreditMutationAuth, async (req, res) => {
+    try {
+        if (!tournamentScheduler?.service) {
+            return res.status(503).json({ ok: false, error: 'Tournament service unavailable' });
+        }
+        const publicUserId = await resolvePublicUserId(supabase, req.authUser);
+        const result = await tournamentScheduler.service.joinTournament(
+            publicUserId,
+            req.params.id,
+            req.body?.song || null
+        );
+        if (!result.ok) {
+            return res.status(400).json(result);
+        }
+        res.json(result);
+    } catch (error) {
+        console.error('[server] tournaments join error:', error);
         res.status(500).json({ ok: false, error: error.message });
     }
 });

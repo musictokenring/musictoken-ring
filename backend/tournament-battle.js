@@ -324,7 +324,13 @@ class TournamentBattleEngine {
   }
 
   async startTournament(tournament, maxPlayers) {
-    if (!tournament || tournament.status !== 'locked') return null;
+    if (!tournament) return null;
+
+    if (tournament.status === 'in_progress' && tournament.bracket_state) {
+      return tournament.bracket_state;
+    }
+
+    if (tournament.status !== 'locked') return null;
 
     const humanRows = await this.loadHumans(tournament.id);
     if (!humanRows.length) {
