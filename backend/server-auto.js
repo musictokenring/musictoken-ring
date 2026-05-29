@@ -2117,7 +2117,10 @@ async function handleTournamentJoinRequest(req, res, tournamentId, genreId) {
         tournamentId,
         req.body?.song || null,
         authz.participantUserId,
-        { genreId: genreId || null }
+        {
+            genreId: genreId || null,
+            preferredTournamentId: tournamentId || req.body?.tournamentId || null
+        }
     );
     if (!result.ok) {
         return res.status(400).json({

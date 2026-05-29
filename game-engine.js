@@ -2408,13 +2408,8 @@ const GameEngine = {
             }
 
             if (window.tournamentEnrollment?.type === 'express') {
-                const enrollment = window.tournamentEnrollment;
-                const slotFresh = enrollment.id && enrollment.closesAt &&
-                    new Date(enrollment.closesAt).getTime() > Date.now() + 15000;
-                if (!slotFresh) {
-                    const refreshedId = await this.refreshExpressEnrollmentId();
-                    if (refreshedId) tournamentId = refreshedId;
-                }
+                const refreshedId = await this.refreshExpressEnrollmentId();
+                if (refreshedId) tournamentId = refreshedId;
             }
 
             const entryFee = Number(betAmount) || Number(window.tournamentEnrollment?.entryFee) || 3;
@@ -2447,7 +2442,8 @@ const GameEngine = {
                 body: JSON.stringify({
                     song: songPayload,
                     walletAddress: walletAddress.toLowerCase(),
-                    genreId: enrollment?.genreId || null
+                    genreId: enrollment?.genreId || null,
+                    tournamentId: enrollment?.id || tournamentId || null
                 })
             });
 

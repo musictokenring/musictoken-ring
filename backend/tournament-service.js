@@ -258,7 +258,7 @@ class TournamentService {
       .from('tournament_participants')
       .select('id', { count: 'exact', head: true })
       .eq('tournament_id', tournamentId)
-      .eq('is_cpu', false);
+      .neq('is_cpu', true);
 
     if (error) {
       console.error('[tournament] countHumanParticipants:', error.message);
@@ -533,53 +533,86 @@ class TournamentService {
     return null;
   }
 
+  async resolveExpressJoinTarget(genre, preferredId, now = new Date()) {
+    const nowMs = now.getTime();
+    if (preferredId) {
+      const { data: pref } = await this.supabase
+        .from('tournaments')
+        .select('*')
+        .eq('id', preferredId)
+        .maybeSingle();
+      if (
+        pref &&
+        pref.tournament_type === 'express' &&
+        pref.genre_id === genre.id &&
+        pref.status === 'registration'
+      ) {
+        const closesMs = new Date(pref.registration_closes_at).getTime();
+        if (closesMs > nowMs + 2000) {
+          return pref;
+        }
+      }
+    }
+    return this.findOpenExpressForGenre(genre.id, now);
+  }
+
   async joinTournament(creditsUserId, tournamentId, song, participantUserId, options = {}) {
     const debitUserId = creditsUserId;
     const playerUserId = participantUserId || creditsUserId;
     const originalTournamentId = tournamentId;
-    let tournamentRow = null;
+    const now = new Date();
+    const nowMs = now.getTime();
+    let tournament = null;
 
     if (options.genreId) {
       const genre = getGenreById(options.genreId);
-      if (genre) {
-        tournamentRow = await this.openExpressForJoin(genre);
-        if (tournamentRow?.id) tournamentId = tournamentRow.id;
+      if (!genre) {
+        return { ok: false, error: 'Género no encontrado' };
       }
-    }
-
-    if (!tournamentRow && tournamentId) {
+      tournament = await this.resolveExpressJoinTarget(
+        genre,
+        options.preferredTournamentId || tournamentId,
+        now
+      );
+      if (!tournament) {
+        return {
+          ok: false,
+          error: 'Inscripción cerrada. Espera la nueva ronda Express en el hub.'
+        };
+      }
+    } else if (tournamentId) {
       const { data, error } = await this.supabase
         .from('tournaments')
         .select('*')
         .eq('id', tournamentId)
         .maybeSingle();
-      if (!error && data) tournamentRow = data;
-    }
-
-    if (!tournamentRow) {
-      return { ok: false, error: 'Torneo no encontrado' };
-    }
-
-    let tournament = tournamentRow;
-    if (tournamentRow.tournament_type === 'express') {
-      const genre = getGenreById(tournamentRow.genre_id || options.genreId);
-      if (genre) {
-        tournament = await this.openExpressForJoin(genre) || tournamentRow;
-      } else {
-        tournament = await this.resolveJoinableTournament(tournamentRow);
+      if (error || !data) {
+        return { ok: false, error: 'Torneo no encontrado' };
       }
-    } else {
-      const closesMs = new Date(tournamentRow.registration_closes_at).getTime();
-      if (tournamentRow.status !== 'registration' || closesMs <= Date.now()) {
-        return { ok: false, error: 'Inscripción cerrada para este torneo' };
-      }
-      tournament = tournamentRow;
+      tournament = data;
     }
 
     if (!tournament || !tournament.id) {
+      return { ok: false, error: 'Torneo no encontrado' };
+    }
+
+    if (tournament.tournament_type === 'express' && !options.genreId) {
+      const genre = getGenreById(tournament.genre_id);
+      if (genre) {
+        tournament = await this.resolveExpressJoinTarget(genre, tournament.id, now) || tournament;
+      }
+    } else if (tournament.tournament_type !== 'express') {
+      const closesMs = new Date(tournament.registration_closes_at).getTime();
+      if (tournament.status !== 'registration' || closesMs <= nowMs) {
+        return { ok: false, error: 'Inscripción cerrada para este torneo' };
+      }
+    }
+
+    const closesMs = new Date(tournament.registration_closes_at).getTime();
+    if (tournament.status !== 'registration' || closesMs <= nowMs) {
       return {
         ok: false,
-        error: 'Express no disponible temporalmente. Espera 10 s y pulsa de nuevo.'
+        error: 'Inscripción cerrada. Elige la ronda Express activa en el hub.'
       };
     }
 
@@ -590,7 +623,7 @@ class TournamentService {
       .select('id')
       .eq('tournament_id', tournamentId)
       .eq('user_id', playerUserId)
-      .eq('is_cpu', false)
+      .neq('is_cpu', true)
       .maybeSingle();
 
     if (existing) {

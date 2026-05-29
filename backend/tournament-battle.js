@@ -182,7 +182,7 @@ class TournamentBattleEngine {
       .from('tournament_participants')
       .select('*')
       .eq('tournament_id', tournamentId)
-      .eq('is_cpu', false)
+      .neq('is_cpu', true)
       .order('joined_at', { ascending: true });
     return humans || [];
   }
@@ -386,7 +386,24 @@ class TournamentBattleEngine {
     if (!tournament) return null;
 
     if (tournament.status === 'in_progress' && tournament.bracket_state) {
-      return tournament.bracket_state;
+      const humanRows = await this.loadHumans(tournament.id);
+      const bracketHumans = Number(tournament.bracket_state.humanCount) || 0;
+      if (humanRows.length > bracketHumans) {
+        console.warn('[tournament-battle] Rebuild bracket: DB humanos',
+          humanRows.length, 'bracket', bracketHumans);
+        await this.clearCpuParticipants(tournament.id);
+        await this.supabase.from('tournaments').update({
+          status: 'locked',
+          bracket_state: null,
+          updated_at: new Date().toISOString()
+        }).eq('id', tournament.id);
+        tournament = Object.assign({}, tournament, {
+          status: 'locked',
+          bracket_state: null
+        });
+      } else {
+        return tournament.bracket_state;
+      }
     }
 
     const isExpress = tournament.tournament_type === 'express';
@@ -405,7 +422,11 @@ class TournamentBattleEngine {
 
     if (tournament.status !== 'locked' && tournament.status !== 'registration') return null;
 
-    const humanRows = await this.loadHumans(tournament.id);
+    let humanRows = await this.loadHumans(tournament.id);
+    if (!humanRows.length) {
+      await new Promise(function (resolve) { setTimeout(resolve, 600); });
+      humanRows = await this.loadHumans(tournament.id);
+    }
     if (!humanRows.length && !isExpress) {
       await this.cancelTournament(tournament.id, 'sin humanos');
       return null;
