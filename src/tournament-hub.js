@@ -13,7 +13,9 @@
   var hubSyncInFlight = false;
   var zeroSinceLocal = null;
   var lastHubSyncAt = 0;
-  var hubFetchController = null;
+  var hubPollController = null;
+  var hubEnsureController = null;
+  var ensureExpressPromise = null;
   var API_TIMEOUT_MS = 55000;
   var HUB_GET_TIMEOUT_MS = 22000;
   var HUB_SYNC_COOLDOWN_MS = 20000;
@@ -142,11 +144,19 @@
   }
 
   async function fetchApi(path, options, timeoutMs) {
-    if (hubFetchController) {
-      try { hubFetchController.abort(); } catch (e) { /* ignore */ }
+    var isEnsure = String(path).indexOf('ensure-express') !== -1;
+    var controller = new AbortController();
+    if (isEnsure) {
+      if (hubEnsureController) {
+        try { hubEnsureController.abort(); } catch (e) { /* ignore */ }
+      }
+      hubEnsureController = controller;
+    } else {
+      if (hubPollController) {
+        try { hubPollController.abort(); } catch (e) { /* ignore */ }
+      }
+      hubPollController = controller;
     }
-    hubFetchController = new AbortController();
-    var controller = hubFetchController;
     var timer = setTimeout(function () { controller.abort(); }, timeoutMs || API_TIMEOUT_MS);
     try {
       var res = await fetch(backendUrl() + path, Object.assign({}, options || {}, {
@@ -154,11 +164,13 @@
         cache: 'no-store'
       }));
       clearTimeout(timer);
-      if (hubFetchController === controller) hubFetchController = null;
+      if (isEnsure && hubEnsureController === controller) hubEnsureController = null;
+      if (!isEnsure && hubPollController === controller) hubPollController = null;
       return res;
     } catch (err) {
       clearTimeout(timer);
-      if (hubFetchController === controller) hubFetchController = null;
+      if (isEnsure && hubEnsureController === controller) hubEnsureController = null;
+      if (!isEnsure && hubPollController === controller) hubPollController = null;
       if (err && err.name === 'AbortError') return null;
       throw err;
     }
@@ -226,33 +238,37 @@
   }
 
   async function ensureExpressSlot(genreId) {
-    try {
-      var res = await fetchApi(
-        '/api/tournaments/genre/' + genreId + '/ensure-express',
-        { method: 'POST', headers: { 'Content-Type': 'application/json' } },
-        API_TIMEOUT_MS
-      );
-      var data = await res.json();
-      if (!res.ok || !data.ok || !data.express) {
-        throw new Error(data.error || 'No se pudo abrir el Express');
+    if (!genreId) return null;
+    if (ensureExpressPromise) return ensureExpressPromise;
+    ensureExpressPromise = (async function () {
+      try {
+        var res = await fetchApi(
+          '/api/tournaments/genre/' + genreId + '/ensure-express',
+          { method: 'POST', headers: { 'Content-Type': 'application/json' } },
+          30000
+        );
+        if (!res) {
+          throw new Error('Servidor no respondió. Espera unos segundos e inténtalo de nuevo.');
+        }
+        var data = await res.json().catch(function () { return {}; });
+        if (!res.ok || !data.ok || !data.express) {
+          throw new Error(data.error || 'No se pudo abrir el Express');
+        }
+        patchGenreExpress(genreId, data.express);
+        return data.express;
+      } catch (e) {
+        console.error('[tournament-hub] ensure-express:', e);
+        toast(e.message || 'Error abriendo Express', 'error');
+        return null;
+      } finally {
+        ensureExpressPromise = null;
       }
-      patchGenreExpress(genreId, data.express);
-      return data.express;
-    } catch (e) {
-      console.error('[tournament-hub] ensure-express:', e);
-      toast(e.message || 'Error abriendo Express', 'error');
-      return null;
-    }
+    })();
+    return ensureExpressPromise;
   }
 
   async function handleExpressJoin(exp, genre) {
-    var tournament = await ensureExpressSlot(genre.id);
-    if (!tournament) tournament = exp;
-    if (!tournament || !tournament.id) {
-      toast('No hay ronda Express disponible. Reintenta en unos segundos.', 'error');
-      return;
-    }
-    await beginEnrollment(tournament, genre, 'express');
+    await beginEnrollment(exp, genre, 'express');
   }
 
   function countdownHtml(seconds, sizeClass) {
@@ -450,9 +466,9 @@
     if (countdownTimer) clearInterval(countdownTimer);
     pollTimer = null;
     countdownTimer = null;
-    if (hubFetchController) {
-      try { hubFetchController.abort(); } catch (e) { /* ignore */ }
-      hubFetchController = null;
+    if (hubPollController) {
+      try { hubPollController.abort(); } catch (e) { /* ignore */ }
+      hubPollController = null;
     }
     hubSyncInFlight = false;
   }
@@ -506,7 +522,8 @@
 
   async function beginEnrollment(tournament, genre, type) {
     if (!tournament || !genre) return;
-    if (type === 'express') {
+    pauseTimers();
+    if (type === 'express' && !tournament.id) {
       var fresh = await ensureExpressSlot(genre.id);
       if (fresh && fresh.id) tournament = fresh;
     }
@@ -545,7 +562,6 @@
       betInput.classList.add('opacity-70');
     }
 
-    pauseTimers();
     if (typeof updateActionButtons === 'function') updateActionButtons('tournament');
     toast('Elige tu canción (' + genre.label + ') y confirma inscripción', 'info');
   }
