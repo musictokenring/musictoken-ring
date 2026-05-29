@@ -330,10 +330,21 @@ class TournamentBattleEngine {
       return tournament.bracket_state;
     }
 
+    const isExpress = tournament.tournament_type === 'express';
+    if (tournament.status === 'registration') {
+      const closesMs = new Date(tournament.registration_closes_at).getTime();
+      if (closesMs > Date.now()) return null;
+      await this.supabase.from('tournaments').update({
+        status: 'locked',
+        updated_at: new Date().toISOString()
+      }).eq('id', tournament.id);
+      tournament = { ...tournament, status: 'locked' };
+    }
+
     if (tournament.status !== 'locked') return null;
 
     const humanRows = await this.loadHumans(tournament.id);
-    if (!humanRows.length) {
+    if (!humanRows.length && !isExpress) {
       await this.cancelTournament(tournament.id, 'sin humanos');
       return null;
     }
@@ -342,7 +353,11 @@ class TournamentBattleEngine {
     allParticipants = await this.assignBracketSlots(allParticipants);
 
     if (allParticipants.length < maxPlayers) {
-      await this.cancelTournament(tournament.id, 'plazas incompletas');
+      await this.cancelTournament(
+        tournament.id,
+        'plazas incompletas ' + allParticipants.length + '/' + maxPlayers +
+        ' (¿migración 016 en Supabase?)'
+      );
       return null;
     }
 

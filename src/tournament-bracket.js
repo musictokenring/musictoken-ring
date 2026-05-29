@@ -12,6 +12,17 @@
   var lobbyStatus = null;
   var serverSkewMs = 0;
   var lastLobbyData = null;
+  var battleKickInFlight = false;
+  var startBattleAttempts = 0;
+  var lastLifecycleError = null;
+  var stuckAtZeroSince = null;
+  var watchGenreId = null;
+  var zeroKickSent = false;
+  var redirecting = false;
+  var kickCooldownUntil = 0;
+  var arenaFetchController = null;
+  var API_TIMEOUT_MS = 55000;
+  var MAX_KICK_ATTEMPTS = 8;
 
   function backendUrl() {
     return (window.CONFIG && window.CONFIG.BACKEND_API) || 'https://musictoken-ring.onrender.com';
@@ -26,6 +37,11 @@
 
   function serverNowMs() {
     return Date.now() - serverSkewMs;
+  }
+
+  function secondsLeft() {
+    if (!lobbyClosesAt) return 0;
+    return Math.max(0, Math.floor((lobbyClosesAt - serverNowMs()) / 1000));
   }
 
   function toast(msg, type) {
@@ -73,6 +89,27 @@
       }).join('');
   }
 
+  function applyLobbyTiming(data) {
+    var t = data.tournament;
+    if (!t || !t.registration_closes_at) return;
+    var newCloses = new Date(t.registration_closes_at).getTime();
+    if (t.id && t.id !== watchId) {
+      watchId = t.id;
+      localStorage.setItem('mtr_watch_tournament', watchId);
+    }
+    if (!lobbyClosesAt) {
+      lobbyClosesAt = newCloses;
+      return;
+    }
+    if (t.status !== 'registration') {
+      lobbyClosesAt = newCloses;
+      return;
+    }
+    if (newCloses >= lobbyClosesAt) {
+      lobbyClosesAt = newCloses;
+    }
+  }
+
   function renderLobby(data) {
     if (!playing) showArena();
     var title = document.getElementById('tournamentArenaTitle');
@@ -81,39 +118,50 @@
     var status = document.getElementById('tournamentArenaStatus');
     var t = data.tournament || {};
     var b = data.bracket;
+    var sec = secondsLeft();
 
     if (title) title.textContent = t.name || (t.tournament_type === 'weekly' ? 'Grand Prix' : 'Torneo Express');
     if (sub) {
       var typeLabel = t.tournament_type === 'weekly' ? 'Grand Prix semanal' : 'Express';
-      var secSub = lobbyClosesAt ? Math.max(0, Math.floor((lobbyClosesAt - serverNowMs()) / 1000)) : 0;
-      if (t.status === 'registration' && secSub > 0) {
-        sub.textContent = typeLabel + ' · inscripción abierta · batalla en ' + fmtClock(secSub);
+      if (t.status === 'registration' && sec > 0) {
+        sub.textContent = typeLabel + ' · inscripción abierta · batalla en ' + fmtClock(sec);
       } else if (t.status === 'registration') {
         sub.textContent = typeLabel + ' · cerrando inscripción…';
       } else if (t.status === 'locked') {
         sub.textContent = typeLabel + ' · preparando batalla…';
+      } else if (t.status === 'in_progress') {
+        sub.textContent = typeLabel + ' · ⚔️ batalla en curso';
       } else {
-        sub.textContent = b
-          ? (b.humanCount + ' humanos · ' + b.cpuCount + ' CPU · ' + (b.totalDuels || b.duels?.length || 0) + ' duelos')
-          : typeLabel;
+        sub.textContent = typeLabel;
       }
     }
 
     if (status) {
-      if (lobbyStatus === 'registration' && lobbyClosesAt) {
-        var sec = Math.max(0, Math.floor((lobbyClosesAt - serverNowMs()) / 1000));
-        if (sec > 0) {
-          status.innerHTML =
-            '<div class="text-center">' +
-            '<div class="text-xs text-gray-400 mb-2">Batalla inicia cuando el cronómetro llegue a 0</div>' +
-            '<div class="text-4xl font-black tabular-nums text-cyan-400 ' + (sec <= 60 ? 'animate-pulse text-red-400' : '') + '">' +
-            fmtClock(sec) + '</div></div>';
-        } else {
-          status.innerHTML =
-            '<div class="text-center">' +
-            '<div class="text-sm text-amber-300 animate-pulse mb-2">⏳ Cerrando inscripción e iniciando batalla…</div>' +
-            '<div class="text-4xl font-black tabular-nums text-cyan-400">00:00</div></div>';
+      if (battleKickInFlight || (lobbyStatus === 'registration' && sec === 0)) {
+        status.innerHTML =
+          '<div class="text-center p-4">' +
+          '<div class="text-sm text-amber-300 animate-pulse mb-2">⏳ Iniciando batalla (CPU + jugadores)…</div>' +
+          '<div class="text-4xl font-black tabular-nums text-cyan-400 mb-2">00:00</div>' +
+          '<p class="text-xs text-gray-400">Intento ' + startBattleAttempts + '/' + MAX_KICK_ATTEMPTS +
+          ' · el servidor puede tardar ~1 min</p>' +
+          (lastLifecycleError
+            ? '<p class="text-xs text-red-300 mt-2">' + lastLifecycleError + '</p>'
+            : '') +
+          '<button type="button" id="tournamentForceHubBtn" class="mt-3 px-4 py-2 rounded-lg bg-cyan-600 text-white text-sm">Volver al hub</button>' +
+          '</div>';
+        var btn = document.getElementById('tournamentForceHubBtn');
+        if (btn) {
+          btn.onclick = function () {
+            close();
+            if (typeof selectMode === 'function') selectMode('tournament');
+          };
         }
+      } else if (lobbyStatus === 'registration' && lobbyClosesAt && sec > 0) {
+        status.innerHTML =
+          '<div class="text-center">' +
+          '<div class="text-xs text-gray-400 mb-2">Batalla inicia cuando el cronómetro llegue a 0</div>' +
+          '<div class="text-4xl font-black tabular-nums text-cyan-400 ' + (sec <= 60 ? 'animate-pulse text-red-400' : '') + '">' +
+          fmtClock(sec) + '</div></div>';
       } else if (lobbyStatus === 'locked') {
         status.innerHTML =
           '<div class="text-center text-amber-300 animate-pulse">🔒 Generando bracket y rival CPU…</div>';
@@ -121,26 +169,19 @@
         status.innerHTML =
           '<div class="text-center text-red-400">' +
           '<p class="font-bold mb-2">❌ Torneo cancelado</p>' +
-          '<p class="text-sm text-gray-400">' +
-          (lastLifecycleError || 'Sin participantes o error al iniciar.') +
-          '</p></div>';
+          '<p class="text-sm text-gray-400">' + (lastLifecycleError || 'Error al iniciar.') + '</p></div>';
+      } else if (lobbyStatus === 'in_progress') {
+        status.innerHTML =
+          '<div class="text-center text-cyan-300">⚔️ Competencia en curso</div>';
       } else if (lastLifecycleError) {
         status.innerHTML =
           '<div class="text-center text-red-400 text-sm">' + lastLifecycleError + '</div>';
-      } else if (lobbyStatus) {
-        var statusMap = {
-          registration: '⏳ Esperando cierre de inscripción…',
-          locked: '🔒 Inscripción cerrada · preparando bracket…',
-          in_progress: '⚔️ Competencia en curso',
-          completed: '🏁 Torneo finalizado'
-        };
-        status.textContent = statusMap[lobbyStatus] || lobbyStatus;
       }
     }
 
     if (b && b.participants && b.participants.length) {
       renderBracketRoster(b);
-    } else if (grid) {
+    } else if (grid && !playing) {
       grid.innerHTML = '';
     }
   }
@@ -169,37 +210,12 @@
     }
   }
 
-  async function advancePlayback(id, duelIndex) {
-    await fetchApi('/api/tournaments/' + id + '/advance-playback', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ duelIndex: duelIndex })
-    }, API_TIMEOUT_MS);
-  }
-
-  function isStaleRegistration(t) {
-    if (!t || t.status !== 'registration' || !t.registration_closes_at) return false;
-    var closes = new Date(t.registration_closes_at).getTime();
-    return closes <= serverNowMs() - 30000;
-  }
-
-  function handleStaleSlot() {
-    lastLifecycleError =
-      'Este torneo expiró. Vuelve al hub y elige el Express activo (cronómetro en marcha).';
-    toast(lastLifecycleError, 'warning');
-    close();
-    if (typeof selectMode === 'function') selectMode('tournament');
-  }
-
-  var startingBattle = false;
-  var startBattleAttempts = 0;
-  var lastLifecycleError = null;
-  var stuckAtZeroSince = null;
-  var watchGenreId = null;
-  var API_TIMEOUT_MS = 55000;
-
   async function fetchApi(path, options, timeoutMs) {
-    var controller = new AbortController();
+    if (arenaFetchController) {
+      try { arenaFetchController.abort(); } catch (e) { /* ignore */ }
+    }
+    arenaFetchController = new AbortController();
+    var controller = arenaFetchController;
     var timer = setTimeout(function () { controller.abort(); }, timeoutMs || API_TIMEOUT_MS);
     try {
       var res = await fetch(backendUrl() + path, Object.assign({}, options || {}, {
@@ -207,23 +223,27 @@
         cache: 'no-store'
       }));
       clearTimeout(timer);
+      if (arenaFetchController === controller) arenaFetchController = null;
       return res;
     } catch (err) {
       clearTimeout(timer);
+      if (arenaFetchController === controller) arenaFetchController = null;
+      if (err && err.name === 'AbortError') return null;
       throw err;
     }
   }
 
   async function wakeBackend() {
     try {
-      await fetchApi('/api/health', { method: 'GET' }, 60000);
+      await fetchApi('/api/health', { method: 'GET' }, 25000);
     } catch (e) {
-      console.warn('[tournament-bracket] wake backend:', e.message || e);
+      console.warn('[tournament-bracket] wake:', e.message || e);
     }
   }
 
   async function fetchBracket(id) {
-    var res = await fetchApi('/api/tournaments/' + id + '/bracket', { method: 'GET' });
+    var res = await fetchApi('/api/tournaments/' + id + '/bracket', { method: 'GET' }, 30000);
+    if (!res) return { ok: false, error: 'timeout' };
     return res.json();
   }
 
@@ -233,69 +253,98 @@
         method: 'POST',
         headers: { 'Content-Type': 'application/json' }
       }, API_TIMEOUT_MS);
+      if (!res) return { ok: false, error: 'timeout' };
       if (res.status === 404) {
-        var kickRes = await fetchApi('/api/tournaments/' + id + '/kick', {
+        await fetchApi('/api/tournaments/' + id + '/kick', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' }
         }, API_TIMEOUT_MS);
-        var kicked = await kickRes.json().catch(function () { return {}; });
-        if (kicked.tournament) {
-          return fetchBracket(id);
-        }
         return fetchBracket(id);
       }
       return res.json();
     } catch (e) {
       console.error('[tournament-bracket] start-battle:', e);
-      return { ok: false, error: e.message || 'timeout' };
+      return { ok: false, error: e.message || 'error' };
     }
   }
 
-  function renderStuckAtZero() {
-    var status = document.getElementById('tournamentArenaStatus');
-    if (!status) return;
-    status.innerHTML =
-      '<div class="text-center p-4">' +
-      '<div class="text-sm text-amber-300 animate-pulse mb-2">⏳ Activando servidor y batalla…</div>' +
-      '<div class="text-4xl font-black tabular-nums text-cyan-400 mb-2">00:00</div>' +
-      '<p class="text-xs text-gray-400">Intento ' + startBattleAttempts + ' · Render puede tardar ~1 min en despertar</p>' +
-      '<button type="button" id="tournamentForceHubBtn" class="mt-3 px-4 py-2 rounded-lg bg-cyan-600 text-white text-sm">Ir al Express activo</button>' +
-      '</div>';
-    var btn = document.getElementById('tournamentForceHubBtn');
-    if (btn) {
-      btn.onclick = function () {
-        if (watchGenreId) redirectToActiveExpress(watchGenreId);
-        else if (typeof selectMode === 'function') selectMode('tournament');
-      };
-    }
+  async function resolveLiveExpressId(genreId) {
+    if (!genreId) return null;
+    var res = await fetchApi(
+      '/api/tournaments/genre/' + genreId + '/ensure-express',
+      { method: 'POST', headers: { 'Content-Type': 'application/json' } },
+      30000
+    );
+    if (!res) return null;
+    var data = await res.json().catch(function () { return {}; });
+    return data.ok && data.express && data.express.id ? data.express.id : null;
   }
 
-  async function ensureBattleStarted() {
-    if (!watchId || startingBattle) return;
-    if (startBattleAttempts >= 25) return;
-    startingBattle = true;
-    startBattleAttempts += 1;
-    renderStuckAtZero();
+  async function redirectToActiveExpress(genreId) {
+    if (!genreId || redirecting) return false;
+    redirecting = true;
     try {
-      if (startBattleAttempts === 1) {
-        await wakeBackend();
-      }
+      var newId = await resolveLiveExpressId(genreId);
+      if (!newId) return false;
+      if (newId === watchId) return false;
+      watchId = newId;
+      localStorage.setItem('mtr_watch_tournament', newId);
+      startBattleAttempts = 0;
+      zeroKickSent = false;
+      stuckAtZeroSince = null;
+      lastLifecycleError = null;
+      await refresh();
+      toast('Nueva ronda Express lista', 'info');
+      return true;
+    } catch (e) {
+      console.warn('[tournament-bracket] redirect:', e);
+      return false;
+    } finally {
+      redirecting = false;
+    }
+  }
+
+  function isStaleRegistration(t) {
+    if (!t || t.status !== 'registration' || !t.registration_closes_at) return false;
+    var closes = new Date(t.registration_closes_at).getTime();
+    return closes <= serverNowMs() - 120000;
+  }
+
+  function handleStaleSlot() {
+    lastLifecycleError =
+      'Esta ronda expiró. Elige el Express activo en el hub.';
+    toast(lastLifecycleError, 'warning');
+    close();
+    if (typeof selectMode === 'function') selectMode('tournament');
+  }
+
+  async function kickBattleOnce() {
+    if (!watchId || battleKickInFlight || Date.now() < kickCooldownUntil) return;
+    if (startBattleAttempts >= MAX_KICK_ATTEMPTS) {
+      lastLifecycleError =
+        'No se pudo iniciar. Vuelve al hub o aplica migración 016 en Supabase.';
+      if (watchGenreId) await redirectToActiveExpress(watchGenreId);
+      return;
+    }
+    battleKickInFlight = true;
+    startBattleAttempts += 1;
+    kickCooldownUntil = Date.now() + 10000;
+    if (lastLobbyData) renderLobby(lastLobbyData);
+    try {
+      if (startBattleAttempts === 1) await wakeBackend();
       var result = await triggerStartBattle(watchId);
       if (result && result.lifecycleError) {
         lastLifecycleError = result.lifecycleError;
       }
       if (result && result.ok && result.tournament && result.tournament.status === 'in_progress') {
+        zeroKickSent = true;
         stuckAtZeroSince = null;
+        startBattleAttempts = 0;
       }
       await refresh();
     } finally {
-      startingBattle = false;
+      battleKickInFlight = false;
     }
-  }
-
-  async function syncWatchToLiveExpress() {
-    if (!watchGenreId) return false;
-    return redirectToActiveExpress(watchGenreId);
   }
 
   function playDuelsSequentially(data) {
@@ -325,9 +374,7 @@
           }
         }
         renderResult(data.bracket);
-        if (champPreview) {
-          toast('🏆 Campeón: ' + champPreview, 'success');
-        }
+        if (champPreview) toast('🏆 Campeón: ' + champPreview, 'success');
         if (window.CreditsSystem && window.connectedAddress) {
           window.CreditsSystem.loadBalance(window.connectedAddress);
         }
@@ -369,7 +416,11 @@
 
       window.GameEngine.startTournamentPlayback(match, {
         onComplete: function () {
-          advancePlayback(tournamentId, idx).then(function () {
+          fetchApi('/api/tournaments/' + tournamentId + '/advance-playback', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ duelIndex: idx })
+          }, API_TIMEOUT_MS).then(function () {
             setTimeout(function () { playNext(idx + 1); }, duels.length > 5 ? 600 : 1200);
           });
         }
@@ -386,16 +437,12 @@
       if (!data.ok) {
         if (data.error) {
           lastLifecycleError = data.error;
-          toast(data.error, 'error');
+          if (startBattleAttempts >= 2) toast(data.error, 'error');
         }
         return;
       }
-      if (data.lifecycleError) {
-        lastLifecycleError = data.lifecycleError;
-      }
-      if (data.tournament?.registration_closes_at) {
-        lobbyClosesAt = new Date(data.tournament.registration_closes_at).getTime();
-      }
+      if (data.lifecycleError) lastLifecycleError = data.lifecycleError;
+      applyLobbyTiming(data);
       lobbyStatus = data.tournament?.status || null;
       if (data.serverTime) {
         serverSkewMs = Date.now() - new Date(data.serverTime).getTime();
@@ -403,6 +450,10 @@
       lastLobbyData = data;
 
       if (isStaleRegistration(data.tournament)) {
+        if (watchGenreId) {
+          await redirectToActiveExpress(watchGenreId);
+          return;
+        }
         handleStaleSlot();
         return;
       }
@@ -410,12 +461,9 @@
       renderLobby(data);
 
       if (data.tournament.status === 'cancelled') {
-        lastLifecycleError = data.lifecycleError || 'Ronda cerrada. Abriendo nueva…';
+        lastLifecycleError = data.lifecycleError || 'Ronda cancelada';
         toast(lastLifecycleError, 'warning');
-        var gidCancel = data.tournament.genre_id || watchGenreId;
-        if (gidCancel) {
-          await redirectToActiveExpress(gidCancel);
-        }
+        if (watchGenreId) await redirectToActiveExpress(watchGenreId);
         return;
       }
 
@@ -424,28 +472,28 @@
         localStorage.setItem('mtr_watch_genre', watchGenreId);
       }
 
-      if (data.tournament.status === 'registration' && lobbyClosesAt) {
-        var secLeft = Math.max(0, Math.floor((lobbyClosesAt - serverNowMs()) / 1000));
-        if (secLeft === 0) {
+      if (data.tournament.status === 'registration') {
+        var secLeft = secondsLeft();
+        if (secLeft === 0 && !zeroKickSent) {
           if (!stuckAtZeroSince) stuckAtZeroSince = Date.now();
-          await ensureBattleStarted();
-          if (startBattleAttempts >= 4 && lobbyStatus === 'registration') {
-            var gid = data.tournament.genre_id || watchGenreId;
-            if (gid) await redirectToActiveExpress(gid);
-          }
-          return;
+          zeroKickSent = true;
+          await kickBattleOnce();
+        } else if (secLeft > 0) {
+          zeroKickSent = false;
+          stuckAtZeroSince = null;
+          startBattleAttempts = 0;
         }
-        stuckAtZeroSince = null;
-        startBattleAttempts = 0;
+        return;
       }
 
       if (data.tournament.status === 'locked') {
-        await ensureBattleStarted();
+        await kickBattleOnce();
         return;
       }
 
       if (data.tournament.status === 'in_progress' && data.bracket) {
         startBattleAttempts = 0;
+        zeroKickSent = true;
         lastLifecycleError = null;
         if (data.bracket.participants && data.bracket.participants.length) {
           renderBracketRoster(data.bracket);
@@ -457,6 +505,7 @@
         } else if (data.bracket.playbackStatus === 'completed') {
           renderResult(data.bracket);
         }
+        return;
       }
 
       if (data.tournament.status === 'completed' && data.bracket) {
@@ -464,77 +513,65 @@
       }
     } catch (e) {
       console.error('[tournament-bracket]', e);
-      if (startBattleAttempts >= 2) {
-        lastLifecycleError =
-          'Servidor lento o dormido. Reintentando… (Render puede tardar ~1 min)';
-        renderStuckAtZero();
-      }
+      lastLifecycleError = 'Conexión lenta con el servidor';
+      if (lastLobbyData) renderLobby(lastLobbyData);
     }
+  }
+
+  function startArenaTimers() {
+    if (pollTimer) clearInterval(pollTimer);
+    pollTimer = setInterval(refresh, 6000);
+    if (countdownTimer) clearInterval(countdownTimer);
+    countdownTimer = setInterval(function () {
+      if (!watchId || !lastLobbyData || playing) return;
+      if (lobbyStatus === 'registration') {
+        renderLobby(lastLobbyData);
+        var sec = secondsLeft();
+        if (sec === 0 && !zeroKickSent && !battleKickInFlight) {
+          zeroKickSent = true;
+          kickBattleOnce();
+        }
+      }
+    }, 1000);
   }
 
   function watch(tournamentId, genreId) {
     if (window.TournamentHub && window.TournamentHub.pauseTimers) {
       window.TournamentHub.pauseTimers();
     }
-    watchId = tournamentId;
     watchGenreId = genreId || localStorage.getItem('mtr_watch_genre') || null;
     startBattleAttempts = 0;
+    zeroKickSent = false;
     stuckAtZeroSince = null;
     lastLifecycleError = null;
-    localStorage.setItem('mtr_watch_tournament', tournamentId);
     if (watchGenreId) localStorage.setItem('mtr_watch_genre', watchGenreId);
     showArena();
-    refresh();
-    if (pollTimer) clearInterval(pollTimer);
-    pollTimer = setInterval(refresh, 3000);
-    if (countdownTimer) clearInterval(countdownTimer);
-    countdownTimer = setInterval(function () {
-      if (!watchId || !lastLobbyData) return;
-      if (!playing) renderLobby(lastLobbyData);
-      var sec = lobbyClosesAt
-        ? Math.max(0, Math.floor((lobbyClosesAt - serverNowMs()) / 1000))
-        : 0;
-      if (
-        startBattleAttempts < 25 &&
-        ((lobbyStatus === 'registration' && sec === 0) || lobbyStatus === 'locked')
-      ) {
-        ensureBattleStarted();
-      }
-      if (
-        lobbyStatus === 'registration' &&
-        sec === 0 &&
-        stuckAtZeroSince &&
-        Date.now() - stuckAtZeroSince > 20000 &&
-        watchGenreId
-      ) {
-        syncWatchToLiveExpress();
-      }
-    }, 1000);
-  }
-
-  async function redirectToActiveExpress(genreId) {
-    try {
-      await wakeBackend();
-      var hub = await fetchApi('/api/tournaments/hub', { method: 'GET' }, API_TIMEOUT_MS);
-      var h = await hub.json();
-      if (!h.ok || !genreId) return false;
-      var g = (h.genres || []).find(function (x) { return x.id === genreId; });
-      if (g && g.express && g.express.id) {
-        localStorage.setItem('mtr_watch_tournament', g.express.id);
-        watch(g.express.id);
-        toast('Slot Express actualizado', 'info');
-        return true;
-      }
-    } catch (e) {
-      console.warn('[tournament-bracket] redirect hub:', e);
+    var status = document.getElementById('tournamentArenaStatus');
+    if (status) {
+      status.innerHTML = '<div class="text-center text-purple-200 animate-pulse">Cargando torneo…</div>';
     }
-    return false;
+
+    (async function () {
+      if (watchGenreId) {
+        var liveId = await resolveLiveExpressId(watchGenreId);
+        if (liveId) tournamentId = liveId;
+      }
+      watchId = tournamentId;
+      localStorage.setItem('mtr_watch_tournament', watchId);
+      await refresh();
+      startArenaTimers();
+    })();
   }
 
   function close() {
     watchId = null;
     playing = false;
     lobbyClosesAt = null;
+    zeroKickSent = false;
+    if (arenaFetchController) {
+      try { arenaFetchController.abort(); } catch (e) { /* ignore */ }
+      arenaFetchController = null;
+    }
     localStorage.removeItem('mtr_watch_tournament');
     document.getElementById('depositSectionMain')?.classList.remove('hidden');
     document.getElementById('contactSection')?.classList.remove('hidden');
@@ -555,27 +592,7 @@
     var saved = localStorage.getItem('mtr_watch_tournament');
     var savedGenre = localStorage.getItem('mtr_watch_genre');
     if (!saved) return;
-    wakeBackend().then(function () {
-      return fetchBracket(saved);
-    }).then(function (data) {
-      if (data.ok && data.tournament) {
-        if (data.tournament.genre_id) {
-          savedGenre = data.tournament.genre_id;
-          localStorage.setItem('mtr_watch_genre', savedGenre);
-        }
-        if (isStaleRegistration(data.tournament) && savedGenre) {
-          redirectToActiveExpress(savedGenre);
-          return;
-        }
-        if (data.tournament.status === 'in_progress' && data.bracket) {
-          watch(saved, savedGenre);
-          return;
-        }
-      }
-      watch(saved, savedGenre);
-    }).catch(function () {
-      watch(saved, savedGenre);
-    });
+    watch(saved, savedGenre);
   });
 
   window.TournamentBracket = { watch: watch, close: close, refresh: refresh };
