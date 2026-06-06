@@ -784,6 +784,9 @@
     watchId = null;
     playing = false;
     lobbyClosesAt = null;
+    if (window.TournamentHub && typeof window.TournamentHub.resumeHubTimers === 'function') {
+      window.TournamentHub.resumeHubTimers();
+    }
     zeroKickSent = false;
     abortArenaFetches();
     localStorage.removeItem('mtr_watch_tournament');

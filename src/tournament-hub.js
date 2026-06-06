@@ -139,14 +139,55 @@
   }
 
   function secondsToBattle(exp) {
-    if (!exp || exp.status !== 'registration' || !exp.registration_closes_at) return 0;
+    if (!exp || !exp.registration_closes_at) return 0;
+    if (exp.status !== 'registration') return 0;
     var closes = new Date(exp.registration_closes_at).getTime();
-    if (closes <= serverNowMs()) return 0;
+    if (!Number.isFinite(closes) || closes <= serverNowMs()) return 0;
     return Math.max(0, Math.floor((closes - serverNowMs()) / 1000));
   }
 
   function isOpenRegistration(exp) {
     return exp && exp.status === 'registration' && secondsToBattle(exp) > 0;
+  }
+
+  function countLiveBattles() {
+    if (!hubData || !hubData.genres) return 0;
+    return hubData.genres.filter(function (g) {
+      return g.express && (g.express.status === 'in_progress' || g.express.status === 'locked');
+    }).length;
+  }
+
+  /** Segundos hasta la próxima batalla — siempre en vivo (no snapshot estático del API). */
+  function rotationCountdownSeconds() {
+    if (!hubData) return 0;
+    var minOpen = null;
+    (hubData.genres || []).forEach(function (g) {
+      if (!isOpenRegistration(g.express)) return;
+      var s = secondsToBattle(g.express);
+      if (s > 0 && (minOpen === null || s < minOpen)) minOpen = s;
+    });
+    if (minOpen !== null && minOpen > 0) return minOpen;
+
+    var rot = hubData.expressRotation || {};
+    if (rot.registrationClosesAt) {
+      var closesIso = new Date(rot.registrationClosesAt).getTime();
+      if (Number.isFinite(closesIso)) {
+        var secClose = Math.max(0, Math.floor((closesIso - serverNowMs()) / 1000));
+        if (secClose > 0) return secClose;
+      }
+    }
+    if (rot.battleStartsAt) {
+      var battleIso = new Date(rot.battleStartsAt).getTime();
+      if (Number.isFinite(battleIso)) {
+        var secBattle = Math.max(0, Math.floor((battleIso - serverNowMs()) / 1000));
+        if (secBattle > 0) return secBattle;
+      }
+    }
+    if (fetchedAtLocal && rot.secondsToNextSlot != null) {
+      var elapsed = Math.floor((Date.now() - fetchedAtLocal) / 1000);
+      return Math.max(0, Number(rot.secondsToNextSlot) - elapsed);
+    }
+    return 0;
   }
 
   function isArenaVisible() {
@@ -357,15 +398,24 @@
     var cfg = hubData.config || {};
     var active = rot.activeExpressCount || cfg.activeExpressCount || 14;
     var total = rot.totalGenres || 14;
-    var minSec = rot.secondsToBattle || 0;
-    (hubData.genres || []).forEach(function (g) {
-      if (isOpenRegistration(g.express)) {
-        var s = secondsToBattle(g.express);
-        if (s > 0 && (minSec <= 0 || s < minSec)) minSec = s;
-      }
-    });
-    if (!minSec || minSec <= 0) {
-      minSec = rot.secondsToBattle || rot.secondsToNextSlot || 0;
+    var minSec = rotationCountdownSeconds();
+    var liveBattles = countLiveBattles();
+    var timerBlock;
+
+    if (minSec > 0) {
+      timerBlock =
+        '<div class="text-[10px] uppercase tracking-wider text-gray-500 mb-1">Próxima batalla (más cercana)</div>' +
+        countdownHtml(minSec, 'text-3xl');
+    } else if (liveBattles > 0) {
+      timerBlock =
+        '<div class="text-[10px] uppercase tracking-wider text-gray-500 mb-1">Estado Express</div>' +
+        '<div class="text-2xl font-black text-purple-300 tabular-nums">⚔️ EN CURSO</div>' +
+        '<div class="text-[11px] text-gray-500 mt-1">' + liveBattles + ' categoría(s) en batalla</div>';
+    } else {
+      timerBlock =
+        '<div class="text-[10px] uppercase tracking-wider text-gray-500 mb-1">Próxima ronda</div>' +
+        '<div class="text-xl font-bold text-amber-300 animate-pulse">♻️ Abriendo…</div>' +
+        '<div class="text-[11px] text-gray-500 mt-1">Sincronizando cronómetro</div>';
     }
 
     el.innerHTML =
@@ -374,8 +424,7 @@
       '<div class="text-purple-300 font-semibold mb-1">⚡ ' + active + '/' + total + ' Express activos · todas las categorías</div>' +
       '<div class="text-xs text-gray-400">Inscripción 5 min por ronda · CPU llena vacantes · batalla al cerrar</div></div>' +
       '<div class="flex-shrink-0 text-center px-4 py-2 rounded-xl border border-cyan-500/30 bg-cyan-500/5">' +
-      '<div class="text-[10px] uppercase tracking-wider text-gray-500 mb-1">Próxima batalla (más cercana)</div>' +
-      countdownHtml(minSec, 'text-3xl') +
+      timerBlock +
       '</div></div>';
   }
 
@@ -537,6 +586,21 @@
     countdownTimer = null;
   }
 
+  function resumeHubTimers() {
+    var hub = document.getElementById('tournamentHub');
+    if (!hub || hub.classList.contains('hidden') || isArenaVisible()) return;
+    startCountdownLoop();
+    if (!pollTimer) {
+      pollTimer = setInterval(function () {
+        refresh(false).catch(function (e) {
+          if (!e || e.name !== 'AbortError') {
+            console.warn('[tournament-hub] poll refresh:', e);
+          }
+        });
+      }, 15000);
+    }
+  }
+
   function abortHubFetches() {
     if (hubPollController) {
       try { hubPollController.abort(); } catch (e) { /* ignore */ }
@@ -571,7 +635,8 @@
   }
 
   function tickCountdowns() {
-    if (!hubData || isArenaVisible()) return;
+    if (!hubData) return;
+    if (isArenaVisible()) return;
     renderRotationBanner();
     if (selectedGenreId) {
       var cd = document.getElementById('genreExpressCountdown');
@@ -769,6 +834,7 @@
     open: open,
     close: close,
     pauseTimers: pauseTimers,
+    resumeHubTimers: resumeHubTimers,
     stopEnrollmentCountdown: stopEnrollmentCountdown,
     ensureExpressSlot: ensureExpressSlot,
     refresh: refresh,
