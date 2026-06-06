@@ -10,6 +10,17 @@ function openAuthModal() {
 
 const playerProfileLoadStateByUser = new Map();
 let activeProfileUserId = null;
+let profileBattleHistoryCache = [];
+let profileBattleFilter = 'all';
+
+const PROFILE_BATTLE_FILTERS = [
+    { id: 'all', label: 'Todos' },
+    { id: 'win', label: 'Victorias' },
+    { id: 'loss', label: 'Derrotas' },
+    { id: 'prize', label: 'Con premio' },
+    { id: 'tournament', label: 'Torneos' },
+    { id: 'match', label: 'PvP' }
+];
 
 function closeAuthModal() {
     document.getElementById('authModal')?.classList.add('hidden');
@@ -593,47 +604,91 @@ async function loadPlayerProfile(user) {
             realBalance = 0;
         }
 
-        let matchesData = [];
-        let matchesError = null;
+        let battleHistory = [];
+        let userStats = null;
 
-        const baseMatchQuery = () => supabaseClient
-            .from('matches')
-            .select('id, winner, match_type, total_pot, player1_id, player2_id, player1_bet, player2_bet, finished_at, status')
-            .or(`player1_id.eq.${user.id},player2_id.eq.${user.id}`)
-            .eq('status', 'finished')
-            .neq('match_type', 'practice') // EXCLUIR batallas de práctica de las estadísticas reales
-            .order('finished_at', { ascending: false })
-            .limit(50);
+        const { data: historyData, error: historyError } = await supabaseClient
+            .from('player_battle_history')
+            .select(
+                'id, battle_kind, battle_mode, source_id, result, opponent_label, ' +
+                'song_name, song_artist, credits_wagered, credits_won, placement, event_label, played_at'
+            )
+            .eq('user_id', user.id)
+            .order('played_at', { ascending: false })
+            .limit(200);
 
-        ({ data: matchesData, error: matchesError } = await baseMatchQuery());
+        if (!historyError && historyData) {
+            battleHistory = historyData;
+        } else if (historyError && historyError.code !== '42P01') {
+            console.warn('[loadPlayerProfile] Historial de batallas:', historyError.message);
+        }
 
-        if (matchesError && matchesError.code === '42703') {
-            console.warn('Esquema de columnas de matches desactualizado. Reintentando con consulta mínima:', matchesError.message);
-            ({ data: matchesData, error: matchesError } = await supabaseClient
+        if (!battleHistory.length) {
+            const { data: matchesData, error: matchesError } = await supabaseClient
                 .from('matches')
                 .select('id, winner, match_type, player1_id, player2_id, player1_bet, player2_bet, finished_at, status')
                 .or(`player1_id.eq.${user.id},player2_id.eq.${user.id}`)
                 .eq('status', 'finished')
-                .neq('match_type', 'practice') // EXCLUIR batallas de práctica de las estadísticas reales
+                .neq('match_type', 'practice')
                 .order('finished_at', { ascending: false })
-                .limit(50));
+                .limit(100);
+
+            if (!matchesError && matchesData?.length) {
+                battleHistory = matchesData.map((m) => {
+                    const isP1 = m.player1_id === user.id;
+                    const won = (isP1 && m.winner === 1) || (!isP1 && m.winner === 2);
+                    return {
+                        id: m.id,
+                        battle_kind: 'match',
+                        battle_mode: m.match_type || 'quick',
+                        source_id: m.id,
+                        result: won ? 'win' : 'loss',
+                        opponent_label: 'Rival',
+                        song_name: null,
+                        credits_wagered: isP1 ? (m.player1_bet || 0) : (m.player2_bet || 0),
+                        credits_won: 0,
+                        event_label: String(m.match_type || 'quick').toUpperCase(),
+                        played_at: m.finished_at
+                    };
+                });
+            }
         }
 
-        if (matchesError) throw matchesError;
+        try {
+            const { data: statsRow } = await supabaseClient
+                .from('users')
+                .select('total_matches, total_wins, total_losses, total_credits_won, total_streams, total_wagered')
+                .eq('id', user.id)
+                .maybeSingle();
+            userStats = statsRow || null;
+        } catch (statsErr) {
+            console.warn('[loadPlayerProfile] Stats usuario:', statsErr.message);
+        }
 
-        const matches = matchesData || [];
-        const totalMatches = matches.length;
-        const wins = matches.filter((m) => {
-            const isP1 = m.player1_id === user.id;
-            return (isP1 && m.winner === 1) || (!isP1 && m.winner === 2);
-        }).length;
-        const losses = Math.max(0, totalMatches - wins);
+        const historyMatches = battleHistory.length;
+        const historyWins = battleHistory.filter((b) => b.result === 'win').length;
+        const historyLosses = battleHistory.filter((b) => b.result === 'loss').length;
+        const historyPrizes = battleHistory.filter((b) => parseFloat(b.credits_won || 0) > 0).length;
+        const historyWagered = battleHistory.reduce(
+            (acc, b) => acc + parseFloat(b.credits_wagered || 0),
+            0
+        );
+
+        const totalMatches = Math.max(historyMatches, userStats?.total_matches || 0);
+        const wins = Math.max(historyWins, userStats?.total_wins || 0);
+        const losses = Math.max(historyLosses, userStats?.total_losses || 0);
+        const prizesReceived = historyPrizes > 0
+            ? historyPrizes
+            : Math.max(historyWins, userStats?.total_wins || 0);
         const winRate = totalMatches > 0 ? ((wins / totalMatches) * 100).toFixed(1) : '0.0';
-        const totalStreams = 0;
-        const totalWagered = matches.reduce((acc, m) => {
-            const isP1 = m.player1_id === user.id;
-            return acc + (isP1 ? (m.player1_bet || 0) : (m.player2_bet || 0));
-        }, 0);
+        const totalStreams = userStats?.total_streams || 0;
+        const totalWagered = Math.max(historyWagered, parseFloat(userStats?.total_wagered || 0));
+        const totalCreditsWon = Math.max(
+            battleHistory.reduce((acc, b) => acc + parseFloat(b.credits_won || 0), 0),
+            parseFloat(userStats?.total_credits_won || 0)
+        );
+
+        profileBattleHistoryCache = battleHistory.slice();
 
         if (isStaleResult()) {
             return;
@@ -688,26 +743,16 @@ async function loadPlayerProfile(user) {
         setProfileValue('profileWins', `${wins}`);
         setProfileValue('profileLosses', `${losses}`);
         setProfileValue('profileWinRate', `${winRate}%`);
+        setProfileValue('profilePrizes', `${prizesReceived}`);
+        setProfileValue(
+            'profileCreditsWon',
+            `${Math.round(totalCreditsWon).toLocaleString('es-ES')} MTR`
+        );
         setProfileValue('profileStreams', `${Math.round(totalStreams).toLocaleString('es-ES')}`);
-        setProfileValue('profileWagered', `${Math.round(totalWagered)} MTR`);
+        setProfileValue('profileWagered', `${Math.round(totalWagered).toLocaleString('es-ES')} MTR`);
 
-        const recentMatches = document.getElementById('profileRecentMatches');
-        if (recentMatches) {
-            if (!matches.length) {
-                recentMatches.innerHTML = '<p class="profile-empty">Aún no hay partidas finalizadas.</p>';
-            } else {
-                recentMatches.innerHTML = matches.slice(0, 5).map((m) => {
-                    const isP1 = m.player1_id === user.id;
-                    const won = (isP1 && m.winner === 1) || (!isP1 && m.winner === 2);
-                    const mode = m.match_type === 'practice' ? 'Práctica' : (m.match_type || 'Modo').toUpperCase();
-                    const ownBet = isP1 ? (m.player1_bet || 0) : (m.player2_bet || 0);
-                    return `<div class="profile-match ${won ? 'win' : 'loss'}">
-                        <span>${won ? '✅ Victoria' : '❌ Derrota'} · ${mode}</span>
-                        <span>${ownBet} MTR</span>
-                    </div>`;
-                }).join('');
-            }
-        }
+        renderProfileBattleFilters();
+        renderProfileBattleHistory();
     } catch (error) {
         if (error?.name === 'AbortError' || String(error?.message || '').includes('aborted')) {
             console.warn('Carga de perfil cancelada (AbortError).');
@@ -745,6 +790,114 @@ async function loadPlayerProfile(user) {
 
     state.promise = runLoad();
     return state.promise;
+}
+
+function battleModeLabel(battle) {
+    const mode = String(battle.battle_mode || '').toLowerCase();
+    const kind = battle.battle_kind;
+    if (kind === 'tournament') {
+        if (mode === 'weekly') return 'Grand Prix';
+        if (mode === 'express') return 'Express';
+        return 'Torneo';
+    }
+    if (mode === 'social') return 'Social';
+    if (mode === 'private') return 'Privado';
+    if (mode === 'quick') return 'Rápido';
+    return battle.event_label || mode.toUpperCase() || 'PvP';
+}
+
+function formatProfileBattleDate(iso) {
+    if (!iso) return '';
+    const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return '';
+    return d.toLocaleString('es-ES', {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+    });
+}
+
+function filterProfileBattles(list, filterId) {
+    if (!list?.length) return [];
+    switch (filterId) {
+        case 'win':
+            return list.filter((b) => b.result === 'win');
+        case 'loss':
+            return list.filter((b) => b.result === 'loss');
+        case 'prize':
+            return list.filter((b) => parseFloat(b.credits_won || 0) > 0);
+        case 'tournament':
+            return list.filter((b) => b.battle_kind === 'tournament');
+        case 'match':
+            return list.filter((b) => b.battle_kind === 'match');
+        default:
+            return list;
+    }
+}
+
+function renderProfileBattleFilters() {
+    const container = document.getElementById('profileBattleFilters');
+    if (!container) return;
+    container.innerHTML = PROFILE_BATTLE_FILTERS.map((f) => {
+        const active = profileBattleFilter === f.id;
+        return `<button type="button" class="profile-battle-filter${active ? ' active' : ''}" ` +
+            `data-filter="${f.id}" onclick="setProfileBattleFilter('${f.id}')">${f.label}</button>`;
+    }).join('');
+}
+
+function renderProfileBattleHistory() {
+    const listEl = document.getElementById('profileBattleHistory');
+    const countEl = document.getElementById('profileBattleCount');
+    if (!listEl) return;
+
+    const filtered = filterProfileBattles(profileBattleHistoryCache, profileBattleFilter);
+    if (countEl) {
+        countEl.textContent = `${filtered.length} registro${filtered.length === 1 ? '' : 's'}`;
+    }
+
+    if (!filtered.length) {
+        listEl.innerHTML =
+            '<p class="text-gray-500 text-sm py-4 text-center">Sin batallas en este filtro.</p>';
+        return;
+    }
+
+    listEl.innerHTML = filtered.map((b) => {
+        const won = b.result === 'win';
+        const prize = parseFloat(b.credits_won || 0);
+        const wagered = parseFloat(b.credits_wagered || 0);
+        const mode = battleModeLabel(b);
+        const title = b.event_label && b.battle_kind === 'tournament'
+            ? b.event_label
+            : (b.song_name || mode);
+        const subtitle = b.song_artist
+            ? b.song_artist
+            : (b.battle_kind === 'tournament' ? 'Competencia de torneo' : 'Enfrentamiento PvP');
+        const date = formatProfileBattleDate(b.played_at);
+        const prizeLine = prize > 0
+            ? `<span class="text-emerald-400 text-xs font-semibold">+${prize.toLocaleString('es-ES')} MTR premio</span>`
+            : `<span class="text-gray-500 text-xs">${wagered.toLocaleString('es-ES')} MTR apostados</span>`;
+
+        return `<button type="button" class="profile-battle-row ${won ? 'is-win' : 'is-loss'}" ` +
+            `data-battle-id="${b.id || b.source_id}" title="${mode} · ${date}">` +
+            `<div class="profile-battle-row-main">` +
+            `<span class="profile-battle-icon">${won ? '✅' : '❌'}</span>` +
+            `<div class="profile-battle-copy">` +
+            `<strong>${won ? 'Victoria' : 'Derrota'} · ${mode}</strong>` +
+            `<span>${title}${subtitle ? ' — ' + subtitle : ''}</span>` +
+            `</div></div>` +
+            `<div class="profile-battle-row-meta">` +
+            prizeLine +
+            `<span class="text-gray-500 text-xs">${date}</span>` +
+            `</div></button>`;
+    }).join('');
+}
+
+function setProfileBattleFilter(filterId) {
+    profileBattleFilter = filterId || 'all';
+    renderProfileBattleFilters();
+    renderProfileBattleHistory();
 }
 
 function setProfileValue(id, value) {
@@ -808,6 +961,13 @@ function setProfileValueWithAutoFont(id, formattedValue, rawValue) {
 
 function openProfileModal() {
     document.getElementById('profileModal')?.classList.remove('hidden');
+    if (typeof supabaseClient !== 'undefined') {
+        supabaseClient.auth.getSession().then(({ data: { session } }) => {
+            if (session?.user && typeof loadPlayerProfile === 'function') {
+                loadPlayerProfile(session.user);
+            }
+        }).catch(() => {});
+    }
 }
 
 function closeProfileModal() {
@@ -903,3 +1063,5 @@ window.handleSignupSubmit = handleSignupSubmit;
 window.logout = logout;
 window.openProfileModal = openProfileModal;
 window.closeProfileModal = closeProfileModal;
+window.loadPlayerProfile = loadPlayerProfile;
+window.setProfileBattleFilter = setProfileBattleFilter;

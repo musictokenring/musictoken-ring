@@ -3687,22 +3687,22 @@ const GameEngine = {
         const winnerSong = winner === 1 ? match.player1_song_preview : match.player2_song_preview;
         this.playVictorySong(winnerSong);
         
-        // CRÍTICO: Actualizar estadísticas del usuario ANTES de procesar premios
         const { data: { session } } = await supabaseClient.auth.getSession();
-        if (session?.user?.id) {
-            await this.updateUserStats(session.user.id, userWon, userWon ? payouts.winnerPayout : 0, match.id);
-        }
-        
-        // Procesar premios
+
+        // Procesar premios y sincronizar historial de batallas
         if (match.match_type !== 'practice') {
-            // CRÍTICO: Determinar el userId del ganador basado en el match, no en la wallet del usuario actual
             const winnerUserId = winner === 1 ? match.player1_id : match.player2_id;
-            
-            if (userWon) {
-                // Award credits instead of MTR directly
-                const creditsWon = payouts.winnerPayout; // Credits amount (ya con fee descontado)
+            const loserUserId = winner === 1 ? match.player2_id : match.player1_id;
+            const creditsWon = payouts.winnerPayout;
+
+            await this.recordMatchBattleHistory(match, winner, creditsWon);
+
+            if (loserUserId) {
+                await this.updateUserStats(loserUserId, false, 0, match.id);
+            }
+
+            if (winnerUserId) {
                 await this.awardCredits(creditsWon, match.id, winnerUserId);
-                // NO llamar updateBalance aquí para evitar duplicación
             }
             // Enviar fee de apuesta (2%) al vault
             await this.sendBetFeeToVault(payouts.platformFee, match.id);
@@ -4904,6 +4904,76 @@ const GameEngine = {
         } catch (error) {
             console.error('[game-engine] Error awarding credits:', error);
             showToast('Error al otorgar créditos. Contacta soporte.', 'error');
+        }
+    },
+
+    /**
+     * Registra la batalla en el historial unificado del perfil (ambos jugadores).
+     */
+    async recordMatchBattleHistory(match, winner, creditsWon) {
+        try {
+            const supabase = window.supabaseClient ||
+                (typeof supabaseClient !== 'undefined' ? supabaseClient : null);
+            if (!supabase || !match?.id || match.match_type === 'practice') return;
+
+            const p1Won = winner === 1;
+            const p2Won = winner === 2;
+            const mode = match.match_type || 'quick';
+            const playedAt = match.finished_at || new Date().toISOString();
+            const prize = parseFloat(creditsWon || 0);
+            const rows = [];
+
+            if (match.player1_id) {
+                rows.push({
+                    user_id: match.player1_id,
+                    battle_kind: 'match',
+                    battle_mode: mode,
+                    source_id: match.id,
+                    result: p1Won ? 'win' : 'loss',
+                    opponent_label: 'Rival',
+                    song_name: match.player1_song_name || null,
+                    song_artist: match.player1_song_artist || null,
+                    credits_wagered: parseFloat(match.player1_bet || 0),
+                    credits_won: p1Won ? prize : 0,
+                    event_label: String(mode).toUpperCase(),
+                    played_at: playedAt
+                });
+            }
+
+            if (match.player2_id) {
+                rows.push({
+                    user_id: match.player2_id,
+                    battle_kind: 'match',
+                    battle_mode: mode,
+                    source_id: match.id,
+                    result: p2Won ? 'win' : 'loss',
+                    opponent_label: 'Rival',
+                    song_name: match.player2_song_name || null,
+                    song_artist: match.player2_song_artist || null,
+                    credits_wagered: parseFloat(match.player2_bet || 0),
+                    credits_won: p2Won ? prize : 0,
+                    event_label: String(mode).toUpperCase(),
+                    played_at: playedAt
+                });
+            }
+
+            if (!rows.length) return;
+
+            const { error } = await supabase
+                .from('player_battle_history')
+                .upsert(rows, { onConflict: 'user_id,battle_kind,source_id' });
+
+            if (error) {
+                console.warn('[recordMatchBattleHistory] No se pudo sincronizar historial:', error.message);
+            } else if (typeof window.loadPlayerProfile === 'function') {
+                const profileModal = document.getElementById('profileModal');
+                if (profileModal && !profileModal.classList.contains('hidden')) {
+                    const { data: { session: liveSession } } = await supabase.auth.getSession();
+                    if (liveSession?.user) window.loadPlayerProfile(liveSession.user);
+                }
+            }
+        } catch (err) {
+            console.warn('[recordMatchBattleHistory] Error:', err.message);
         }
     },
 

@@ -289,6 +289,15 @@
     }
     localStorage.removeItem('mtr_watch_tournament');
     localStorage.removeItem('mtr_joined_tournament');
+    if (typeof window.loadPlayerProfile === 'function' && typeof supabaseClient !== 'undefined') {
+      supabaseClient.auth.getSession().then(function (res) {
+        var session = res && res.data && res.data.session;
+        var profileModal = document.getElementById('profileModal');
+        if (session && session.user && profileModal && !profileModal.classList.contains('hidden')) {
+          window.loadPlayerProfile(session.user);
+        }
+      }).catch(function () {});
+    }
     showArena();
     renderResult(b);
     var title = document.getElementById('tournamentArenaTitle');

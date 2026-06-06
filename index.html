@@ -1587,32 +1587,82 @@
     </div>
 
     <!-- Profile Modal -->
+    <style>
+        #profileModal .modal-box { max-width: 34rem; max-height: 90vh; overflow-y: auto; }
+        .profile-battle-filter {
+            padding: 0.35rem 0.65rem;
+            border-radius: 9999px;
+            font-size: 0.7rem;
+            font-weight: 600;
+            border: 1px solid rgba(255,255,255,0.08);
+            background: rgba(255,255,255,0.03);
+            color: #9ca3af;
+            cursor: pointer;
+            transition: all 0.15s ease;
+        }
+        .profile-battle-filter:hover { color: #fff; border-color: rgba(255,255,255,0.18); }
+        .profile-battle-filter.active {
+            color: #fff;
+            border-color: rgba(34,211,238,0.45);
+            background: rgba(34,211,238,0.12);
+        }
+        .profile-battle-row {
+            width: 100%;
+            text-align: left;
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 0.75rem;
+            padding: 0.75rem;
+            border-radius: 0.65rem;
+            border: 1px solid rgba(255,255,255,0.06);
+            background: rgba(255,255,255,0.02);
+            cursor: pointer;
+            transition: border-color 0.15s ease, background 0.15s ease;
+        }
+        .profile-battle-row:hover { border-color: rgba(255,255,255,0.14); background: rgba(255,255,255,0.04); }
+        .profile-battle-row.is-win { border-left: 3px solid rgba(52,211,153,0.7); }
+        .profile-battle-row.is-loss { border-left: 3px solid rgba(248,113,113,0.65); }
+        .profile-battle-row-main { display: flex; gap: 0.6rem; min-width: 0; flex: 1; }
+        .profile-battle-icon { flex-shrink: 0; font-size: 0.95rem; line-height: 1.4; }
+        .profile-battle-copy { display: flex; flex-direction: column; gap: 0.15rem; min-width: 0; }
+        .profile-battle-copy strong { color: #fff; font-size: 0.78rem; }
+        .profile-battle-copy span { color: #9ca3af; font-size: 0.72rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .profile-battle-row-meta { display: flex; flex-direction: column; align-items: flex-end; gap: 0.2rem; flex-shrink: 0; }
+        #profileBattleHistory { max-height: 16rem; overflow-y: auto; display: flex; flex-direction: column; gap: 0.5rem; }
+    </style>
     <div id="profileModal" class="hidden fixed inset-0 z-[100] flex items-center justify-center p-4">
         <div class="modal-overlay" onclick="closeProfileModal()"></div>
         <div class="modal-box max-w-lg">
             <button type="button" onclick="closeProfileModal()" class="absolute top-4 right-4 text-gray-400 hover:text-white text-2xl leading-none cursor-pointer">×</button>
             <h2 class="text-2xl font-bold text-white mb-1">Perfil del Jugador</h2>
-            <p class="text-gray-400 text-sm mb-6">Resumen de rendimiento</p>
+            <p class="text-gray-400 text-sm mb-6">Estadísticas sincronizadas de todas tus batallas</p>
             <div class="mb-6">
                 <p id="profileDisplayName" class="text-lg font-bold text-white">Jugador</p>
                 <p id="profileEmail" class="text-gray-400 text-sm">-</p>
                 <p class="text-gray-500 text-xs mt-1">Miembro desde: <span id="profileSince">-</span></p>
             </div>
-            <div class="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-6">
-                <div class="p-3 rounded-lg bg-white/[0.03] border border-white/5 text-center cursor-help overflow-hidden" title="MTR créditos jugables: fichas estables ~$1 USD nominal cada una (1:1)" style="min-height: 60px; display: flex; flex-direction: column; justify-content: center;">
+            <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
+                <div class="p-3 rounded-lg bg-white/[0.03] border border-white/5 text-center cursor-help overflow-hidden sm:col-span-2" title="MTR créditos jugables: fichas estables ~$1 USD nominal cada una (1:1)" style="min-height: 60px; display: flex; flex-direction: column; justify-content: center;">
                     <span class="text-xs text-gray-400 block mb-1" id="profileBalanceLabel">MTR créditos</span>
                     <strong id="profileBalance" class="text-white block break-words" style="word-break: break-word; overflow-wrap: break-word;">-</strong>
                 </div>
-                <div class="p-3 rounded-lg bg-white/[0.03] border border-white/5 text-center"><span class="text-xs text-gray-400 block">Partidas</span><strong id="profileMatches" class="text-white">-</strong></div>
-                <div class="p-3 rounded-lg bg-white/[0.03] border border-white/5 text-center"><span class="text-xs text-gray-400 block">Victorias</span><strong id="profileWins" class="text-white">-</strong></div>
-                <div class="p-3 rounded-lg bg-white/[0.03] border border-white/5 text-center"><span class="text-xs text-gray-400 block">Derrotas</span><strong id="profileLosses" class="text-white">-</strong></div>
+                <div class="p-3 rounded-lg bg-white/[0.03] border border-white/5 text-center"><span class="text-xs text-gray-400 block">Enfrentamientos</span><strong id="profileMatches" class="text-white">-</strong></div>
+                <div class="p-3 rounded-lg bg-white/[0.03] border border-white/5 text-center"><span class="text-xs text-gray-400 block">Victorias</span><strong id="profileWins" class="text-emerald-400">-</strong></div>
+                <div class="p-3 rounded-lg bg-white/[0.03] border border-white/5 text-center"><span class="text-xs text-gray-400 block">Derrotas</span><strong id="profileLosses" class="text-red-400">-</strong></div>
                 <div class="p-3 rounded-lg bg-white/[0.03] border border-white/5 text-center"><span class="text-xs text-gray-400 block">Win Rate</span><strong id="profileWinRate" class="text-white">-</strong></div>
+                <div class="p-3 rounded-lg bg-white/[0.03] border border-white/5 text-center" title="Veces que recibiste premio en MTR"><span class="text-xs text-gray-400 block">Premios recibidos</span><strong id="profilePrizes" class="text-amber-300">-</strong></div>
+                <div class="p-3 rounded-lg bg-white/[0.03] border border-white/5 text-center"><span class="text-xs text-gray-400 block">MTR ganados</span><strong id="profileCreditsWon" class="text-emerald-300 text-sm">-</strong></div>
                 <div class="p-3 rounded-lg bg-white/[0.03] border border-white/5 text-center"><span class="text-xs text-gray-400 block">Streams</span><strong id="profileStreams" class="text-white">-</strong></div>
             </div>
-            <div class="p-3 rounded-lg bg-white/[0.03] border border-white/5 text-center mb-6"><span class="text-xs text-gray-400 block">MTR apostados</span><strong id="profileWagered" class="text-white">-</strong></div>
+            <div class="p-3 rounded-lg bg-white/[0.03] border border-white/5 text-center mb-6"><span class="text-xs text-gray-400 block">MTR apostados (total)</span><strong id="profileWagered" class="text-white">-</strong></div>
             <div>
-                <h3 class="text-sm font-bold text-white mb-3">Últimas partidas</h3>
-                <div id="profileRecentMatches"><p class="text-gray-500 text-sm">Sin partidas aún.</p></div>
+                <div class="flex items-center justify-between gap-2 mb-3">
+                    <h3 class="text-sm font-bold text-white">Historial de batallas</h3>
+                    <span id="profileBattleCount" class="text-xs text-gray-500">0 registros</span>
+                </div>
+                <div id="profileBattleFilters" class="flex flex-wrap gap-2 mb-3"></div>
+                <div id="profileBattleHistory"><p class="text-gray-500 text-sm">Sin batallas aún.</p></div>
             </div>
         </div>
     </div>
@@ -1649,7 +1699,7 @@
     <!-- ==================== SCRIPTS ==================== -->
     <!-- Scripts críticos para funcionalidad básica - mantener sin defer -->
     <!-- CRÍTICO: Cargar auth-system.js primero para que openAuthModal esté disponible -->
-    <script src="./auth-system.js?v=v2.7"></script>
+    <script src="./auth-system.js?v=v2.8-battle-history"></script>
     <script>
         // CRÍTICO: Asegurar que openAuthModal esté disponible globalmente ANTES de que se ejecute cualquier onclick
         // Esto debe ejecutarse inmediatamente después de cargar auth-system.js
@@ -1778,9 +1828,9 @@
     <script src="./src/streams-realtime.js?v=v2.7" defer></script>
     <!-- Ramp Network removido - ya no se usa -->
     <script src="./src/tournament-hub.js?v=v2.6-live-global-timer"></script>
-    <script src="./src/tournament-bracket.js?v=v2.13-tournament-results"></script>
+    <script src="./src/tournament-bracket.js?v=v2.14-battle-history"></script>
     <script src="./src/claim-ui.js?v=v2.7" defer></script>
-    <script src="./game-engine.js?v=v3.19-tournament-results"></script>
+    <script src="./game-engine.js?v=v3.20-battle-history"></script>
     <script>window.MTR_INLINE_TOP_STREAMS_ACTIVE = true;</script>
     <!-- DEFINIR quickBet INMEDIATAMENTE - ANTES DE CUALQUIER OTRO SCRIPT -->
     <script>

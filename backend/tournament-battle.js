@@ -6,6 +6,7 @@ const {
   EXPRESS_MAX_PLAYERS,
   WEEKLY_MAX_PLAYERS
 } = require('./tournament-genres');
+const { recordTournamentBattles } = require('./player-battle-history');
 
 const CPU_NAME_POOL = [
   'DJ Arena Bot', 'Beat Machine', 'Stream Master', 'Vinyl CPU',
@@ -597,11 +598,25 @@ class TournamentBattleEngine {
 
     if (nextIndex >= (bracket.duels?.length || 0)) {
       bracket.playbackStatus = 'completed';
+      const { data: fullTournament } = await this.supabase
+        .from('tournaments')
+        .select('id, name, tournament_type, entry_fee, updated_at')
+        .eq('id', tournamentId)
+        .maybeSingle();
+
       await this.supabase.from('tournaments').update({
         status: 'completed',
         bracket_state: bracket,
         updated_at: new Date().toISOString()
       }).eq('id', tournamentId);
+
+      if (fullTournament) {
+        try {
+          await recordTournamentBattles(this.supabase, fullTournament, bracket);
+        } catch (histErr) {
+          console.error('[tournament-battle] battle history:', histErr.message);
+        }
+      }
     } else {
       bracket.playbackStatus = 'playing';
       await this.supabase.from('tournaments').update({
