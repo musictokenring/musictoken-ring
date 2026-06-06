@@ -122,8 +122,12 @@ function togglePreview(url, button) {
         // Play new audio
         currentAudio = new Audio(url);
         currentAudio.play();
-        if (window.GameEngine && typeof window.GameEngine.primeBattleAudio === 'function') {
-            window.GameEngine.primeBattleAudio(url);
+        if (window.GameEngine) {
+            if (typeof window.GameEngine.holdBattleAudioSession === 'function') {
+                window.GameEngine.holdBattleAudioSession(url);
+            } else if (typeof window.GameEngine.primeBattleAudio === 'function') {
+                window.GameEngine.primeBattleAudio(url);
+            }
         }
         button.textContent = '⏸ Pause';
         

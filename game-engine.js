@@ -25,6 +25,7 @@ const GameEngine = {
     userAudio: null,
     _userAudioEl: null,
     _battleAudioUnlocked: false,
+    _audioSessionHeld: false,
     _pendingBattleUrl: null,
     _lastPreviewUrl: null,
     _audioGesturesBound: false,
@@ -2063,6 +2064,14 @@ const GameEngine = {
 
         await new Promise(function (resolve) { setTimeout(resolve, 200); });
 
+        var battleArena = document.getElementById('battleArena');
+        if (battleArena) {
+            battleArena.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+        if (typeof this.releaseBattleAudioSession === 'function') {
+            this.releaseBattleAudioSession();
+        }
+
         var target1 = Number(match.preset_plays1) || 500000;
         var target2 = Number(match.preset_plays2) || 480000;
         var plays1 = 0;
@@ -2529,8 +2538,15 @@ const GameEngine = {
             this.addToJackpotPool(jackpotContribution);
 
             const joinedId = result.tournamentId || tournamentId;
-            if (song && song.preview && typeof this.primeBattleAudio === 'function') {
-                this.primeBattleAudio(song.preview);
+            if (song && song.preview) {
+                try {
+                    sessionStorage.setItem('mtr_battle_preview_url', song.preview);
+                } catch (_ss) { /* ignore */ }
+                if (typeof this.holdBattleAudioSession === 'function') {
+                    this.holdBattleAudioSession(song.preview);
+                } else if (typeof this.primeBattleAudio === 'function') {
+                    this.primeBattleAudio(song.preview);
+                }
             }
             if (result.rolledToNewSlot) {
                 showToast('Nueva ronda Express — ¡inscrito!', 'success');
@@ -3956,6 +3972,37 @@ const GameEngine = {
         if (hint) hint.classList.add('hidden');
     },
 
+    holdBattleAudioSession(url) {
+        if (!url) return;
+        this._lastPreviewUrl = url;
+        this.bindAudioUnlockGestures();
+        var el = this.ensureUserAudio();
+        var self = this;
+        try {
+            el.src = url;
+            el.loop = true;
+            el.muted = false;
+            el.volume = 0.002;
+            var p = el.play();
+            if (p && typeof p.then === 'function') {
+                p.then(function () {
+                    self._battleAudioUnlocked = true;
+                    self._audioSessionHeld = true;
+                }).catch(function () {
+                    self.primeBattleAudio(url);
+                });
+            }
+        } catch (_e) {
+            this.primeBattleAudio(url);
+        }
+    },
+
+    releaseBattleAudioSession() {
+        if (!this._userAudioEl) return;
+        this._userAudioEl.volume = 1;
+        this._audioSessionHeld = false;
+    },
+
     primeBattleAudio(url) {
         if (!url) return;
         this._lastPreviewUrl = url;
@@ -3974,8 +4021,7 @@ const GameEngine = {
                     el.currentTime = 0;
                     el.volume = 1;
                     self._battleAudioUnlocked = true;
-                    self.hideAudioTapHint();
-                }).catch(function () { /* espera gesto del usuario */ });
+                }).catch(function () { /* ignore */ });
             }
         } catch (_e) { /* ignore */ }
     },
@@ -3983,7 +4029,6 @@ const GameEngine = {
     playUserSong(url) {
         if (!url) return;
         this._lastPreviewUrl = url;
-        this.bindAudioUnlockGestures();
         var el = this.ensureUserAudio();
         var self = this;
         if (!el.src || el.src.indexOf(url) === -1) {
@@ -3998,11 +4043,16 @@ const GameEngine = {
             playPromise.then(function () {
                 self._pendingBattleUrl = null;
                 self._battleAudioUnlocked = true;
-                self.hideAudioTapHint();
             }).catch(function (err) {
                 console.warn('[audio] play bloqueado:', err.message || err);
-                self._pendingBattleUrl = url;
-                self.showAudioTapHint();
+                if (!self.userAudio) return;
+                self.userAudio.muted = true;
+                var retry = self.userAudio.play();
+                if (retry && typeof retry.then === 'function') {
+                    retry.then(function () {
+                        if (self.userAudio) self.userAudio.muted = false;
+                    }).catch(function () { /* ignore */ });
+                }
             });
         }
     },

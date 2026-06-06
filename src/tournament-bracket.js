@@ -8,7 +8,6 @@
   var countdownTimer = null;
   var watchId = null;
   var playing = false;
-  var duelGateActive = false;
   var lobbyClosesAt = null;
   var lobbyStatus = null;
   var serverSkewMs = 0;
@@ -172,43 +171,16 @@
       (sec <= 60 ? 'animate-pulse text-red-400' : '') + '">' + fmtClock(sec) + '</div></div>';
   }
 
-  function renderInProgressBattleCta(b) {
-    var status = document.getElementById('tournamentArenaStatus');
-    if (!status) return;
-    var duelCount = (b && b.duels && b.duels.length) || 0;
-    var idx = (b && b.currentDuelIndex) || 0;
-    status.innerHTML =
-      '<div class="text-center p-6 rounded-2xl border-2 border-cyan-400/40 bg-cyan-500/10">' +
-      '<div class="text-lg text-white font-bold mb-2">⚔️ ¡La batalla está lista!</div>' +
-      '<p class="text-sm text-gray-300 mb-4">Duelo ' + (idx + 1) + ' de ' + duelCount +
-      ' · pulsa para ver la competencia con música</p>' +
-      '<button type="button" id="tournamentResumeBattleBtn" class="px-10 py-4 rounded-2xl bg-cyan-400 text-black font-black text-xl shadow-lg animate-pulse">' +
-      '▶ VER BATALLA EN VIVO</button></div>';
-    var btn = document.getElementById('tournamentResumeBattleBtn');
-    if (btn) {
-      btn.onclick = function () {
-        if (lastLobbyData) resumePlaybackFromLobby();
-      };
-    }
-  }
-
-  function resumePlaybackFromLobby() {
-    if (!lastLobbyData || playing || duelGateActive) return;
-    var b = lastLobbyData.bracket;
-    if (!b || !b.duels || !b.duels.length || b.playbackStatus === 'completed') return;
-    playDuelsSequentially(lastLobbyData);
-  }
-
   function recoverStuckPlaybackState() {
     var battleArena = document.getElementById('battleArena');
-    if (playing && !duelGateActive && !battleArena) {
+    if (playing && !battleArena) {
       playing = false;
     }
   }
 
   function renderLobby(data) {
-    if (!playing && !duelGateActive) showArena();
-    if (playing || duelGateActive) {
+    if (!playing) showArena();
+    if (playing) {
       return;
     }
     var title = document.getElementById('tournamentArenaTitle');
@@ -285,7 +257,13 @@
           '<p class="font-bold mb-2">❌ Torneo cancelado</p>' +
           '<p class="text-sm text-gray-400">' + (lastLifecycleError || 'Error al iniciar.') + '</p></div>';
       } else if (lobbyStatus === 'in_progress') {
-        renderInProgressBattleCta(b);
+        var duelTotal = (b && b.duels && b.duels.length) || 0;
+        var duelIdx = (b && b.currentDuelIndex) || 0;
+        status.innerHTML =
+          '<div class="text-center p-4">' +
+          '<div class="text-sm text-cyan-300 font-bold animate-pulse mb-2">⚔️ Batalla automática en curso</div>' +
+          '<p class="text-xs text-gray-400">Duelo ' + (duelIdx + 1) + ' de ' + duelTotal +
+          ' · iniciando según el cronómetro del torneo</p></div>';
       } else if (lastLifecycleError) {
         status.innerHTML =
           '<div class="text-center text-red-400 text-sm">' + lastLifecycleError + '</div>';
@@ -517,7 +495,7 @@
         if (result.bracket && result.bracket.participants && result.bracket.participants.length) {
           renderBracketRoster(result.bracket);
         }
-        if (!playing && !duelGateActive && result.bracket && result.bracket.duels &&
+        if (!playing && result.bracket && result.bracket.duels &&
             result.bracket.duels.length && result.bracket.playbackStatus !== 'completed') {
           playDuelsSequentially(result);
           return;
@@ -533,45 +511,9 @@
     } finally {
       battleKickInFlight = false;
     }
-    if (!playing && !duelGateActive) {
+    if (!playing) {
       await refresh();
     }
-  }
-
-  var duelAudioPrimed = false;
-
-  function showDuelStartGate(match, onStart) {
-    duelGateActive = true;
-    showArena();
-    var progress = document.getElementById('tournamentArenaStatus');
-    if (progress) {
-      progress.innerHTML =
-        '<div class="text-center p-8 rounded-2xl border-2 border-cyan-400/50 bg-cyan-500/10">' +
-        '<div class="text-xl text-white font-bold mb-2">⚔️ ' + (match.duel_label || 'Duelo') + '</div>' +
-        '<p class="text-sm text-gray-300 mb-4">' +
-        (match.player1_label || 'Jugador 1') + ' vs ' + (match.player2_label || 'Jugador 2') + '</p>' +
-        '<button type="button" id="tournamentDuelStartBtn" class="px-10 py-4 rounded-2xl bg-cyan-400 text-black font-black text-xl shadow-lg animate-pulse">' +
-        '▶ INICIAR DUELO</button>' +
-        '<p class="text-xs text-gray-400 mt-3">Pulsa para activar audio y ver la batalla</p></div>';
-      progress.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    }
-    toast('¡Pulsa INICIAR DUELO para ver la batalla con música!', 'info');
-    var btn = document.getElementById('tournamentDuelStartBtn');
-    if (!btn) {
-      duelGateActive = false;
-      onStart();
-      return;
-    }
-    btn.onclick = function () {
-      duelGateActive = false;
-      if (window.GameEngine) {
-        if (match.player1_song_preview && typeof window.GameEngine.primeBattleAudio === 'function') {
-          window.GameEngine.primeBattleAudio(match.player1_song_preview);
-        }
-        duelAudioPrimed = true;
-      }
-      onStart();
-    };
   }
 
   function playDuelsSequentially(data) {
@@ -586,6 +528,10 @@
     var startIdx = data.currentDuelIndex || 0;
     var tournamentId = data.tournament.id;
     var bracket = data.bracket;
+
+    if (window.GameEngine && typeof window.GameEngine.releaseBattleAudioSession === 'function') {
+      window.GameEngine.releaseBattleAudioSession();
+    }
 
     function playNext(idx) {
       if (idx >= duels.length) {
@@ -641,7 +587,8 @@
         duel_label: duel.label
       };
 
-      function runDuelPlayback() {
+      var startDelay = idx === startIdx ? 600 : (duels.length > 5 ? 500 : 900);
+      setTimeout(function () {
         window.GameEngine.startTournamentPlayback(match, {
           onComplete: function () {
             fetchApi('/api/tournaments/' + tournamentId + '/advance-playback', {
@@ -653,13 +600,7 @@
             });
           }
         });
-      }
-
-      if (!duelAudioPrimed) {
-        showDuelStartGate(match, runDuelPlayback);
-      } else {
-        runDuelPlayback();
-      }
+      }, startDelay);
     }
 
     playNext(startIdx);
@@ -695,7 +636,7 @@
 
       if (isStaleRegistration(data.tournament) && !isPinnedWatch(watchId)) {
         if (arenaBlocked || battleKickInFlight) {
-          if (!playing && !duelGateActive) renderLobby(data);
+          if (!playing) renderLobby(data);
           return;
         }
         if (watchGenreId && lobbyStatus !== 'locked' && lobbyStatus !== 'in_progress') {
@@ -709,7 +650,7 @@
       if (data.tournament.status === 'cancelled') {
         lastLifecycleError = data.lifecycleError || 'Ronda cancelada';
         toast(lastLifecycleError, 'warning');
-        if (!playing && !duelGateActive) renderLobby(data);
+        if (!playing) renderLobby(data);
         return;
       }
 
@@ -719,7 +660,7 @@
       }
 
       if (data.tournament.status === 'registration') {
-        if (!playing && !duelGateActive) renderLobby(data);
+        if (!playing) renderLobby(data);
         var secLeft = secondsLeft();
         if (arenaBlocked) {
           return;
@@ -736,7 +677,7 @@
       }
 
       if (data.tournament.status === 'locked') {
-        if (!playing && !duelGateActive) renderLobby(data);
+        if (!playing) renderLobby(data);
         await kickBattleOnce();
         return;
       }
@@ -746,10 +687,10 @@
         startBattleAttempts = 0;
         zeroKickSent = true;
         lastLifecycleError = null;
-        if (data.bracket.participants && data.bracket.participants.length && !playing && !duelGateActive) {
+        if (data.bracket.participants && data.bracket.participants.length && !playing) {
           renderBracketRoster(data.bracket);
         }
-        if (!playing && !duelGateActive && data.bracket.duels && data.bracket.duels.length) {
+        if (!playing && data.bracket.duels && data.bracket.duels.length) {
           if (data.bracket.playbackStatus !== 'completed') {
             playDuelsSequentially(data);
             return;
@@ -757,22 +698,20 @@
         }
         if (data.bracket.playbackStatus === 'completed') {
           playing = false;
-          duelGateActive = false;
           renderResult(data.bracket);
           return;
         }
-        if (!playing && !duelGateActive) renderLobby(data);
+        if (!playing) renderLobby(data);
         return;
       }
 
       if (data.tournament.status === 'completed' && data.bracket) {
         playing = false;
-        duelGateActive = false;
         renderResult(data.bracket);
         return;
       }
 
-      if (!playing && !duelGateActive) renderLobby(data);
+      if (!playing) renderLobby(data);
     } catch (e) {
       console.error('[tournament-bracket]', e);
       lastLifecycleError = 'Conexión lenta con el servidor';
@@ -785,7 +724,7 @@
     pollTimer = setInterval(refresh, 6000);
     if (countdownTimer) clearInterval(countdownTimer);
     countdownTimer = setInterval(function () {
-      if (!watchId || playing || duelGateActive || arenaBlocked) return;
+      if (!watchId || playing || arenaBlocked) return;
       if (lobbyStatus === 'registration' && lobbyClosesAt) {
         tickLobbyCountdownDisplay();
         if (lastLobbyData) renderLobby(lastLobbyData);
@@ -807,8 +746,6 @@
     }
     lobbyClosesAt = null;
     lastLobbyData = null;
-    duelAudioPrimed = false;
-    duelGateActive = false;
     playing = false;
     watchGenreId = genreId || localStorage.getItem('mtr_watch_genre') || null;
     startBattleAttempts = 0;
@@ -846,7 +783,6 @@
   function close() {
     watchId = null;
     playing = false;
-    duelGateActive = false;
     lobbyClosesAt = null;
     zeroKickSent = false;
     abortArenaFetches();

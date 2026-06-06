@@ -1778,9 +1778,9 @@
     <script src="./src/streams-realtime.js?v=v2.7" defer></script>
     <!-- Ramp Network removido - ya no se usa -->
     <script src="./src/tournament-hub.js?v=v2.5-enrollment-timer"></script>
-    <script src="./src/tournament-bracket.js?v=v2.11-battle-playback-fix"></script>
+    <script src="./src/tournament-bracket.js?v=v2.12-auto-battle-timer"></script>
     <script src="./src/claim-ui.js?v=v2.7" defer></script>
-    <script src="./game-engine.js?v=v3.17-dom-audio-duel"></script>
+    <script src="./game-engine.js?v=v3.18-auto-battle-audio"></script>
     <script>window.MTR_INLINE_TOP_STREAMS_ACTIVE = true;</script>
     <!-- DEFINIR quickBet INMEDIATAMENTE - ANTES DE CUALQUIER OTRO SCRIPT -->
     <script>
@@ -2033,9 +2033,12 @@
                         window.selectedSong = song;
                         logFn('[selectSongForBattle] ✅ window.selectedSong establecido:', song);
                         logFn('[selectSongForBattle] Verificación window.selectedSong:', window.selectedSong);
-                        if (song && song.preview && window.GameEngine &&
-                            typeof window.GameEngine.primeBattleAudio === 'function') {
-                            window.GameEngine.primeBattleAudio(song.preview);
+                        if (song && song.preview && window.GameEngine) {
+                            if (typeof window.GameEngine.holdBattleAudioSession === 'function') {
+                                window.GameEngine.holdBattleAudioSession(song.preview);
+                            } else if (typeof window.GameEngine.primeBattleAudio === 'function') {
+                                window.GameEngine.primeBattleAudio(song.preview);
+                            }
                         }
                     }
                     
@@ -4997,8 +5000,12 @@
                     if (enrollment.genreId) {
                         localStorage.setItem('mtr_watch_genre', enrollment.genreId);
                     }
-                    if (song.preview && typeof GameEngine.primeBattleAudio === 'function') {
-                        GameEngine.primeBattleAudio(song.preview);
+                    if (song.preview) {
+                        if (typeof GameEngine.holdBattleAudioSession === 'function') {
+                            GameEngine.holdBattleAudioSession(song.preview);
+                        } else if (typeof GameEngine.primeBattleAudio === 'function') {
+                            GameEngine.primeBattleAudio(song.preview);
+                        }
                     }
                     await GameEngine.joinTournament(enrollment.id, song, enrollment.entryFee);
                 } else {
