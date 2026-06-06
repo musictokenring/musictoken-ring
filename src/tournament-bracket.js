@@ -107,10 +107,21 @@
       m.indexOf('bracket') !== -1 || m.indexOf('is_cpu') !== -1;
   }
 
+  function shouldClearJoinedPin(t) {
+    if (!t) return false;
+    if (t.status === 'cancelled' || t.status === 'completed') return true;
+    if (t.status === 'registration' && t.registration_closes_at) {
+      var closes = new Date(t.registration_closes_at).getTime();
+      if (closes <= serverNowMs() - 180000) return true;
+    }
+    return false;
+  }
+
   function applyLobbyTiming(data) {
     var t = data.tournament;
     if (!t || !t.registration_closes_at) return;
     var newCloses = new Date(t.registration_closes_at).getTime();
+    if (!Number.isFinite(newCloses)) return;
     if (t.id && t.id !== watchId && redirecting) {
       watchId = t.id;
       localStorage.setItem('mtr_watch_tournament', watchId);
@@ -127,12 +138,37 @@
       lobbyClosesAt = newCloses;
       return;
     }
-    if (secondsLeft() === 0 && startBattleAttempts > 0) {
-      return;
-    }
     if (newCloses >= lobbyClosesAt) {
       lobbyClosesAt = newCloses;
+      return;
     }
+    if (lobbyClosesAt - newCloses > 45000) {
+      lobbyClosesAt = newCloses;
+    }
+  }
+
+  function tickLobbyCountdownDisplay() {
+    if (!watchId || playing || arenaBlocked || lobbyStatus !== 'registration' || !lobbyClosesAt) {
+      return;
+    }
+    var sec = secondsLeft();
+    var sub = document.getElementById('tournamentArenaSubtitle');
+    if (sub) {
+      var typeLabel = (lastLobbyData && lastLobbyData.tournament &&
+        lastLobbyData.tournament.tournament_type === 'weekly') ? 'Grand Prix semanal' : 'Express';
+      if (sec > 0) {
+        sub.textContent = typeLabel + ' · inscripción abierta · batalla en ' + fmtClock(sec);
+      } else {
+        sub.textContent = typeLabel + ' · cerrando inscripción…';
+      }
+    }
+    var status = document.getElementById('tournamentArenaStatus');
+    if (!status || battleKickInFlight || sec === 0) return;
+    status.innerHTML =
+      '<div class="text-center">' +
+      '<div class="text-xs text-gray-400 mb-2">Batalla inicia cuando el cronómetro llegue a 0</div>' +
+      '<div class="text-4xl font-black tabular-nums text-cyan-400 ' +
+      (sec <= 60 ? 'animate-pulse text-red-400' : '') + '">' + fmtClock(sec) + '</div></div>';
   }
 
   function renderLobby(data) {
@@ -464,6 +500,35 @@
     }
   }
 
+  var duelAudioPrimed = false;
+
+  function showDuelStartGate(match, onStart) {
+    showArena();
+    var progress = document.getElementById('tournamentArenaStatus');
+    if (progress) {
+      progress.innerHTML =
+        '<div class="text-center p-6">' +
+        '<div class="text-sm text-cyan-300 font-bold mb-2">' + (match.duel_label || 'Duelo') + '</div>' +
+        '<button type="button" id="tournamentDuelStartBtn" class="px-8 py-4 rounded-2xl bg-cyan-400 text-black font-black text-lg shadow-lg">' +
+        '▶ INICIAR DUELO</button>' +
+        '<p class="text-xs text-gray-400 mt-3">Pulsa para activar audio y comenzar</p></div>';
+    }
+    var btn = document.getElementById('tournamentDuelStartBtn');
+    if (!btn) {
+      onStart();
+      return;
+    }
+    btn.onclick = function () {
+      if (window.GameEngine) {
+        if (match.player1_song_preview && typeof window.GameEngine.primeBattleAudio === 'function') {
+          window.GameEngine.primeBattleAudio(match.player1_song_preview);
+        }
+        duelAudioPrimed = true;
+      }
+      onStart();
+    };
+  }
+
   function playDuelsSequentially(data) {
     if (playing || !data.bracket || !data.bracket.duels || !data.bracket.duels.length) return;
     if (!window.GameEngine || typeof window.GameEngine.startTournamentPlayback !== 'function') {
@@ -531,17 +596,25 @@
         duel_label: duel.label
       };
 
-      window.GameEngine.startTournamentPlayback(match, {
-        onComplete: function () {
-          fetchApi('/api/tournaments/' + tournamentId + '/advance-playback', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ duelIndex: idx })
-          }, API_TIMEOUT_MS, 'kick').then(function () {
-            setTimeout(function () { playNext(idx + 1); }, duels.length > 5 ? 600 : 1200);
-          });
-        }
-      });
+      function runDuelPlayback() {
+        window.GameEngine.startTournamentPlayback(match, {
+          onComplete: function () {
+            fetchApi('/api/tournaments/' + tournamentId + '/advance-playback', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ duelIndex: idx })
+            }, API_TIMEOUT_MS, 'kick').then(function () {
+              setTimeout(function () { playNext(idx + 1); }, duels.length > 5 ? 600 : 1200);
+            });
+          }
+        });
+      }
+
+      if (!duelAudioPrimed) {
+        showDuelStartGate(match, runDuelPlayback);
+      } else {
+        runDuelPlayback();
+      }
     }
 
     playNext(startIdx);
@@ -570,6 +643,10 @@
         serverSkewMs = Date.now() - new Date(data.serverTime).getTime();
       }
       lastLobbyData = data;
+
+      if (shouldClearJoinedPin(data.tournament)) {
+        localStorage.removeItem('mtr_joined_tournament');
+      }
 
       if (isStaleRegistration(data.tournament) && !isPinnedWatch(watchId)) {
         if (arenaBlocked || battleKickInFlight) {
@@ -652,9 +729,10 @@
     pollTimer = setInterval(refresh, 6000);
     if (countdownTimer) clearInterval(countdownTimer);
     countdownTimer = setInterval(function () {
-      if (!watchId || !lastLobbyData || playing || arenaBlocked) return;
-      if (lobbyStatus === 'registration') {
-        renderLobby(lastLobbyData);
+      if (!watchId || playing || arenaBlocked) return;
+      if (lobbyStatus === 'registration' && lobbyClosesAt) {
+        tickLobbyCountdownDisplay();
+        if (lastLobbyData) renderLobby(lastLobbyData);
         var sec = secondsLeft();
         if (sec === 0 && !battleKickInFlight && (!zeroKickSent || startBattleAttempts < MAX_KICK_ATTEMPTS)) {
           zeroKickSent = true;
@@ -665,9 +743,15 @@
   }
 
   function watch(tournamentId, genreId) {
+    if (window.GameEngine && typeof window.GameEngine.bindAudioUnlockGestures === 'function') {
+      window.GameEngine.bindAudioUnlockGestures();
+    }
     if (window.TournamentHub && window.TournamentHub.pauseTimers) {
       window.TournamentHub.pauseTimers();
     }
+    lobbyClosesAt = null;
+    lastLobbyData = null;
+    duelAudioPrimed = false;
     watchGenreId = genreId || localStorage.getItem('mtr_watch_genre') || null;
     startBattleAttempts = 0;
     zeroKickSent = false;

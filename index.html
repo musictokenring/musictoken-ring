@@ -1267,6 +1267,8 @@
             </div>
         </section>
 
+        <audio id="mtrBattleAudio" loop playsinline webkit-playsinline preload="auto" style="display:none" aria-hidden="true"></audio>
+
         <!-- TOURNAMENT ARENA (lobby + bracket + resultados) -->
         <section id="tournamentArena" class="hidden mb-16">
             <div class="flex items-center gap-4 mb-6">
@@ -1775,10 +1777,10 @@
     <!-- Scripts que pueden cargarse después del render inicial -->
     <script src="./src/streams-realtime.js?v=v2.7" defer></script>
     <!-- Ramp Network removido - ya no se usa -->
-    <script src="./src/tournament-hub.js?v=v2.4-fast-express-cache"></script>
-    <script src="./src/tournament-bracket.js?v=v2.8-pin-human-join"></script>
+    <script src="./src/tournament-hub.js?v=v2.5-enrollment-timer"></script>
+    <script src="./src/tournament-bracket.js?v=v2.10-duel-start-timer"></script>
     <script src="./src/claim-ui.js?v=v2.7" defer></script>
-    <script src="./game-engine.js?v=v3.15-pin-join-audio-prime"></script>
+    <script src="./game-engine.js?v=v3.17-dom-audio-duel"></script>
     <script>window.MTR_INLINE_TOP_STREAMS_ACTIVE = true;</script>
     <!-- DEFINIR quickBet INMEDIATAMENTE - ANTES DE CUALQUIER OTRO SCRIPT -->
     <script>
@@ -2031,6 +2033,10 @@
                         window.selectedSong = song;
                         logFn('[selectSongForBattle] ✅ window.selectedSong establecido:', song);
                         logFn('[selectSongForBattle] Verificación window.selectedSong:', window.selectedSong);
+                        if (song && song.preview && window.GameEngine &&
+                            typeof window.GameEngine.primeBattleAudio === 'function') {
+                            window.GameEngine.primeBattleAudio(song.preview);
+                        }
                     }
                     
                     // También actualizar variable local si existe en el scope

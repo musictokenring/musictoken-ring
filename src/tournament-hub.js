@@ -558,11 +558,15 @@
     stopEnrollmentCountdown();
     if (type !== 'express' || !tournament?.registration_closes_at) return;
     enrollmentCountdownTimer = setInterval(function () {
-      if (!window.tournamentEnrollment) {
+      var enrollment = window.tournamentEnrollment;
+      if (!enrollment) {
         stopEnrollmentCountdown();
         return;
       }
-      updateEnrollmentSubtitle(genreLabel, type, tournament);
+      updateEnrollmentSubtitle(genreLabel, type, {
+        entry_fee: enrollment.entryFee,
+        registration_closes_at: enrollment.closesAt || tournament.registration_closes_at
+      });
     }, 1000);
   }
 

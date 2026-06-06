@@ -23,6 +23,11 @@ const GameEngine = {
     initPromise: null,
     eloRefreshIntervalId: null,
     userAudio: null,
+    _userAudioEl: null,
+    _battleAudioUnlocked: false,
+    _pendingBattleUrl: null,
+    _lastPreviewUrl: null,
+    _audioGesturesBound: false,
     victoryAudio: null,
     connectedWallet: null,
     lastPrizeTxHash: null,
@@ -55,7 +60,8 @@ const GameEngine = {
                 this.loadStoredWallet();
                 this.setupRealtimeSubscriptions();
                 this.scheduleEloRefresh();
-                
+                this.bindAudioUnlockGestures();
+
                 // Actualizar display después de cargar balances
                 this.updatePracticeBetDisplay();
             } catch (initError) {
@@ -3007,6 +3013,7 @@ const GameEngine = {
             console.log('[createBattleUI] ✅ battleArena encontrado en DOM');
             addedArena.classList.remove('hidden');
             console.log('[createBattleUI] ✅ battleArena visible');
+            this.bindBattleArenaAudio(addedArena);
             
             // Detectar si es dispositivo móvil (ANTES del setTimeout)
             const isMobile = typeof window !== 'undefined' && (
@@ -3848,48 +3855,161 @@ const GameEngine = {
     // AUDIO
     // ==========================================
 
-    primeBattleAudio(url) {
-        if (!url) return;
+    _silentAudioSrc:
+        'data:audio/wav;base64,UklGRigAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQQAAAAAAA==',
+
+    ensureUserAudio() {
+        if (!this._userAudioEl) {
+            var domEl = document.getElementById('mtrBattleAudio');
+            this._userAudioEl = domEl || new Audio();
+            this._userAudioEl.loop = true;
+            this._userAudioEl.preload = 'auto';
+            if (domEl) {
+                domEl.setAttribute('playsinline', '');
+                domEl.setAttribute('webkit-playsinline', '');
+            }
+        }
+        this.userAudio = this._userAudioEl;
+        return this._userAudioEl;
+    },
+
+    bindAudioUnlockGestures() {
+        if (this._audioGesturesBound) return;
+        this._audioGesturesBound = true;
+        var self = this;
+        function onGesture() {
+            self.unlockAudioFromGesture();
+        }
+        document.addEventListener('click', onGesture, { capture: true, passive: true });
+        document.addEventListener('touchstart', onGesture, { capture: true, passive: true });
+    },
+
+    bindBattleArenaAudio(arenaEl) {
+        if (!arenaEl || arenaEl._mtrAudioTapBound) return;
+        arenaEl._mtrAudioTapBound = true;
+        var self = this;
+        arenaEl.addEventListener('click', function () {
+            self.unlockAudioFromGesture();
+        }, { passive: true });
+        arenaEl.addEventListener('touchstart', function () {
+            self.unlockAudioFromGesture();
+        }, { passive: true });
+    },
+
+    unlockAudioFromGesture() {
+        var el = this.ensureUserAudio();
+        var self = this;
+        function resumePending() {
+            if (self._pendingBattleUrl) {
+                var pending = self._pendingBattleUrl;
+                self._pendingBattleUrl = null;
+                self.playUserSong(pending);
+            }
+        }
+        if (this._battleAudioUnlocked) {
+            resumePending();
+            return;
+        }
         try {
-            var probe = new Audio(url);
-            probe.volume = 0.01;
-            var p = probe.play();
+            el.src = this._lastPreviewUrl || this._silentAudioSrc;
+            el.loop = false;
+            el.volume = 0.001;
+            el.muted = false;
+            var p = el.play();
             if (p && typeof p.then === 'function') {
                 p.then(function () {
-                    probe.pause();
-                    probe.currentTime = 0;
-                    GameEngine._battleAudioUnlocked = true;
+                    el.pause();
+                    el.currentTime = 0;
+                    el.loop = true;
+                    el.volume = 1;
+                    self._battleAudioUnlocked = true;
+                    self.hideAudioTapHint();
+                    resumePending();
                 }).catch(function () { /* ignore */ });
+            }
+        } catch (_e) { /* ignore */ }
+    },
+
+    showAudioTapHint() {
+        var hint = document.getElementById('audioTapHint');
+        if (!hint) {
+            hint = document.createElement('div');
+            hint.id = 'audioTapHint';
+            hint.className =
+                'text-center py-2 px-4 mb-2 rounded-xl border border-amber-400/40 ' +
+                'bg-amber-500/10 text-amber-200 text-sm font-bold animate-pulse cursor-pointer';
+            hint.textContent = '🔊 Toca la pantalla para activar el audio';
+            var arena = document.getElementById('battleArena');
+            if (arena) {
+                arena.insertBefore(hint, arena.firstChild);
+            }
+            var self = this;
+            hint.addEventListener('click', function () {
+                self.unlockAudioFromGesture();
+            });
+        }
+        hint.classList.remove('hidden');
+    },
+
+    hideAudioTapHint() {
+        var hint = document.getElementById('audioTapHint');
+        if (hint) hint.classList.add('hidden');
+    },
+
+    primeBattleAudio(url) {
+        if (!url) return;
+        this._lastPreviewUrl = url;
+        this.bindAudioUnlockGestures();
+        var el = this.ensureUserAudio();
+        try {
+            el.src = url;
+            el.loop = true;
+            el.volume = 0.01;
+            el.muted = false;
+            var self = this;
+            var p = el.play();
+            if (p && typeof p.then === 'function') {
+                p.then(function () {
+                    el.pause();
+                    el.currentTime = 0;
+                    el.volume = 1;
+                    self._battleAudioUnlocked = true;
+                    self.hideAudioTapHint();
+                }).catch(function () { /* espera gesto del usuario */ });
             }
         } catch (_e) { /* ignore */ }
     },
 
     playUserSong(url) {
         if (!url) return;
-        if (this.userAudio) this.userAudio.pause();
-        this.userAudio = new Audio(url);
-        this.userAudio.loop = true;
+        this._lastPreviewUrl = url;
+        this.bindAudioUnlockGestures();
+        var el = this.ensureUserAudio();
         var self = this;
-        var playPromise = this.userAudio.play();
-        if (playPromise && typeof playPromise.catch === 'function') {
-            playPromise.catch(function (err) {
-                console.warn('[audio] play:', err.message || err);
-                if (!self.userAudio) return;
-                self.userAudio.muted = true;
-                var retry = self.userAudio.play();
-                if (retry && typeof retry.then === 'function') {
-                    retry.then(function () {
-                        if (self.userAudio) self.userAudio.muted = false;
-                    }).catch(function () { /* ignore */ });
-                }
+        if (!el.src || el.src.indexOf(url) === -1) {
+            el.pause();
+            el.src = url;
+        }
+        el.loop = true;
+        el.muted = false;
+        el.volume = 1;
+        var playPromise = el.play();
+        if (playPromise && typeof playPromise.then === 'function') {
+            playPromise.then(function () {
+                self._pendingBattleUrl = null;
+                self._battleAudioUnlocked = true;
+                self.hideAudioTapHint();
+            }).catch(function (err) {
+                console.warn('[audio] play bloqueado:', err.message || err);
+                self._pendingBattleUrl = url;
+                self.showAudioTapHint();
             });
         }
     },
-    
+
     stopUserSong() {
         if (this.userAudio) {
             this.userAudio.pause();
-            this.userAudio = null;
         }
     },
     
