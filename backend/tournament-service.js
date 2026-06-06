@@ -275,7 +275,7 @@ class TournamentService {
   async countHumanParticipants(tournamentId) {
     const { data, error } = await this.supabase
       .from('tournament_participants')
-      .select('user_id, is_cpu, tournament_id')
+      .select('user_id, tournament_id')
       .eq('tournament_id', tournamentId);
 
     if (error) {
@@ -288,7 +288,7 @@ class TournamentService {
   async syncTournamentParticipantCount(tournamentId) {
     const { data: rows, error } = await this.supabase
       .from('tournament_participants')
-      .select('user_id, is_cpu, tournament_id')
+      .select('user_id, tournament_id')
       .eq('tournament_id', tournamentId);
 
     if (error) {
@@ -659,7 +659,7 @@ class TournamentService {
 
     const { data: existingRows } = await this.supabase
       .from('tournament_participants')
-      .select('user_id, is_cpu, tournament_id')
+      .select('user_id, tournament_id')
       .eq('tournament_id', tournamentId)
       .eq('user_id', playerUserId);
 
@@ -700,16 +700,37 @@ class TournamentService {
       participantRow.song_preview = song.preview || '';
     }
 
-    const { error: insertError } = await this.supabase
+    let insertError = null;
+    ({ error: insertError } = await this.supabase
       .from('tournament_participants')
-      .insert([participantRow]);
+      .insert([participantRow]));
+
+    if (insertError) {
+      const msg = String(insertError.message || '');
+      const retryRow = Object.assign({}, participantRow);
+      let stripped = false;
+      if (msg.indexOf('is_cpu') !== -1) {
+        delete retryRow.is_cpu;
+        stripped = true;
+      }
+      if (msg.indexOf('display_name') !== -1) {
+        delete retryRow.display_name;
+        stripped = true;
+      }
+      if (stripped) {
+        ({ error: insertError } = await this.supabase
+          .from('tournament_participants')
+          .insert([retryRow]));
+      }
+    }
 
     if (insertError) {
       console.error('[tournament] join insert error:', insertError.message);
       return { ok: false, error: insertError.message };
     }
 
-    const newHumanCount = humanCount + 1;
+    const verifiedHumans = await this.countHumanParticipants(tournamentId);
+    const newHumanCount = Math.max(verifiedHumans, humanCount + 1);
     const platformRate = 0.08;
     const prizeContribution = entryFee * (1 - platformRate);
     const updatePayload = {

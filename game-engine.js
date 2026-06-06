@@ -2407,12 +2407,12 @@ const GameEngine = {
                 return;
             }
 
-            if (window.tournamentEnrollment?.type === 'express') {
-                const refreshedId = await this.refreshExpressEnrollmentId();
-                if (refreshedId) tournamentId = refreshedId;
+            const enrollment = window.tournamentEnrollment;
+            if (enrollment?.id) {
+                tournamentId = enrollment.id;
             }
 
-            const entryFee = Number(betAmount) || Number(window.tournamentEnrollment?.entryFee) || 3;
+            const entryFee = Number(betAmount) || Number(enrollment?.entryFee) || 3;
             if (!(await this.hasSufficientCredits(entryFee))) {
                 return;
             }
@@ -2431,7 +2431,6 @@ const GameEngine = {
                 showToast('Conecta tu wallet antes de inscribirte en el torneo.', 'error');
                 return;
             }
-            const enrollment = window.tournamentEnrollment;
             const isExpressJoin = enrollment?.type === 'express' && enrollment?.genreId;
             const joinUrl = isExpressJoin
                 ? backendUrl + '/api/tournaments/express/join'
@@ -2459,6 +2458,7 @@ const GameEngine = {
                     );
                     if (localOk) {
                         showToast('¡Inscrito en el torneo!', 'success');
+                        localStorage.setItem('mtr_joined_tournament', tournamentId);
                         window.tournamentEnrollment = null;
                         this.watchTournamentArena(tournamentId);
                         return;
@@ -2478,6 +2478,7 @@ const GameEngine = {
                     );
                     if (localOk) {
                         showToast('¡Inscrito en el torneo!', 'success');
+                        localStorage.setItem('mtr_joined_tournament', tournamentId);
                         window.tournamentEnrollment = null;
                         this.watchTournamentArena(tournamentId);
                         return;
@@ -2522,14 +2523,23 @@ const GameEngine = {
             this.addToJackpotPool(jackpotContribution);
 
             const joinedId = result.tournamentId || tournamentId;
+            if (song && song.preview && typeof this.primeBattleAudio === 'function') {
+                this.primeBattleAudio(song.preview);
+            }
             if (result.rolledToNewSlot) {
                 showToast('Nueva ronda Express — ¡inscrito!', 'success');
             } else if (result.alreadyJoined) {
                 showToast('Ya estabas inscrito en esta ronda', 'success');
             } else {
-                showToast('¡Inscrito! ' + (result.humanCount || 1) + ' jugador(es) humanos en la ronda', 'success');
+                const humans = Number(result.humanCount) || 1;
+                if (humans < 1) {
+                    showToast('Inscripción registrada, pero no se detectó tu plaza humana. Recarga e inténtalo de nuevo.', 'warning');
+                } else {
+                    showToast('¡Inscrito! ' + humans + ' jugador(es) humanos en la ronda', 'success');
+                }
             }
             localStorage.setItem('mtr_watch_tournament', joinedId);
+            localStorage.setItem('mtr_joined_tournament', joinedId);
             if (enrollment?.genreId) {
                 localStorage.setItem('mtr_watch_genre', enrollment.genreId);
             }
@@ -3838,15 +3848,40 @@ const GameEngine = {
     // AUDIO
     // ==========================================
 
+    primeBattleAudio(url) {
+        if (!url) return;
+        try {
+            var probe = new Audio(url);
+            probe.volume = 0.01;
+            var p = probe.play();
+            if (p && typeof p.then === 'function') {
+                p.then(function () {
+                    probe.pause();
+                    probe.currentTime = 0;
+                    GameEngine._battleAudioUnlocked = true;
+                }).catch(function () { /* ignore */ });
+            }
+        } catch (_e) { /* ignore */ }
+    },
+
     playUserSong(url) {
         if (!url) return;
         if (this.userAudio) this.userAudio.pause();
         this.userAudio = new Audio(url);
         this.userAudio.loop = true;
+        var self = this;
         var playPromise = this.userAudio.play();
         if (playPromise && typeof playPromise.catch === 'function') {
             playPromise.catch(function (err) {
                 console.warn('[audio] play:', err.message || err);
+                if (!self.userAudio) return;
+                self.userAudio.muted = true;
+                var retry = self.userAudio.play();
+                if (retry && typeof retry.then === 'function') {
+                    retry.then(function () {
+                        if (self.userAudio) self.userAudio.muted = false;
+                    }).catch(function () { /* ignore */ });
+                }
             });
         }
     },

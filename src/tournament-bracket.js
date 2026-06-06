@@ -54,6 +54,10 @@
     if (typeof showToast === 'function') showToast(msg, type || 'info');
   }
 
+  function isPinnedWatch(id) {
+    return !!(id && localStorage.getItem('mtr_joined_tournament') === id);
+  }
+
   function hideSections() {
     ['modeSelector', 'songSelection', 'tournamentHub'].forEach(function (id) {
       var el = document.getElementById(id);
@@ -362,6 +366,7 @@
   async function redirectToActiveExpress(genreId) {
     if (!genreId || redirecting || arenaBlocked || battleKickInFlight) return false;
     if (lobbyStatus === 'locked' || lobbyStatus === 'in_progress') return false;
+    if (isPinnedWatch(watchId)) return false;
     redirecting = true;
     try {
       var newId = await resolveLiveExpressId(genreId);
@@ -566,7 +571,7 @@
       }
       lastLobbyData = data;
 
-      if (isStaleRegistration(data.tournament)) {
+      if (isStaleRegistration(data.tournament) && !isPinnedWatch(watchId)) {
         if (arenaBlocked || battleKickInFlight) {
           renderLobby(data);
           return;
@@ -678,7 +683,7 @@
 
     (async function () {
       try {
-        if (watchGenreId && tournamentId) {
+        if (watchGenreId && tournamentId && !isPinnedWatch(tournamentId)) {
           var probe = await fetchBracket(tournamentId);
           if (probe.ok && isStaleRegistration(probe.tournament)) {
             var liveId = await resolveLiveExpressId(watchGenreId);
@@ -703,6 +708,7 @@
     zeroKickSent = false;
     abortArenaFetches();
     localStorage.removeItem('mtr_watch_tournament');
+    localStorage.removeItem('mtr_joined_tournament');
     document.getElementById('depositSectionMain')?.classList.remove('hidden');
     document.getElementById('contactSection')?.classList.remove('hidden');
     if (pollTimer) clearInterval(pollTimer);

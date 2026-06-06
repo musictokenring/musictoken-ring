@@ -201,16 +201,23 @@ class TournamentBattleEngine {
   }
 
   async loadHumans(tournamentId) {
+    const cols =
+      'user_id, tournament_id, song_id, song_name, song_artist, song_image, song_preview, display_name, bracket_slot, is_cpu';
     const { data, error } = await this.supabase
       .from('tournament_participants')
-      .select('*')
-      .eq('tournament_id', tournamentId)
-      .order('joined_at', { ascending: true });
+      .select(cols)
+      .eq('tournament_id', tournamentId);
     if (error) {
       console.error('[tournament-battle] loadHumans:', error.message);
       return [];
     }
-    return (data || []).filter(isHumanParticipantRow);
+    const humans = (data || []).filter(isHumanParticipantRow);
+    humans.sort(function (a, b) {
+      const ja = a.joined_at ? Date.parse(a.joined_at) : 0;
+      const jb = b.joined_at ? Date.parse(b.joined_at) : 0;
+      return ja - jb;
+    });
+    return humans;
   }
 
   async clearCpuParticipants(tournamentId) {
@@ -219,8 +226,23 @@ class TournamentBattleEngine {
       .delete()
       .eq('tournament_id', tournamentId)
       .eq('is_cpu', true);
-    if (error) {
-      console.warn('[tournament-battle] clearCpu:', tournamentId, error.message);
+    if (!error) return;
+
+    console.warn('[tournament-battle] clearCpu is_cpu:', tournamentId, error.message);
+    const { data: rows, error: readErr } = await this.supabase
+      .from('tournament_participants')
+      .select('user_id')
+      .eq('tournament_id', tournamentId);
+    if (readErr) {
+      console.warn('[tournament-battle] clearCpu read:', tournamentId, readErr.message);
+      return;
+    }
+    for (const row of (rows || []).filter(isCpuParticipantRow)) {
+      await this.supabase
+        .from('tournament_participants')
+        .delete()
+        .eq('tournament_id', tournamentId)
+        .eq('user_id', row.user_id);
     }
   }
 
