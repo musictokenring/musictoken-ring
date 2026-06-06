@@ -1778,9 +1778,9 @@
     <script src="./src/streams-realtime.js?v=v2.7" defer></script>
     <!-- Ramp Network removido - ya no se usa -->
     <script src="./src/tournament-hub.js?v=v2.6-live-global-timer"></script>
-    <script src="./src/tournament-bracket.js?v=v2.12-auto-battle-timer"></script>
+    <script src="./src/tournament-bracket.js?v=v2.13-tournament-results"></script>
     <script src="./src/claim-ui.js?v=v2.7" defer></script>
-    <script src="./game-engine.js?v=v3.18-auto-battle-audio"></script>
+    <script src="./game-engine.js?v=v3.19-tournament-results"></script>
     <script>window.MTR_INLINE_TOP_STREAMS_ACTIVE = true;</script>
     <!-- DEFINIR quickBet INMEDIATAMENTE - ANTES DE CUALQUIER OTRO SCRIPT -->
     <script>
@@ -3703,6 +3703,11 @@
 
         function backToModes() {
             document.getElementById('songSelection').classList.add('hidden');
+            var tournamentArenaEl = document.getElementById('tournamentArena');
+            if (tournamentArenaEl) tournamentArenaEl.classList.add('hidden');
+            if (window.TournamentBracket && typeof window.TournamentBracket.close === 'function') {
+                window.TournamentBracket.close();
+            }
             var tournamentHubEl = document.getElementById('tournamentHub');
             if (tournamentHubEl) tournamentHubEl.classList.add('hidden');
             if (window.TournamentHub) window.TournamentHub.close();

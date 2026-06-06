@@ -2043,7 +2043,11 @@ const GameEngine = {
         ['songSelection', 'waitingScreen', 'roomScreen', 'modeSelector', 'tournamentHub'].forEach(function (id) {
             document.getElementById(id)?.classList.add('hidden');
         });
-        document.getElementById('tournamentArena')?.classList.add('hidden');
+        if (match.match_type !== 'tournament') {
+            document.getElementById('tournamentArena')?.classList.add('hidden');
+        } else {
+            document.getElementById('tournamentArena')?.classList.remove('hidden');
+        }
         document.getElementById('depositSectionMain')?.classList.add('hidden');
         document.getElementById('contactSection')?.classList.add('hidden');
 
@@ -2167,14 +2171,19 @@ const GameEngine = {
                         ? '<span class="text-cyan-300 font-bold">🏆 Gana ' + (match.player1_label || 'Lado 1') + '</span>'
                         : '<span class="text-fuchsia-300 font-bold">🏆 Gana ' + (match.player2_label || 'Lado 2') + '</span>';
                 }
+                var delayMs = options.victoryDelayMs != null
+                    ? Number(options.victoryDelayMs)
+                    : Math.max(2000, (self.victoryAudioDuration || 15) * 1000);
                 setTimeout(function () {
                     self.stopUserSong();
                     var arena = document.getElementById('battleArena');
                     if (arena) arena.remove();
-                    document.getElementById('depositSectionMain')?.classList.remove('hidden');
-                    document.getElementById('contactSection')?.classList.remove('hidden');
+                    if (match.match_type !== 'tournament') {
+                        document.getElementById('depositSectionMain')?.classList.remove('hidden');
+                        document.getElementById('contactSection')?.classList.remove('hidden');
+                    }
                     if (options.onComplete) options.onComplete({ winner: winner });
-                }, Math.max(2000, (self.victoryAudioDuration || 15) * 1000));
+                }, delayMs);
             }
         }, 1000);
     },

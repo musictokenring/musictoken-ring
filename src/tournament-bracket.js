@@ -8,6 +8,7 @@
   var countdownTimer = null;
   var watchId = null;
   var playing = false;
+  var showingResult = false;
   var lobbyClosesAt = null;
   var lobbyStatus = null;
   var serverSkewMs = 0;
@@ -179,6 +180,7 @@
   }
 
   function renderLobby(data) {
+    if (showingResult) return;
     if (!playing) showArena();
     if (playing) {
       return;
@@ -277,27 +279,90 @@
     }
   }
 
+  function finishTournamentPresentation(b) {
+    showingResult = true;
+    playing = false;
+    var battleArena = document.getElementById('battleArena');
+    if (battleArena) battleArena.remove();
+    if (window.GameEngine && typeof window.GameEngine.stopUserSong === 'function') {
+      window.GameEngine.stopUserSong();
+    }
+    localStorage.removeItem('mtr_watch_tournament');
+    localStorage.removeItem('mtr_joined_tournament');
+    showArena();
+    renderResult(b);
+    var title = document.getElementById('tournamentArenaTitle');
+    if (title) title.textContent = '🏆 Torneo finalizado';
+    var sub = document.getElementById('tournamentArenaSubtitle');
+    if (sub) sub.textContent = 'Resultados oficiales de la ronda';
+    var status = document.getElementById('tournamentArenaStatus');
+    if (status) {
+      status.innerHTML =
+        '<div class="text-center text-purple-200 font-bold">✅ Competencia completada</div>';
+    }
+    var panel = document.getElementById('tournamentResultPanel');
+    if (panel) {
+      panel.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+  }
+
   function renderResult(b) {
     var panel = document.getElementById('tournamentResultPanel');
     if (!panel || !b) return;
+    showingResult = true;
+    showArena();
+    var rosterHtml = '';
+    if (b.participants && b.participants.length) {
+      rosterHtml =
+        '<div class="mt-4 text-left space-y-2">' +
+        '<div class="text-xs uppercase tracking-wider text-gray-500 mb-2">Clasificación final</div>' +
+        b.participants.map(function (p, i) {
+          var isChamp = b.winnerParticipantId && p.id === b.winnerParticipantId;
+          return (
+            '<div class="flex items-center gap-3 p-2 rounded-lg ' +
+            (isChamp ? 'bg-purple-500/20 border border-purple-400/40' : 'bg-black/30') + '">' +
+            '<span class="text-xs font-bold text-gray-400 w-6">#' + (i + 1) + '</span>' +
+            '<img src="' + (p.songImage || '') + '" class="w-10 h-10 rounded object-cover" onerror="this.style.display=\'none\'">' +
+            '<div class="flex-1 min-w-0">' +
+            '<div class="text-sm font-bold text-white truncate">' + (p.displayName || 'Jugador') + '</div>' +
+            '<div class="text-xs text-gray-400 truncate">' + (p.songName || '') + '</div>' +
+            '</div>' +
+            (isChamp ? '<span class="text-lg">🏆</span>' : (p.isCpu ? '<span class="text-xs text-gray-500">CPU</span>' : '')) +
+            '</div>'
+          );
+        }).join('') +
+        '</div>';
+    }
     panel.classList.remove('hidden');
     panel.innerHTML =
       '<div class="p-6 rounded-2xl border border-purple-500/30 bg-purple-500/10 text-center">' +
-      '<div class="text-3xl mb-2">🏆</div>' +
-      '<h3 class="text-xl font-bold text-white mb-2">' + (b.championName || 'Campeón') + '</h3>' +
-      '<p class="text-sm text-purple-200 mb-3">' + (b.championSong || '') + '</p>' +
-      '<p class="text-sm text-gray-300 mb-4">' + (b.resultMessage || '') + '</p>' +
+      '<div class="text-4xl mb-2">🏆</div>' +
+      '<h3 class="text-2xl font-bold text-white mb-1">' + (b.championName || 'Campeón') + '</h3>' +
+      '<p class="text-sm text-purple-200 mb-3">🎵 ' + (b.championSong || '') + '</p>' +
+      '<p class="text-sm text-gray-300 mb-4">' + (b.resultMessage || 'Torneo completado.') + '</p>' +
       (b.prizeAwarded > 0
-        ? '<p class="text-cyan-400 font-bold">+' + b.prizeAwarded + ' cr acreditados</p>'
+        ? '<p class="text-cyan-400 font-bold text-lg">+' + Number(b.prizeAwarded).toFixed(1) + ' cr acreditados</p>'
         : '<p class="text-amber-300 text-sm">Sin premio acreditado en este slot</p>') +
-      '<button type="button" id="tournamentBackHubBtn" class="mt-4 px-4 py-2 rounded-lg bg-white/10 text-white text-sm">Volver al hub</button>' +
-      '</div>';
+      rosterHtml +
+      '<div class="flex flex-wrap gap-2 justify-center mt-6">' +
+      '<button type="button" id="tournamentBackHubBtn" class="px-4 py-2 rounded-lg bg-cyan-600 text-white text-sm font-bold">Hub de torneos</button>' +
+      '<button type="button" id="tournamentBackModesBtn" class="px-4 py-2 rounded-lg bg-white/10 text-white text-sm">Otros modos</button>' +
+      '</div></div>';
     var back = document.getElementById('tournamentBackHubBtn');
     if (back) {
-      back.addEventListener('click', function () {
+      back.onclick = function () {
+        showingResult = false;
         close();
         if (typeof selectMode === 'function') selectMode('tournament');
-      });
+      };
+    }
+    var modes = document.getElementById('tournamentBackModesBtn');
+    if (modes) {
+      modes.onclick = function () {
+        showingResult = false;
+        close();
+        if (typeof backToModes === 'function') backToModes();
+      };
     }
   }
 
@@ -535,7 +600,6 @@
 
     function playNext(idx) {
       if (idx >= duels.length) {
-        playing = false;
         var champPreview = '';
         if (bracket.participants && bracket.winnerParticipantId) {
           var champ = bracket.participants.find(function (p) {
@@ -546,7 +610,7 @@
             champPreview = champ.songName;
           }
         }
-        renderResult(data.bracket);
+        finishTournamentPresentation(data.bracket);
         if (champPreview) toast('🏆 Campeón: ' + champPreview, 'success');
         if (window.CreditsSystem && window.connectedAddress) {
           window.CreditsSystem.loadBalance(window.connectedAddress);
@@ -590,6 +654,7 @@
       var startDelay = idx === startIdx ? 600 : (duels.length > 5 ? 500 : 900);
       setTimeout(function () {
         window.GameEngine.startTournamentPlayback(match, {
+          victoryDelayMs: 2800,
           onComplete: function () {
             fetchApi('/api/tournaments/' + tournamentId + '/advance-playback', {
               method: 'POST',
@@ -609,6 +674,7 @@
   async function refresh() {
     if (!watchId) return;
     if (battleKickInFlight) return;
+    if (showingResult) return;
     try {
       var data = await fetchBracket(watchId);
       if (!data.ok) {
@@ -634,7 +700,7 @@
         localStorage.removeItem('mtr_joined_tournament');
       }
 
-      if (isStaleRegistration(data.tournament) && !isPinnedWatch(watchId)) {
+      if (isStaleRegistration(data.tournament) && !isPinnedWatch(watchId) && !showingResult) {
         if (arenaBlocked || battleKickInFlight) {
           if (!playing) renderLobby(data);
           return;
@@ -697,8 +763,7 @@
           }
         }
         if (data.bracket.playbackStatus === 'completed') {
-          playing = false;
-          renderResult(data.bracket);
+          finishTournamentPresentation(data.bracket);
           return;
         }
         if (!playing) renderLobby(data);
@@ -706,8 +771,7 @@
       }
 
       if (data.tournament.status === 'completed' && data.bracket) {
-        playing = false;
-        renderResult(data.bracket);
+        finishTournamentPresentation(data.bracket);
         return;
       }
 
@@ -748,6 +812,7 @@
     lastLobbyData = null;
     playing = false;
     watchGenreId = genreId || localStorage.getItem('mtr_watch_genre') || null;
+    showingResult = false;
     startBattleAttempts = 0;
     zeroKickSent = false;
     stuckAtZeroSince = null;
@@ -783,6 +848,7 @@
   function close() {
     watchId = null;
     playing = false;
+    showingResult = false;
     lobbyClosesAt = null;
     if (window.TournamentHub && typeof window.TournamentHub.resumeHubTimers === 'function') {
       window.TournamentHub.resumeHubTimers();
