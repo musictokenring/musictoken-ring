@@ -195,6 +195,33 @@
     return arena && !arena.classList.contains('hidden');
   }
 
+  function findGenre(genreId) {
+    if (!genreId) return null;
+    var fromHub = (hubData && hubData.genres || []).find(function (g) { return g.id === genreId; });
+    if (fromHub) return fromHub;
+    return FALLBACK_GENRES.find(function (g) { return g.id === genreId; }) || null;
+  }
+
+  function closeArenaForEnrollment() {
+    if (window.TournamentBracket && typeof window.TournamentBracket.close === 'function') {
+      window.TournamentBracket.close({ keepEnrollment: false });
+    } else {
+      var arena = document.getElementById('tournamentArena');
+      if (arena) arena.classList.add('hidden');
+      localStorage.removeItem('mtr_watch_tournament');
+    }
+    document.getElementById('depositSectionMain')?.classList.remove('hidden');
+    document.getElementById('contactSection')?.classList.remove('hidden');
+  }
+
+  function clearStaleWatchState() {
+    var saved = localStorage.getItem('mtr_watch_tournament');
+    var joined = localStorage.getItem('mtr_joined_tournament');
+    if (saved && (!joined || joined !== saved)) {
+      localStorage.removeItem('mtr_watch_tournament');
+    }
+  }
+
   async function safeJson(res) {
     if (!res) return null;
     try {
@@ -514,10 +541,13 @@
         '</div>' +
         (expressOpen
           ? '<button type="button" class="mt-3 w-full py-2.5 rounded-lg text-sm font-bold bg-gradient-to-r from-cyan-600 to-purple-600 text-white" data-join-express="' + (exp.id || '') + '" data-genre-id="' + g.id + '">' +
-            (expressNeedsId ? 'Abrir e inscribirme · ' : 'Inscribirme · ') + exp.entry_fee + ' cr</button>'
+            (expressNeedsId ? 'Abrir e inscribirme · ' : '🎵 Elegir canción e inscribirme · ') + exp.entry_fee + ' cr</button>'
           : (exp.status === 'in_progress' || exp.status === 'locked'
-            ? '<button type="button" class="mt-3 w-full py-2.5 rounded-lg text-sm font-bold bg-cyan-600 text-white" data-watch-express="' + exp.id + '">Ver batalla Express</button>'
-            : '<p class="mt-3 text-xs text-amber-300">Esperando nuevo slot…</p>')) +
+            ? '<div class="mt-3 space-y-2">' +
+              '<button type="button" class="w-full py-2.5 rounded-lg text-sm font-bold bg-cyan-600/80 text-white border border-cyan-400/30" data-watch-express="' + exp.id + '" data-genre-id="' + g.id + '">👀 Ver batalla en curso</button>' +
+              '<button type="button" class="w-full py-2.5 rounded-lg text-sm font-bold bg-gradient-to-r from-cyan-600 to-purple-600 text-white" data-enroll-next-express data-genre-id="' + g.id + '">🎵 Inscribirme en la próxima ronda</button>' +
+              '</div>'
+            : '<button type="button" class="mt-3 w-full py-2.5 rounded-lg text-sm font-bold bg-gradient-to-r from-cyan-600 to-purple-600 text-white" data-enroll-next-express data-genre-id="' + g.id + '">🎵 Abrir inscripción y elegir canción</button>')) +
         '</div>'
       : '<p class="text-sm text-gray-500">Express cargando…</p>';
 
@@ -562,9 +592,14 @@
     var watchExp = panel.querySelector('[data-watch-express]');
     if (watchExp && window.TournamentBracket && exp.id) {
       watchExp.addEventListener('click', function () {
-        window.TournamentBracket.watch(exp.id);
+        window.TournamentBracket.watch(exp.id, g.id);
       });
     }
+    panel.querySelectorAll('[data-enroll-next-express]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        handleExpressJoin(null, g, btn);
+      });
+    });
     var joinWk = panel.querySelector('[data-join-weekly]');
     if (joinWk) {
       joinWk.addEventListener('click', function () {
@@ -687,13 +722,24 @@
   async function beginEnrollment(tournament, genre, type) {
     if (!tournament || !genre) return;
     pauseTimers();
-    if (type === 'express' && !tournament.id) {
-      var fresh = await ensureExpressSlot(genre.id);
+    closeArenaForEnrollment();
+    clearStaleWatchState();
+    if (type === 'express' && (!tournament.id || tournament.status === 'in_progress' || tournament.status === 'locked' || tournament.status === 'completed')) {
+      var fresh = await ensureExpressSlot(genre.id, { force: true });
       if (fresh && fresh.id) tournament = fresh;
     }
     if (!tournament.id) {
       toast('Express no disponible todavía. Espera unos segundos y pulsa de nuevo.', 'error');
       return;
+    }
+    if (tournament.status && tournament.status !== 'registration') {
+      toast('Esta ronda ya no acepta inscripciones. Abriendo la siguiente…', 'info');
+      var nextSlot = await ensureExpressSlot(genre.id, { force: true });
+      if (!nextSlot || !nextSlot.id || nextSlot.status !== 'registration') {
+        toast('Inscripción cerrada. Espera la próxima ronda Express.', 'warning');
+        return;
+      }
+      tournament = nextSlot;
     }
     window.tournamentEnrollment = {
       id: tournament.id,
@@ -709,8 +755,11 @@
 
     var hub = document.getElementById('tournamentHub');
     var song = document.getElementById('songSelection');
+    var modeSelector = document.getElementById('modeSelector');
     if (hub) hub.classList.add('hidden');
+    if (modeSelector) modeSelector.classList.add('hidden');
     if (song) song.classList.remove('hidden');
+    window.currentMode = 'tournament';
 
     var title = document.getElementById('modeTitle');
     var sub = document.getElementById('socialChallengeSubtitle');
@@ -776,7 +825,27 @@
     countdownTimer = setInterval(tickCountdowns, 1000);
   }
 
+  function beginEnrollmentFromArena(tournament, genreId) {
+    var genre = findGenre(genreId);
+    if (!genre) {
+      toast('Categoría no encontrada. Vuelve al hub.', 'error');
+      return;
+    }
+    var slot = {
+      id: tournament.id,
+      entry_fee: tournament.entry_fee,
+      registration_closes_at: tournament.registration_closes_at,
+      name: tournament.name,
+      status: tournament.status
+    };
+    beginEnrollment(slot, genre, tournament.tournament_type === 'weekly' ? 'weekly' : 'express');
+  }
+
   function open() {
+    clearStaleWatchState();
+    if (isArenaVisible() && !localStorage.getItem('mtr_joined_tournament')) {
+      closeArenaForEnrollment();
+    }
     var hub = document.getElementById('tournamentHub');
     if (hub) hub.classList.remove('hidden');
     showGenreList();
@@ -839,6 +908,7 @@
     ensureExpressSlot: ensureExpressSlot,
     refresh: refresh,
     beginEnrollment: beginEnrollment,
+    beginEnrollmentFromArena: beginEnrollmentFromArena,
     secondsToBattle: secondsToBattle
   };
 })();
