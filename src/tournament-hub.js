@@ -358,11 +358,22 @@
           }
           var data = await safeJson(res);
           if (!data) continue;
-          if (res.ok && data.ok && data.express && data.express.id) {
-            patchGenreExpress(genreId, data.express);
-            ensureRequested[genreId] = true;
-            expressSlotCache[genreId] = { express: data.express, at: Date.now() };
-            return data.express;
+          if (res.ok && data.ok && data.express) {
+            if (data.expressBattle && hubData) {
+              var gi = (hubData.genres || []).findIndex(function (x) { return x.id === genreId; });
+              if (gi >= 0) hubData.genres[gi].expressBattle = data.expressBattle;
+            }
+            if (data.express.status === 'registration') {
+              patchGenreExpress(genreId, data.express);
+              ensureRequested[genreId] = true;
+              expressSlotCache[genreId] = { express: data.express, at: Date.now() };
+              return data.express;
+            }
+            if (data.express.id) {
+              patchGenreExpress(genreId, data.express);
+              expressSlotCache[genreId] = { express: data.express, at: Date.now() };
+              return data.express;
+            }
           }
           if (data.error && attempt === 3) {
             throw new Error(data.error);
@@ -485,8 +496,9 @@
     grid.innerHTML = genres.map(function (g) {
       var exp = g.express;
       var wk = g.weekly;
+      var humans = exp && exp.human_participants != null ? exp.human_participants : 0;
       var expLine = exp
-        ? (exp.current_participants + '/' + exp.max_participants + ' · ' + expressStatusLine(exp))
+        ? (humans + ' humanos · ' + expressStatusLine(exp))
         : 'Express activo';
       var wkLine = wk
         ? (wk.current_participants + '/' + wk.max_participants + ' · ' + fmtCredits(Number(wk.prize_pool || 0).toFixed(0)))
@@ -539,7 +551,9 @@
             ? '<p class="text-sm text-amber-300 mb-3 animate-pulse">⏳ Actualizando slot Express…</p>'
             : '<p class="text-sm text-amber-300 mb-3">' + expressStatusLine(exp) + '</p>')) +
         '<div class="tournament-stat-row"><span>Apuesta de entrada</span><strong>' + fmtCredits(exp.entry_fee) + '</strong></div>' +
-        '<div class="tournament-stat-row"><span>Jugadores</span><strong>' + exp.current_participants + '/' + exp.max_participants + '</strong></div>' +
+        '<div class="tournament-stat-row"><span>Jugadores humanos</span><strong>' +
+        (exp.human_participants != null ? exp.human_participants : 0) + '/' + exp.max_participants + '</strong></div>' +
+        '<div class="tournament-stat-row"><span>Plazas en bracket</span><strong>' + exp.current_participants + '/' + exp.max_participants + ' (CPU llena vacantes)</strong></div>' +
         '<div class="tournament-stat-row"><span>Pozo de premios</span><strong>' + fmtCredits(Number(exp.prize_pool || 0).toFixed(1)) + '</strong></div>' +
         '<div class="tournament-progress tournament-progress--express"><span style="width:' +
         Math.min(100, (exp.current_participants / exp.max_participants) * 100) + '%"></span></div>' +
@@ -688,15 +702,19 @@
     var anyZero = (hubData.genres || []).some(function (g) {
       return g.express && g.express.status === 'registration' && secondsToBattle(g.express) === 0;
     });
-    if (anyZero) {
+    var rotZero = rotationCountdownSeconds() === 0;
+    if (anyZero || rotZero) {
       if (!zeroSinceLocal) zeroSinceLocal = Date.now();
       if (
-        Date.now() - zeroSinceLocal > 5000 &&
-        Date.now() - lastHubSyncAt > HUB_SYNC_COOLDOWN_MS &&
+        Date.now() - zeroSinceLocal > 2500 &&
+        Date.now() - lastHubSyncAt > 3000 &&
         !hubSyncInFlight
       ) {
-        refresh(false).catch(function (e) {
-          console.warn('[tournament-hub] zero refresh:', e);
+        syncHubSlots().then(function () {
+          if (selectedGenreId) renderGenreDetail();
+          else renderGenreGrid(document.getElementById('tournamentGenreFilter')?.value || 'all');
+        }).catch(function (e) {
+          console.warn('[tournament-hub] zero sync:', e);
         });
       }
     } else {

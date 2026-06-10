@@ -18,7 +18,7 @@ const {
 } = require('./tournament-genres');
 const { TournamentBattleEngine, isHumanParticipantRow, isCpuParticipantRow } = require('./tournament-battle');
 const { deductUnifiedBalance } = require('./unified-balance');
-const { upsertBattleRow, bumpUserStats } = require('./player-battle-history');
+const { upsertBattleRow, bumpUserStats, recordTournamentBattles } = require('./player-battle-history');
 
 class TournamentService {
   constructor(supabase) {
@@ -39,10 +39,103 @@ class TournamentService {
     const ready = await this.ensureSchemaReady();
     if (!ready) return;
 
+    await this.processStaleExpressBattles();
     await this.ensureAllExpressSlots();
     await this.ensureWeeklyTournaments();
     await this.processExpiredRegistrations();
     await this.processLockedTournaments();
+  }
+
+  /**
+   * Cierra Express atascados en in_progress/locked (batallas solo CPU sin espectadores).
+   */
+  async processStaleExpressBattles(now = new Date()) {
+    const nowMs = now.getTime();
+    const nowIso = now.toISOString();
+    const { data: rows } = await this.supabase
+      .from('tournaments')
+      .select('*')
+      .eq('tournament_type', 'express')
+      .in('status', ['in_progress', 'locked']);
+
+    for (const t of rows || []) {
+      const closesMs = this.registrationClosesMs(t);
+      if (!Number.isFinite(closesMs)) continue;
+      const ageAfterCloseMs = nowMs - closesMs;
+      const bracket = t.bracket_state;
+      const playbackDone = bracket?.playbackStatus === 'completed';
+      const duelsDone = bracket?.duels?.length &&
+        (bracket.currentDuelIndex || 0) >= bracket.duels.length;
+      const shouldComplete =
+        playbackDone ||
+        duelsDone ||
+        (t.status === 'in_progress' && ageAfterCloseMs > 4 * 60 * 1000) ||
+        (t.status === 'locked' && ageAfterCloseMs > 2 * 60 * 1000);
+
+      if (!shouldComplete) continue;
+
+      const nextBracket = bracket
+        ? Object.assign({}, bracket, { playbackStatus: 'completed' })
+        : bracket;
+
+      await this.supabase.from('tournaments').update({
+        status: 'completed',
+        bracket_state: nextBracket,
+        updated_at: nowIso
+      }).eq('id', t.id);
+
+      if (nextBracket) {
+        try {
+          await recordTournamentBattles(
+            this.supabase,
+            Object.assign({}, t, { status: 'completed', updated_at: nowIso }),
+            nextBracket
+          );
+        } catch (histErr) {
+          console.warn('[tournament] stale battle history:', t.id, histErr.message);
+        }
+      }
+
+      console.log('[tournament] ✅ Express CPU completado (stale):', t.name, t.id);
+    }
+  }
+
+  async completeStaleExpressBattlesForGenre(genreId, now = new Date()) {
+    const nowMs = now.getTime();
+    const nowIso = now.toISOString();
+    const { data: rows } = await this.supabase
+      .from('tournaments')
+      .select('*')
+      .eq('tournament_type', 'express')
+      .eq('genre_id', genreId)
+      .in('status', ['in_progress', 'locked']);
+
+    for (const t of rows || []) {
+      const closesMs = this.registrationClosesMs(t);
+      if (!Number.isFinite(closesMs) || nowMs <= closesMs) continue;
+      const bracket = t.bracket_state;
+      const nextBracket = bracket
+        ? Object.assign({}, bracket, { playbackStatus: 'completed' })
+        : bracket;
+
+      await this.supabase.from('tournaments').update({
+        status: 'completed',
+        bracket_state: nextBracket,
+        updated_at: nowIso
+      }).eq('id', t.id);
+
+      if (nextBracket) {
+        try {
+          await recordTournamentBattles(
+            this.supabase,
+            Object.assign({}, t, { status: 'completed', updated_at: nowIso }),
+            nextBracket
+          );
+        } catch (histErr) {
+          console.warn('[tournament] genre stale history:', t.id, histErr.message);
+        }
+      }
+    }
   }
 
   getExpressSlotInfo(now = new Date()) {
@@ -200,19 +293,15 @@ class TournamentService {
   }
 
   async openExpressForJoin(genre, now = new Date()) {
+    await this.completeStaleExpressBattlesForGenre(genre.id, now);
+
     let open = await this.findOpenExpressForGenre(genre.id, now);
     if (open) return open;
-
-    const activeBattle = await this.findActiveExpressForGenre(genre.id);
-    if (activeBattle) return activeBattle;
 
     await this.clearStaleExpressForGenre(genre.id, now);
 
     open = await this.findOpenExpressForGenre(genre.id, now);
     if (open) return open;
-
-    const activeAfterClose = await this.findActiveExpressForGenre(genre.id);
-    if (activeAfterClose) return activeAfterClose;
 
     open = await this.createOpenExpressNow(genre, now);
     if (open) return open;
@@ -789,6 +878,7 @@ class TournamentService {
 
   /** Cierra inscripciones vencidas y garantiza un Express abierto por género. */
   async syncExpressHubSlots(now = new Date()) {
+    await this.processStaleExpressBattles(now);
     await this.processExpiredRegistrations();
     await this.ensureAllExpressSlots();
     return now;
@@ -799,7 +889,7 @@ class TournamentService {
     const graceFloorIso = new Date(nowMs - EXPRESS_JOIN_GRACE_MS).toISOString();
     const { data } = await this.supabase
       .from('tournaments')
-      .select('id, genre_id, entry_fee, prize_pool, max_participants, current_participants, status, registration_opens_at, registration_closes_at, name, slot_key')
+      .select('id, genre_id, entry_fee, prize_pool, max_participants, current_participants, human_participants, status, registration_opens_at, registration_closes_at, name, slot_key')
       .eq('tournament_type', 'express')
       .eq('genre_id', genreId)
       .eq('status', 'registration')
@@ -830,27 +920,28 @@ class TournamentService {
       return { ok: false, error: 'Género no encontrado' };
     }
     const serverNow = new Date();
-    const open = await this.findOpenExpressForGenre(genreId, serverNow);
-    if (open) {
+    await this.completeStaleExpressBattlesForGenre(genreId, serverNow);
+
+    let open = await this.findOpenExpressForGenre(genreId, serverNow);
+    if (!open) {
+      open = await this.openExpressForJoin(genre, serverNow);
+    }
+    if (open?.status === 'registration') {
       return {
         ok: true,
         express: enrichExpressRow(open, serverNow)
       };
     }
+
     const active = await this.findActiveExpressForGenre(genreId);
-    if (active) {
-      return {
-        ok: true,
-        express: enrichExpressRow(active, serverNow)
-      };
-    }
-    const row = await this.openExpressForJoin(genre, serverNow);
-    if (!row) {
-      return { ok: false, error: 'No se pudo crear el Express (revisa Supabase)' };
-    }
+    const placeholder = this.buildTimingExpressPlaceholder(genre, serverNow);
     return {
       ok: true,
-      express: enrichExpressRow(row, serverNow)
+      express: placeholder,
+      expressBattle: active ? enrichExpressRow(active, serverNow) : null,
+      message: active
+        ? 'Batalla CPU en curso. Se abrió la siguiente inscripción.'
+        : null
     };
   }
 
@@ -889,7 +980,7 @@ class TournamentService {
 
     const { data: expressRows } = await this.supabase
       .from('tournaments')
-      .select('id, genre_id, entry_fee, prize_pool, max_participants, current_participants, status, registration_opens_at, registration_closes_at, name, slot_key')
+      .select('id, genre_id, entry_fee, prize_pool, max_participants, current_participants, human_participants, status, registration_opens_at, registration_closes_at, name, slot_key')
       .eq('tournament_type', 'express')
       .in('status', ['registration', 'locked', 'in_progress']);
 
@@ -913,15 +1004,11 @@ class TournamentService {
       const prevCloses = new Date(prev.registration_closes_at).getTime();
       const prevOpen = prev.status === 'registration' && prevCloses > nowMs;
       if (isOpenReg && !prevOpen) return enriched;
-      if (isOpenReg && prevOpen && closesMs > prevCloses) return enriched;
+      if (isOpenReg && prevOpen) return closesMs > prevCloses ? enriched : prev;
       if (!isOpenReg && prevOpen) return prev;
-      if (row.status === 'locked' || row.status === 'in_progress') {
-        if (!prevOpen && (prev.status !== 'locked' && prev.status !== 'in_progress')) {
-          return enriched;
-        }
-        if (prev.status === 'registration') return enriched;
-      }
-      return prev;
+      if (row.status === 'in_progress' && prev.status !== 'in_progress') return enriched;
+      if (prev.status === 'in_progress') return prev;
+      return enriched;
     };
 
     (expressRows || []).forEach((row) => {
@@ -934,21 +1021,33 @@ class TournamentService {
       const closesMs = current?.registration_closes_at
         ? new Date(current.registration_closes_at).getTime()
         : 0;
+      const currentOpen =
+        current?.status === 'registration' && closesMs > nowMs;
       const needsFreshSlot =
         !current ||
-        (current.status === 'registration' && closesMs <= nowMs);
+        !currentOpen ||
+        current.status === 'in_progress' ||
+        current.status === 'locked';
 
       if (needsFreshSlot) {
         if (syncSlots) {
-          const row = await this.ensureExpressForGenre(genre, serverNow);
-          if (row) {
+          await this.completeStaleExpressBattlesForGenre(genre.id, serverNow);
+          let row = await this.findOpenExpressForGenre(genre.id, serverNow);
+          if (!row) {
+            row = await this.openExpressForJoin(genre, serverNow);
+          }
+          if (row?.status === 'registration') {
+            expressByGenre[genre.id] = enrichExpressRow(row, serverNow);
+          } else if (!currentOpen && current) {
+            expressByGenre[genre.id] = current;
+          } else if (row) {
             expressByGenre[genre.id] = enrichExpressRow(row, serverNow);
           }
         } else {
           const openRow = await this.findOpenExpressForGenre(genre.id, serverNow);
           if (openRow) {
             expressByGenre[genre.id] = enrichExpressRow(openRow, serverNow);
-          } else {
+          } else if (!currentOpen) {
             expressByGenre[genre.id] = this.buildTimingExpressPlaceholder(genre, serverNow);
           }
         }
