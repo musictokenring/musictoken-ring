@@ -18,6 +18,7 @@ const {
 } = require('./tournament-genres');
 const { TournamentBattleEngine, isHumanParticipantRow, isCpuParticipantRow } = require('./tournament-battle');
 const { deductUnifiedBalance } = require('./unified-balance');
+const { upsertBattleRow, bumpUserStats } = require('./player-battle-history');
 
 class TournamentService {
   constructor(supabase) {
@@ -675,8 +676,8 @@ class TournamentService {
     if (!deduction.ok) {
       return {
         ok: false,
-        error: 'Saldo insuficiente para la inscripción (' + entryFee + ' cr). Saldo detectado: ' +
-          (deduction.total != null ? Number(deduction.total).toFixed(2) : '0') + ' cr',
+        error: 'Saldo insuficiente para la inscripción (' + entryFee + ' MTR créditos). Saldo detectado: ' +
+          (deduction.total != null ? Number(deduction.total).toFixed(2) : '0') + ' MTR créditos',
         total_balance: deduction.total,
         credits_balance: deduction.creditsBal,
         fiat_balance: deduction.fiat,
@@ -1068,6 +1069,97 @@ class TournamentService {
       .eq('user_id', userId)
       .maybeSingle();
     return Boolean(data);
+  }
+
+  /**
+   * Retiro voluntario: descalifica al jugador y pierde su apuesta (sin reembolso).
+   */
+  async abandonTournament(userId, tournamentId) {
+    if (!userId || !tournamentId) {
+      return { ok: false, error: 'Datos incompletos' };
+    }
+
+    const { data: tournament, error: tErr } = await this.supabase
+      .from('tournaments')
+      .select('*')
+      .eq('id', tournamentId)
+      .maybeSingle();
+
+    if (tErr || !tournament) {
+      return { ok: false, error: 'Torneo no encontrado' };
+    }
+
+    if (tournament.status === 'completed' || tournament.status === 'cancelled') {
+      return { ok: false, error: 'El torneo ya finalizó. No puedes abandonar.' };
+    }
+
+    const { data: participant, error: pErr } = await this.supabase
+      .from('tournament_participants')
+      .select('*')
+      .eq('tournament_id', tournamentId)
+      .eq('user_id', userId)
+      .maybeSingle();
+
+    if (pErr || !participant || isCpuParticipantRow(participant)) {
+      return { ok: false, error: 'No estás inscrito en este torneo' };
+    }
+
+    const { error: delErr } = await this.supabase
+      .from('tournament_participants')
+      .delete()
+      .eq('tournament_id', tournamentId)
+      .eq('user_id', userId);
+
+    if (delErr) {
+      console.error('[tournament] abandon delete:', delErr.message);
+      return { ok: false, error: 'No se pudo procesar el abandono' };
+    }
+
+    const entryFee = Number(tournament.entry_fee) || 3;
+    const platformRate = 0.08;
+    const prizeContribution = entryFee * (1 - platformRate);
+    const newHumanCount = await this.countHumanParticipants(tournamentId);
+    const newPrizePool = Math.max(0, Number(tournament.prize_pool || 0) - prizeContribution);
+
+    const updatePayload = {
+      current_participants: newHumanCount,
+      human_participants: newHumanCount,
+      prize_pool: Math.round(newPrizePool * 10) / 10,
+      updated_at: new Date().toISOString()
+    };
+
+    if (tournament.status === 'locked' && newHumanCount < 1) {
+      updatePayload.status = 'registration';
+    }
+
+    await this.supabase.from('tournaments').update(updatePayload).eq('id', tournamentId);
+
+    await upsertBattleRow(this.supabase, {
+      user_id: userId,
+      battle_kind: 'tournament',
+      battle_mode: tournament.tournament_type || 'express',
+      source_id: tournamentId,
+      result: 'loss',
+      opponent_label: 'Retiro voluntario',
+      song_name: participant.song_name || null,
+      song_artist: participant.song_artist || null,
+      credits_wagered: entryFee,
+      credits_won: 0,
+      placement: 99,
+      event_label: (tournament.name || 'Torneo') + ' · Abandono',
+      played_at: new Date().toISOString()
+    });
+
+    await bumpUserStats(this.supabase, userId, false, 0, entryFee);
+
+    console.log('[tournament] Abandono voluntario:', tournamentId, 'user:', userId);
+
+    return {
+      ok: true,
+      tournamentId,
+      forfeitedCredits: entryFee,
+      message: 'Has abandonado el torneo. Quedas descalificado y pierdes tu apuesta.'
+    };
   }
 }
 

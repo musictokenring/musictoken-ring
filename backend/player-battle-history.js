@@ -154,5 +154,6 @@ module.exports = {
   recordMatchBattles,
   recordTournamentBattles,
   upsertBattleRow,
+  bumpUserStats,
   isCpuUserId
 };

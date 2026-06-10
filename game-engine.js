@@ -2490,7 +2490,7 @@ const GameEngine = {
                 }
                 let msg = result.error || 'Error al inscribirte en el torneo';
                 if (result.total_balance != null && msg.indexOf('insuficiente') !== -1) {
-                    msg += ' (servidor ve ' + Number(result.total_balance).toFixed(2) + ' cr)';
+                    msg += ' (servidor ve ' + Number(result.total_balance).toFixed(2) + ' MTR créditos)';
                 }
                 console.error('[joinTournament] falló:', result);
                 if (response.status === 400 && walletAddress) {
@@ -5808,7 +5808,7 @@ if (typeof window !== 'undefined') {
             buttonsDiv.innerHTML = '<button onclick="startPractice()" class="btn-primary btn-large" id="startPracticeBtn">🎯 Iniciar Práctica</button>';
         } else if (mode === 'tournament') {
             if (window.tournamentEnrollment) {
-                buttonsDiv.innerHTML = '<button onclick="joinTournamentMode()" class="btn-primary btn-large" id="joinTournamentBtn">🏆 Confirmar inscripción · ' + window.tournamentEnrollment.entryFee + ' cr</button>';
+                buttonsDiv.innerHTML = '<button onclick="joinTournamentMode()" class="btn-primary btn-large" id="joinTournamentBtn">🏆 Confirmar inscripción · ' + window.tournamentEnrollment.entryFee + ' MTR créditos</button>';
             } else {
                 buttonsDiv.innerHTML = '<button onclick="selectMode(\'tournament\')" class="btn-primary btn-large" id="openTournamentHubBtn">🏆 Abrir hub de torneos</button>';
             }

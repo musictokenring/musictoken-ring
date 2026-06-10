@@ -35,11 +35,97 @@
     return (window.CONFIG && window.CONFIG.BACKEND_API) || 'https://musictoken-ring.onrender.com';
   }
 
+  var CREDITS_LABEL = 'MTR créditos';
+
   function fmtClock(seconds) {
     if (!Number.isFinite(seconds) || seconds < 0) seconds = 0;
     var m = Math.floor(seconds / 60);
     var s = seconds % 60;
     return String(m).padStart(2, '0') + ':' + String(s).padStart(2, '0');
+  }
+
+  function lobbyCountdownHtml(sec, maxSec) {
+    maxSec = maxSec || 300;
+    var urgent = sec <= 60;
+    var pct = Math.min(100, Math.max(0, (sec / maxSec) * 100));
+    return (
+      '<div class="tournament-lobby-stage">' +
+      '<div class="tournament-lobby-rings' + (urgent ? ' urgent' : '') + '">' +
+      '<div class="ring ring-1"></div><div class="ring ring-2"></div><div class="ring ring-3"></div>' +
+      '</div>' +
+      '<div class="tournament-lobby-core">' +
+      '<div class="tournament-lobby-label">Batalla en</div>' +
+      '<div class="tournament-lobby-time' + (urgent ? ' urgent' : '') + '" data-lobby-clock>' + fmtClock(sec) + '</div>' +
+      '</div>' +
+      '<div class="tournament-lobby-bar"><span style="width:' + pct + '%"></span></div>' +
+      '<p class="tournament-lobby-hint">La arena se activará automáticamente al llegar a 00:00</p>' +
+      '</div>'
+    );
+  }
+
+  function updateAbandonButtonVisibility() {
+    var btn = document.getElementById('tournamentAbandonBtn');
+    if (!btn) return;
+    var canAbandon = isEnrolledInCurrentWatch() &&
+      watchId &&
+      !playing &&
+      !showingResult &&
+      lobbyStatus !== 'completed' &&
+      lobbyStatus !== 'cancelled';
+    btn.classList.toggle('hidden', !canAbandon);
+  }
+
+  function openAbandonModal() {
+    var modal = document.getElementById('tournamentAbandonModal');
+    if (modal) modal.classList.remove('hidden');
+  }
+
+  function closeAbandonModal() {
+    var modal = document.getElementById('tournamentAbandonModal');
+    if (modal) modal.classList.add('hidden');
+  }
+
+  async function confirmAbandonTournament() {
+    if (!watchId || !isEnrolledInCurrentWatch()) {
+      toast('No estás inscrito en esta ronda', 'warning');
+      return;
+    }
+    var confirmBtn = document.getElementById('tournamentAbandonConfirmBtn');
+    if (confirmBtn) {
+      confirmBtn.disabled = true;
+      confirmBtn.textContent = 'Procesando…';
+    }
+    try {
+      var headers = { 'Content-Type': 'application/json' };
+      if (window.GameEngine && typeof window.GameEngine.getBackendAuthHeaders === 'function') {
+        headers = await window.GameEngine.getBackendAuthHeaders(headers);
+      }
+      var res = await fetch(backendUrl() + '/api/tournaments/' + watchId + '/abandon', {
+        method: 'POST',
+        headers: headers
+      });
+      var data = await res.json().catch(function () { return {}; });
+      if (!res.ok || !data.ok) {
+        toast(data.error || 'No se pudo abandonar el torneo', 'error');
+        return;
+      }
+      closeAbandonModal();
+      toast(data.message || 'Has abandonado el torneo. Perdiste tu apuesta.', 'warning');
+      close({ keepEnrollment: false });
+      if (window.CreditsSystem && window.connectedAddress) {
+        window.CreditsSystem.loadBalance(window.connectedAddress);
+      }
+      if (typeof selectMode === 'function') selectMode('tournament');
+    } catch (e) {
+      console.error('[tournament-bracket] abandon:', e);
+      toast('Error al abandonar. Reintenta.', 'error');
+    } finally {
+      closeAbandonModal();
+      if (confirmBtn) {
+        confirmBtn.disabled = false;
+        confirmBtn.textContent = 'Sí, abandonar y perder apuesta';
+      }
+    }
   }
 
   function serverNowMs() {
@@ -169,11 +255,8 @@
     }
     var status = document.getElementById('tournamentArenaStatus');
     if (!status || battleKickInFlight || sec === 0) return;
-    status.innerHTML =
-      '<div class="text-center">' +
-      '<div class="text-xs text-gray-400 mb-2">Batalla inicia cuando el cronómetro llegue a 0</div>' +
-      '<div class="text-4xl font-black tabular-nums text-cyan-400 ' +
-      (sec <= 60 ? 'animate-pulse text-red-400' : '') + '">' + fmtClock(sec) + '</div></div>';
+    status.innerHTML = lobbyCountdownHtml(sec, 300);
+    updateAbandonButtonVisibility();
   }
 
   function recoverStuckPlaybackState() {
@@ -252,16 +335,11 @@
         var enrollCta = '';
         if (!isEnrolledInCurrentWatch()) {
           enrollCta =
-            '<button type="button" id="tournamentEnrollFromArenaBtn" ' +
-            'class="mt-4 px-5 py-2.5 rounded-lg text-sm font-bold bg-gradient-to-r from-cyan-600 to-purple-600 text-white">' +
+            '<button type="button" id="tournamentEnrollFromArenaBtn" class="tournament-btn-primary" style="max-width:280px;margin:1rem auto 0">' +
             '🎵 Elegir canción e inscribirme</button>' +
-            '<p class="text-[11px] text-gray-500 mt-2">Debes elegir tu canción antes de participar</p>';
+            '<p class="tournament-lobby-hint">Debes elegir tu canción antes de participar</p>';
         }
-        status.innerHTML =
-          '<div class="text-center">' +
-          '<div class="text-xs text-gray-400 mb-2">Batalla inicia cuando el cronómetro llegue a 0</div>' +
-          '<div class="text-4xl font-black tabular-nums text-cyan-400 ' + (sec <= 60 ? 'animate-pulse text-red-400' : '') + '">' +
-          fmtClock(sec) + '</div>' + enrollCta + '</div>';
+        status.innerHTML = lobbyCountdownHtml(sec, 300) + enrollCta;
         var enrollBtn = document.getElementById('tournamentEnrollFromArenaBtn');
         if (enrollBtn) {
           enrollBtn.onclick = function () {
@@ -270,7 +348,12 @@
         }
       } else if (lobbyStatus === 'locked') {
         status.innerHTML =
-          '<div class="text-center text-amber-300 animate-pulse">🔒 Generando bracket y rival CPU…</div>';
+          '<div class="tournament-lobby-stage">' +
+          '<div class="tournament-lobby-rings urgent"><div class="ring ring-1"></div><div class="ring ring-2"></div></div>' +
+          '<div class="tournament-lobby-core">' +
+          '<div class="tournament-lobby-label">Preparando arena</div>' +
+          '<div class="text-lg font-bold text-amber-300 animate-pulse">🔒 Generando bracket y rivales CPU…</div>' +
+          '</div></div>';
       } else if (lobbyStatus === 'cancelled') {
         status.innerHTML =
           '<div class="text-center text-red-400">' +
@@ -295,6 +378,7 @@
     } else if (grid && !playing) {
       grid.innerHTML = '';
     }
+    updateAbandonButtonVisibility();
   }
 
   function finishTournamentPresentation(b) {
@@ -934,6 +1018,25 @@
   }
 
   document.addEventListener('DOMContentLoaded', function () {
+    var abandonBtn = document.getElementById('tournamentAbandonBtn');
+    if (abandonBtn) {
+      abandonBtn.addEventListener('click', openAbandonModal);
+    }
+    var abandonCancel = document.getElementById('tournamentAbandonCancelBtn');
+    if (abandonCancel) {
+      abandonCancel.addEventListener('click', closeAbandonModal);
+    }
+    var abandonConfirm = document.getElementById('tournamentAbandonConfirmBtn');
+    if (abandonConfirm) {
+      abandonConfirm.addEventListener('click', confirmAbandonTournament);
+    }
+    var abandonOverlay = document.getElementById('tournamentAbandonModal');
+    if (abandonOverlay) {
+      abandonOverlay.addEventListener('click', function (e) {
+        if (e.target === abandonOverlay) closeAbandonModal();
+      });
+    }
+
     var saved = localStorage.getItem('mtr_watch_tournament');
     var savedGenre = localStorage.getItem('mtr_watch_genre');
     var joined = localStorage.getItem('mtr_joined_tournament');
@@ -946,5 +1049,11 @@
     watch(saved, savedGenre);
   });
 
-  window.TournamentBracket = { watch: watch, close: close, refresh: refresh };
+  window.TournamentBracket = {
+    watch: watch,
+    close: close,
+    refresh: refresh,
+    openAbandonModal: openAbandonModal,
+    confirmAbandonTournament: confirmAbandonTournament
+  };
 })();

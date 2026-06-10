@@ -24,6 +24,11 @@
   var API_TIMEOUT_MS = 55000;
   var HUB_GET_TIMEOUT_MS = 22000;
   var HUB_SYNC_COOLDOWN_MS = 20000;
+  var CREDITS_LABEL = 'MTR créditos';
+
+  function fmtCredits(amount) {
+    return Number(amount || 0) + ' ' + CREDITS_LABEL;
+  }
 
   var FALLBACK_GENRES = [
     { id: 'reggaeton', label: 'Reggaeton', region: 'latino', emoji: '🎤', deezerQuery: 'reggaeton' },
@@ -399,7 +404,7 @@
       if (btn) {
         btn.disabled = false;
         var fee = (exp && exp.entry_fee) || 3;
-        btn.textContent = (exp && !exp.id ? 'Abrir e inscribirme · ' : 'Inscribirme · ') + fee + ' cr';
+        btn.textContent = (exp && !exp.id ? 'Abrir e inscribirme · ' : 'Inscribirme · ') + fmtCredits(fee);
       }
     }
   }
@@ -446,11 +451,11 @@
     }
 
     el.innerHTML =
-      '<div class="flex flex-wrap items-center justify-between gap-4">' +
+      '<div class="tournament-rotation-banner flex flex-wrap items-center justify-between gap-4 p-4">' +
       '<div class="flex-1 min-w-[200px]">' +
-      '<div class="text-purple-300 font-semibold mb-1">⚡ ' + active + '/' + total + ' Express activos · todas las categorías</div>' +
-      '<div class="text-xs text-gray-400">Inscripción 5 min por ronda · CPU llena vacantes · batalla al cerrar</div></div>' +
-      '<div class="flex-shrink-0 text-center px-4 py-2 rounded-xl border border-cyan-500/30 bg-cyan-500/5">' +
+      '<div class="text-purple-200 font-bold mb-1 tracking-wide">⚡ ' + active + '/' + total + ' Express activos</div>' +
+      '<div class="text-xs text-gray-400">Inscripción 5 min · apuesta en ' + CREDITS_LABEL + ' · batalla al cerrar cronómetro</div></div>' +
+      '<div class="flex-shrink-0 text-center px-5 py-3 rounded-xl border border-cyan-500/30 bg-black/30">' +
       timerBlock +
       '</div></div>';
   }
@@ -484,19 +489,20 @@
         ? (exp.current_participants + '/' + exp.max_participants + ' · ' + expressStatusLine(exp))
         : 'Express activo';
       var wkLine = wk
-        ? (wk.current_participants + '/' + wk.max_participants + ' · Pool ' + Number(wk.prize_pool || 0).toFixed(0) + ' cr')
+        ? (wk.current_participants + '/' + wk.max_participants + ' · ' + fmtCredits(Number(wk.prize_pool || 0).toFixed(0)))
         : '—';
+      var regionClass = g.region === 'anglo' ? 'tournament-genre-card--anglo' : 'tournament-genre-card--latino';
       var liveBadge = exp && exp.status === 'registration'
-        ? '<span class="inline-block mt-2 px-2 py-0.5 rounded text-[10px] font-bold bg-cyan-500/20 text-cyan-300 border border-cyan-500/30">LIVE</span>'
+        ? '<span class="tournament-badge tournament-badge--live">● Live</span>'
         : (exp && exp.status === 'in_progress'
-          ? '<span class="inline-block mt-2 px-2 py-0.5 rounded text-[10px] font-bold bg-purple-500/20 text-purple-300">EN JUEGO</span>'
+          ? '<span class="tournament-badge tournament-badge--playing">⚔ En juego</span>'
           : '');
       return (
-        '<button type="button" data-genre="' + g.id + '" class="tournament-genre-card group text-left p-4 rounded-xl border border-purple-500/20 bg-gray-900/60 hover:border-purple-400/40 hover:bg-purple-500/5 transition-all">' +
-        '<div class="text-2xl mb-2">' + g.emoji + '</div>' +
-        '<div class="font-bold text-white group-hover:text-purple-300">' + g.label + '</div>' +
-        '<div class="text-[11px] text-gray-500 mt-2">Express: ' + expLine + '</div>' +
-        '<div class="text-[11px] text-gray-500">Semanal: ' + wkLine + '</div>' +
+        '<button type="button" data-genre="' + g.id + '" class="tournament-genre-card ' + regionClass + ' group text-left p-4">' +
+        '<div class="tournament-genre-emoji mb-2">' + g.emoji + '</div>' +
+        '<div class="tournament-genre-title group-hover:text-purple-200">' + g.label + '</div>' +
+        '<div class="tournament-genre-meta mt-2">Express · ' + expLine + '</div>' +
+        '<div class="tournament-genre-meta">Grand Prix · ' + wkLine + '</div>' +
         liveBadge +
         '</button>'
       );
@@ -523,48 +529,42 @@
     var expressNeedsId = expressOpen && !exp.id;
 
     var expressHtml = exp
-      ? '<div class="p-4 rounded-xl border border-cyan-500/20 bg-cyan-500/5">' +
-        '<div class="text-sm font-bold text-cyan-300 mb-3">⚡ Express · siempre activo</div>' +
+      ? '<div class="tournament-panel tournament-panel--express">' +
+        '<div class="tournament-panel-title tournament-panel-title--express mb-3">⚡ Express · ronda activa</div>' +
         (expressOpen
           ? '<div class="mb-4 p-4 rounded-xl border border-cyan-500/25 bg-black/30 text-center" id="genreExpressCountdown">' +
             countdownHtml(sec, 'text-4xl') +
-            '<p class="text-xs text-cyan-200/80 mt-3">Inscríbete antes de que termine el cronómetro</p></div>'
+            '<p class="text-xs text-cyan-200/80 mt-3">Elige tu canción e inscríbete antes del cierre</p></div>'
           : (exp.status === 'registration' && sec === 0
-            ? '<p class="text-sm text-amber-300 mb-3 animate-pulse">⏳ Actualizando slot Express… recarga en unos segundos</p>'
+            ? '<p class="text-sm text-amber-300 mb-3 animate-pulse">⏳ Actualizando slot Express…</p>'
             : '<p class="text-sm text-amber-300 mb-3">' + expressStatusLine(exp) + '</p>')) +
-        '<div class="text-xs text-gray-400 space-y-1">' +
-        '<div>Entry: <strong class="text-white">' + exp.entry_fee + ' cr</strong></div>' +
-        '<div>Jugadores: <strong class="text-white">' + exp.current_participants + '/' + exp.max_participants + '</strong></div>' +
-        '<div>Prize pool: <strong class="text-white">' + Number(exp.prize_pool || 0).toFixed(1) + ' cr</strong></div>' +
-        '<div class="w-full bg-gray-800 rounded-full h-2 mt-2"><div class="bg-cyan-500 h-2 rounded-full transition-all" style="width:' +
-        Math.min(100, (exp.current_participants / exp.max_participants) * 100) + '%"></div></div>' +
-        '</div>' +
+        '<div class="tournament-stat-row"><span>Apuesta de entrada</span><strong>' + fmtCredits(exp.entry_fee) + '</strong></div>' +
+        '<div class="tournament-stat-row"><span>Jugadores</span><strong>' + exp.current_participants + '/' + exp.max_participants + '</strong></div>' +
+        '<div class="tournament-stat-row"><span>Pozo de premios</span><strong>' + fmtCredits(Number(exp.prize_pool || 0).toFixed(1)) + '</strong></div>' +
+        '<div class="tournament-progress tournament-progress--express"><span style="width:' +
+        Math.min(100, (exp.current_participants / exp.max_participants) * 100) + '%"></span></div>' +
         (expressOpen
-          ? '<button type="button" class="mt-3 w-full py-2.5 rounded-lg text-sm font-bold bg-gradient-to-r from-cyan-600 to-purple-600 text-white" data-join-express="' + (exp.id || '') + '" data-genre-id="' + g.id + '">' +
-            (expressNeedsId ? 'Abrir e inscribirme · ' : '🎵 Elegir canción e inscribirme · ') + exp.entry_fee + ' cr</button>'
+          ? '<button type="button" class="tournament-btn-primary" data-join-express="' + (exp.id || '') + '" data-genre-id="' + g.id + '">' +
+            (expressNeedsId ? '🎵 Abrir e inscribirme · ' : '🎵 Elegir canción e inscribirme · ') + fmtCredits(exp.entry_fee) + '</button>'
           : (exp.status === 'in_progress' || exp.status === 'locked'
-            ? '<div class="mt-3 space-y-2">' +
-              '<button type="button" class="w-full py-2.5 rounded-lg text-sm font-bold bg-cyan-600/80 text-white border border-cyan-400/30" data-watch-express="' + exp.id + '" data-genre-id="' + g.id + '">👀 Ver batalla en curso</button>' +
-              '<button type="button" class="w-full py-2.5 rounded-lg text-sm font-bold bg-gradient-to-r from-cyan-600 to-purple-600 text-white" data-enroll-next-express data-genre-id="' + g.id + '">🎵 Inscribirme en la próxima ronda</button>' +
-              '</div>'
-            : '<button type="button" class="mt-3 w-full py-2.5 rounded-lg text-sm font-bold bg-gradient-to-r from-cyan-600 to-purple-600 text-white" data-enroll-next-express data-genre-id="' + g.id + '">🎵 Abrir inscripción y elegir canción</button>')) +
+            ? '<button type="button" class="tournament-btn-secondary" data-watch-express="' + exp.id + '" data-genre-id="' + g.id + '">👀 Ver batalla en curso</button>' +
+              '<button type="button" class="tournament-btn-primary" data-enroll-next-express data-genre-id="' + g.id + '">🎵 Inscribirme en la próxima ronda</button>'
+            : '<button type="button" class="tournament-btn-primary" data-enroll-next-express data-genre-id="' + g.id + '">🎵 Abrir inscripción y elegir canción</button>')) +
         '</div>'
       : '<p class="text-sm text-gray-500">Express cargando…</p>';
 
     var weeklyHtml = wk
-      ? '<div class="p-4 rounded-xl border border-purple-500/20 bg-purple-500/5">' +
-        '<div class="text-sm font-bold text-purple-300 mb-2">🏆 Grand Prix Semanal</div>' +
-        '<div class="text-xs text-gray-400 space-y-1">' +
-        '<div>Entry: <strong class="text-white">' + wk.entry_fee + ' cr</strong></div>' +
-        '<div>Jugadores: <strong class="text-white">' + wk.current_participants + '/' + wk.max_participants + '</strong></div>' +
-        '<div>Prize pool: <strong class="text-white">' + Number(wk.prize_pool || 0).toFixed(1) + ' cr</strong></div>' +
-        '<div class="w-full bg-gray-800 rounded-full h-2 mt-2"><div class="bg-purple-500 h-2 rounded-full" style="width:' +
-        Math.min(100, (wk.current_participants / wk.max_participants) * 100) + '%"></div></div>' +
-        '</div>' +
+      ? '<div class="tournament-panel tournament-panel--weekly">' +
+        '<div class="tournament-panel-title tournament-panel-title--weekly mb-3">🏆 Grand Prix Semanal</div>' +
+        '<div class="tournament-stat-row"><span>Apuesta de entrada</span><strong>' + fmtCredits(wk.entry_fee) + '</strong></div>' +
+        '<div class="tournament-stat-row"><span>Jugadores</span><strong>' + wk.current_participants + '/' + wk.max_participants + '</strong></div>' +
+        '<div class="tournament-stat-row"><span>Pozo de premios</span><strong>' + fmtCredits(Number(wk.prize_pool || 0).toFixed(1)) + '</strong></div>' +
+        '<div class="tournament-progress tournament-progress--weekly"><span style="width:' +
+        Math.min(100, (wk.current_participants / wk.max_participants) * 100) + '%"></span></div>' +
         (wk.status === 'registration'
-          ? '<button type="button" class="mt-3 w-full py-2.5 rounded-lg text-sm font-bold bg-purple-600/80 text-white border border-purple-400/30" data-join-weekly="' + wk.id + '">Inscribirme · ' + wk.entry_fee + ' cr</button>'
+          ? '<button type="button" class="tournament-btn-primary" data-join-weekly="' + wk.id + '">🎵 Elegir canción e inscribirme · ' + fmtCredits(wk.entry_fee) + '</button>'
           : (wk.status === 'in_progress' || wk.status === 'locked'
-            ? '<button type="button" class="mt-3 w-full py-2.5 rounded-lg text-sm font-bold bg-purple-500 text-white" data-watch-weekly="' + wk.id + '">Ver competencia Grand Prix</button>'
+            ? '<button type="button" class="tournament-btn-secondary" data-watch-weekly="' + wk.id + '">👀 Ver competencia Grand Prix</button>'
             : '<p class="mt-3 text-xs text-amber-300">Inscripción cerrada</p>')) +
         '</div>'
       : '<p class="text-sm text-gray-500">Grand Prix no disponible.</p>';
@@ -714,7 +714,7 @@
       sec = fmtClock(left);
     }
     sub.textContent = (type === 'express' ? 'Express' : 'Grand Prix') +
-      ' · Entry ' + (tournament?.entry_fee || 3) + ' cr' +
+      ' · Apuesta ' + fmtCredits(tournament?.entry_fee || 3) +
       (sec ? ' · Batalla en ' + sec : '') +
       ' · Elige canción de ' + genreLabel;
   }

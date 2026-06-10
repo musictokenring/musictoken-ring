@@ -2199,6 +2199,29 @@ app.post('/api/tournaments/:id/start-battle', async (req, res) => {
     }
 });
 
+app.post('/api/tournaments/:id/abandon', requireCreditMutationAuth, async (req, res) => {
+    try {
+        if (!tournamentScheduler?.service) {
+            return res.status(503).json({ ok: false, error: 'Tournament service unavailable' });
+        }
+        const resolved = await resolveCreditsUserId(req);
+        if (!resolved?.userId) {
+            return res.status(401).json({ ok: false, error: 'Sesión no válida' });
+        }
+        const result = await tournamentScheduler.service.abandonTournament(
+            resolved.userId,
+            req.params.id
+        );
+        if (!result.ok) {
+            return res.status(400).json(result);
+        }
+        return res.json(result);
+    } catch (error) {
+        console.error('[server] tournaments abandon error:', error);
+        res.status(500).json({ ok: false, error: error.message });
+    }
+});
+
 app.post('/api/tournaments/:id/advance-playback', async (req, res) => {
     try {
         if (!tournamentScheduler?.service) {
