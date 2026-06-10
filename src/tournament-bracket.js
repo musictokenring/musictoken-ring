@@ -156,12 +156,27 @@
     });
   }
 
+  function scrollArenaIntoView() {
+    setTimeout(function () {
+      var arena = document.getElementById('tournamentArena');
+      if (!arena) return;
+      var header = document.querySelector('header');
+      var headerH = header ? header.offsetHeight : 72;
+      var scrollY = window.pageYOffset || document.documentElement.scrollTop || 0;
+      var top = arena.getBoundingClientRect().top + scrollY - headerH - 12;
+      window.scrollTo({ top: Math.max(0, top), behavior: 'smooth' });
+    }, 140);
+  }
+
   function showArena() {
     hideSections();
     document.getElementById('depositSectionMain')?.classList.add('hidden');
     document.getElementById('contactSection')?.classList.add('hidden');
     var arena = document.getElementById('tournamentArena');
-    if (arena) arena.classList.remove('hidden');
+    if (!arena) return;
+    var wasHidden = arena.classList.contains('hidden');
+    arena.classList.remove('hidden');
+    if (wasHidden) scrollArenaIntoView();
   }
 
   function renderBracketRoster(b) {
