@@ -5,6 +5,7 @@ const {
   TOURNAMENT_GENRES,
   EXPRESS_MAX_PLAYERS,
   EXPRESS_ENTRY_FEE,
+  EXPRESS_SLOT_MS,
   EXPRESS_REGISTRATION_MS,
   EXPRESS_JOIN_GRACE_MS,
   WEEKLY_MAX_PLAYERS,
@@ -247,13 +248,24 @@ class TournamentService {
   }
 
   async createOpenExpressNow(genre, now = new Date()) {
-    const nowMs = now.getTime();
-    const regOpens = now.toISOString();
-    const regCloses = new Date(nowMs + EXPRESS_REGISTRATION_MS).toISOString();
+    // Alinear el nuevo slot a la malla global de 10 min para que el
+    // cronómetro global del hub sea estable (no salte entre géneros).
+    const timing = getExpressTimingForGenre(genre.id, now);
+    let regOpensMs;
+    let regClosesMs;
+    if (timing.secondsToClose > 20) {
+      regOpensMs = timing.slotStartMs;
+      regClosesMs = timing.registrationClosesMs;
+    } else {
+      regOpensMs = timing.slotStartMs + EXPRESS_SLOT_MS;
+      regClosesMs = regOpensMs + EXPRESS_REGISTRATION_MS;
+    }
+    const regOpens = new Date(regOpensMs).toISOString();
+    const regCloses = new Date(regClosesMs).toISOString();
     const name = `Express ${genre.label}`;
 
     for (let attempt = 0; attempt < 4; attempt += 1) {
-      const slotKey = `express_${genre.id}_${nowMs}_${attempt}`;
+      const slotKey = `express_${genre.id}_${regOpensMs}_${attempt}`;
       const { data: created, error } = await this.supabase
         .from('tournaments')
         .insert([{
@@ -946,9 +958,12 @@ class TournamentService {
     const ts = serverNow.getTime();
     let regOpens = timing.registrationOpensAt;
     let regCloses = timing.registrationClosesAt;
+    // Si ya estamos en fase de batalla, apuntar a la SIGUIENTE ranura de la
+    // malla global (no a ahora+5min) para que el cronómetro global no salte.
     if (ts >= timing.registrationClosesMs) {
-      regOpens = serverNow.toISOString();
-      regCloses = new Date(ts + EXPRESS_REGISTRATION_MS).toISOString();
+      const nextOpensMs = timing.slotStartMs + EXPRESS_SLOT_MS;
+      regOpens = new Date(nextOpensMs).toISOString();
+      regCloses = new Date(nextOpensMs + EXPRESS_REGISTRATION_MS).toISOString();
     }
     return enrichExpressRow({
       id: null,
