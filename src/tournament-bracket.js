@@ -389,6 +389,9 @@
     if (window.GameEngine && typeof window.GameEngine.stopUserSong === 'function') {
       window.GameEngine.stopUserSong();
     }
+    if (window.GameEngine && typeof window.GameEngine.stopVictorySong === 'function') {
+      window.GameEngine.stopVictorySong();
+    }
     localStorage.removeItem('mtr_watch_tournament');
     localStorage.removeItem('mtr_joined_tournament');
     if (typeof window.loadPlayerProfile === 'function' && typeof supabaseClient !== 'undefined') {
@@ -417,48 +420,151 @@
     }
   }
 
+  function escapeHtml(str) {
+    return String(str == null ? '' : str)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
+  }
+
+  function localUserId() {
+    if (window.CreditsSystem && window.CreditsSystem.currentUserId) {
+      return window.CreditsSystem.currentUserId;
+    }
+    return null;
+  }
+
+  /** Ranking real desde la eliminatoria: campeón → eliminado más tarde primero. */
+  function computeRanking(b) {
+    var parts = (b.participants || []).slice();
+    if (!parts.length) return [];
+    var lostRound = {};
+    (b.duels || []).forEach(function (d) {
+      var p1 = d.player1 && d.player1.id;
+      var p2 = d.player2 && d.player2.id;
+      var loserId = d.winnerParticipantId === p1 ? p2 : p1;
+      if (loserId != null && lostRound[loserId] == null) {
+        lostRound[loserId] = d.round || 0;
+      }
+    });
+    var champId = b.winnerParticipantId;
+    parts.sort(function (a, c) {
+      if (a.id === champId && c.id !== champId) return -1;
+      if (c.id === champId && a.id !== champId) return 1;
+      var ra = lostRound[a.id] || 0;
+      var rc = lostRound[c.id] || 0;
+      if (rc !== ra) return rc - ra;
+      return 0;
+    });
+    return parts;
+  }
+
+  function podiumSpotHtml(p, place) {
+    if (!p) {
+      return '<div class="mtr-podium-spot mtr-podium-spot--' + place + '"></div>';
+    }
+    var medal = place === 'first' ? '🥇' : (place === 'second' ? '🥈' : '🥉');
+    var num = place === 'first' ? '1' : (place === 'second' ? '2' : '3');
+    var fallback = 'https://e-cdns-images.dzcdn.net/images/cover/2646329172/250x250-000000-80-0-0.jpg';
+    return (
+      '<div class="mtr-podium-spot mtr-podium-spot--' + place + '">' +
+      '<div class="mtr-podium-medal">' + medal + '</div>' +
+      '<img class="mtr-podium-avatar" src="' + escapeHtml(p.songImage || fallback) + '" ' +
+      'onerror="this.src=\'' + fallback + '\'" alt="">' +
+      '<div class="mtr-podium-name">' + (p.isCpu ? '🤖 ' : '') + escapeHtml(p.displayName || 'Jugador') + '</div>' +
+      '<div class="mtr-podium-song">' + escapeHtml(p.songName || '') + '</div>' +
+      '<div class="mtr-podium-base">' + num + '</div>' +
+      '</div>'
+    );
+  }
+
+  function confettiHtml() {
+    var colors = ['#fbbf24', '#22d3ee', '#ec4899', '#a855f7', '#34d399', '#f97316'];
+    var pieces = '';
+    for (var i = 0; i < 36; i++) {
+      var left = Math.round(Math.random() * 100);
+      var color = colors[i % colors.length];
+      var delay = (Math.random() * 1.2).toFixed(2);
+      var dur = (2.4 + Math.random() * 1.4).toFixed(2);
+      var w = 5 + Math.round(Math.random() * 6);
+      pieces +=
+        '<i style="left:' + left + '%;background:' + color +
+        ';width:' + w + 'px;animation-delay:' + delay +
+        's;animation-duration:' + dur + 's"></i>';
+    }
+    return '<div class="mtr-confetti">' + pieces + '</div>';
+  }
+
   function renderResult(b) {
     var panel = document.getElementById('tournamentResultPanel');
     if (!panel || !b) return;
     showingResult = true;
     showArena();
-    var rosterHtml = '';
-    if (b.participants && b.participants.length) {
-      rosterHtml =
-        '<div class="mt-4 text-left space-y-2">' +
-        '<div class="text-xs uppercase tracking-wider text-gray-500 mb-2">Clasificación final</div>' +
-        b.participants.map(function (p, i) {
-          var isChamp = b.winnerParticipantId && p.id === b.winnerParticipantId;
+
+    var ranking = computeRanking(b);
+    var meId = localUserId();
+
+    var podiumHtml = '';
+    if (ranking.length) {
+      podiumHtml =
+        '<div class="mtr-podium">' +
+        podiumSpotHtml(ranking[1] || null, 'second') +
+        podiumSpotHtml(ranking[0] || null, 'first') +
+        podiumSpotHtml(ranking[2] || null, 'third') +
+        '</div>';
+    }
+
+    var standingsHtml = '';
+    if (ranking.length) {
+      standingsHtml =
+        '<div class="mtr-standings">' +
+        '<div class="mtr-standings-title">Clasificación final</div>' +
+        ranking.map(function (p, i) {
+          var isChamp = i === 0;
+          var isYou = meId && p.userId === meId;
+          var fallback = 'https://e-cdns-images.dzcdn.net/images/cover/2646329172/250x250-000000-80-0-0.jpg';
+          var tag = isYou
+            ? '<span class="mtr-standing-tag mtr-standing-tag--you">TÚ</span>'
+            : (p.isCpu ? '<span class="mtr-standing-tag mtr-standing-tag--cpu">CPU</span>' : '');
+          var delay = (0.5 + i * 0.08).toFixed(2);
           return (
-            '<div class="flex items-center gap-3 p-2 rounded-lg ' +
-            (isChamp ? 'bg-purple-500/20 border border-purple-400/40' : 'bg-black/30') + '">' +
-            '<span class="text-xs font-bold text-gray-400 w-6">#' + (i + 1) + '</span>' +
-            '<img src="' + (p.songImage || '') + '" class="w-10 h-10 rounded object-cover" onerror="this.style.display=\'none\'">' +
-            '<div class="flex-1 min-w-0">' +
-            '<div class="text-sm font-bold text-white truncate">' + (p.displayName || 'Jugador') + '</div>' +
-            '<div class="text-xs text-gray-400 truncate">' + (p.songName || '') + '</div>' +
-            '</div>' +
-            (isChamp ? '<span class="text-lg">🏆</span>' : (p.isCpu ? '<span class="text-xs text-gray-500">CPU</span>' : '')) +
+            '<div class="mtr-standing-row' + (isChamp ? ' mtr-standing-row--champion' : '') +
+            '" style="animation-delay:' + delay + 's">' +
+            '<span class="mtr-standing-rank">' + (isChamp ? '🏆' : '#' + (i + 1)) + '</span>' +
+            '<img class="mtr-standing-avatar" src="' + escapeHtml(p.songImage || fallback) + '" ' +
+            'onerror="this.src=\'' + fallback + '\'" alt="">' +
+            '<div class="mtr-standing-copy">' +
+            '<div class="mtr-standing-name">' + escapeHtml(p.displayName || 'Jugador') + '</div>' +
+            '<div class="mtr-standing-song">🎵 ' + escapeHtml(p.songName || 'Sin título') + '</div>' +
+            '</div>' + tag +
             '</div>'
           );
         }).join('') +
         '</div>';
     }
+
+    var prizeHtml = b.prizeAwarded > 0
+      ? '<div class="mtr-prize-chip">💰 +' + Number(b.prizeAwarded).toFixed(1) + ' MTR créditos acreditados</div>'
+      : '<div class="mtr-prize-chip mtr-prize-chip--empty">Sin premio acreditado en este slot</div>';
+
     panel.classList.remove('hidden');
     panel.innerHTML =
-      '<div class="p-6 rounded-2xl border border-purple-500/30 bg-purple-500/10 text-center">' +
-      '<div class="text-4xl mb-2">🏆</div>' +
-      '<h3 class="text-2xl font-bold text-white mb-1">' + (b.championName || 'Campeón') + '</h3>' +
-      '<p class="text-sm text-purple-200 mb-3">🎵 ' + (b.championSong || '') + '</p>' +
-      '<p class="text-sm text-gray-300 mb-4">' + (b.resultMessage || 'Torneo completado.') + '</p>' +
-      (b.prizeAwarded > 0
-        ? '<p class="text-cyan-400 font-bold text-lg">+' + Number(b.prizeAwarded).toFixed(1) + ' cr acreditados</p>'
-        : '<p class="text-amber-300 text-sm">Sin premio acreditado en este slot</p>') +
-      rosterHtml +
+      '<div class="mtr-result">' +
+      confettiHtml() +
+      '<div class="mtr-result-inner text-center">' +
+      '<div class="mtr-result-crown">👑</div>' +
+      '<div class="mtr-result-title">Campeón del torneo</div>' +
+      '<h3 class="mtr-champion-name mt-1">' + escapeHtml(b.championName || 'Campeón') + '</h3>' +
+      '<p class="mtr-champion-song">🎵 ' + escapeHtml(b.championSong || '') + '</p>' +
+      podiumHtml +
+      '<p class="text-sm text-gray-300 mt-4 mb-1">' + escapeHtml(b.resultMessage || 'Torneo completado.') + '</p>' +
+      prizeHtml +
+      standingsHtml +
       '<div class="flex flex-wrap gap-2 justify-center mt-6">' +
-      '<button type="button" id="tournamentBackHubBtn" class="px-4 py-2 rounded-lg bg-cyan-600 text-white text-sm font-bold">Hub de torneos</button>' +
-      '<button type="button" id="tournamentBackModesBtn" class="px-4 py-2 rounded-lg bg-white/10 text-white text-sm">Otros modos</button>' +
+      '<button type="button" id="tournamentBackHubBtn" class="tournament-btn-primary" style="width:auto;padding:0.65rem 1.4rem">🏆 Hub de torneos</button>' +
+      '<button type="button" id="tournamentBackModesBtn" class="tournament-btn-secondary" style="width:auto;margin-top:0;padding:0.65rem 1.4rem">Otros modos</button>' +
+      '</div>' +
       '</div></div>';
+
     var back = document.getElementById('tournamentBackHubBtn');
     if (back) {
       back.onclick = function () {

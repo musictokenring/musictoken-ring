@@ -2040,6 +2040,9 @@ const GameEngine = {
         if (!match) return;
 
         var self = this;
+
+        if (typeof this.stopVictorySong === 'function') this.stopVictorySong();
+        this.stopUserSong();
         ['songSelection', 'waitingScreen', 'roomScreen', 'modeSelector', 'tournamentHub'].forEach(function (id) {
             document.getElementById(id)?.classList.add('hidden');
         });
@@ -2163,19 +2166,20 @@ const GameEngine = {
                 var winnerSong = winner === 1
                     ? match.player1_song_preview
                     : match.player2_song_preview;
+                var delayMs = options.victoryDelayMs != null
+                    ? Number(options.victoryDelayMs)
+                    : Math.max(2000, (self.victoryAudioDuration || 15) * 1000);
                 if (winnerSong) {
-                    self.playVictorySong(winnerSong);
+                    self.playVictorySong(winnerSong, delayMs);
                 }
                 if (statusEl) {
                     statusEl.innerHTML = winner === 1
                         ? '<span class="text-cyan-300 font-bold">🏆 Gana ' + (match.player1_label || 'Lado 1') + '</span>'
                         : '<span class="text-fuchsia-300 font-bold">🏆 Gana ' + (match.player2_label || 'Lado 2') + '</span>';
                 }
-                var delayMs = options.victoryDelayMs != null
-                    ? Number(options.victoryDelayMs)
-                    : Math.max(2000, (self.victoryAudioDuration || 15) * 1000);
                 setTimeout(function () {
                     self.stopUserSong();
+                    if (typeof self.stopVictorySong === 'function') self.stopVictorySong();
                     var arena = document.getElementById('battleArena');
                     if (arena) arena.remove();
                     if (match.match_type !== 'tournament') {
@@ -4071,10 +4075,24 @@ const GameEngine = {
             this.userAudio.pause();
         }
     },
-    
-    playVictorySong(url) {
+
+    stopVictorySong() {
+        if (this._victoryTimeout) {
+            clearTimeout(this._victoryTimeout);
+            this._victoryTimeout = null;
+        }
+        if (this.victoryAudio) {
+            try {
+                this.victoryAudio.pause();
+                this.victoryAudio.currentTime = 0;
+            } catch (_e) { /* ignore */ }
+            this.victoryAudio = null;
+        }
+    },
+
+    playVictorySong(url, maxDurationMs) {
         if (!url) return;
-        if (this.victoryAudio) this.victoryAudio.pause();
+        this.stopVictorySong();
         this.victoryAudio = new Audio(url);
         var self = this;
         var playPromise = this.victoryAudio.play();
@@ -4083,12 +4101,12 @@ const GameEngine = {
                 console.warn('[audio] victory:', err.message || err);
             });
         }
-        setTimeout(function () {
-            if (self.victoryAudio) {
-                self.victoryAudio.pause();
-                self.victoryAudio = null;
-            }
-        }, self.victoryAudioDuration * 1000);
+        var stopAfter = Number(maxDurationMs) > 0
+            ? Number(maxDurationMs)
+            : (self.victoryAudioDuration || 15) * 1000;
+        this._victoryTimeout = setTimeout(function () {
+            self.stopVictorySong();
+        }, stopAfter);
     },
     
     // ==========================================

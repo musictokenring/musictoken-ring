@@ -47,11 +47,66 @@ class TournamentService {
   }
 
   /**
+   * Determina si una batalla Express está REALMENTE atascada/terminada.
+   * No marca como completada una batalla que apenas inició (debe correr la eliminatoria).
+   */
+  isStaleExpressBattle(t, nowMs) {
+    const bracket = t?.bracket_state;
+    if (!bracket) {
+      // locked sin bracket: solo viejo se considera atascado
+      const closesMs = this.registrationClosesMs(t);
+      if (!Number.isFinite(closesMs)) return false;
+      return (nowMs - closesMs) > 3 * 60 * 1000;
+    }
+
+    const playbackDone = bracket.playbackStatus === 'completed';
+    const duelsDone = bracket.duels?.length &&
+      (bracket.currentDuelIndex || 0) >= bracket.duels.length;
+    if (playbackDone || duelsDone) return true;
+
+    // Batalla solo-CPU sin espectador que avance la reproducción:
+    // dar margen suficiente para que un humano vea la eliminatoria completa.
+    const closesMs = this.registrationClosesMs(t);
+    if (!Number.isFinite(closesMs)) return false;
+    const ageAfterCloseMs = nowMs - closesMs;
+    if (t.status === 'in_progress') return ageAfterCloseMs > 6 * 60 * 1000;
+    if (t.status === 'locked') return ageAfterCloseMs > 3 * 60 * 1000;
+    return false;
+  }
+
+  async completeExpressBattle(t, now = new Date()) {
+    const nowIso = now.toISOString();
+    const bracket = t.bracket_state;
+    const nextBracket = bracket
+      ? Object.assign({}, bracket, { playbackStatus: 'completed' })
+      : bracket;
+
+    await this.supabase.from('tournaments').update({
+      status: 'completed',
+      bracket_state: nextBracket,
+      updated_at: nowIso
+    }).eq('id', t.id);
+
+    if (nextBracket) {
+      try {
+        await recordTournamentBattles(
+          this.supabase,
+          Object.assign({}, t, { status: 'completed', updated_at: nowIso }),
+          nextBracket
+        );
+      } catch (histErr) {
+        console.warn('[tournament] stale battle history:', t.id, histErr.message);
+      }
+    }
+
+    console.log('[tournament] ✅ Express completado (stale):', t.name, t.id);
+  }
+
+  /**
    * Cierra Express atascados en in_progress/locked (batallas solo CPU sin espectadores).
    */
   async processStaleExpressBattles(now = new Date()) {
     const nowMs = now.getTime();
-    const nowIso = now.toISOString();
     const { data: rows } = await this.supabase
       .from('tournaments')
       .select('*')
@@ -59,50 +114,13 @@ class TournamentService {
       .in('status', ['in_progress', 'locked']);
 
     for (const t of rows || []) {
-      const closesMs = this.registrationClosesMs(t);
-      if (!Number.isFinite(closesMs)) continue;
-      const ageAfterCloseMs = nowMs - closesMs;
-      const bracket = t.bracket_state;
-      const playbackDone = bracket?.playbackStatus === 'completed';
-      const duelsDone = bracket?.duels?.length &&
-        (bracket.currentDuelIndex || 0) >= bracket.duels.length;
-      const shouldComplete =
-        playbackDone ||
-        duelsDone ||
-        (t.status === 'in_progress' && ageAfterCloseMs > 4 * 60 * 1000) ||
-        (t.status === 'locked' && ageAfterCloseMs > 2 * 60 * 1000);
-
-      if (!shouldComplete) continue;
-
-      const nextBracket = bracket
-        ? Object.assign({}, bracket, { playbackStatus: 'completed' })
-        : bracket;
-
-      await this.supabase.from('tournaments').update({
-        status: 'completed',
-        bracket_state: nextBracket,
-        updated_at: nowIso
-      }).eq('id', t.id);
-
-      if (nextBracket) {
-        try {
-          await recordTournamentBattles(
-            this.supabase,
-            Object.assign({}, t, { status: 'completed', updated_at: nowIso }),
-            nextBracket
-          );
-        } catch (histErr) {
-          console.warn('[tournament] stale battle history:', t.id, histErr.message);
-        }
-      }
-
-      console.log('[tournament] ✅ Express CPU completado (stale):', t.name, t.id);
+      if (!this.isStaleExpressBattle(t, nowMs)) continue;
+      await this.completeExpressBattle(t, now);
     }
   }
 
   async completeStaleExpressBattlesForGenre(genreId, now = new Date()) {
     const nowMs = now.getTime();
-    const nowIso = now.toISOString();
     const { data: rows } = await this.supabase
       .from('tournaments')
       .select('*')
@@ -111,30 +129,8 @@ class TournamentService {
       .in('status', ['in_progress', 'locked']);
 
     for (const t of rows || []) {
-      const closesMs = this.registrationClosesMs(t);
-      if (!Number.isFinite(closesMs) || nowMs <= closesMs) continue;
-      const bracket = t.bracket_state;
-      const nextBracket = bracket
-        ? Object.assign({}, bracket, { playbackStatus: 'completed' })
-        : bracket;
-
-      await this.supabase.from('tournaments').update({
-        status: 'completed',
-        bracket_state: nextBracket,
-        updated_at: nowIso
-      }).eq('id', t.id);
-
-      if (nextBracket) {
-        try {
-          await recordTournamentBattles(
-            this.supabase,
-            Object.assign({}, t, { status: 'completed', updated_at: nowIso }),
-            nextBracket
-          );
-        } catch (histErr) {
-          console.warn('[tournament] genre stale history:', t.id, histErr.message);
-        }
-      }
+      if (!this.isStaleExpressBattle(t, nowMs)) continue;
+      await this.completeExpressBattle(t, now);
     }
   }
 
