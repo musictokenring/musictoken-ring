@@ -19,6 +19,8 @@ const NOWPAYMENTS_IPN_SECRET =
     process.env.NOWPAYMENTS_IPN_SECRET ||
     '';
 const NOWPAYMENTS_API_URL = 'https://api.nowpayments.io/v1';
+let _nowpaymentsPayoutToken = null;
+let _nowpaymentsPayoutTokenExpiresAt = 0;
 const TRADING_FUND_WALLET = process.env.TRADING_FUND_WALLET || '';
 const CUSTODY_ENABLED = process.env.CUSTODY_ENABLED === 'true';
 /** Retiros/premios: USDT TRC20 por defecto si Custody + Tron; override con NOWPAYOUT_CURRENCY */
@@ -1050,6 +1052,35 @@ class NOWPaymentsService {
     }
 
     /**
+     * NOWPayments Mass Payouts requiere un JWT ademas de x-api-key. El token
+     * se obtiene con POST /v1/auth (email+password de la cuenta NOWPayments,
+     * solo por env vars) y expira cada 5 min segun la doc oficial.
+     */
+    async getPayoutAuthToken() {
+        const now = Date.now();
+        if (_nowpaymentsPayoutToken && now < _nowpaymentsPayoutTokenExpiresAt) {
+            return _nowpaymentsPayoutToken;
+        }
+        const email = process.env.NOWPAYMENTS_EMAIL || '';
+        const pass = process.env.NOWPAYMENTS_PASSWORD || '';
+        if (!email || !pass) {
+            throw new Error('NOWPAYMENTS_EMAIL / NOWPAYMENTS_PASSWORD not configured');
+        }
+        const resp = await fetch(`${NOWPAYMENTS_API_URL}/auth`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email, password: pass })
+        });
+        if (!resp.ok) {
+            throw new Error(`NOWPayments auth failed: ${resp.status}`);
+        }
+        const data = await resp.json();
+        _nowpaymentsPayoutToken = data.token;
+        _nowpaymentsPayoutTokenExpiresAt = now + 4 * 60 * 1000;
+        return _nowpaymentsPayoutToken;
+    }
+
+    /**
      * Envío desde Custody (premios): no descuenta créditos de usuario en Supabase.
      */
     async createCustodyPayout(recipientAddress, amountUsd, metadata = {}) {
@@ -1080,10 +1111,13 @@ class NOWPaymentsService {
 
         const ipnCallbackUrl = `${(process.env.BACKEND_URL || process.env.RENDER_EXTERNAL_URL || '').replace(/\/$/, '')}/webhook/nowpayments`;
 
+        const payoutAuthToken = await this.getPayoutAuthToken();
+
         const payoutResponse = await fetch(`${NOWPAYMENTS_API_URL}/payout`, {
             method: 'POST',
             headers: {
                 'x-api-key': NOWPAYMENTS_API_KEY,
+                'Authorization': `Bearer ${payoutAuthToken}`,
                 'Content-Type': 'application/json'
             },
             body: JSON.stringify({ ipn_callback_url: ipnCallbackUrl, withdrawals: [withdrawalItem], metadata })
