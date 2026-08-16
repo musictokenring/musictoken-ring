@@ -1066,26 +1066,27 @@ class NOWPaymentsService {
         if (!Number.isFinite(amt) || amt <= 0) {
             throw new Error('Invalid payout amount');
         }
-        const payoutBody =
+        // Payload shape per official docs (Mass payouts -> Create payout):
+        // https://documenter.getpostman.com/view/7907941/2s93JusNJt#3a87a0bb-2daa-431c-b072-d63560b03952
+        const withdrawalItem =
             process.env.NOWPAYOUT_USE_USDC_BASE === 'true'
-                ? {
-                      currency: 'USDC',
-                      chain: 'BASE',
-                      recipients: [{ address: recipientAddress, amount: amt.toFixed(6) }]
-                  }
+                ? { address: recipientAddress, currency: 'USDC', chain: 'BASE', amount: amt.toFixed(6) }
                 : {
+                      address: recipientAddress,
                       currency: NOWPAYOUT_CURRENCY,
                       ...(NOWPAYOUT_CHAIN ? { chain: NOWPAYOUT_CHAIN } : {}),
-                      recipients: [{ address: recipientAddress, amount: amt.toFixed(8) }]
+                      amount: amt.toFixed(8)
                   };
 
-        const payoutResponse = await fetch(`${NOWPAYMENTS_API_URL}/payout/create`, {
+        const ipnCallbackUrl = `${(process.env.BACKEND_URL || process.env.RENDER_EXTERNAL_URL || '').replace(/\/$/, '')}/webhook/nowpayments`;
+
+        const payoutResponse = await fetch(`${NOWPAYMENTS_API_URL}/payout`, {
             method: 'POST',
             headers: {
                 'x-api-key': NOWPAYMENTS_API_KEY,
                 'Content-Type': 'application/json'
             },
-            body: JSON.stringify({ ...payoutBody, metadata })
+            body: JSON.stringify({ ipn_callback_url: ipnCallbackUrl, withdrawals: [withdrawalItem], metadata })
         });
 
         if (!payoutResponse.ok) {
