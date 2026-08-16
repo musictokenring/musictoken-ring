@@ -1,0 +1,158 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8" />
+<title>MTR AI Ops — Demo Dashboard</title>
+<style>
+  :root {
+    --bg: #0b0f14; --panel: #131a22; --border: #23303c; --text: #e8eef4;
+    --muted: #8fa2b3; --accent: #33d17a; --warn: #f2b705; --bad: #ef5350;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; font-family: -apple-system, Segoe UI, Roboto, sans-serif;
+    background: var(--bg); color: var(--text); padding: 24px;
+  }
+  h1 { font-size: 20px; margin: 0 0 4px; }
+  .sub { color: var(--muted); margin-bottom: 24px; font-size: 13px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px; }
+  .card {
+    background: var(--panel); border: 1px solid var(--border); border-radius: 10px;
+    padding: 16px; display: flex; flex-direction: column; gap: 10px;
+  }
+  .card h2 { font-size: 15px; margin: 0; display: flex; align-items: center; gap: 8px; }
+  .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--muted); display: inline-block; }
+  .dot.ok { background: var(--accent); }
+  .dot.bad { background: var(--bad); }
+  button {
+    background: #1c2833; color: var(--text); border: 1px solid var(--border);
+    border-radius: 6px; padding: 8px 12px; cursor: pointer; font-size: 13px;
+  }
+  button:hover { border-color: var(--accent); }
+  input {
+    background: #0e141b; color: var(--text); border: 1px solid var(--border);
+    border-radius: 6px; padding: 6px 8px; font-size: 12px; width: 100%;
+  }
+  label { font-size: 11px; color: var(--muted); }
+  pre {
+    background: #0e141b; border: 1px solid var(--border); border-radius: 6px;
+    padding: 10px; font-size: 11px; overflow-x: auto; margin: 0; max-height: 220px;
+    white-space: pre-wrap; word-break: break-word;
+  }
+  .flow { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); margin: 16px 0; flex-wrap: wrap; }
+  .flow b { color: var(--text); }
+</style>
+</head>
+<body>
+  <h1>🎛️ MTR AI-Native Ops — Demo Dashboard</h1>
+  <div class="sub">Corriendo local (sin Docker): scout :8081 · cfo :8082 · host :8083</div>
+
+  <div class="flow">
+    <span><b>1. Scout</b> detecta artista</span> →
+    <span><b>2. Pago</b> llega vía NOWPayments (simulado)</span> →
+    <span><b>3. CFO</b> paga 95/5 (con guardrails)</span> →
+    <span><b>4. Host</b> narra el resultado</span> →
+    <span><b>5. Ledger</b> en BigQuery/local</span>
+  </div>
+
+  <div class="grid">
+    <div class="card">
+      <h2><span id="dot-scout" class="dot"></span> Scout Agent — A&amp;R IA</h2>
+      <button onclick="runScout()">Escanear Deezer ahora</button>
+      <pre id="out-scout">—</pre>
+    </div>
+
+    <div class="card">
+      <h2><span id="dot-cfo" class="dot"></span> CFO Agent — payments-agent</h2>
+      <label>artist_user_id (Supabase users.id)</label>
+      <input id="artistId" value="demo-artist-001" />
+      <label>amount_usd</label>
+      <input id="amountUsd" value="10" />
+      <button onclick="runCfo()">Procesar pago (split 95/5)</button>
+      <pre id="out-cfo">—</pre>
+    </div>
+
+    <div class="card">
+      <h2><span id="dot-host" class="dot"></span> Host Agent — battle-host-agent</h2>
+      <button onclick="runHost()">Narrar batalla</button>
+      <pre id="out-host">—</pre>
+    </div>
+
+    <div class="card">
+      <h2>📊 Resumen de la corrida</h2>
+      <pre id="out-summary">Todavía no se corrió nada.</pre>
+    </div>
+  </div>
+
+<script>
+const SCOUT = 'http://localhost:8081';
+const CFO = 'http://localhost:8082';
+const HOST = 'http://localhost:8083';
+const CFO_SECRET = 'demo-secret';
+
+async function checkHealth(url, dotId) {
+  try {
+    const r = await fetch(url + '/health');
+    document.getElementById(dotId).className = 'dot ' + (r.ok ? 'ok' : 'bad');
+  } catch { document.getElementById(dotId).className = 'dot bad'; }
+}
+checkHealth(SCOUT, 'dot-scout');
+checkHealth(CFO, 'dot-cfo');
+checkHealth(HOST, 'dot-host');
+
+let summary = {};
+function renderSummary() {
+  document.getElementById('out-summary').textContent = JSON.stringify(summary, null, 2);
+}
+
+async function runScout() {
+  const out = document.getElementById('out-scout');
+  out.textContent = 'Escaneando Deezer...';
+  try {
+    const r = await fetch(SCOUT + '/run', { method: 'POST' });
+    const data = await r.json();
+    out.textContent = JSON.stringify(data, null, 2);
+    summary.scout = { detections: data.detections };
+    renderSummary();
+  } catch (e) { out.textContent = 'Error: ' + e; }
+}
+
+async function runCfo() {
+  const out = document.getElementById('out-cfo');
+  out.textContent = 'Procesando pago...';
+  const artist_user_id = document.getElementById('artistId').value;
+  const amount_usd = parseFloat(document.getElementById('amountUsd').value);
+  try {
+    const r = await fetch(CFO + '/payout', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Agent-Secret': CFO_SECRET },
+      body: JSON.stringify({
+        payment_id: 'demo-' + Date.now(),
+        artist_user_id, battle_id: 'demo-battle-001', amount_usd
+      })
+    });
+    const data = await r.json();
+    out.textContent = JSON.stringify(data, null, 2);
+    summary.cfo = { status: data.status, reason: data.reason, artist_amount_usd: data.artist_amount_usd };
+    renderSummary();
+  } catch (e) { out.textContent = 'Error: ' + e; }
+}
+
+async function runHost() {
+  const out = document.getElementById('out-host');
+  out.textContent = 'Generando narración...';
+  try {
+    const r = await fetch(HOST + '/narrate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ battle_id: 'demo-battle-001', event_type: 'hype' })
+    });
+    const data = await r.json();
+    out.textContent = JSON.stringify(data, null, 2);
+    summary.host = { reply: data.reply };
+    renderSummary();
+  } catch (e) { out.textContent = 'Error: ' + e; }
+}
+</script>
+</body>
+</html>

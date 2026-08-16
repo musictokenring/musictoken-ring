@@ -1733,6 +1733,55 @@ app.post('/api/user/add-credits', requireInternalSecret, async (req, res) => {
 });
 
 /**
+ * Agent-native ops: internal payout trigger, called ONLY by the GCP CFO
+ * agent (agents/cfo_agent.py) after it has already validated the payment,
+ * the wallet-of-record, and per-tx/daily caps. This route re-validates the
+ * wallet server-side too (defense in depth — never trust the caller's
+ * amount/user pairing blindly) and reuses sendPrize(), the same
+ * already-audited payout path used elsewhere, instead of introducing a new
+ * one. Protected by requireInternalSecret (BACKEND_INTERNAL_SECRET), same
+ * mechanism as the other /api/internal-style routes above.
+ */
+const _agentPayoutIdempotency = new Set(); // best-effort, in-process guard;
+// CFO agent already enforces the authoritative idempotency check in Firestore.
+
+app.post('/api/internal/agent-payout', requireInternalSecret, async (req, res) => {
+    try {
+        const { userId, amountUsd, reason, idempotencyKey } = req.body;
+
+        if (!userId || !amountUsd || amountUsd <= 0) {
+            return res.status(400).json({ error: 'Invalid parameters' });
+        }
+        if (idempotencyKey) {
+            if (_agentPayoutIdempotency.has(idempotencyKey)) {
+                return res.json({ success: true, duplicate: true });
+            }
+            _agentPayoutIdempotency.add(idempotencyKey);
+        }
+
+        // Wallet of record ONLY from Supabase — never trust a wallet passed in the body.
+        const { data: user, error: userError } = await supabase
+            .from('users')
+            .select('id, wallet_address')
+            .eq('id', userId)
+            .single();
+
+        if (userError || !user || !user.wallet_address) {
+            return res.status(404).json({ error: 'User or wallet not found' });
+        }
+
+        const { sendPrize } = require('./prize-service');
+        const result = await sendPrize(user.wallet_address, amountUsd);
+
+        console.log('[agent-payout]', { userId, amountUsd, reason, result });
+        res.json({ success: true, ...result });
+    } catch (error) {
+        console.error('[server] Error in agent-payout:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+/**
  * Vault endpoints
  */
 

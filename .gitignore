@@ -8,3 +8,9 @@ build
 .env.local
 .env.*.local
 vercel.env
+
+# Agentes Python (GCP AI-native ops)
+__pycache__/
+*.pyc
+.venv/
+*.jsonl
