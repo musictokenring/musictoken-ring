@@ -1,0 +1,71 @@
+# Local dev stack for the AI-native ops layer (scout / cfo / host agents)
+# plus the existing Node backend, wired together the same way they'll talk
+# in GCP (REST, shared secret). Does not touch Vercel/Render/Supabase —
+# Supabase is still the real DB (point SUPABASE_URL/KEY at your project or a
+# local Supabase CLI instance); this just runs the compute pieces locally.
+#
+# Usage:
+#   cp agents/.env.example agents/.env   # fill in Deezer/NOWPayments/Supabase keys
+#   docker-compose up --build
+#
+# GCP services (Firestore/BigQuery/Secret Manager/Vertex AI) are disabled by
+# default here (FIRESTORE_DISABLED / BIGQUERY_DISABLED / USE_SECRET_MANAGER)
+# so the stack runs with zero cloud credentials for local demo purposes; set
+# USE_SECRET_MANAGER=true + mount a service-account key to exercise the real
+# GCP path locally.
+version: "3.9"
+
+services:
+  backend:
+    image: node:18-alpine
+    working_dir: /app
+    command: sh -c "npm install --omit=dev && node backend/server-auto.js"
+    volumes:
+      - ./:/app
+    ports:
+      - "3001:3001"
+    env_file:
+      - .env
+    environment:
+      PORT: 3001
+      SCOUT_AGENT_URL: http://scout-agent:8080
+      CFO_AGENT_URL: http://cfo-agent:8080
+      HOST_AGENT_URL: http://host-agent:8080
+
+  scout-agent:
+    build:
+      context: .
+      dockerfile: agents/Dockerfile
+    command: ["gunicorn", "--bind", "0.0.0.0:8080", "--chdir", "agents", "scout_agent:app"]
+    ports:
+      - "8081:8080"
+    env_file:
+      - agents/.env
+    environment:
+      RUN_MODE: http
+      FIRESTORE_DISABLED: "true"
+      BIGQUERY_DISABLED: "true"
+
+  cfo-agent:
+    build:
+      context: .
+      dockerfile: agents/Dockerfile
+    command: ["gunicorn", "--bind", "0.0.0.0:8080", "--chdir", "agents", "cfo_agent:app"]
+    ports:
+      - "8082:8080"
+    env_file:
+      - agents/.env
+    environment:
+      FIRESTORE_DISABLED: "true"
+      BIGQUERY_DISABLED: "true"
+      BACKEND_URL: http://backend:3001
+
+  host-agent:
+    build:
+      context: .
+      dockerfile: agents/Dockerfile
+    command: ["gunicorn", "--bind", "0.0.0.0:8080", "--chdir", "agents", "host_agent:app"]
+    ports:
+      - "8083:8080"
+    env_file:
+      - agents/.env

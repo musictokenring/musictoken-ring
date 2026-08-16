@@ -1,0 +1,4 @@
+steps:
+  - name: gcr.io/cloud-builders/docker
+    args: ['build', '-f', 'agents/Dockerfile', '-t', 'gcr.io/mtr-ai-ops-2026/mtr-agents', '.']
+images: ['gcr.io/mtr-ai-ops-2026/mtr-agents']
