@@ -3029,6 +3029,27 @@ const GameEngine = {
                 </div>
             </div>
             <div id="battleStatusText" class="text-center py-4 px-4 mb-4"></div>
+
+            <div id="fanBetPanel" class="max-w-3xl mx-auto rounded-2xl border border-white/10 bg-white/5 p-4 mb-4">
+                <p class="text-center text-xs text-gray-400 uppercase tracking-widest mb-3">🎤 Apostá por tu favorito</p>
+                <div class="flex items-center justify-center gap-2 mb-3">
+                    <span class="text-gray-400 text-sm">Monto:</span>
+                    <input type="number" id="fanBetAmount" min="1" step="1" value="10"
+                           class="w-24 px-3 py-1.5 rounded-lg bg-black/40 border border-white/20 text-white text-center font-bold" />
+                    <span class="text-gray-400 text-sm">créditos</span>
+                </div>
+                <div class="flex items-center justify-center gap-3">
+                    <button id="fanBetPlayer1Btn" type="button"
+                            class="flex-1 max-w-[180px] px-4 py-2 rounded-xl font-bold text-sm border border-cyan-400/40 bg-cyan-500/10 text-cyan-300 hover:bg-cyan-500/20 transition">
+                        🔷 ${match.player1_song_artist || 'Jugador 1'}
+                    </button>
+                    <button id="fanBetPlayer2Btn" type="button"
+                            class="flex-1 max-w-[180px] px-4 py-2 rounded-xl font-bold text-sm border border-fuchsia-400/40 bg-fuchsia-500/10 text-fuchsia-300 hover:bg-fuchsia-500/20 transition">
+                        🔶 ${match.player2_song_artist || 'Jugador 2'}
+                    </button>
+                </div>
+                <div id="fanBetStatus" class="text-center text-xs text-gray-400 mt-3"></div>
+            </div>
         `;
         
         console.log('[createBattleUI] HTML generado, agregando al DOM...');
@@ -3043,7 +3064,8 @@ const GameEngine = {
             addedArena.classList.remove('hidden');
             console.log('[createBattleUI] ✅ battleArena visible');
             this.bindBattleArenaAudio(addedArena);
-            
+            this.setupFanBetPanel(match);
+
             // Detectar si es dispositivo móvil (ANTES del setTimeout)
             const isMobile = typeof window !== 'undefined' && (
                 /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) ||
@@ -3923,6 +3945,86 @@ const GameEngine = {
         arenaEl.addEventListener('touchstart', function () {
             self.unlockAudioFromGesture();
         }, { passive: true });
+    },
+
+    /**
+     * Panel de apuestas de espectador ("fan bets") — POST /api/battles/:id/bet.
+     * Modelo 80/10/10: los fans no juegan la batalla, apuestan credits por un
+     * lado. Los propios jugadores de esta batalla no ven el panel (ya tienen
+     * su propia apuesta 1v1 via player1_bet/player2_bet).
+     */
+    setupFanBetPanel(match) {
+        var panel = document.getElementById('fanBetPanel');
+        if (!panel || !match || !match.id) return;
+
+        if (this.currentUserId && (this.currentUserId === match.player1_id || this.currentUserId === match.player2_id)) {
+            panel.classList.add('hidden');
+            return;
+        }
+
+        var self = this;
+        var btn1 = document.getElementById('fanBetPlayer1Btn');
+        var btn2 = document.getElementById('fanBetPlayer2Btn');
+        if (btn1) btn1.addEventListener('click', function () { self.placeFanBet(match, 'player1'); });
+        if (btn2) btn2.addEventListener('click', function () { self.placeFanBet(match, 'player2'); });
+    },
+
+    async placeFanBet(match, side) {
+        var statusEl = document.getElementById('fanBetStatus');
+        var amountInput = document.getElementById('fanBetAmount');
+        var btn1 = document.getElementById('fanBetPlayer1Btn');
+        var btn2 = document.getElementById('fanBetPlayer2Btn');
+        var amount = Number(amountInput ? amountInput.value : 0);
+
+        if (!Number.isFinite(amount) || amount <= 0) {
+            showToast('Ingresá un monto válido para apostar', 'error');
+            return;
+        }
+        if (!match || !match.id) {
+            showToast('No se pudo identificar la batalla', 'error');
+            return;
+        }
+
+        if (btn1) btn1.disabled = true;
+        if (btn2) btn2.disabled = true;
+        if (statusEl) statusEl.textContent = 'Registrando apuesta...';
+
+        try {
+            var backendUrl = window.CONFIG?.BACKEND_API || window.CreditsSystem?.backendUrl || 'https://musictoken-ring.onrender.com';
+            var res = await fetch(backendUrl + '/api/battles/' + match.id + '/bet', {
+                method: 'POST',
+                headers: await this.getBackendAuthHeaders(),
+                body: JSON.stringify({ side: side, amount: amount })
+            });
+            var data = await res.json().catch(function () { return {}; });
+
+            if (!res.ok || !data.ok) {
+                showToast(data.error || 'No se pudo registrar la apuesta', 'error');
+                if (btn1) btn1.disabled = false;
+                if (btn2) btn2.disabled = false;
+                if (statusEl) statusEl.textContent = '';
+                return;
+            }
+
+            var sideLabel = side === 'player1'
+                ? (match.player1_song_artist || 'Jugador 1')
+                : (match.player2_song_artist || 'Jugador 2');
+            showToast('¡Apuesta registrada! Fuiste con ' + sideLabel, 'success');
+            if (statusEl) {
+                statusEl.textContent = '✅ Apostaste ' + amount + ' créditos a ' + sideLabel + '. ¡Suerte!';
+            }
+            // El monto ya se descontó en el backend; refrescamos el balance visible.
+            var walletAddress = window.connectedAddress || localStorage.getItem('mtr_wallet');
+            if (walletAddress && window.CreditsSystem) {
+                await window.CreditsSystem.loadBalance(walletAddress);
+            }
+        } catch (error) {
+            console.error('[placeFanBet] Error:', error);
+            showToast('Error de conexión al apostar', 'error');
+            if (btn1) btn1.disabled = false;
+            if (btn2) btn2.disabled = false;
+            if (statusEl) statusEl.textContent = '';
+        }
     },
 
     unlockAudioFromGesture() {
