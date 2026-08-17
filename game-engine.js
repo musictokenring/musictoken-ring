@@ -3995,7 +3995,7 @@ const GameEngine = {
             var res = await fetch(backendUrl + '/api/battles/' + match.id + '/bet', {
                 method: 'POST',
                 headers: await this.getBackendAuthHeaders(),
-                body: JSON.stringify({ side: side, amount: amount })
+                body: JSON.stringify({ side: side, amount: amount, walletAddress: window.connectedAddress || null })
             });
             var data = await res.json().catch(function () { return {}; });
 

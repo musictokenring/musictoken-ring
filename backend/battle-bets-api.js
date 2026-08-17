@@ -11,25 +11,31 @@
  * SEGURIDAD, mismo patron que el resto del proyecto:
  *  - El usuario que aposta se identifica por su token Bearer (getAuthUserFromBearer),
  *    NUNCA por un userId que venga en el body.
+ *  - El userId que realmente tiene el saldo se resuelve con resolveCreditsUserId
+ *    (backend/auth-middleware.js) — el MISMO mecanismo que usa la inscripcion a
+ *    torneos para cuentas con wallet vinculada. resolvePublicUserId (la version
+ *    simple) devuelve el id de auth de Supabase, que en cuentas con wallet no es
+ *    necesariamente donde vive el saldo (saldo_fiat/saldo_onchain quedan bajo el
+ *    id vinculado a la wallet) — eso causaba "Insufficient credits" con saldo real
+ *    de sobra (encontrado probando en produccion con una cuenta con wallet y
+ *    ~$3000 nominales que via la resolucion simple daba total_balance: 0).
  *  - El saldo se descuenta con deductUnifiedBalance (backend/unified-balance.js) —
  *    la MISMA fuente de balance que muestra el frontend (credits + saldo_fiat +
  *    saldo_onchain), igual que /api/credits/deduct y las inscripciones a torneo.
- *    Descontar solo de user_credits.credits (como se hacia antes) causaba falsos
- *    "Insufficient credits" en cuentas cuyo saldo esta en saldo_fiat/onchain.
  *  - Las ganancias se acreditan con increment_user_credits (RPC atomica que ya
  *    usa el resto del sistema de creditos), nunca escribiendo la tabla directo.
  *  - /settle es idempotente: si el battleId ya tiene fila en
  *    battle_settlements, se rechaza (no se puede liquidar dos veces).
  */
-const { getAuthUserFromBearer, resolvePublicUserId, requireInternalSecret } = require('./auth-middleware');
+const { getAuthUserFromBearer, resolveCreditsUserId, requireInternalSecret } = require('./auth-middleware');
 const { computeSettlement } = require('./battle-settlement');
 const { deductUnifiedBalance } = require('./unified-balance');
 
-function makePlaceBetHandler(supabase) {
+function makePlaceBetHandler(supabase, walletLinkService) {
   return async function placeBetHandler(req, res) {
     try {
       const { battleId } = req.params;
-      const { side, amount } = req.body || {};
+      const { side, amount, walletAddress } = req.body || {};
 
       if (!battleId) return res.status(400).json({ ok: false, error: 'battleId is required' });
       if (side !== 'player1' && side !== 'player2') {
@@ -44,7 +50,13 @@ function makePlaceBetHandler(supabase) {
       if (!authUser) {
         return res.status(401).json({ ok: false, error: 'Unauthorized' });
       }
-      const userId = await resolvePublicUserId(supabase, authUser);
+      const resolved = await resolveCreditsUserId(
+        supabase,
+        { getUserIdFromWallet: (addr) => (walletLinkService ? walletLinkService.getUserIdFromWallet(addr) : null) },
+        authUser,
+        walletAddress || null
+      );
+      const userId = resolved.userId;
       if (!userId) {
         return res.status(404).json({ ok: false, error: 'User not found' });
       }
@@ -184,7 +196,7 @@ function makeSettleHandler(supabase) {
   };
 }
 
-function registerBattleBetsRoutes(app, supabase) {
+function registerBattleBetsRoutes(app, supabase, walletLinkService) {
   if (!app || typeof app.post !== 'function') {
     throw new Error('registerBattleBetsRoutes requires an app instance');
   }
@@ -192,7 +204,7 @@ function registerBattleBetsRoutes(app, supabase) {
     throw new Error('registerBattleBetsRoutes requires a supabase client');
   }
 
-  app.post('/api/battles/:battleId/bet', makePlaceBetHandler(supabase));
+  app.post('/api/battles/:battleId/bet', makePlaceBetHandler(supabase, walletLinkService));
   app.post('/api/battles/:battleId/settle', requireInternalSecret, makeSettleHandler(supabase));
   return app;
 }
