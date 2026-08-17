@@ -1,0 +1,205 @@
+/**
+ * Rutas de apuestas multi-fan por batalla (modelo 80/10/10).
+ *
+ * POST /api/battles/:battleId/bet     -> un fan autenticado aposta credits
+ *                                        por un lado de la batalla.
+ * POST /api/battles/:battleId/settle  -> liquida la batalla (SOLO interno,
+ *                                        requireInternalSecret — la llama el
+ *                                        propio backend cuando la batalla
+ *                                        real se resuelve, nunca un cliente).
+ *
+ * SEGURIDAD, mismo patron que el resto del proyecto:
+ *  - El usuario que aposta se identifica por su token Bearer (getAuthUserFromBearer),
+ *    NUNCA por un userId que venga en el body.
+ *  - Los creditos se descuentan con decrement_user_credits / se acreditan con
+ *    increment_user_credits (las mismas funciones RPC atomicas que ya usa
+ *    el resto del sistema de creditos), nunca escribiendo la tabla directo.
+ *  - /settle es idempotente: si el battleId ya tiene fila en
+ *    battle_settlements, se rechaza (no se puede liquidar dos veces).
+ */
+const { getAuthUserFromBearer, resolvePublicUserId, requireInternalSecret } = require('./auth-middleware');
+const { computeSettlement } = require('./battle-settlement');
+
+function makePlaceBetHandler(supabase) {
+  return async function placeBetHandler(req, res) {
+    try {
+      const { battleId } = req.params;
+      const { side, amount } = req.body || {};
+
+      if (!battleId) return res.status(400).json({ ok: false, error: 'battleId is required' });
+      if (side !== 'player1' && side !== 'player2') {
+        return res.status(400).json({ ok: false, error: "side must be 'player1' or 'player2'" });
+      }
+      const numericAmount = Number(amount);
+      if (!Number.isFinite(numericAmount) || numericAmount <= 0) {
+        return res.status(400).json({ ok: false, error: 'amount must be a positive number' });
+      }
+
+      const authUser = await getAuthUserFromBearer(req, supabase);
+      if (!authUser) {
+        return res.status(401).json({ ok: false, error: 'Unauthorized' });
+      }
+      const userId = await resolvePublicUserId(supabase, authUser);
+      if (!userId) {
+        return res.status(404).json({ ok: false, error: 'User not found' });
+      }
+
+      const { data: alreadySettled } = await supabase
+        .from('battle_settlements')
+        .select('battle_id')
+        .eq('battle_id', battleId)
+        .maybeSingle();
+      if (alreadySettled) {
+        return res.status(409).json({ ok: false, error: 'This battle is already settled; no more bets accepted' });
+      }
+
+      // Descuenta credits de forma atomica ANTES de registrar la apuesta.
+      // decrement_user_credits ya usa GREATEST(0, credits - amount) --
+      // verificamos el saldo resultante para saber si realmente alcanzaba.
+      const { data: beforeRow } = await supabase
+        .from('user_credits')
+        .select('credits')
+        .eq('user_id', userId)
+        .maybeSingle();
+      const balanceBefore = Number(beforeRow?.credits || 0);
+      if (balanceBefore < numericAmount) {
+        return res.status(402).json({ ok: false, error: 'Insufficient credits' });
+      }
+
+      const { error: decError } = await supabase.rpc('decrement_user_credits', {
+        user_id_param: userId,
+        credits_to_subtract: numericAmount
+      });
+      if (decError) {
+        console.error('[battle-bets] decrement_user_credits failed:', decError);
+        return res.status(500).json({ ok: false, error: 'Failed to reserve credits' });
+      }
+
+      const { data: bet, error: insertError } = await supabase
+        .from('battle_bets')
+        .insert({ battle_id: battleId, user_id: userId, side, amount: numericAmount })
+        .select('id')
+        .single();
+
+      if (insertError) {
+        // Compensacion: la apuesta no se pudo registrar, devolver los creditos.
+        console.error('[battle-bets] insert failed, refunding credits:', insertError);
+        await supabase.rpc('increment_user_credits', {
+          user_id_param: userId,
+          credits_to_add: numericAmount
+        });
+        return res.status(500).json({ ok: false, error: 'Failed to record bet, credits refunded' });
+      }
+
+      return res.status(200).json({ ok: true, betId: bet.id, battleId, side, amount: numericAmount });
+    } catch (error) {
+      console.error('[battle-bets] placeBetHandler error:', error);
+      return res.status(500).json({ ok: false, error: error?.message || 'Internal error' });
+    }
+  };
+}
+
+function makeSettleHandler(supabase) {
+  return async function settleHandler(req, res) {
+    try {
+      const { battleId } = req.params;
+      const { winningSide, artistUserId } = req.body || {};
+
+      if (!battleId) return res.status(400).json({ ok: false, error: 'battleId is required' });
+      if (winningSide !== 'player1' && winningSide !== 'player2') {
+        return res.status(400).json({ ok: false, error: "winningSide must be 'player1' or 'player2'" });
+      }
+
+      const { data: existing } = await supabase
+        .from('battle_settlements')
+        .select('battle_id')
+        .eq('battle_id', battleId)
+        .maybeSingle();
+      if (existing) {
+        return res.status(409).json({ ok: false, error: 'Battle already settled' });
+      }
+
+      const { data: bets, error: betsError } = await supabase
+        .from('battle_bets')
+        .select('id, user_id, side, amount')
+        .eq('battle_id', battleId)
+        .eq('settled', false);
+
+      if (betsError) {
+        console.error('[battle-bets] failed to load bets:', betsError);
+        return res.status(500).json({ ok: false, error: 'Failed to load bets' });
+      }
+      if (!bets || bets.length === 0) {
+        return res.status(404).json({ ok: false, error: 'No bets found for this battle' });
+      }
+
+      const settlement = computeSettlement(
+        bets.map((b) => ({ userId: b.user_id, side: b.side, amount: Number(b.amount) })),
+        winningSide
+      );
+
+      // Acredita a cada ganador (RPC atomica, una llamada por usuario).
+      for (const payout of settlement.payouts) {
+        const { error: payErr } = await supabase.rpc('increment_user_credits', {
+          user_id_param: payout.userId,
+          credits_to_add: payout.amount
+        });
+        if (payErr) {
+          // No hacemos rollback de los pagos anteriores: mejor pagar de mas
+          // (y loggear fuerte) que dejar a un ganador sin cobrar por un
+          // error de red a mitad de camino. Se corrige manualmente si pasa.
+          console.error('[battle-bets] CRITICAL: payout failed for user', payout.userId, payErr);
+        }
+      }
+
+      // Acredita al artista (10%), si se indico su user_id.
+      if (artistUserId && settlement.artistCut > 0) {
+        const { error: artistPayErr } = await supabase.rpc('increment_user_credits', {
+          user_id_param: artistUserId,
+          credits_to_add: settlement.artistCut
+        });
+        if (artistPayErr) {
+          console.error('[battle-bets] CRITICAL: artist payout failed:', artistPayErr);
+        }
+      }
+
+      // El platformCut no se acredita a nadie: simplemente no se reparte,
+      // queda "retenido" (es la comision de la casa).
+
+      await supabase
+        .from('battle_bets')
+        .update({ settled: true, settled_at: new Date().toISOString() })
+        .eq('battle_id', battleId);
+
+      await supabase.from('battle_settlements').insert({
+        battle_id: battleId,
+        winning_side: winningSide,
+        total_pool: settlement.totalPool,
+        platform_cut: settlement.platformCut,
+        artist_cut: settlement.artistCut,
+        winner_pool: settlement.winnerPool,
+        artist_user_id: artistUserId || null
+      });
+
+      return res.status(200).json({ ok: true, battleId, ...settlement });
+    } catch (error) {
+      console.error('[battle-bets] settleHandler error:', error);
+      return res.status(500).json({ ok: false, error: error?.message || 'Internal error' });
+    }
+  };
+}
+
+function registerBattleBetsRoutes(app, supabase) {
+  if (!app || typeof app.post !== 'function') {
+    throw new Error('registerBattleBetsRoutes requires an app instance');
+  }
+  if (!supabase) {
+    throw new Error('registerBattleBetsRoutes requires a supabase client');
+  }
+
+  app.post('/api/battles/:battleId/bet', makePlaceBetHandler(supabase));
+  app.post('/api/battles/:battleId/settle', requireInternalSecret, makeSettleHandler(supabase));
+  return app;
+}
+
+module.exports = { registerBattleBetsRoutes, makePlaceBetHandler, makeSettleHandler };

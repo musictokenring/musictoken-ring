@@ -2417,6 +2417,14 @@ try {
     console.warn('[server] Prize routes not registered:', prizeRegErr.message);
 }
 
+try {
+    const { registerBattleBetsRoutes } = require('./battle-bets-api');
+    registerBattleBetsRoutes(app, supabase);
+    console.log('[server] Registered POST /api/battles/:battleId/bet and /settle (modelo 80/10/10)');
+} catch (battleBetsRegErr) {
+    console.warn('[server] Battle bets routes not registered:', battleBetsRegErr.message);
+}
+
 /**
  * Root endpoint - helps verify server is running
  */
