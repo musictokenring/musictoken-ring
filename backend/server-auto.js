@@ -2419,7 +2419,7 @@ try {
 
 try {
     const { registerBattleBetsRoutes } = require('./battle-bets-api');
-    registerBattleBetsRoutes(app, supabase);
+    registerBattleBetsRoutes(app, supabase, walletLinkService);
     console.log('[server] Registered POST /api/battles/:battleId/bet and /settle (modelo 80/10/10)');
 } catch (battleBetsRegErr) {
     console.warn('[server] Battle bets routes not registered:', battleBetsRegErr.message);
