@@ -4214,10 +4214,17 @@
                 }
             }
 
-            var query = rawQuery;
-            if (enrollment && enrollment.deezerQuery) {
-                query = enrollment.deezerQuery + ' ' + query;
-            }
+            // IMPORTANTE: si el usuario ya escribio algo, buscamos EXACTAMENTE eso,
+            // sin pegarle el genero adelante. Confirmado contra la API real de
+            // Deezer que "rock english bon jovi" da 0 resultados (vs 147 de "bon
+            // jovi" solo) y "rock english living" da 2 (vs 300 de "living" solo) —
+            // Deezer no interpreta esto como "genero Y texto", arruina la busqueda.
+            // El prefijo de genero (deezerQuery) solo aplica cuando el campo esta
+            // vacio, para sugerir canciones del genero sin que el usuario tipee nada.
+            var hasTypedQuery = !!(rawQuery && rawQuery.trim());
+            var query = hasTypedQuery
+                ? rawQuery
+                : (enrollment && enrollment.deezerQuery) || rawQuery;
             logFn('[searchSong] ✅ Función llamada con query:', query);
 
             if (!query || !query.trim()) {
