@@ -11,6 +11,7 @@
  * SEGURIDAD, mismo patron que el resto del proyecto:
  *  - El usuario que aposta se identifica por su token Bearer (getAuthUserFromBearer),
  *    NUNCA por un userId que venga en el body.
+ fix/battle-bets-wallet-user-resolution
  *  - El userId que realmente tiene el saldo se resuelve con resolveCreditsUserId
  *    (backend/auth-middleware.js) — el MISMO mecanismo que usa la inscripcion a
  *    torneos para cuentas con wallet vinculada. resolvePublicUserId (la version
@@ -22,6 +23,12 @@
  *  - El saldo se descuenta con deductUnifiedBalance (backend/unified-balance.js) —
  *    la MISMA fuente de balance que muestra el frontend (credits + saldo_fiat +
  *    saldo_onchain), igual que /api/credits/deduct y las inscripciones a torneo.
+
+ *  - El saldo se descuenta con deductUnifiedBalance (backend/unified-balance.js) —
+ *    la MISMA fuente de balance que muestra el frontend (credits + saldo_fiat +
+ *    saldo_onchain), igual que /api/credits/deduct y las inscripciones a torneo.
+ *    Descontar solo de user_credits.credits (como se hacia antes) causaba falsos
+ *    "Insufficient credits" en cuentas cuyo saldo esta en saldo_fiat/onchain. main
  *  - Las ganancias se acreditan con increment_user_credits (RPC atomica que ya
  *    usa el resto del sistema de creditos), nunca escribiendo la tabla directo.
  *  - /settle es idempotente: si el battleId ya tiene fila en
