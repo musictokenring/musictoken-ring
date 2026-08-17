@@ -1,21 +1,28 @@
 /**
  * 14 géneros oficiales — Express (cada 10 min) + Grand Prix semanal.
  */
+// deezerGenreId: id real del genero en la API de Deezer (GET /genre), solo para
+// los generos donde existe un calce bueno. Cuando esta presente, el buscador de
+// canciones usa el chart curado del genero (/chart/:id/tracks, catalogo mucho mas
+// grande) en vez de la busqueda de texto libre. Los generos "_en" y los latinos sin
+// genero propio en Deezer (bachata, merengue, trap, pop latino, rock en español) se
+// quedan con deezerQuery por texto porque el chart de Deezer no filtra por idioma ni
+// tiene esos subgeneros como categoria propia — ver PR de busqueda de canciones.
 const TOURNAMENT_GENRES = [
-  { id: 'reggaeton', label: 'Reggaeton', region: 'latino', emoji: '🎤', deezerQuery: 'reggaeton' },
+  { id: 'reggaeton', label: 'Reggaeton', region: 'latino', emoji: '🎤', deezerQuery: 'reggaeton', deezerGenreId: 122 },
   { id: 'pop_en', label: 'Pop en inglés', region: 'anglo', emoji: '🎵', deezerQuery: 'pop english' },
-  { id: 'salsa', label: 'Salsa', region: 'latino', emoji: '💃', deezerQuery: 'salsa' },
+  { id: 'salsa', label: 'Salsa', region: 'latino', emoji: '💃', deezerQuery: 'salsa', deezerGenreId: 67 },
   { id: 'rock_en', label: 'Rock en inglés', region: 'anglo', emoji: '🎸', deezerQuery: 'rock english' },
-  { id: 'cumbia', label: 'Cumbia', region: 'latino', emoji: '🪗', deezerQuery: 'cumbia' },
+  { id: 'cumbia', label: 'Cumbia', region: 'latino', emoji: '🪗', deezerQuery: 'cumbia', deezerGenreId: 71 },
   { id: 'hip_hop_en', label: 'Hip hop / R&B (EN)', region: 'anglo', emoji: '🎧', deezerQuery: 'hip hop english' },
-  { id: 'vallenato', label: 'Vallenato', region: 'latino', emoji: '🎹', deezerQuery: 'vallenato' },
+  { id: 'vallenato', label: 'Vallenato', region: 'latino', emoji: '🎹', deezerQuery: 'vallenato', deezerGenreId: 498 },
   { id: 'pop_latino', label: 'Pop latino', region: 'latino', emoji: '⭐', deezerQuery: 'pop latino' },
   { id: 'rock_es', label: 'Rock en español', region: 'latino', emoji: '🎸', deezerQuery: 'rock en español' },
   { id: 'electronic_en', label: 'Electrónica / EDM (EN)', region: 'anglo', emoji: '⚡', deezerQuery: 'edm electronic english' },
   { id: 'bachata', label: 'Bachata', region: 'latino', emoji: '❤️', deezerQuery: 'bachata' },
   { id: 'trap_latino', label: 'Trap latino', region: 'latino', emoji: '🔥', deezerQuery: 'trap latino' },
   { id: 'merengue', label: 'Merengue', region: 'latino', emoji: '🥁', deezerQuery: 'merengue' },
-  { id: 'regional', label: 'Regional / Corridos', region: 'latino', emoji: '🤠', deezerQuery: 'corridos regional mexican' }
+  { id: 'regional', label: 'Regional / Corridos', region: 'latino', emoji: '🤠', deezerQuery: 'corridos regional mexican', deezerGenreId: 65 }
 ];
 
 const EXPRESS_SLOT_MS = 10 * 60 * 1000;

@@ -31,20 +31,20 @@
   }
 
   var FALLBACK_GENRES = [
-    { id: 'reggaeton', label: 'Reggaeton', region: 'latino', emoji: '🎤', deezerQuery: 'reggaeton' },
+    { id: 'reggaeton', label: 'Reggaeton', region: 'latino', emoji: '🎤', deezerQuery: 'reggaeton', deezerGenreId: 122 },
     { id: 'pop_en', label: 'Pop en inglés', region: 'anglo', emoji: '🎵', deezerQuery: 'pop english' },
-    { id: 'salsa', label: 'Salsa', region: 'latino', emoji: '💃', deezerQuery: 'salsa' },
+    { id: 'salsa', label: 'Salsa', region: 'latino', emoji: '💃', deezerQuery: 'salsa', deezerGenreId: 67 },
     { id: 'rock_en', label: 'Rock en inglés', region: 'anglo', emoji: '🎸', deezerQuery: 'rock english' },
-    { id: 'cumbia', label: 'Cumbia', region: 'latino', emoji: '🪗', deezerQuery: 'cumbia' },
+    { id: 'cumbia', label: 'Cumbia', region: 'latino', emoji: '🪗', deezerQuery: 'cumbia', deezerGenreId: 71 },
     { id: 'hip_hop_en', label: 'Hip hop / R&B (EN)', region: 'anglo', emoji: '🎧', deezerQuery: 'hip hop english' },
-    { id: 'vallenato', label: 'Vallenato', region: 'latino', emoji: '🎹', deezerQuery: 'vallenato' },
+    { id: 'vallenato', label: 'Vallenato', region: 'latino', emoji: '🎹', deezerQuery: 'vallenato', deezerGenreId: 498 },
     { id: 'pop_latino', label: 'Pop latino', region: 'latino', emoji: '⭐', deezerQuery: 'pop latino' },
     { id: 'rock_es', label: 'Rock en español', region: 'latino', emoji: '🎸', deezerQuery: 'rock en español' },
     { id: 'electronic_en', label: 'Electrónica / EDM (EN)', region: 'anglo', emoji: '⚡', deezerQuery: 'edm electronic english' },
     { id: 'bachata', label: 'Bachata', region: 'latino', emoji: '❤️', deezerQuery: 'bachata' },
     { id: 'trap_latino', label: 'Trap latino', region: 'latino', emoji: '🔥', deezerQuery: 'trap latino' },
     { id: 'merengue', label: 'Merengue', region: 'latino', emoji: '🥁', deezerQuery: 'merengue' },
-    { id: 'regional', label: 'Regional / Corridos', region: 'latino', emoji: '🤠', deezerQuery: 'corridos regional mexican' }
+    { id: 'regional', label: 'Regional / Corridos', region: 'latino', emoji: '🤠', deezerQuery: 'corridos regional mexican', deezerGenreId: 65 }
   ];
 
   function buildFallbackHubData() {
@@ -447,7 +447,7 @@
 
     if (minSec > 0) {
       timerBlock =
-        '<div class="text-[10px] uppercase tracking-wider text-gray-500 mb-1">Próxima batalla (más cercana)</div>' +
+        '<div class="text-[10px] uppercase tracking-wider text-gray-500 mb-1">La batalla más cercana arranca en</div>' +
         countdownHtml(minSec, 'text-3xl');
     } else if (liveBattles > 0) {
       timerBlock =
@@ -764,6 +764,7 @@
       genreId: genre.id,
       genreLabel: genre.label,
       deezerQuery: genre.deezerQuery || genre.label,
+      deezerGenreId: genre.deezerGenreId || null,
       entryFee: Number(tournament.entry_fee),
       type: type,
       name: tournament.name,

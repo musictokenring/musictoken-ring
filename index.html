@@ -4200,23 +4200,37 @@
             var logFn = window.__originalLog || console.log;
             var errorFn = console.error;
             
-            var query = document.getElementById('songSearch').value;
-            if (window.tournamentEnrollment && window.tournamentEnrollment.deezerQuery) {
-                query = window.tournamentEnrollment.deezerQuery + ' ' + query;
+            var rawQuery = document.getElementById('songSearch').value;
+            var enrollment = window.tournamentEnrollment;
+
+            // Genero con catalogo curado en Deezer (reggaeton, salsa, cumbia,
+            // regional, vallenato) y el usuario no escribio nada especifico:
+            // usamos el chart del genero (mucho mas grande) en vez de texto libre.
+            if (enrollment && enrollment.deezerGenreId && (!rawQuery || !rawQuery.trim())) {
+                if (typeof window.searchDeezerChart === 'function') {
+                    logFn('[searchSong] ✅ Usando catálogo de género Deezer, id:', enrollment.deezerGenreId);
+                    window.searchDeezerChart(enrollment.deezerGenreId, 'searchResults', 0);
+                    return;
+                }
+            }
+
+            var query = rawQuery;
+            if (enrollment && enrollment.deezerQuery) {
+                query = enrollment.deezerQuery + ' ' + query;
             }
             logFn('[searchSong] ✅ Función llamada con query:', query);
-            
+
             if (!query || !query.trim()) {
                 logFn('[searchSong] ⚠️ Query vacío');
                 return;
             }
-            
+
             logFn('[searchSong] Verificando funciones disponibles...');
             logFn('[searchSong] searchDeezer:', typeof searchDeezer);
             logFn('[searchSong] window.searchDeezer:', typeof window.searchDeezer);
             logFn('[searchSong] displaySearchResults:', typeof displaySearchResults);
             logFn('[searchSong] window.displaySearchResults:', typeof window.displaySearchResults);
-            
+
             if (typeof window.searchDeezer === 'function') {
                 logFn('[searchSong] ✅ Llamando window.searchDeezer...');
                 window.searchDeezer(query, 'searchResults');

@@ -151,23 +151,59 @@ function stopAllPreviews() {
 // DEEZER SEARCH (JSONP)
 // =========================================
 
-function searchDeezer(query, resultsElementId = 'searchResults') {
+// Tamaño de pagina para busqueda de texto y para el chart de genero. 25 es el
+// maximo practico de una sola llamada a /search o /chart de Deezer.
+const DEEZER_PAGE_SIZE = 25;
+
+/**
+ * Muestra (o quita) el boton "Cargar más" debajo de los resultados.
+ * receivedCount >= DEEZER_PAGE_SIZE es la señal de que probablemente hay mas
+ * resultados disponibles (Deezer no manda un total confiable en /chart).
+ */
+function renderLoadMoreButton(resultsDiv, receivedCount, onClick) {
+    const existing = document.getElementById('deezerLoadMoreBtn');
+    if (existing) existing.remove();
+    if (receivedCount < DEEZER_PAGE_SIZE) return;
+
+    const btn = document.createElement('button');
+    btn.id = 'deezerLoadMoreBtn';
+    btn.type = 'button';
+    btn.textContent = '⬇️ Cargar más canciones';
+    btn.style.cssText = 'display:block; width:100%; margin-top:8px; padding:10px; text-align:center; ' +
+        'color:#22D3EE; background:rgba(34,211,238,0.08); border:1px solid rgba(34,211,238,0.3); ' +
+        'border-radius:8px; cursor:pointer;';
+    btn.onclick = function () {
+        btn.disabled = true;
+        btn.textContent = 'Cargando…';
+        onClick();
+    };
+    resultsDiv.appendChild(btn);
+}
+
+/**
+ * Busca canciones por texto libre en Deezer (busqueda genérica o de un género
+ * sin categoria propia en Deezer — ver deezerGenreId en tournament-genres.js).
+ * offset > 0 agrega resultados al final en vez de reemplazar (paginación).
+ */
+function searchDeezer(query, resultsElementId = 'searchResults', offset = 0) {
     if (!query || !query.trim()) {
         showToast('Por favor ingresa un término de búsqueda', 'error');
         return;
     }
-    
+
     const resultsDiv = document.getElementById(resultsElementId);
     if (!resultsDiv) {
         console.error('Results element not found:', resultsElementId);
         return;
     }
-    
-    resultsDiv.innerHTML = '<p style="text-align: center; padding: 20px; color: #9CA3AF;">🔍 Buscando...</p>';
-    
+
+    if (offset === 0) {
+        resultsDiv.innerHTML = '<p style="text-align: center; padding: 20px; color: #9CA3AF;">🔍 Buscando...</p>';
+    }
+
     // Create unique callback name
     const callbackName = `deezerCallback_${Date.now()}`;
-    
+
     let timeoutId = null;
 
     // Create callback function
@@ -180,39 +216,111 @@ function searchDeezer(query, resultsElementId = 'searchResults') {
         delete window[callbackName];
         const scriptEl = document.getElementById(callbackName);
         if (scriptEl) scriptEl.remove();
-        
-        if (!data.data || data.data.length === 0) {
+
+        const tracks = (data && data.data) || [];
+        if (offset === 0 && tracks.length === 0) {
             resultsDiv.innerHTML = '<p style="text-align: center; padding: 20px; color: #9CA3AF;">No se encontraron resultados</p>';
             return;
         }
-        
-        displaySearchResults(data.data, resultsDiv);
+
+        displaySearchResults(tracks, resultsDiv, offset > 0).then(() => {
+            renderLoadMoreButton(resultsDiv, tracks.length, function () {
+                searchDeezer(query, resultsElementId, offset + DEEZER_PAGE_SIZE);
+            });
+        });
     };
-    
+
     // Create script tag for JSONP request
     const script = document.createElement('script');
     script.id = callbackName;
-    script.src = `https://api.deezer.com/search?q=${encodeURIComponent(query)}&limit=6&output=jsonp&callback=${callbackName}`;
+    script.src = `https://api.deezer.com/search?q=${encodeURIComponent(query)}&limit=${DEEZER_PAGE_SIZE}&index=${offset}&output=jsonp&callback=${callbackName}`;
     script.onerror = function() {
         if (timeoutId) {
             clearTimeout(timeoutId);
             timeoutId = null;
         }
         delete window[callbackName];
-        resultsDiv.innerHTML = '<p style="text-align: center; padding: 20px; color: #EF4444;">❌ Error en la búsqueda</p>';
+        if (offset === 0) resultsDiv.innerHTML = '<p style="text-align: center; padding: 20px; color: #EF4444;">❌ Error en la búsqueda</p>';
         showToast('Error al buscar', 'error');
     };
-    
+
     document.head.appendChild(script);
 
     timeoutId = setTimeout(() => {
         delete window[callbackName];
         const scriptEl = document.getElementById(callbackName);
         if (scriptEl) scriptEl.remove();
-        resultsDiv.innerHTML = '<p style="text-align: center; padding: 20px; color: #EF4444;">⏱️ Tiempo de espera agotado</p>';
+        if (offset === 0) resultsDiv.innerHTML = '<p style="text-align: center; padding: 20px; color: #EF4444;">⏱️ Tiempo de espera agotado</p>';
         showToast('La búsqueda tardó demasiado, intenta nuevamente', 'error');
     }, 8000);
 }
+
+/**
+ * Trae el catalogo curado de un genero real de Deezer (/chart/:id/tracks) — mucho
+ * mas grande que la busqueda de texto, y sin el sesgo/ruido de un keyword. Solo
+ * aplica a los generos con deezerGenreId (ver backend/tournament-genres.js).
+ * offset > 0 agrega resultados al final en vez de reemplazar (paginación).
+ */
+function searchDeezerChart(genreId, resultsElementId = 'searchResults', offset = 0) {
+    const resultsDiv = document.getElementById(resultsElementId);
+    if (!resultsDiv) {
+        console.error('Results element not found:', resultsElementId);
+        return;
+    }
+
+    if (offset === 0) {
+        resultsDiv.innerHTML = '<p style="text-align: center; padding: 20px; color: #9CA3AF;">🔍 Cargando catálogo del género...</p>';
+    }
+
+    const callbackName = `deezerChartCallback_${Date.now()}`;
+    let timeoutId = null;
+
+    window[callbackName] = function (data) {
+        if (timeoutId) {
+            clearTimeout(timeoutId);
+            timeoutId = null;
+        }
+        delete window[callbackName];
+        const scriptEl = document.getElementById(callbackName);
+        if (scriptEl) scriptEl.remove();
+
+        const tracks = (data && data.data) || [];
+        if (offset === 0 && tracks.length === 0) {
+            resultsDiv.innerHTML = '<p style="text-align: center; padding: 20px; color: #9CA3AF;">No se encontraron resultados</p>';
+            return;
+        }
+
+        displaySearchResults(tracks, resultsDiv, offset > 0).then(() => {
+            renderLoadMoreButton(resultsDiv, tracks.length, function () {
+                searchDeezerChart(genreId, resultsElementId, offset + DEEZER_PAGE_SIZE);
+            });
+        });
+    };
+
+    const script = document.createElement('script');
+    script.id = callbackName;
+    script.src = `https://api.deezer.com/chart/${genreId}/tracks?limit=${DEEZER_PAGE_SIZE}&index=${offset}&output=jsonp&callback=${callbackName}`;
+    script.onerror = function () {
+        if (timeoutId) {
+            clearTimeout(timeoutId);
+            timeoutId = null;
+        }
+        delete window[callbackName];
+        if (offset === 0) resultsDiv.innerHTML = '<p style="text-align: center; padding: 20px; color: #EF4444;">❌ Error cargando el catálogo</p>';
+        showToast('Error al cargar canciones del género', 'error');
+    };
+
+    document.head.appendChild(script);
+
+    timeoutId = setTimeout(() => {
+        delete window[callbackName];
+        const scriptEl = document.getElementById(callbackName);
+        if (scriptEl) scriptEl.remove();
+        if (offset === 0) resultsDiv.innerHTML = '<p style="text-align: center; padding: 20px; color: #EF4444;">⏱️ Tiempo de espera agotado</p>';
+        showToast('La búsqueda tardó demasiado, intenta nuevamente', 'error');
+    }, 8000);
+}
+window.searchDeezerChart = searchDeezerChart;
 
 // =========================================
 // DISPLAY SEARCH RESULTS
@@ -253,7 +361,7 @@ function getTrackIndicator(streams, avg24h) {
     return '<span class="stream-indicator neutral">•</span>';
 }
 
-async function displaySearchResults(tracks, resultsDiv) {
+async function displaySearchResults(tracks, resultsDiv, append = false) {
     const enrichedTracks = await Promise.all(tracks.map(async (track) => {
         const streamData = await fetchTrackStreams(track.id);
         return { track, streamData };
@@ -290,7 +398,15 @@ async function displaySearchResults(tracks, resultsDiv) {
         `;
     });
 
-    resultsDiv.innerHTML = html;
+    if (append) {
+        // Quitamos el boton "Cargar más" antes de agregar la nueva tanda; se
+        // vuelve a crear en renderLoadMoreButton() con el offset actualizado.
+        const existingLoadMore = document.getElementById('deezerLoadMoreBtn');
+        if (existingLoadMore) existingLoadMore.remove();
+        resultsDiv.insertAdjacentHTML('beforeend', html);
+    } else {
+        resultsDiv.innerHTML = html;
+    }
 }
 
 function formatDeltaArrow(current, avg24h) {
