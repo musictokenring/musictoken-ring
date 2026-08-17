@@ -2959,7 +2959,7 @@ const GameEngine = {
                     <span class="text-3xl font-black text-white tabular-nums" id="battleTimer">${this.battleDuration}</span>
                     <span class="text-xs text-gray-400">seg</span>
                 </div>
-                <div class="text-sm text-gray-500">💰 Pot: ${pot} MTR</div>
+                <div class="text-sm text-gray-500" title="Lo que arriesgan los dos jugadores entre si, no incluye lo que apuesten los fans">💰 Pozo de jugadores: ${pot} MTR</div>
             </div>
 
             <div class="relative rounded-2xl overflow-hidden border border-cyan-500/20 bg-black/60 mb-6 h-[300px] sm:h-[340px] md:h-[380px]" id="battleCanvasWrap">
@@ -3031,7 +3031,8 @@ const GameEngine = {
             <div id="battleStatusText" class="text-center py-4 px-4 mb-4"></div>
 
             <div id="fanBetPanel" class="max-w-3xl mx-auto rounded-2xl border border-white/10 bg-white/5 p-4 mb-4">
-                <p class="text-center text-xs text-gray-400 uppercase tracking-widest mb-3">🎤 Apostá por tu favorito</p>
+                <p class="text-center text-xs text-gray-400 uppercase tracking-widest mb-1">🎤 Apostá por tu favorito</p>
+                <p class="text-center text-[11px] text-gray-500 mb-3">Pozo aparte del de los jugadores · se reparte 80% entre los fans del lado ganador, 10% al artista, 10% a la plataforma</p>
                 <div class="flex items-center justify-center gap-2 mb-3">
                     <span class="text-gray-400 text-sm">Monto:</span>
                     <input type="number" id="fanBetAmount" min="1" step="1" value="10"
