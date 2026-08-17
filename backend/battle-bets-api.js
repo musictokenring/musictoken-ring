@@ -11,14 +11,19 @@
  * SEGURIDAD, mismo patron que el resto del proyecto:
  *  - El usuario que aposta se identifica por su token Bearer (getAuthUserFromBearer),
  *    NUNCA por un userId que venga en el body.
- *  - Los creditos se descuentan con decrement_user_credits / se acreditan con
- *    increment_user_credits (las mismas funciones RPC atomicas que ya usa
- *    el resto del sistema de creditos), nunca escribiendo la tabla directo.
+ *  - El saldo se descuenta con deductUnifiedBalance (backend/unified-balance.js) —
+ *    la MISMA fuente de balance que muestra el frontend (credits + saldo_fiat +
+ *    saldo_onchain), igual que /api/credits/deduct y las inscripciones a torneo.
+ *    Descontar solo de user_credits.credits (como se hacia antes) causaba falsos
+ *    "Insufficient credits" en cuentas cuyo saldo esta en saldo_fiat/onchain.
+ *  - Las ganancias se acreditan con increment_user_credits (RPC atomica que ya
+ *    usa el resto del sistema de creditos), nunca escribiendo la tabla directo.
  *  - /settle es idempotente: si el battleId ya tiene fila en
  *    battle_settlements, se rechaza (no se puede liquidar dos veces).
  */
 const { getAuthUserFromBearer, resolvePublicUserId, requireInternalSecret } = require('./auth-middleware');
 const { computeSettlement } = require('./battle-settlement');
+const { deductUnifiedBalance } = require('./unified-balance');
 
 function makePlaceBetHandler(supabase) {
   return async function placeBetHandler(req, res) {
@@ -53,26 +58,16 @@ function makePlaceBetHandler(supabase) {
         return res.status(409).json({ ok: false, error: 'This battle is already settled; no more bets accepted' });
       }
 
-      // Descuenta credits de forma atomica ANTES de registrar la apuesta.
-      // decrement_user_credits ya usa GREATEST(0, credits - amount) --
-      // verificamos el saldo resultante para saber si realmente alcanzaba.
-      const { data: beforeRow } = await supabase
-        .from('user_credits')
-        .select('credits')
-        .eq('user_id', userId)
-        .maybeSingle();
-      const balanceBefore = Number(beforeRow?.credits || 0);
-      if (balanceBefore < numericAmount) {
-        return res.status(402).json({ ok: false, error: 'Insufficient credits' });
-      }
-
-      const { error: decError } = await supabase.rpc('decrement_user_credits', {
-        user_id_param: userId,
-        credits_to_subtract: numericAmount
-      });
-      if (decError) {
-        console.error('[battle-bets] decrement_user_credits failed:', decError);
-        return res.status(500).json({ ok: false, error: 'Failed to reserve credits' });
+      // Descuenta del balance unificado (credits + saldo_fiat + saldo_onchain,
+      // misma fuente que el header del frontend) de forma atomica ANTES de
+      // registrar la apuesta.
+      const deduction = await deductUnifiedBalance(supabase, userId, numericAmount);
+      if (!deduction.ok) {
+        return res.status(402).json({
+          ok: false,
+          error: deduction.error || 'Insufficient credits',
+          total_balance: deduction.total
+        });
       }
 
       const { data: bet, error: insertError } = await supabase
