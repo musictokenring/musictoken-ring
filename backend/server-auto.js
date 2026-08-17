@@ -2411,8 +2411,8 @@ app.post('/api/deposit/mercadopago/create', (req, res) => {
 
 try {
     const { registerPrizeRoutes } = require('./prize-api');
-    registerPrizeRoutes(app);
-    console.log('[server] Registered POST /api/prizes/send');
+    registerPrizeRoutes(app, supabase);
+    console.log('[server] Registered POST /api/prizes/send (wallet validado contra participantes del match)');
 } catch (prizeRegErr) {
     console.warn('[server] Prize routes not registered:', prizeRegErr.message);
 }
