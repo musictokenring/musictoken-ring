@@ -3970,18 +3970,35 @@ const GameEngine = {
         if (btn2) btn2.addEventListener('click', function () { self.placeFanBet(match, 'player2'); });
     },
 
+    /**
+     * Id de batalla para el sistema de apuestas de fans. Las batallas 1v1 fuera
+     * de torneo (Modo Rapido, Practica) usan el UUID real de la tabla matches
+     * (match.id). Las batallas de torneo Express/Grand Prix NO tienen fila
+     * propia en la base -- se simulan dentro de tournaments.bracket_state, y
+     * match.id ahi es solo una etiqueta local del bracket (ej. "r2m1", se
+     * repite en cada torneo). Por eso para torneos combinamos con
+     * match.tournament_id (ese si es un UUID real y unico) para que el
+     * battle_id sea unico y estable por duelo. Ver supabase/migrations/
+     * 012_battle_bets_battle_id_text.sql (battle_id es TEXT, no UUID).
+     */
+    getFanBetBattleId(match) {
+        if (!match || !match.id) return null;
+        return match.tournament_id ? (match.tournament_id + ':' + match.id) : match.id;
+    },
+
     async placeFanBet(match, side) {
         var statusEl = document.getElementById('fanBetStatus');
         var amountInput = document.getElementById('fanBetAmount');
         var btn1 = document.getElementById('fanBetPlayer1Btn');
         var btn2 = document.getElementById('fanBetPlayer2Btn');
         var amount = Number(amountInput ? amountInput.value : 0);
+        var battleId = this.getFanBetBattleId(match);
 
         if (!Number.isFinite(amount) || amount <= 0) {
             showToast('Ingresá un monto válido para apostar', 'error');
             return;
         }
-        if (!match || !match.id) {
+        if (!battleId) {
             showToast('No se pudo identificar la batalla', 'error');
             return;
         }
@@ -3992,7 +4009,7 @@ const GameEngine = {
 
         try {
             var backendUrl = window.CONFIG?.BACKEND_API || window.CreditsSystem?.backendUrl || 'https://musictoken-ring.onrender.com';
-            var res = await fetch(backendUrl + '/api/battles/' + match.id + '/bet', {
+            var res = await fetch(backendUrl + '/api/battles/' + encodeURIComponent(battleId) + '/bet', {
                 method: 'POST',
                 headers: await this.getBackendAuthHeaders(),
                 body: JSON.stringify({ side: side, amount: amount, walletAddress: window.connectedAddress || null })
