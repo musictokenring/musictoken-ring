@@ -184,27 +184,28 @@ async function verifyUserCanMutateCredits(
 
   if (walletAddress && userId && /^0x[a-fA-F0-9]{40}$/.test(walletAddress)) {
     const normalized = walletAddress.toLowerCase();
-    const ownsWallet = await userOwnsWallet(
-      supabase,
-      walletLinkAdapter,
-      publicUserId,
-      walletAddress
-    );
 
-    if (ownsWallet) {
-      if (walletLinkAdapter?.getUserIdFromWallet) {
-        const linkedUserId = await walletLinkAdapter.getUserIdFromWallet(normalized);
-        if (linkedUserId === userId) return true;
-      }
-
-      const { data: walletUser } = await supabase
-        .from('users')
-        .select('id')
-        .ilike('wallet_address', normalized)
-        .maybeSingle();
-
-      if (walletUser?.id === userId) return true;
+    // CRITICO: la wallet debe resolver directo al userId que se esta mutando.
+    // NO exigimos ademas que esa wallet este vinculada a publicUserId (el id
+    // de auth crudo) -- eso es precisamente lo que NUNCA es cierto en cuentas
+    // con wallet vinculada, donde el id de creditos (userId, resuelto por
+    // resolveCreditsUserId) es distinto del id de auth. El gate anterior via
+    // userOwnsWallet(publicUserId) rechazaba con 403 SIEMPRE para esas
+    // cuentas (encontrado con Desafio Social: 'No se pudieron descontar
+    // creditos' pese a tener saldo de sobra). Mismo patron ya corregido para
+    // battle-bets y el perfil del jugador.
+    if (walletLinkAdapter?.getUserIdFromWallet) {
+      const linkedUserId = await walletLinkAdapter.getUserIdFromWallet(normalized);
+      if (linkedUserId === userId) return true;
     }
+
+    const { data: walletUser } = await supabase
+      .from('users')
+      .select('id')
+      .ilike('wallet_address', normalized)
+      .maybeSingle();
+
+    if (walletUser?.id === userId) return true;
   }
 
   if (walletAddress) {
