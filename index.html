@@ -6810,6 +6810,67 @@
         });
         window.addEventListener('focus', trySyncWalletConnectOnFocus);
 
+        // CRÍTICO (movil): en iOS, cambiar a la app de la wallet (MetaMask,
+        // etc.) para aprobar la conexión suele hacer que Chrome/Safari
+        // RECARGUE la pestaña entera al volver (por presión de memoria al
+        // tener otra app pesada abierta) -- se pierde TODO el estado de JS,
+        // incluido walletConnectProvider, así que el resync de
+        // visibilitychange de arriba no alcanza (arranca de cero).
+        //
+        // WalletConnect SÍ persiste la sesión aprobada en IndexedDB
+        // (WALLET_CONNECT_V2_INDEXED_DB), que sobrevive la recarga. El
+        // problema es que nada la revisaba al cargar la página -- solo se
+        // inicializaba el provider cuando el usuario tocaba "Conectar
+        // Wallet". Este intento silencioso, al cargar, restaura la sesión
+        // sola si ya existe, sin mostrar QR ni pedir nada de nuevo.
+        async function tryRestoreWalletConnectSession() {
+            if (connectedAddress || walletConnectProvider) return; // ya conectado por otra via
+
+            var EP = null;
+            for (var i = 0; i < 15; i++) { // hasta 3s esperando que cargue el SDK
+                EP = getEthereumProviderClass();
+                if (EP) break;
+                await new Promise(function (r) { setTimeout(r, 200); });
+            }
+            if (!EP) return;
+
+            try {
+                var provider = await EP.init({
+                    projectId: CONFIG.WALLETCONNECT_PROJECT_ID,
+                    chains: [8453],
+                    optionalChains: [1, 137, 56],
+                    metadata: {
+                        name: 'MusicToken Ring',
+                        description: 'Music Battle Arena',
+                        url: window.location.origin,
+                        icons: ['https://pink-blank-vicuna-260.mypinata.cloud/ipfs/bafybeie24pisqmw6teijdng4flzjwumgwpesilowjxq3kww3p7kxlmuywm']
+                    },
+                    showQrModal: false
+                });
+
+                if (connectedAddress) return; // se conecto por otra via mientras esperabamos
+
+                walletConnectProvider = provider;
+                provider.on('connect', function () { handleWalletConnectSuccess(); });
+                provider.on('disconnect', function () { walletConnectProvider = null; });
+
+                if (provider.accounts && provider.accounts.length > 0) {
+                    console.log('[wallet] ✅ Sesión de WalletConnect restaurada desde almacenamiento local');
+                    await handleWalletConnectSuccess();
+                }
+            } catch (e) {
+                console.warn('[wallet] No se pudo restaurar sesión de WalletConnect:', e);
+            }
+        }
+
+        if (document.readyState === 'complete') {
+            setTimeout(tryRestoreWalletConnectSession, 500);
+        } else {
+            window.addEventListener('load', function () {
+                setTimeout(tryRestoreWalletConnectSession, 500);
+            });
+        }
+
         // Cerrar modal de QR de Binance
         window.closeBinanceQRModal = function closeBinanceQRModal() {
             var modal = document.getElementById('binanceQRModal');
