@@ -6286,6 +6286,92 @@
             }
         }
 
+        // CRÍTICO: única puerta de entrada para crear el provider de
+        // WalletConnect. Antes había DOS lugares que podían llamar
+        // EthereumProvider.init() por separado (la restauración silenciosa al
+        // cargar la página, y showWalletConnectQR al tocar "Conectar Wallet")
+        // -- si ambos corrían casi al mismo tiempo (ej. el usuario toca
+        // "Conectar" apenas carga la página) se creaban DOS instancias
+        // distintas del provider, cada una con su propio pairing, y la que
+        // terminaba aprobada por la wallet no era necesariamente con la que
+        // el resto del código seguía interactuando. Con walletConnectInitPromise
+        // compartida, la segunda llamada espera y reutiliza el mismo resultado
+        // en vez de iniciar una segunda conexión en paralelo.
+        var walletConnectInitPromise = null;
+        function ensureWalletConnectProvider() {
+            if (walletConnectProvider) return Promise.resolve(walletConnectProvider);
+            if (!walletConnectInitPromise) {
+                walletConnectInitPromise = (async function () {
+                    var EP = getEthereumProviderClass();
+                    if (!EP) throw new Error('WalletConnect SDK no disponible todavía');
+                    var provider = await EP.init({
+                        projectId: CONFIG.WALLETCONNECT_PROJECT_ID,
+                        chains: [8453], // Base chain
+                        optionalChains: [1, 137, 56], // Ethereum, Polygon, BSC
+                        metadata: {
+                            name: 'MusicToken Ring',
+                            description: 'Music Battle Arena',
+                            url: window.location.origin,
+                            icons: ['https://pink-blank-vicuna-260.mypinata.cloud/ipfs/bafybeie24pisqmw6teijdng4flzjwumgwpesilowjxq3kww3p7kxlmuywm'],
+                            // CRÍTICO (móvil): sin esto, la wallet no sabe cómo
+                            // volver sola a esta pestaña después de aprobar --
+                            // te deja parado en su propia pantalla de inicio en
+                            // vez de regresarte automáticamente. Usamos la URL
+                            // completa (no solo el origin) para volver a la
+                            // misma vista en la que estabas, no a la portada.
+                            redirect: { universal: window.location.href }
+                        },
+                        showQrModal: false // Manejar QR manualmente como Aerodrome
+                    });
+                    walletConnectProvider = provider;
+                    return provider;
+                })();
+            }
+            return walletConnectInitPromise;
+        }
+
+        // Engancha los listeners UNA sola vez por instancia de provider (marca
+        // __mtrListenersAttached), sin importar desde dónde se llame -- así
+        // tanto showWalletConnectQR como la restauración silenciosa quedan
+        // escuchando exactamente los mismos eventos, en vez de cada una
+        // enganchando su propio subconjunto por separado (lo que antes hacía
+        // que a veces quedaran dos listeners de 'connect' distintos en el
+        // mismo provider).
+        function ensureWalletConnectListeners(provider) {
+            if (!provider || provider.__mtrListenersAttached) return;
+            provider.__mtrListenersAttached = true;
+
+            provider.on('display_uri', function (uri) {
+                console.log('[wallet] 📡 Evento display_uri capturado');
+                handleWalletConnectURI(uri);
+            });
+            provider.on('uri', function (uri) {
+                console.log('[wallet] 📡 Evento uri capturado');
+                handleWalletConnectURI(uri);
+            });
+            provider.on('*', function (event, data) {
+                console.log('[wallet] 📡 Evento genérico:', event, data);
+                if (event === 'display_uri' || event === 'uri') {
+                    handleWalletConnectURI(data);
+                }
+            });
+            provider.on('connect', function () {
+                console.log('[wallet] ✅ WalletConnect connected');
+                handleWalletConnectSuccess();
+            });
+            provider.on('disconnect', function () {
+                console.log('[wallet] WalletConnect disconnected');
+                walletConnectProvider = null;
+                walletConnectInitPromise = null;
+            });
+            provider.on('session_event', function (event) {
+                console.log('[wallet] WalletConnect session event:', event);
+            });
+            provider.on('session_delete', function () {
+                console.log('[wallet] Session deleted');
+            });
+        }
+
         // Mostrar QR code para conectar Binance Wallet usando WalletConnect v2
         // Conecta cualquier wallet vía WalletConnect (QR / deep link propio) sin
         // nunca navegar fuera de la pestaña actual -- a diferencia de los deep
@@ -6341,91 +6427,24 @@
                     return;
                 }
 
-                // Crear el provider de WalletConnect si todavía no existe. OJO:
-                // puede que YA exista sin necesidad de crear uno acá -- lo pudo
-                // haber inicializado tryRestoreWalletConnectSession() en
-                // silencio al cargar la página (para restaurar una sesión
-                // previa). En ese caso el provider existe pero TODAVÍA no tiene
-                // enganchados los listeners de display_uri/uri (los que
-                // muestran el QR) -- por eso el enganche de listeners está
-                // separado de la creación, más abajo, y corre siempre que haga
-                // falta, no solo cuando se crea un provider nuevo.
-                if (!walletConnectProvider) {
-                    console.log('[wallet] Inicializando WalletConnect provider (método Aerodrome)...');
-                    try {
-                        walletConnectProvider = await getEthereumProviderClass().init({
-                            projectId: CONFIG.WALLETCONNECT_PROJECT_ID,
-                            chains: [8453], // Base chain
-                            optionalChains: [1, 137, 56], // Ethereum, Polygon, BSC
-                            metadata: {
-                                name: 'MusicToken Ring',
-                                description: 'Music Battle Arena',
-                                url: window.location.origin,
-                                icons: ['https://pink-blank-vicuna-260.mypinata.cloud/ipfs/bafybeie24pisqmw6teijdng4flzjwumgwpesilowjxq3kww3p7kxlmuywm'],
-                                // CRÍTICO (móvil): sin esto, la wallet no sabe cómo
-                                // volver sola a esta pestaña después de aprobar --
-                                // te deja parado en su propia pantalla de inicio
-                                // ("ahora podés volver a la app") en vez de
-                                // regresarte automáticamente.
-                                redirect: { universal: window.location.origin }
-                            },
-                            showQrModal: false // Manejar QR manualmente como Aerodrome
-                        });
-                        console.log('[wallet] ✅ Provider inicializado correctamente');
-                    } catch (initError) {
-                        console.error('[wallet] ❌ Error al inicializar provider:', initError);
-                        throw initError;
-                    }
+                // Crear el provider (o reutilizar el que ya haya, incluso si lo
+                // esta creando en paralelo tryRestoreWalletConnectSession --
+                // ensureWalletConnectProvider() comparte la misma promesa para
+                // que nunca se creen dos instancias distintas) y enganchar los
+                // listeners si todavia no lo estan en esta instancia.
+                try {
+                    walletConnectProvider = await ensureWalletConnectProvider();
+                    console.log('[wallet] ✅ Provider listo');
+                } catch (initError) {
+                    console.error('[wallet] ❌ Error al inicializar provider:', initError);
+                    throw initError;
                 }
 
-                // Verificar que el provider tenga los métodos necesarios
                 if (!walletConnectProvider.on || !walletConnectProvider.connect) {
                     throw new Error('Provider no tiene métodos necesarios');
                 }
 
-                // Enganchar los listeners UNA sola vez por instancia de provider
-                // (marcamos con __mtrListenersAttached), sin importar si el
-                // provider se acaba de crear arriba o ya existia de antes.
-                if (!walletConnectProvider.__mtrListenersAttached) {
-                    walletConnectProvider.__mtrListenersAttached = true;
-
-                    walletConnectProvider.on('display_uri', function(uri) {
-                        console.log('[wallet] 📡 Evento display_uri capturado');
-                        handleWalletConnectURI(uri);
-                    });
-
-                    // También escuchar 'uri' event (algunas versiones usan este)
-                    walletConnectProvider.on('uri', function(uri) {
-                        console.log('[wallet] 📡 Evento uri capturado');
-                        handleWalletConnectURI(uri);
-                    });
-
-                    // Escuchar todos los eventos para debugging
-                    walletConnectProvider.on('*', function(event, data) {
-                        console.log('[wallet] 📡 Evento genérico:', event, data);
-                        if (event === 'display_uri' || event === 'uri') {
-                            handleWalletConnectURI(data);
-                        }
-                    });
-
-                    walletConnectProvider.on('connect', function() {
-                        console.log('[wallet] ✅ WalletConnect connected');
-                        handleWalletConnectSuccess();
-                    });
-
-                    walletConnectProvider.on('disconnect', function() {
-                        console.log('[wallet] WalletConnect disconnected');
-                        walletConnectProvider = null;
-                    });
-
-                    walletConnectProvider.on('session_event', function(event) {
-                        console.log('[wallet] WalletConnect session event:', event);
-                    });
-
-                    walletConnectProvider.on('session_delete', function() {
-                        console.log('[wallet] Session deleted');
-                    });
-                }
+                ensureWalletConnectListeners(walletConnectProvider);
 
                 // Se resetea en cada llamada a showWalletConnectQR (no al
                 // enganchar listeners, que solo pasa una vez) para que un
@@ -6832,6 +6851,11 @@
             if (!document.hidden) trySyncWalletConnectOnFocus();
         });
         window.addEventListener('focus', trySyncWalletConnectOnFocus);
+        // 'pageshow' dispara siempre que la página se muestra, incluso al
+        // volver desde el cache de retroceso de Safari (bfcache) tras la
+        // redirección de la wallet -- casos donde visibilitychange/focus a
+        // veces no llegan a dispararse a tiempo.
+        window.addEventListener('pageshow', trySyncWalletConnectOnFocus);
 
         // CRÍTICO (movil): en iOS, cambiar a la app de la wallet (MetaMask,
         // etc.) para aprobar la conexión suele hacer que Chrome/Safari
@@ -6858,25 +6882,10 @@
             if (!EP) return;
 
             try {
-                var provider = await EP.init({
-                    projectId: CONFIG.WALLETCONNECT_PROJECT_ID,
-                    chains: [8453],
-                    optionalChains: [1, 137, 56],
-                    metadata: {
-                        name: 'MusicToken Ring',
-                        description: 'Music Battle Arena',
-                        url: window.location.origin,
-                        icons: ['https://pink-blank-vicuna-260.mypinata.cloud/ipfs/bafybeie24pisqmw6teijdng4flzjwumgwpesilowjxq3kww3p7kxlmuywm'],
-                        redirect: { universal: window.location.origin }
-                    },
-                    showQrModal: false
-                });
-
+                var provider = await ensureWalletConnectProvider();
                 if (connectedAddress) return; // se conecto por otra via mientras esperabamos
 
-                walletConnectProvider = provider;
-                provider.on('connect', function () { handleWalletConnectSuccess(); });
-                provider.on('disconnect', function () { walletConnectProvider = null; });
+                ensureWalletConnectListeners(provider);
 
                 if (provider.accounts && provider.accounts.length > 0) {
                     console.log('[wallet] ✅ Sesión de WalletConnect restaurada desde almacenamiento local');
