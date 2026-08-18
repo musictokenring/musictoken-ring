@@ -6782,17 +6782,26 @@
                             <button onclick="closeBinanceQRModal()" class="text-gray-400 hover:text-white text-2xl leading-none">&times;</button>
                         </div>
                         <p class="text-gray-400 text-sm mb-4 text-center">WalletConnect no está disponible</p>
+
+                        <div class="mb-4 p-3 rounded-lg bg-amber-500/10 border border-amber-500/30">
+                            <p class="text-amber-300 text-xs font-semibold mb-2">⚠️ Causa más común: estás abriendo este enlace adentro de otra app (WhatsApp, Instagram, etc.), y ese navegador interno bloquea la conexión de wallets.</p>
+                            <button id="wcCopyLinkBtn" onclick="copyPageLinkForBrowser()" class="w-full px-4 py-2 bg-amber-500 hover:bg-amber-600 text-black font-semibold rounded-lg text-sm transition">
+                                📋 Copiar enlace para abrir en Chrome/Safari
+                            </button>
+                            <p class="text-amber-200/70 text-[11px] mt-2 text-center">Pegalo en tu navegador normal (no en esta app) y volvé a intentar conectar</p>
+                        </div>
+
                         <div class="space-y-3">
-                            <p class="text-gray-300 text-sm font-semibold">Opción 1: Usar ${fallbackWalletName} directamente</p>
+                            <p class="text-gray-300 text-sm font-semibold">Opción 2: Usar ${fallbackWalletName} directamente</p>
                             <ol class="text-gray-400 text-xs space-y-2 list-decimal list-inside mb-4">
                                 <li>Abre ${fallbackWalletName} en tu móvil</li>
                                 <li>Ve a la sección "dApps" o "Explorar"</li>
                                 <li>Busca "MusicToken Ring" o visita: <span class="text-cyan-400 break-all">musictokenring.xyz</span></li>
                             </ol>
 
-                            <p class="text-gray-300 text-sm font-semibold">Opción 2: Usar otra wallet</p>
+                            <p class="text-gray-300 text-sm font-semibold">Opción 3: Usar otra wallet</p>
                             <p class="text-gray-400 text-xs mb-4">Puedes usar MetaMask, Trust Wallet u otra wallet compatible</p>
-                            
+
                             <div class="flex gap-2">
                                 <button onclick="closeBinanceQRModal(); showMobileWalletModal();" class="flex-1 px-4 py-2 bg-cyan-500/20 border border-cyan-500/50 rounded text-cyan-400 text-sm hover:bg-cyan-500/30 transition">
                                     Ver otras wallets
@@ -6805,15 +6814,62 @@
                     </div>
                 `;
                 document.body.appendChild(modal);
-                
+
                 modal.addEventListener('click', function(e) {
                     if (e.target === modal) {
                         closeBinanceQRModal();
                     }
                 });
             }
-            
+
             modal.classList.remove('hidden');
+        }
+
+        // Copia la URL actual (limpia de hash/parametros de sesion) para pegarla
+        // en un navegador de verdad -- WalletConnect necesita WebSockets, que
+        // varios navegadores internos de apps (WhatsApp, Instagram, etc.)
+        // bloquean o restringen, y ahi nunca llega a conectar.
+        window.copyPageLinkForBrowser = function copyPageLinkForBrowser() {
+            var link = window.location.origin + window.location.pathname;
+            var btn = document.getElementById('wcCopyLinkBtn');
+
+            function markCopied() {
+                if (typeof showToast === 'function') {
+                    showToast('Enlace copiado. Pegalo en Chrome/Safari.', 'success');
+                }
+                if (btn) {
+                    var original = btn.textContent;
+                    btn.textContent = '✅ Copiado';
+                    setTimeout(function() { btn.textContent = original; }, 2000);
+                }
+            }
+
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(link).then(markCopied).catch(function() {
+                    fallbackCopyLink(link, markCopied);
+                });
+            } else {
+                fallbackCopyLink(link, markCopied);
+            }
+        };
+
+        function fallbackCopyLink(link, onSuccess) {
+            try {
+                var tmpInput = document.createElement('input');
+                tmpInput.value = link;
+                tmpInput.style.position = 'fixed';
+                tmpInput.style.opacity = '0';
+                document.body.appendChild(tmpInput);
+                tmpInput.select();
+                tmpInput.setSelectionRange(0, 99999);
+                document.execCommand('copy');
+                document.body.removeChild(tmpInput);
+                onSuccess();
+            } catch (e) {
+                if (typeof showToast === 'function') {
+                    showToast('No se pudo copiar. Copiá manualmente: ' + link, 'info');
+                }
+            }
         }
 
         // Copiar URI de WalletConnect al portapapeles
