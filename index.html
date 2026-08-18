@@ -6272,6 +6272,20 @@
             }
         };
 
+        // Compartido entre reintentos: si un provider ya tiene los listeners
+        // enganchados (ver showWalletConnectQR), __mtrWcUriReceived se resetea
+        // en cada llamada para permitir mostrar un URI nuevo en un reintento,
+        // sin volver a enganchar los listeners (eso pasa una sola vez).
+        var __mtrWcUriReceived = false;
+        function handleWalletConnectURI(uri) {
+            if (__mtrWcUriReceived) return; // Evitar múltiples llamadas
+            __mtrWcUriReceived = true;
+            console.log('[wallet] ✅✅✅ URI recibido:', uri ? uri.substring(0, 50) + '...' : 'null');
+            if (uri) {
+                displayQRCodeModal(uri);
+            }
+        }
+
         // Mostrar QR code para conectar Binance Wallet usando WalletConnect v2
         // Conecta cualquier wallet vía WalletConnect (QR / deep link propio) sin
         // nunca navegar fuera de la pestaña actual -- a diferencia de los deep
@@ -6327,10 +6341,17 @@
                     return;
                 }
 
-                // Crear o reutilizar el provider de WalletConnect - Método similar a Aerodrome
+                // Crear el provider de WalletConnect si todavía no existe. OJO:
+                // puede que YA exista sin necesidad de crear uno acá -- lo pudo
+                // haber inicializado tryRestoreWalletConnectSession() en
+                // silencio al cargar la página (para restaurar una sesión
+                // previa). En ese caso el provider existe pero TODAVÍA no tiene
+                // enganchados los listeners de display_uri/uri (los que
+                // muestran el QR) -- por eso el enganche de listeners está
+                // separado de la creación, más abajo, y corre siempre que haga
+                // falta, no solo cuando se crea un provider nuevo.
                 if (!walletConnectProvider) {
                     console.log('[wallet] Inicializando WalletConnect provider (método Aerodrome)...');
-                    
                     try {
                         walletConnectProvider = await getEthereumProviderClass().init({
                             projectId: CONFIG.WALLETCONNECT_PROJECT_ID,
@@ -6345,69 +6366,65 @@
                             showQrModal: false // Manejar QR manualmente como Aerodrome
                         });
                         console.log('[wallet] ✅ Provider inicializado correctamente');
-                        
-                        // Verificar que el provider tenga los métodos necesarios
-                        if (!walletConnectProvider.on || !walletConnectProvider.connect) {
-                            throw new Error('Provider no tiene métodos necesarios');
-                        }
-
-                        // Escuchar eventos de conexión ANTES de llamar a connect() - CRÍTICO
-                        // Múltiples listeners para asegurar que capturamos el URI
-                        var uriReceived = false;
-                        
-                        function handleURI(uri) {
-                            if (uriReceived) return; // Evitar múltiples llamadas
-                            uriReceived = true;
-                            console.log('[wallet] ✅✅✅ URI recibido:', uri ? uri.substring(0, 50) + '...' : 'null');
-                            if (uri) {
-                                displayQRCodeModal(uri);
-                            }
-                        }
-                        
-                        // Listener 1: display_uri event (método estándar)
-                        walletConnectProvider.on('display_uri', function(uri) {
-                            console.log('[wallet] 📡 Evento display_uri capturado');
-                            handleURI(uri);
-                        });
-                        
-                        // Listener 2: También escuchar 'uri' event (algunas versiones usan este)
-                        walletConnectProvider.on('uri', function(uri) {
-                            console.log('[wallet] 📡 Evento uri capturado');
-                            handleURI(uri);
-                        });
-                        
-                        // Listener 3: Escuchar todos los eventos para debugging
-                        walletConnectProvider.on('*', function(event, data) {
-                            console.log('[wallet] 📡 Evento genérico:', event, data);
-                            if (event === 'display_uri' || event === 'uri') {
-                                handleURI(data);
-                            }
-                        });
-                        
-                        walletConnectProvider.on('connect', function() {
-                            console.log('[wallet] ✅ WalletConnect connected');
-                            handleWalletConnectSuccess();
-                        });
-
-                        walletConnectProvider.on('disconnect', function() {
-                            console.log('[wallet] WalletConnect disconnected');
-                            walletConnectProvider = null;
-                        });
-
-                        walletConnectProvider.on('session_event', function(event) {
-                            console.log('[wallet] WalletConnect session event:', event);
-                        });
-                        
-                        // También escuchar errores
-                        walletConnectProvider.on('session_delete', function() {
-                            console.log('[wallet] Session deleted');
-                        });
-                        
                     } catch (initError) {
                         console.error('[wallet] ❌ Error al inicializar provider:', initError);
                         throw initError;
                     }
                 }
+
+                // Verificar que el provider tenga los métodos necesarios
+                if (!walletConnectProvider.on || !walletConnectProvider.connect) {
+                    throw new Error('Provider no tiene métodos necesarios');
+                }
+
+                // Enganchar los listeners UNA sola vez por instancia de provider
+                // (marcamos con __mtrListenersAttached), sin importar si el
+                // provider se acaba de crear arriba o ya existia de antes.
+                if (!walletConnectProvider.__mtrListenersAttached) {
+                    walletConnectProvider.__mtrListenersAttached = true;
+
+                    walletConnectProvider.on('display_uri', function(uri) {
+                        console.log('[wallet] 📡 Evento display_uri capturado');
+                        handleWalletConnectURI(uri);
+                    });
+
+                    // También escuchar 'uri' event (algunas versiones usan este)
+                    walletConnectProvider.on('uri', function(uri) {
+                        console.log('[wallet] 📡 Evento uri capturado');
+                        handleWalletConnectURI(uri);
+                    });
+
+                    // Escuchar todos los eventos para debugging
+                    walletConnectProvider.on('*', function(event, data) {
+                        console.log('[wallet] 📡 Evento genérico:', event, data);
+                        if (event === 'display_uri' || event === 'uri') {
+                            handleWalletConnectURI(data);
+                        }
+                    });
+
+                    walletConnectProvider.on('connect', function() {
+                        console.log('[wallet] ✅ WalletConnect connected');
+                        handleWalletConnectSuccess();
+                    });
+
+                    walletConnectProvider.on('disconnect', function() {
+                        console.log('[wallet] WalletConnect disconnected');
+                        walletConnectProvider = null;
+                    });
+
+                    walletConnectProvider.on('session_event', function(event) {
+                        console.log('[wallet] WalletConnect session event:', event);
+                    });
+
+                    walletConnectProvider.on('session_delete', function() {
+                        console.log('[wallet] Session deleted');
+                    });
+                }
+
+                // Se resetea en cada llamada a showWalletConnectQR (no al
+                // enganchar listeners, que solo pasa una vez) para que un
+                // reintento con el mismo provider pueda mostrar un QR nuevo.
+                __mtrWcUriReceived = false;
 
                 // Variable para rastrear si el QR apareció
                 var qrShown = false;
