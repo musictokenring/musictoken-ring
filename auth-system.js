@@ -607,13 +607,29 @@ async function loadPlayerProfile(user) {
         let battleHistory = [];
         let userStats = null;
 
+        // CRÍTICO: en cuentas con wallet vinculada, las batallas/torneos se
+        // registran con el id del usuario RESUELTO por wallet (el mismo que usa
+        // deductUnifiedBalance/resolveCreditsUserId en el backend), que puede ser
+        // distinto de user.id (el id de auth de Supabase). Si solo filtramos por
+        // user.id el historial sale vacío aunque el jugador sí haya jugado.
+        // window.CreditsSystem.currentUserId ya trae ese id resuelto (lo carga
+        // /api/user/credits/:walletAddress, la misma fuente que el saldo del
+        // header) cuando estamos viendo el perfil propio.
+        var statsUserIds = [user.id];
+        if (useCreditsSystemBalance &&
+            typeof window.CreditsSystem !== 'undefined' &&
+            window.CreditsSystem.currentUserId &&
+            window.CreditsSystem.currentUserId !== user.id) {
+            statsUserIds.push(window.CreditsSystem.currentUserId);
+        }
+
         const { data: historyData, error: historyError } = await supabaseClient
             .from('player_battle_history')
             .select(
                 'id, battle_kind, battle_mode, source_id, result, opponent_label, ' +
                 'song_name, song_artist, credits_wagered, credits_won, placement, event_label, played_at'
             )
-            .eq('user_id', user.id)
+            .in('user_id', statsUserIds)
             .order('played_at', { ascending: false })
             .limit(200);
 
@@ -624,10 +640,13 @@ async function loadPlayerProfile(user) {
         }
 
         if (!battleHistory.length) {
+            const orClause = statsUserIds
+                .map((id) => `player1_id.eq.${id},player2_id.eq.${id}`)
+                .join(',');
             const { data: matchesData, error: matchesError } = await supabaseClient
                 .from('matches')
                 .select('id, winner, match_type, player1_id, player2_id, player1_bet, player2_bet, finished_at, status')
-                .or(`player1_id.eq.${user.id},player2_id.eq.${user.id}`)
+                .or(orClause)
                 .eq('status', 'finished')
                 .neq('match_type', 'practice')
                 .order('finished_at', { ascending: false })
@@ -635,7 +654,7 @@ async function loadPlayerProfile(user) {
 
             if (!matchesError && matchesData?.length) {
                 battleHistory = matchesData.map((m) => {
-                    const isP1 = m.player1_id === user.id;
+                    const isP1 = statsUserIds.includes(m.player1_id);
                     const won = (isP1 && m.winner === 1) || (!isP1 && m.winner === 2);
                     return {
                         id: m.id,
@@ -655,12 +674,27 @@ async function loadPlayerProfile(user) {
         }
 
         try {
-            const { data: statsRow } = await supabaseClient
+            const { data: statsRows } = await supabaseClient
                 .from('users')
-                .select('total_matches, total_wins, total_losses, total_credits_won, total_streams, total_wagered')
-                .eq('id', user.id)
-                .maybeSingle();
-            userStats = statsRow || null;
+                .select('id, total_matches, total_wins, total_losses, total_credits_won, total_streams, total_wagered')
+                .in('id', statsUserIds);
+            // Puede haber una fila de stats por cada id candidato (auth id vs id
+            // vinculado a la wallet); nos quedamos con el maximo de cada campo en
+            // vez de una sola fila, para no perder progreso que quedo registrado
+            // bajo el otro id.
+            if (statsRows && statsRows.length) {
+                userStats = statsRows.reduce((acc, row) => ({
+                    total_matches: Math.max(acc.total_matches, row.total_matches || 0),
+                    total_wins: Math.max(acc.total_wins, row.total_wins || 0),
+                    total_losses: Math.max(acc.total_losses, row.total_losses || 0),
+                    total_credits_won: Math.max(acc.total_credits_won, row.total_credits_won || 0),
+                    total_streams: Math.max(acc.total_streams, row.total_streams || 0),
+                    total_wagered: Math.max(acc.total_wagered, row.total_wagered || 0)
+                }), {
+                    total_matches: 0, total_wins: 0, total_losses: 0,
+                    total_credits_won: 0, total_streams: 0, total_wagered: 0
+                });
+            }
         } catch (statsErr) {
             console.warn('[loadPlayerProfile] Stats usuario:', statsErr.message);
         }
