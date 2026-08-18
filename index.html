@@ -6733,37 +6733,46 @@
         // Manejar conexión exitosa de WalletConnect
         async function handleWalletConnectSuccess() {
             closeBinanceQRModal();
-            
+
             if (walletConnectProvider && walletConnectProvider.accounts && walletConnectProvider.accounts.length > 0) {
                 connectedAddress = walletConnectProvider.accounts[0];
                 connectedChainId = walletConnectProvider.chainId || 8453;
                 // EXPONER GLOBALMENTE
                 window.connectedAddress = connectedAddress;
                 window.connectedChainId = connectedChainId;
-                
+
                 console.log('[wallet] Connected via WalletConnect:', connectedAddress);
-                
-                // Verificar que esté en Base
-                if (connectedChainId !== 8453) {
-                    try {
-                        await walletConnectProvider.request({
-                            method: 'wallet_switchEthereumChain',
-                            params: [{ chainId: '0x2105' }]
-                        });
-                        connectedChainId = 8453;
-                    } catch (e) {
-                        console.warn('[wallet] Could not switch to Base');
-                    }
-                }
-                
+
+                // CRÍTICO: actualizar la UI y el saldo YA, sin esperar el cambio
+                // de red a Base. Antes esto esperaba (await) la respuesta de
+                // wallet_switchEthereumChain ANTES de llamar renderWallet() -- si
+                // la wallet no mostraba ese segundo permiso con claridad (muy
+                // comun en moviles), el await se quedaba esperando para siempre
+                // y la pantalla nunca se enteraba de que la wallet ya estaba
+                // conectada de verdad. El pedido de cambio de red ahora se hace
+                // aparte, sin bloquear nada.
+                var connectedWalletName = (activeWalletConnectMeta && activeWalletConnectMeta.name) || 'Wallet';
                 renderWallet();
-                
-                if (connectedChainId === 8453 && connectedAddress) {
-                    await refreshMtrBalance(connectedAddress);
-                    if (typeof showToast === 'function') {
-                        var connectedWalletName = (activeWalletConnectMeta && activeWalletConnectMeta.name) || 'Wallet';
-                        showToast(connectedWalletName + ' conectada vía WalletConnect ✓', 'success');
-                    }
+                if (typeof showToast === 'function') {
+                    showToast(connectedWalletName + ' conectada vía WalletConnect ✓', 'success');
+                }
+                await refreshMtrBalance(connectedAddress);
+
+                // Pedir cambio a Base en segundo plano, sin bloquear la UI.
+                if (connectedChainId !== 8453) {
+                    walletConnectProvider.request({
+                        method: 'wallet_switchEthereumChain',
+                        params: [{ chainId: '0x2105' }]
+                    }).then(function () {
+                        connectedChainId = 8453;
+                        window.connectedChainId = connectedChainId;
+                        renderWallet();
+                    }).catch(function (e) {
+                        console.warn('[wallet] Could not switch to Base', e);
+                        if (typeof showToast === 'function') {
+                            showToast('Conectada, pero cambiá manualmente a la red Base en tu wallet', 'info');
+                        }
+                    });
                 }
             }
         }
