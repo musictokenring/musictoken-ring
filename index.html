@@ -6361,7 +6361,13 @@
                                 name: 'MusicToken Ring',
                                 description: 'Music Battle Arena',
                                 url: window.location.origin,
-                                icons: ['https://pink-blank-vicuna-260.mypinata.cloud/ipfs/bafybeie24pisqmw6teijdng4flzjwumgwpesilowjxq3kww3p7kxlmuywm']
+                                icons: ['https://pink-blank-vicuna-260.mypinata.cloud/ipfs/bafybeie24pisqmw6teijdng4flzjwumgwpesilowjxq3kww3p7kxlmuywm'],
+                                // CRÍTICO (móvil): sin esto, la wallet no sabe cómo
+                                // volver sola a esta pestaña después de aprobar --
+                                // te deja parado en su propia pantalla de inicio
+                                // ("ahora podés volver a la app") en vez de
+                                // regresarte automáticamente.
+                                redirect: { universal: window.location.origin }
                             },
                             showQrModal: false // Manejar QR manualmente como Aerodrome
                         });
@@ -6860,7 +6866,8 @@
                         name: 'MusicToken Ring',
                         description: 'Music Battle Arena',
                         url: window.location.origin,
-                        icons: ['https://pink-blank-vicuna-260.mypinata.cloud/ipfs/bafybeie24pisqmw6teijdng4flzjwumgwpesilowjxq3kww3p7kxlmuywm']
+                        icons: ['https://pink-blank-vicuna-260.mypinata.cloud/ipfs/bafybeie24pisqmw6teijdng4flzjwumgwpesilowjxq3kww3p7kxlmuywm'],
+                        redirect: { universal: window.location.origin }
                     },
                     showQrModal: false
                 });
