@@ -6777,6 +6777,39 @@
             }
         }
 
+        // CRÍTICO (movil): cuando el usuario toca "Abrir en MetaMask" (o
+        // cualquier wallet), esta pestaña pasa a segundo plano mientras aprueba
+        // la conexion en la app de la wallet. iOS/Android pueden suspender el
+        // WebSocket de esta pestaña en ese momento, y el evento 'connect' que
+        // el relay de WalletConnect intenta entregar se pierde -- la wallet
+        // queda conectada de verdad pero la pagina nunca se entera, aunque el
+        // usuario vuelva a mirarla. Al recuperar el foco, resincronizamos a
+        // mano: si el provider ya tiene cuentas (se restauro solo al
+        // reconectar el socket) actualizamos la UI; si no, reintentamos unas
+        // vueltas mas por si el socket todavia esta reconectando.
+        function trySyncWalletConnectOnFocus() {
+            if (!walletConnectProvider || connectedAddress) return;
+            var attempts = 0;
+            var maxAttempts = 10; // 5s (10 * 500ms)
+            var checkInterval = setInterval(function () {
+                attempts++;
+                if (walletConnectProvider && walletConnectProvider.accounts && walletConnectProvider.accounts.length > 0) {
+                    clearInterval(checkInterval);
+                    console.log('[wallet] ✅ Conexión recuperada al volver a la pestaña');
+                    handleWalletConnectSuccess();
+                    return;
+                }
+                if (attempts >= maxAttempts || !walletConnectProvider || connectedAddress) {
+                    clearInterval(checkInterval);
+                }
+            }, 500);
+        }
+
+        document.addEventListener('visibilitychange', function () {
+            if (!document.hidden) trySyncWalletConnectOnFocus();
+        });
+        window.addEventListener('focus', trySyncWalletConnectOnFocus);
+
         // Cerrar modal de QR de Binance
         window.closeBinanceQRModal = function closeBinanceQRModal() {
             var modal = document.getElementById('binanceQRModal');
