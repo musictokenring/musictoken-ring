@@ -295,6 +295,10 @@
         
         // Variable global para WalletConnect
         var walletConnectProvider = null;
+        // Wallet activa mientras se muestra el QR de WalletConnect (nombre, icono,
+        // deep link tipo "scheme://wc?uri=") -- generaliza el modal, que antes
+        // solo tenia textos hardcodeados de Binance Wallet.
+        var activeWalletConnectMeta = null;
 
         function extractMetaMaskErrorMessage(reason) {
             if (!reason) return '';
@@ -6250,22 +6254,30 @@
         };
 
         // Mostrar QR code para conectar Binance Wallet usando WalletConnect v2
-        async function showBinanceWalletConnectQR() {
+        // Conecta cualquier wallet vía WalletConnect (QR / deep link propio) sin
+        // nunca navegar fuera de la pestaña actual -- a diferencia de los deep
+        // links tipo "link.metamask.io/dapp/..." que abren el sitio de cero
+        // adentro del navegador de la wallet y pierden la sesion de Google en
+        // movil. walletMeta: { id, name, icon, deepLink } (deepLink tipo
+        // "scheme://wc?uri=", puede ser null para la opcion generica).
+        async function showWalletConnectQR(walletMeta) {
+            activeWalletConnectMeta = walletMeta || { id: 'wallet', name: 'tu wallet', icon: '🔗', deepLink: null };
+
             // Mostrar indicador de carga inmediatamente
             if (typeof showToast === 'function') {
                 showToast('Iniciando conexión WalletConnect...', 'info');
             }
-            
+
             try {
                 // Esperar a que WalletConnect se cargue si aún no está disponible
                 if (typeof EthereumProvider === 'undefined') {
                     console.log('[wallet] Waiting for WalletConnect SDK to load...');
-                    
+
                     // Mostrar mensaje de carga
                     if (typeof showToast === 'function') {
                         showToast('Cargando WalletConnect...', 'info');
                     }
-                    
+
                     // Esperar máximo 5 segundos para que se cargue
                     var waitTime = 0;
                     var checkInterval = setInterval(function() {
@@ -6277,7 +6289,7 @@
                                 showToast('Generando QR code...', 'info');
                             }
                             setTimeout(function() {
-                                showBinanceWalletConnectQR(); // Reintentar
+                                showWalletConnectQR(activeWalletConnectMeta); // Reintentar
                             }, 300);
                             return;
                         }
@@ -6552,6 +6564,11 @@
             }
         }
 
+        // Alias retrocompatible: llama a Binance especificamente.
+        async function showBinanceWalletConnectQR() {
+            return showWalletConnectQR({ id: 'binance', name: 'Binance Wallet', icon: '🟡', deepLink: 'bnbapp://wc?uri=' });
+        }
+
         // Mostrar modal con QR code
         // Última actualización: 2026-03-01 - WalletConnect QR fix
         function displayQRCodeModal(uri) {
@@ -6573,10 +6590,10 @@
                 qrModal.innerHTML = `
                     <div class="bg-gray-900 border border-cyan-500/30 rounded-xl p-6 max-w-sm w-full mx-4 shadow-2xl">
                         <div class="flex justify-between items-center mb-4">
-                            <h3 class="text-xl font-bold text-white">Conectar Binance Wallet</h3>
+                            <h3 id="walletConnectModalTitle" class="text-xl font-bold text-white">Conectar Wallet</h3>
                             <button onclick="closeBinanceQRModal()" class="text-gray-400 hover:text-white text-2xl leading-none">&times;</button>
                         </div>
-                        <p class="text-gray-400 text-sm mb-4 text-center">Escanea este código QR con Binance Wallet</p>
+                        <p id="walletConnectModalSubtitle" class="text-gray-400 text-sm mb-4 text-center">Escanea este código QR con tu wallet</p>
                         <div id="qrCodeContainer" class="flex flex-col items-center justify-center mb-4 p-4 bg-white rounded-lg min-h-[256px] relative">
                             <div id="qrLoadingSpinner" class="flex flex-col items-center justify-center absolute inset-0">
                                 <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-cyan-500 mb-2"></div>
@@ -6584,11 +6601,11 @@
                                 <p id="qrTimer" class="text-gray-500 text-xs mt-1">Esperando: 0s</p>
                             </div>
                         </div>
-                        <button onclick="openBinanceApp()" class="w-full mb-4 px-4 py-3 bg-yellow-500 hover:bg-yellow-600 text-black font-semibold rounded-lg transition flex items-center justify-center gap-2">
-                            <span>🟡</span>
-                            <span>Abrir en Binance Wallet</span>
+                        <button id="walletConnectOpenAppBtn" onclick="openWalletConnectApp()" class="w-full mb-4 px-4 py-3 bg-yellow-500 hover:bg-yellow-600 text-black font-semibold rounded-lg transition flex items-center justify-center gap-2">
+                            <span id="walletConnectOpenAppIcon">🔗</span>
+                            <span id="walletConnectOpenAppLabel">Abrir en tu wallet</span>
                         </button>
-                        <p class="text-gray-500 text-xs text-center mb-4">O copia el código y pégalo en Binance Wallet</p>
+                        <p id="walletConnectModalCopyHint" class="text-gray-500 text-xs text-center mb-4">O copia el código y pégalo en tu wallet</p>
                         <div class="flex gap-2">
                             <input type="text" id="walletConnectURI" readonly class="flex-1 px-3 py-2 bg-gray-800 border border-gray-700 rounded text-xs text-gray-300 font-mono" value="">
                             <button onclick="copyWalletConnectURI()" class="px-4 py-2 bg-cyan-500/20 border border-cyan-500/50 rounded text-cyan-400 text-sm hover:bg-cyan-500/30 transition">Copiar</button>
@@ -6597,7 +6614,7 @@
                     </div>
                 `;
                 document.body.appendChild(qrModal);
-                
+
                 // Cerrar al hacer clic fuera del modal
                 qrModal.addEventListener('click', function(e) {
                     if (e.target === qrModal) {
@@ -6605,7 +6622,23 @@
                     }
                 });
             }
-            
+
+            // Actualizar textos segun la wallet activa (el modal puede estar
+            // reutilizandose de un intento anterior con otra wallet distinta).
+            var wcMeta = activeWalletConnectMeta || { name: 'tu wallet', icon: '🔗', deepLink: null };
+            var titleEl = document.getElementById('walletConnectModalTitle');
+            if (titleEl) titleEl.textContent = 'Conectar ' + wcMeta.name;
+            var subtitleEl = document.getElementById('walletConnectModalSubtitle');
+            if (subtitleEl) subtitleEl.textContent = 'Escanea este código QR con ' + wcMeta.name;
+            var copyHintEl = document.getElementById('walletConnectModalCopyHint');
+            if (copyHintEl) copyHintEl.textContent = 'O copia el código y pégalo en ' + wcMeta.name;
+            var openAppLabelEl = document.getElementById('walletConnectOpenAppLabel');
+            if (openAppLabelEl) openAppLabelEl.textContent = 'Abrir en ' + wcMeta.name;
+            var openAppIconEl = document.getElementById('walletConnectOpenAppIcon');
+            if (openAppIconEl) openAppIconEl.textContent = wcMeta.icon || '🔗';
+            var openAppBtnEl = document.getElementById('walletConnectOpenAppBtn');
+            if (openAppBtnEl) openAppBtnEl.classList.toggle('hidden', !wcMeta.deepLink);
+
             // Actualizar URI
             var uriInput = document.getElementById('walletConnectURI');
             if (uriInput) {
@@ -6709,7 +6742,8 @@
                 if (connectedChainId === 8453 && connectedAddress) {
                     await refreshMtrBalance(connectedAddress);
                     if (typeof showToast === 'function') {
-                        showToast('Binance Wallet conectada vía WalletConnect ✓', 'success');
+                        var connectedWalletName = (activeWalletConnectMeta && activeWalletConnectMeta.name) || 'Wallet';
+                        showToast(connectedWalletName + ' conectada vía WalletConnect ✓', 'success');
                     }
                 }
             }
@@ -6740,21 +6774,22 @@
                 modal = document.createElement('div');
                 modal.id = 'binanceQRModal';
                 modal.className = 'fixed inset-0 z-50 flex items-center justify-center bg-black/90 backdrop-blur-sm';
+                var fallbackWalletName = (activeWalletConnectMeta && activeWalletConnectMeta.name) || 'tu wallet';
                 modal.innerHTML = `
                     <div class="bg-gray-900 border border-cyan-500/30 rounded-xl p-6 max-w-sm w-full mx-4 shadow-2xl">
                         <div class="flex justify-between items-center mb-4">
-                            <h3 class="text-xl font-bold text-white">Conectar Binance Wallet</h3>
+                            <h3 class="text-xl font-bold text-white">Conectar ${fallbackWalletName}</h3>
                             <button onclick="closeBinanceQRModal()" class="text-gray-400 hover:text-white text-2xl leading-none">&times;</button>
                         </div>
                         <p class="text-gray-400 text-sm mb-4 text-center">WalletConnect no está disponible</p>
                         <div class="space-y-3">
-                            <p class="text-gray-300 text-sm font-semibold">Opción 1: Usar Binance Wallet directamente</p>
+                            <p class="text-gray-300 text-sm font-semibold">Opción 1: Usar ${fallbackWalletName} directamente</p>
                             <ol class="text-gray-400 text-xs space-y-2 list-decimal list-inside mb-4">
-                                <li>Abre Binance Wallet en tu móvil</li>
+                                <li>Abre ${fallbackWalletName} en tu móvil</li>
                                 <li>Ve a la sección "dApps" o "Explorar"</li>
                                 <li>Busca "MusicToken Ring" o visita: <span class="text-cyan-400 break-all">musictokenring.xyz</span></li>
                             </ol>
-                            
+
                             <p class="text-gray-300 text-sm font-semibold">Opción 2: Usar otra wallet</p>
                             <p class="text-gray-400 text-xs mb-4">Puedes usar MetaMask, Trust Wallet u otra wallet compatible</p>
                             
@@ -6795,8 +6830,11 @@
             }
         };
         
-        // Abrir Binance Wallet app con el URI (similar a Aerodrome)
-        window.openBinanceApp = function openBinanceApp() {
+        // Abrir la app de wallet con el URI de WalletConnect (deep link tipo
+        // "scheme://wc?uri=..." -- SOLO aprueba la conexion, no vuelve a abrir
+        // el sitio adentro de la wallet, asi la pestaña original no pierde la
+        // sesion de Google en movil).
+        window.openWalletConnectApp = function openWalletConnectApp() {
             var uri = window.__currentWalletConnectURI || document.getElementById('walletConnectURI')?.value;
             if (!uri) {
                 if (typeof showToast === 'function') {
@@ -6804,147 +6842,64 @@
                 }
                 return;
             }
-            
-            // Intentar abrir Binance Wallet con el URI
-            var binanceDeepLink = 'bnbapp://wc?uri=' + encodeURIComponent(uri);
-            
-            // Intentar abrir
+
+            var walletName = (activeWalletConnectMeta && activeWalletConnectMeta.name) || 'tu wallet';
+            var scheme = (activeWalletConnectMeta && activeWalletConnectMeta.deepLink) || 'bnbapp://wc?uri=';
+            var walletDeepLink = scheme + encodeURIComponent(uri);
+
             try {
-                window.location.href = binanceDeepLink;
-                
+                window.location.href = walletDeepLink;
+
                 // Si no se abre en 2 segundos, mostrar instrucciones
                 setTimeout(function() {
                     if (typeof showToast === 'function') {
-                        showToast('Abre Binance Wallet manualmente y pega el código', 'info');
+                        showToast('Abre ' + walletName + ' manualmente y pega el código', 'info');
                     }
                 }, 2000);
             } catch(e) {
-                console.error('[wallet] Error al abrir Binance:', e);
+                console.error('[wallet] Error al abrir wallet:', e);
                 if (typeof showToast === 'function') {
-                    showToast('Copia el código y pégalo en Binance Wallet', 'info');
+                    showToast('Copia el código y pégalo en ' + walletName, 'info');
                 }
             }
         };
+        // Alias retrocompatible.
+        window.openBinanceApp = window.openWalletConnectApp;
 
         // Conectar wallet móvil usando deep linking
         function connectMobileWallet(wallet) {
             console.log('[wallet] 📱 Conectando wallet móvil:', wallet.name);
             closeMobileWalletModal();
-            
-            // WalletConnect requiere configuración adicional
-            if (wallet.id === 'walletconnect') {
-                if (typeof showToast === 'function') {
-                    showToast('WalletConnect requiere configuración adicional. Usa una wallet específica.', 'info');
-                }
-                return;
-            }
-            
-            // Para MetaMask, usar el mismo método que Trust Wallet (que funciona)
-            if (wallet.id === 'metamask') {
-                console.log('[wallet] 📱 MetaMask detectada - usando método Trust Wallet...');
-                
-                // Verificar si window.ethereum está disponible (como Trust Wallet)
-                if (window.ethereum) {
-                    console.log('[wallet] 📱 MetaMask: window.ethereum disponible, conectando directamente...');
-                    connectWallet();
-                    return;
-                }
-                
-                // Si no está disponible, usar deep link con formato correcto de MetaMask
-                if (typeof showToast === 'function') {
-                    showToast('Abriendo MetaMask...', 'info');
-                }
-                
-                // Formato correcto de MetaMask: https://link.metamask.io/dapp/{dappUrl}
-                // Solo usar el dominio sin protocolo ni parámetros adicionales
-                var currentUrl = window.location.href;
-                var dappUrl = currentUrl.replace(/^https?:\/\//, ''); // Remover http:// o https://
-                var deepLink = 'https://link.metamask.io/dapp/' + dappUrl;
-                
-                console.log('[wallet] 📱 MetaMask: URL actual:', currentUrl);
-                console.log('[wallet] 📱 MetaMask: DApp URL:', dappUrl);
-                console.log('[wallet] 📱 MetaMask: Deep link:', deepLink);
-                
-                // Intentar abrir MetaMask
-                try {
-                    window.location.href = deepLink;
-                } catch (e) {
-                    console.error('[wallet] 📱 MetaMask: Error al abrir:', e);
-                    if (typeof showToast === 'function') {
-                        showToast('Error al abrir MetaMask. Ábrela manualmente.', 'error');
-                    }
-                }
-                
-                // Usar el mismo sistema de detección que Trust Wallet
-                setupReturnDetection('metamask');
-                return;
-            }
-            
-            // Para Binance Wallet - mejorar detección
-            if (wallet.id === 'binance') {
-                console.log('[wallet] 📱 Binance Wallet detectada...');
-                console.log('[wallet] 📱 window.BinanceChain disponible:', !!window.BinanceChain);
-                console.log('[wallet] 📱 window.ethereum disponible:', !!window.ethereum);
-                
-                // Si BinanceChain está disponible, usar método directo
-                if (window.BinanceChain) {
-                    console.log('[wallet] 📱 Binance: Conectando directamente...');
-                    connectBinanceWallet();
-                    return;
-                }
-                
-                // Si window.ethereum está disponible (Binance puede usar ethereum también)
-                if (window.ethereum) {
-                    console.log('[wallet] 📱 Binance: Usando window.ethereum...');
-                    connectWallet();
-                    return;
-                }
-                
-                // Si no, usar WalletConnect con QR
-                console.log('[wallet] 📱 Binance: Usando WalletConnect QR...');
-                showBinanceWalletConnectQR();
-                return;
-            }
-            
-            // Para otras wallets, intentar conectar usando window.ethereum primero
+
+            // Ya estamos adentro de un navegador con provider inyectado (extension
+            // de escritorio, o ya estamos en el navegador propio de la wallet):
+            // conectar directo, sin WalletConnect.
             if (window.ethereum) {
+                console.log('[wallet] 📱 window.ethereum disponible, conectando directamente...');
                 connectWallet();
                 return;
             }
-            
-            // Mostrar mensaje informativo
+
+            // Binance Wallet mantiene su deteccion especial de BinanceChain.
+            if (wallet.id === 'binance' && window.BinanceChain) {
+                console.log('[wallet] 📱 Binance: Conectando directamente vía BinanceChain...');
+                connectBinanceWallet();
+                return;
+            }
+
+            // TODO EL RESTO (MetaMask, Trust Wallet, Coinbase, Rainbow, la opción
+            // genérica "WalletConnect", y cualquier otra sin provider inyectado):
+            // usar WalletConnect (QR / deep link de aprobación propio de cada
+            // wallet). A propósito NO usamos deep links tipo
+            // "link.metamask.io/dapp/..." que vuelven a abrir el sitio de cero
+            // adentro del navegador de la wallet -- eso pierde la sesión de
+            // Google en móvil (bug reportado: "conecto wallet y me pide iniciar
+            // sesión de nuevo"). WalletConnect solo pide aprobar la conexión y
+            // nunca abandona esta pestaña.
             if (typeof showToast === 'function') {
                 showToast('Abriendo ' + wallet.name + '...', 'info');
             }
-            
-            // Deep linking para otras wallets móviles
-            var deepLink;
-            if (wallet.id === 'trust') {
-                deepLink = 'https://link.trustwallet.com/open_url?coin_id=60&url=' + encodeURIComponent(window.location.href);
-            } else if (wallet.id === 'coinbase') {
-                deepLink = 'https://go.cb-w.com/dapp?cb_url=' + encodeURIComponent(window.location.href);
-            } else if (wallet.deepLink) {
-                deepLink = wallet.deepLink + encodeURIComponent(window.location.href);
-            } else {
-                if (typeof showToast === 'function') {
-                    showToast('Wallet no soportada: ' + wallet.name, 'error');
-                }
-                return;
-            }
-            
-            // Intentar abrir la wallet app
-            try {
-                window.location.href = deepLink;
-            } catch (e) {
-                console.error('[wallet] Error al abrir wallet:', e);
-                if (typeof showToast === 'function') {
-                    showToast('Error al abrir ' + wallet.name, 'error');
-                }
-                return;
-            }
-            
-            // Configurar detección cuando regresamos
-            setupReturnDetection(wallet.id);
+            showWalletConnectQR(wallet);
         }
         
         // Función auxiliar para detectar cuando el usuario regresa después de abrir una wallet
