@@ -274,9 +274,19 @@
         }
     </script>
     
-    <!-- Web3Modal v2 - Cargar con defer (no crítico para render inicial) -->
-    <script src="https://cdn.jsdelivr.net/npm/@web3modal/standalone@2.7.1/dist/index.umd.js" defer></script>
-    
+    <!-- Web3Modal v2 REMOVIDO (2026-08-18): no se usaba en ningun lado del
+         codigo (el modal de QR de conectar wallet es 100% custom, ver
+         displayQRCodeModal / showWalletConnectQR). Definia sus propios
+         web-components de iconos (ej. "ph-arrow-circle-down") que colisionan
+         con los que trae empaquetados @walletconnect/ethereum-provider (via
+         @reown/appkit): customElements.define() no permite redefinir un
+         nombre ya registrado, tira NotSupportedError, y esa excepcion corta
+         la inicializacion del bundle de ethereum-provider a la mitad --
+         dejaba window['@walletconnect/ethereum-provider'] vacio y WalletConnect
+         nunca terminaba de cargar para NINGUNA wallet (probablemente nunca
+         funciono, ni para Binance). Confirmado evaluando el bundle a mano en
+         devtools: sin este script, expone su API completa. -->
+
     <!-- WalletConnect v2 Core SDK - Cargar con defer -->
     <script src="https://cdn.jsdelivr.net/npm/@walletconnect/core@2.14.0/dist/index.umd.js" defer></script>
     <script src="https://cdn.jsdelivr.net/npm/@walletconnect/ethereum-provider@2.23.6/dist/index.umd.js" defer></script>
@@ -295,6 +305,15 @@
         
         // Variable global para WalletConnect
         var walletConnectProvider = null;
+        // El bundle UMD de @walletconnect/ethereum-provider NO se expone como un
+        // global limpio "EthereumProvider" -- se registra bajo la clave literal
+        // del paquete (window['@walletconnect/ethereum-provider'].EthereumProvider).
+        // Este helper resuelve eso (y tambien acepta un eventual window.EthereumProvider
+        // por si una version futura del bundle cambia como se expone).
+        function getEthereumProviderClass() {
+            var pkg = window['@walletconnect/ethereum-provider'];
+            return (pkg && pkg.EthereumProvider) || window.EthereumProvider || null;
+        }
         // Wallet activa mientras se muestra el QR de WalletConnect (nombre, icono,
         // deep link tipo "scheme://wc?uri=") -- generaliza el modal, que antes
         // solo tenia textos hardcodeados de Binance Wallet.
@@ -6270,7 +6289,7 @@
 
             try {
                 // Esperar a que WalletConnect se cargue si aún no está disponible
-                if (typeof EthereumProvider === 'undefined') {
+                if (!getEthereumProviderClass()) {
                     console.log('[wallet] Waiting for WalletConnect SDK to load...');
 
                     // Mostrar mensaje de carga
@@ -6282,7 +6301,7 @@
                     var waitTime = 0;
                     var checkInterval = setInterval(function() {
                         waitTime += 200;
-                        if (typeof EthereumProvider !== 'undefined') {
+                        if (getEthereumProviderClass()) {
                             clearInterval(checkInterval);
                             console.log('[wallet] ✅ WalletConnect SDK loaded, proceeding...');
                             if (typeof showToast === 'function') {
@@ -6313,7 +6332,7 @@
                     console.log('[wallet] Inicializando WalletConnect provider (método Aerodrome)...');
                     
                     try {
-                        walletConnectProvider = await EthereumProvider.init({
+                        walletConnectProvider = await getEthereumProviderClass().init({
                             projectId: CONFIG.WALLETCONNECT_PROJECT_ID,
                             chains: [8453], // Base chain
                             optionalChains: [1, 137, 56], // Ethereum, Polygon, BSC
