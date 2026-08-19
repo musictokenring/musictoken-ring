@@ -24,6 +24,37 @@ function promptLoginRequired(message) {
     }
 }
 
+// Host IA (agents/host_agent.py, Cloud Run público, ver DEPLOY_GCP.md). Narra
+// la batalla en el chat de la arena. Le mandamos el contexto en vivo nosotros
+// (nombres, quién domina, pozo) en vez de que el agente lo lea de Supabase:
+// esta app no guarda un scoreboard de la batalla en la base de datos, el
+// estado vive acá en el cliente, así que es la fuente real de verdad.
+const HOST_AGENT_URL = 'https://host-agent-287417719690.us-central1.run.app';
+
+async function triggerHostNarration(battleId, eventType, contextText) {
+    const el = document.getElementById('hostCommentary');
+    try {
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 8000);
+        const resp = await fetch(HOST_AGENT_URL + '/narrate', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ battle_id: String(battleId || 'local'), event_type: eventType, context: contextText }),
+            signal: controller.signal
+        });
+        clearTimeout(timeout);
+        if (!resp.ok) return;
+        const data = await resp.json();
+        if (el && data && data.reply) {
+            el.textContent = '🎙️ ' + data.reply;
+            el.classList.remove('hidden');
+        }
+    } catch (e) {
+        // Best-effort: el host es color, nunca debe romper ni bloquear la batalla.
+        console.warn('[hostAgent] narración no disponible:', e && e.message);
+    }
+}
+
 const GameEngine = {
     currentMatch: null,
     currentMode: null,
@@ -2194,6 +2225,10 @@ const GameEngine = {
                         ? '<span class="text-cyan-300 font-bold">🏆 Gana ' + (match.player1_label || 'Lado 1') + '</span>'
                         : '<span class="text-fuchsia-300 font-bold">🏆 Gana ' + (match.player2_label || 'Lado 2') + '</span>';
                 }
+                var winnerArtist = winner === 1
+                    ? (match.player1_song_artist || match.player1_label || 'Lado 1')
+                    : (match.player2_song_artist || match.player2_label || 'Lado 2');
+                triggerHostNarration(match.id || match.match_id, 'result', '🏆 Ganó ' + winnerArtist + '. Batalla terminada.');
                 setTimeout(function () {
                     self.stopUserSong();
                     if (typeof self.stopVictorySong === 'function') self.stopVictorySong();
@@ -3046,6 +3081,7 @@ const GameEngine = {
                 </div>
             </div>
             <div id="battleStatusText" class="text-center py-4 px-4 mb-4"></div>
+            <div id="hostCommentary" class="hidden max-w-3xl mx-auto text-center text-xs sm:text-sm text-amber-300/90 italic px-4 mb-4"></div>
 
             <div id="fanBetPanel" class="max-w-3xl mx-auto rounded-2xl border border-white/10 bg-white/5 p-4 mb-4">
                 <p class="text-center text-xs text-gray-400 uppercase tracking-widest mb-1">🎤 Apostá por tu favorito</p>
@@ -3083,6 +3119,14 @@ const GameEngine = {
             console.log('[createBattleUI] ✅ battleArena visible');
             this.bindBattleArenaAudio(addedArena);
             this.setupFanBetPanel(match);
+
+            triggerHostNarration(
+                match.id || match.match_id,
+                'hype',
+                '🔷 ' + (match.player1_song_artist || match.player1_label || 'Jugador 1') + ' vs 🔶 ' +
+                (match.player2_song_artist || match.player2_label || 'Jugador 2') +
+                '. Arranca la batalla, pozo de ' + ((match.player1_bet || 0) + (match.player2_bet || 0)) + ' créditos.'
+            );
 
             // Detectar si es dispositivo móvil (ANTES del setTimeout)
             const isMobile = typeof window !== 'undefined' && (

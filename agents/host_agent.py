@@ -42,7 +42,18 @@ def _get_model():
 
 
 def build_battle_context(battle_id: str) -> str:
-    battle = supabase.get_active_battle(battle_id)
+    """Best-effort Supabase fallback, used only when the caller didn't already
+    supply live context (see generate_reply). NOTE: MTR's real-time battles
+    (game-engine.js) don't persist a live scoreboard row in Supabase — there
+    is no `battles` table with vote counts, the game state lives client-side.
+    So this fallback realistically never finds anything; it exists only so a
+    battle_id-only call degrades to a generic line instead of erroring, and
+    picks up real data automatically if that ever changes."""
+    try:
+        battle = supabase.get_active_battle(battle_id)
+    except Exception as exc:  # noqa: BLE001 - never let a Supabase hiccup 500 /narrate
+        logger.warning("[host] Supabase lookup failed for battle %s: %s", battle_id, exc)
+        return f"Batalla {battle_id}: sin datos disponibles."
     if not battle:
         return f"Batalla {battle_id}: sin datos disponibles."
     return (
@@ -53,8 +64,12 @@ def build_battle_context(battle_id: str) -> str:
     )
 
 
-def generate_reply(battle_id: str, event_type: str, user_message: str = "") -> str:
-    context = build_battle_context(battle_id)
+def generate_reply(battle_id: str, event_type: str, user_message: str = "", live_context: str = "") -> str:
+    # The frontend (game-engine.js) already holds the real live battle state
+    # in memory — artist names, who's ahead, the pot — since it's rendering
+    # it to the screen in real time. Prefer that over the Supabase fallback,
+    # which has no live scoreboard to read from in this app's data model.
+    context = live_context.strip() if live_context and live_context.strip() else build_battle_context(battle_id)
     prompt = f"Contexto en vivo: {context}\nTipo de evento: {event_type}\n"
     if user_message:
         prompt += f"Pregunta del fan: {user_message}\n"
@@ -90,10 +105,11 @@ def narrate() -> Any:
     battle_id = str(body.get("battle_id", ""))
     event_type = str(body.get("event_type", "hype"))
     user_message = str(body.get("message", ""))
+    live_context = str(body.get("context", ""))
     if not battle_id:
         return jsonify({"error": "battle_id is required"}), 400
 
-    reply = generate_reply(battle_id, event_type, user_message)
+    reply = generate_reply(battle_id, event_type, user_message, live_context)
     return jsonify({"battle_id": battle_id, "reply": reply})
 
 
