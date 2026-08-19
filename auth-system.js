@@ -6,6 +6,12 @@
 // Modal control functions (must be global)
 function openAuthModal() {
     document.getElementById('authModal')?.classList.remove('hidden');
+    // El botón de "Firmar con tu wallet" solo tiene sentido si hay un
+    // provider inyectado (window.ethereum) -- típicamente porque estamos
+    // adentro del navegador propio de MetaMask/Trust Wallet, donde Google
+    // se bloquea por política propia de seguridad contra WebViews.
+    var walletBtn = document.getElementById('walletSignInBtn');
+    if (walletBtn) walletBtn.classList.toggle('hidden', !window.ethereum);
 }
 
 const playerProfileLoadStateByUser = new Map();
@@ -184,6 +190,101 @@ async function loginWithGoogle() {
         showToast('Error al iniciar sesión con Google', 'error');
     }
 }
+
+/**
+ * Login por firma de wallet (Sign-In with Ethereum), sin Google y sin
+ * contraseña. Pensado para cuando ya estamos adentro del navegador propio de
+ * una wallet (window.ethereum disponible) -- ahí Google bloquea el login por
+ * su propia política de seguridad contra WebViews embebidos, y WalletConnect
+ * no hace falta porque la wallet ya está en este mismo navegador. Un solo tap
+ * para firmar, no autoriza ninguna transacción ni gasta gas.
+ *
+ * El backend (backend/siwe-auth.js) verifica la firma y devuelve una sesión
+ * REAL de Supabase -- a partir de setSession(), el resto de la app funciona
+ * exactamente igual que con Google (el listener de onAuthStateChange más
+ * abajo se encarga de actualizar la UI).
+ */
+async function signInWithWallet() {
+    try {
+        if (!window.ethereum) {
+            showToast('No se encontró una wallet en este navegador. Abrí este sitio desde MetaMask o Trust Wallet.', 'error');
+            return;
+        }
+
+        if (!supabaseClient) {
+            supabaseClient = initSupabaseClient();
+        }
+        if (!supabaseClient) {
+            throw new Error('Supabase no está disponible. Recarga la página.');
+        }
+
+        showToast('Conectando con tu wallet...', 'info');
+        const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
+        const address = (accounts && accounts[0] || '').toLowerCase();
+        if (!address) throw new Error('No se pudo obtener la dirección de la wallet');
+
+        const backendUrl = (window.CONFIG && window.CONFIG.BACKEND_API) || 'https://musictoken-ring.onrender.com';
+
+        // 1. Pedir el mensaje único para firmar.
+        const nonceRes = await fetch(`${backendUrl}/api/auth/wallet/nonce`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ address })
+        });
+        const nonceData = await nonceRes.json().catch(() => ({}));
+        if (!nonceRes.ok || !nonceData.ok) {
+            throw new Error(nonceData.error || 'No se pudo iniciar el login con wallet');
+        }
+
+        // 2. Firmar (un solo tap en la wallet -- no gasta gas, no autoriza nada).
+        showToast('Confirmá la firma en tu wallet...', 'info');
+        const signature = await window.ethereum.request({
+            method: 'personal_sign',
+            params: [nonceData.message, address]
+        });
+
+        // 3. El backend verifica la firma y devuelve una sesión real de Supabase.
+        const verifyRes = await fetch(`${backendUrl}/api/auth/wallet/verify`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ address, signature })
+        });
+        const verifyData = await verifyRes.json().catch(() => ({}));
+        if (!verifyRes.ok || !verifyData.ok) {
+            throw new Error(verifyData.error || 'No se pudo verificar la firma');
+        }
+
+        // 4. Activar la sesión. onAuthStateChange (más abajo en este archivo)
+        // se encarga de actualizar el resto de la UI, igual que con Google.
+        const { error: sessionError } = await supabaseClient.auth.setSession({
+            access_token: verifyData.access_token,
+            refresh_token: verifyData.refresh_token
+        });
+        if (sessionError) throw sessionError;
+
+        // La wallet ya quedó probada por firma -- la marcamos como conectada
+        // directamente, sin pedir un "Conectar Wallet" aparte encima del login.
+        window.connectedAddress = address;
+        localStorage.setItem('mtr_wallet', address);
+        if (typeof window.renderWallet === 'function') window.renderWallet();
+        if (window.CreditsSystem && typeof window.CreditsSystem.loadBalance === 'function') {
+            window.CreditsSystem.loadBalance(address);
+        }
+
+        showToast('¡Sesión iniciada con tu wallet! ✓', 'success');
+        closeAuthModal();
+    } catch (error) {
+        console.error('[auth] Error en login por firma de wallet:', error);
+        const msg = String((error && (error.message || error.code)) || 'Error al iniciar sesión con tu wallet');
+        // El usuario cancelando la firma a propósito no es un error grave.
+        if (/user rejected|user denied|rejected the request/i.test(msg)) {
+            showToast('Firma cancelada', 'info');
+        } else {
+            showToast(msg, 'error');
+        }
+    }
+}
+window.signInWithWallet = signInWithWallet;
 
 function parseOAuthErrorFromUrl() {
     const params = new URLSearchParams(window.location.search);

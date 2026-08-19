@@ -2425,6 +2425,14 @@ try {
     console.warn('[server] Battle bets routes not registered:', battleBetsRegErr.message);
 }
 
+try {
+    const { registerSiweRoutes } = require('./siwe-auth');
+    registerSiweRoutes(app, walletLinkService);
+    console.log('[server] Registered POST /api/auth/wallet/nonce and /verify (login por firma de wallet)');
+} catch (siweRegErr) {
+    console.warn('[server] SIWE routes not registered:', siweRegErr.message);
+}
+
 /**
  * Root endpoint - helps verify server is running
  */
