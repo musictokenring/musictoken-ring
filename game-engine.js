@@ -7,6 +7,23 @@
 const MIN_BET_AMOUNT = 1; // créditos (1 crédito ≈ 1 USD nominal)
 const MIN_BET_TORNEO = 1; // mismo mínimo para Torneo
 
+// Acciones que requieren sesión (aceptar desafío, inscribirse a torneo, etc.)
+// mostraban un toast de error y no hacían nada más -- un callejón sin salida,
+// sobre todo adentro del navegador de una wallet, donde Google está bloqueado
+// y "Firmar con tu wallet" (ver auth-system.js) es la salida real. Este
+// helper abre el modal de login directamente en vez de dejar al usuario sin
+// saber qué hacer.
+function promptLoginRequired(message) {
+    if (typeof showToast === 'function') {
+        showToast(message || 'Iniciá sesión para continuar', 'error');
+    }
+    if (typeof window.openAuthModal === 'function') {
+        window.openAuthModal();
+    } else if (typeof openAuthModal === 'function') {
+        openAuthModal();
+    }
+}
+
 const GameEngine = {
     currentMatch: null,
     currentMode: null,
@@ -1149,7 +1166,7 @@ const GameEngine = {
         try {
             const { data: { session } } = await supabaseClient.auth.getSession();
             if (!session) {
-                showToast('Debes iniciar sesión para aceptar el desafío', 'error');
+                promptLoginRequired('Debes iniciar sesión para aceptar el desafío');
                 return;
             }
             
@@ -2431,7 +2448,7 @@ const GameEngine = {
         try {
             const { data: { session } } = await supabaseClient.auth.getSession();
             if (!session) {
-                showToast('Inicia sesión para inscribirte en torneos', 'error');
+                promptLoginRequired('Inicia sesión para inscribirte en torneos');
                 return;
             }
 
@@ -2753,7 +2770,7 @@ const GameEngine = {
                     console.warn('[createMatch] ⚠️ Reembolsando créditos porque no hay sesión');
                     await this.updateBalance(bet1, 'refund', null);
                 }
-                showToast('Error: Debes iniciar sesión para crear una partida.', 'error');
+                promptLoginRequired('Error: Debes iniciar sesión para crear una partida.');
                 return;
             }
             

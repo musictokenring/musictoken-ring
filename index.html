@@ -690,6 +690,94 @@
 </head>
 
 <body class="min-h-screen text-white font-sans antialiased">
+    <!-- Aviso de navegador embebido -- se ejecuta lo antes posible, ANTES de
+         que el usuario intente loguearse. Google bloquea el login por su
+         propia politica de seguridad en navegadores embebidos de apps como
+         WhatsApp/Instagram/Facebook (ver
+         developers.googleblog.com/upcoming-security-changes-to-googles-oauth-20-authorization-endpoint-in-embedded-webviews),
+         no es algo arreglable de este lado -- mejor avisar antes que dejar
+         que el usuario choque con un error sin explicacion. Self-contenido a
+         proposito (no depende de showToast/openAuthModal, que todavia no
+         cargaron a esta altura). -->
+    <script>
+        (function () {
+            function detectEmbeddedBrowser() {
+                var ua = navigator.userAgent || '';
+                var named = [
+                    { test: /instagram/i, name: 'Instagram' },
+                    { test: /fban|fbav|fb_iab|messenger/i, name: 'Facebook/Messenger' },
+                    { test: /twitter/i, name: 'Twitter/X' },
+                    { test: /line\//i, name: 'LINE' },
+                    { test: /musical_ly|tiktok|bytedancewebview/i, name: 'TikTok' },
+                    { test: /linkedinapp/i, name: 'LinkedIn' },
+                    { test: /snapchat/i, name: 'Snapchat' },
+                    { test: /whatsapp/i, name: 'WhatsApp' }
+                ];
+                for (var i = 0; i < named.length; i++) {
+                    if (named[i].test.test(ua)) return named[i].name;
+                }
+                // Señal genérica de WebView embebido en Android (agrega "; wv)"
+                // al user agent) -- cubre apps sin token propio claro, como
+                // WhatsApp en algunas versiones de Android.
+                if (/android/i.test(ua) && /; wv\)/i.test(ua)) return 'esta app';
+                return null;
+            }
+
+            var appName = detectEmbeddedBrowser();
+            if (!appName) return;
+            if (sessionStorage.getItem('mtr_embedded_banner_dismissed')) return;
+
+            function fallbackCopy(link, done) {
+                try {
+                    var input = document.createElement('input');
+                    input.value = link;
+                    input.style.position = 'fixed';
+                    input.style.opacity = '0';
+                    document.body.appendChild(input);
+                    input.select();
+                    input.setSelectionRange(0, 99999);
+                    document.execCommand('copy');
+                    document.body.removeChild(input);
+                    done();
+                } catch (e) { /* no hay mas para hacer */ }
+            }
+
+            function copyLinkAndNotify(btn) {
+                var link = window.location.origin + window.location.pathname;
+                function done() {
+                    if (btn) {
+                        var original = btn.textContent;
+                        btn.textContent = '✅ Copiado';
+                        setTimeout(function () { btn.textContent = original; }, 2000);
+                    }
+                }
+                if (navigator.clipboard && navigator.clipboard.writeText) {
+                    navigator.clipboard.writeText(link).then(done).catch(function () { fallbackCopy(link, done); });
+                } else {
+                    fallbackCopy(link, done);
+                }
+            }
+
+            var banner = document.createElement('div');
+            banner.id = 'embeddedBrowserBanner';
+            banner.style.cssText = 'position:sticky;top:0;z-index:200;background:#78350f;border-bottom:1px solid rgba(251,191,36,0.4);padding:10px 14px;font-size:13px;color:#fef3c7;display:flex;align-items:center;gap:10px;flex-wrap:wrap;';
+            banner.innerHTML =
+                '<span style="flex:1;min-width:200px;">⚠️ Estás usando el navegador de ' + appName + '. El login con Google y algunas funciones no van a andar acá.</span>' +
+                '<button id="embeddedBannerCopyBtn" style="padding:6px 12px;border-radius:8px;background:#f59e0b;color:#000;font-weight:700;border:none;cursor:pointer;white-space:nowrap;">📋 Copiar enlace</button>' +
+                '<button id="embeddedBannerCloseBtn" style="background:none;border:none;color:#fef3c7;font-size:18px;cursor:pointer;padding:0 4px;line-height:1;">×</button>';
+
+            document.body.insertBefore(banner, document.body.firstChild);
+
+            document.getElementById('embeddedBannerCopyBtn').addEventListener('click', function () {
+                copyLinkAndNotify(this);
+            });
+            document.getElementById('embeddedBannerCloseBtn').addEventListener('click', function () {
+                banner.remove();
+                sessionStorage.setItem('mtr_embedded_banner_dismissed', '1');
+            });
+        })();
+    </script>
+
     <!-- Script de respaldo TEMPRANO - Se ejecuta inmediatamente al cargar body -->
     <script>
         console.log('[BACKUP-EARLY] ⚡ Script de respaldo temprano iniciado');
