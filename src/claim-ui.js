@@ -142,7 +142,7 @@
                         <div id="vaultBalanceDisplay" class="hidden p-3 rounded-lg bg-cyan-500/10 border border-cyan-500/20 mb-4">
                             <div class="text-xs text-cyan-400">
                                 <div class="font-bold mb-1">💰 Vault de Liquidez:</div>
-                                <div>Balance disponible: <span id="vaultBalanceAmount" class="font-bold">-</span> USD (vault)</div>
+                                <div id="vaultBalanceLine">Balance disponible: <span id="vaultBalanceAmount" class="font-bold">-</span> USD (vault)</div>
                                 <a id="vaultBaseScanLink" href="#" target="_blank" class="text-xs underline mt-1 inline-block">Ver en BaseScan</a>
                             </div>
                         </div>
@@ -298,10 +298,18 @@
 
                     const vaultDisplay = document.getElementById('vaultBalanceDisplay');
                     const vaultAmount = document.getElementById('vaultBalanceAmount');
+                    const vaultLine = document.getElementById('vaultBalanceLine');
                     const vaultLink = document.getElementById('vaultBaseScanLink');
 
                     if (vaultDisplay && vaultAmount) {
-                        vaultAmount.textContent = balance.toFixed(2);
+                        // Un "$0.00 (vault)" desnudo se lee como que algo está roto.
+                        // Plataforma nueva en etapa de pruebas: es real, no es un bug,
+                        // pero hay que decirlo en vez de dejar el número solo.
+                        if (vaultLine) {
+                            vaultLine.innerHTML = balance > 0
+                                ? 'Balance disponible: <span id="vaultBalanceAmount" class="font-bold">' + balance.toFixed(2) + '</span> USD (vault)'
+                                : 'En fondeo inicial (plataforma en etapa de pruebas)';
+                        }
                         vaultDisplay.classList.remove('hidden');
 
                         if (vaultLink && baseScanUrl) {

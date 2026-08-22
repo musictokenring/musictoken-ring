@@ -992,9 +992,9 @@
                         <span class="mt-2 block text-[11px] text-gray-500">Stablecoins y otras monedas admitidas</span>
                     </button>
                     <button type="button" onclick="openMercadoPagoModal()" class="deposit-flow-btn group relative overflow-hidden rounded-xl border border-yellow-500/40 bg-gradient-to-br from-yellow-950/40 to-gray-900/80 px-4 py-4 text-left transition hover:border-yellow-400/55 hover:shadow-lg hover:shadow-yellow-500/10">
-                        <span class="block text-xs font-medium text-yellow-300/90 mb-1">Colombia</span>
-                        <span class="block text-base font-bold text-white">Mercado Pago</span>
-                        <span class="mt-2 block text-[11px] text-gray-500">PSE, Nequi o tarjeta (COP)</span>
+                        <span class="block text-xs font-medium text-yellow-300/90 mb-1">🇨🇴 Colombia · Mercado Pago</span>
+                        <span class="block text-base font-bold text-white">Pagar en pesos (COP)</span>
+                        <span class="mt-2 block text-[11px] text-gray-400">PSE · Nequi · Bancolombia · Visa · Mastercard</span>
                     </button>
                 </div>
 
@@ -3635,7 +3635,12 @@
                     const vaultLinkEl = document.getElementById('publicVaultLink');
 
                     if (vaultBalanceEl) {
-                        vaultBalanceEl.textContent = balance.toFixed(2) + ' USD (vault)';
+                        // Un "$0.00 (vault)" desnudo se lee como que algo está roto.
+                        // Plataforma nueva en etapa de pruebas: es real, no es un bug —
+                        // pero hay que decirlo, no dejar el número solo sin contexto.
+                        vaultBalanceEl.textContent = balance > 0
+                            ? balance.toFixed(2) + ' USD (vault)'
+                            : 'En fondeo inicial (plataforma en etapa de pruebas)';
                         vaultBalanceEl.classList.remove('text-gray-400', 'text-red-400', 'text-gray-500');
                         vaultBalanceEl.classList.add('text-cyan-400');
                     }

@@ -734,9 +734,15 @@ const GameEngine = {
             return true;
         }
         
-        // Si no hay suficientes créditos, mostrar mensaje claro
+        // Si no hay suficientes créditos, mostrar mensaje claro.
+        // CRÍTICO: antes decía que el MTR on-chain "puede convertirse
+        // automáticamente" — eso no es real, esa conversión nunca se
+        // implementó (ver ANALISIS-RIESGO-FINANCIERO-MTR.md, es
+        // deliberadamente así por seguridad). Prometer algo que no pasa
+        // confunde y alarma al usuario; el mensaje ahora solo apunta a lo
+        // que sí existe: depositar.
         const shortfall = betAmount - credits;
-        showToast(`MTR créditos jugables insuficientes. Necesitas ${betAmount}, tienes ${credits.toFixed(2)}. ${onchainBalance > 0 ? `Tienes ${onchainBalance.toLocaleString('es-ES')} MTR on-chain que puede convertirse automáticamente.` : 'Añade saldo (depósito) para obtener más créditos.'}`, 'error');
+        showToast(`Fichas jugables insuficientes. Necesitas ${betAmount}, tenés ${credits.toFixed(2)}. Añadí saldo (Mercado Pago o NOWPayments) para conseguir más fichas.`, 'error');
         return false;
     },
     
@@ -995,12 +1001,11 @@ const GameEngine = {
                     // Si el backend muestra créditos insuficientes, mostrar error claro
                     if (backendCredits < normalizedBet) {
                         const onchainBalance = Number(window.__mtrOnChainBalance || 0);
-                        let errorMsg = `Créditos insuficientes. Tienes ${backendCredits.toFixed(2)} créditos pero necesitas ${normalizedBet}. `;
-                        if (onchainBalance >= normalizedBet) {
-                            errorMsg += `Tienes ${onchainBalance.toLocaleString('es-ES')} MTR on-chain que puede convertirse automáticamente. Intenta nuevamente.`;
-                        } else {
-                            errorMsg += `Añade saldo (depósito) para obtener más créditos.`;
-                        }
+                        // CRÍTICO: ya no se promete conversión automática de MTR
+                        // on-chain — esa conversión no existe (ver
+                        // ANALISIS-RIESGO-FINANCIERO-MTR.md, deliberado por
+                        // seguridad). Prometerla confunde al usuario.
+                        let errorMsg = `Créditos insuficientes. Tienes ${backendCredits.toFixed(2)} créditos pero necesitas ${normalizedBet}. Añade saldo (Mercado Pago o NOWPayments) para obtener más créditos.`;
                         showToast(errorMsg, 'error');
                         return;
                     }
