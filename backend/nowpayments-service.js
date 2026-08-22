@@ -777,24 +777,20 @@ class NOWPaymentsService {
                     payment_id: paymentData.payment_id
                 });
                 
-                // Registrar el rechazo para auditoría
+                // Registrar el rechazo para auditoría.
+                // CRÍTICO: wallet_address, payment_id y payment_data NO son columnas
+                // reales de `deposits` (confirmado contra la tabla real) — este insert
+                // fallaba en silencio (el resultado ni se leía) en cada rechazo. tx_hash
+                // ya identifica el pago de forma única; el detalle completo del rechazo
+                // queda igual en el console.error de arriba.
                 await supabase
                     .from('deposits')
                     .insert({
                         tx_hash: paymentData.payment_id,
-                        wallet_address: userWallet || null,
                         amount: depositAmount,
                         token: (paymentData.pay_currency || 'USDT').toString().slice(0, 32),
                         credits_awarded: 0,
                         status: 'rejected_no_user',
-                        payment_id: paymentData.payment_id,
-                        payment_data: {
-                            ...paymentData,
-                            rejection_reason: 'User not authenticated or not found in system',
-                            user_email: userEmail,
-                            user_wallet: userWallet,
-                            user_id_from_order: userIdFromOrder
-                        },
                         created_at: new Date().toISOString()
                     });
 
@@ -816,22 +812,30 @@ class NOWPaymentsService {
                 throw new Error(`Failed to award credits: ${creditError.message}`);
             }
 
-            // Record deposit
+            // Record deposit.
+            // CRÍTICO: wallet_address, fee_amount, vault_fee, trading_fund_fee,
+            // payment_id y payment_data NO son columnas reales de `deposits`
+            // (confirmado contra la tabla real, mismo problema encontrado y
+            // arreglado en mercadopago-service.js). Este insert fallaba y
+            // TIRABA (throw abajo) en CADA depósito de NOWPayments — los
+            // créditos ya se habían otorgado arriba así que el usuario cobraba
+            // bien, pero el throw cortaba la ejecución antes de llegar a
+            // actualizar el balance del Vault de Liquidez (más abajo), así que
+          // el vault nunca se fondeaba con la comisión real de ningún depósito.
+            // deposit_fee sí es una columna real — ahí queda el total de la
+            // comisión (vault_fee + trading_fund_fee siguen calculándose igual
+            // para las llamadas RPC de abajo, que son la fuente real de verdad
+            // del balance del vault/trading fund).
             const { data: deposit, error: depositError } = await supabase
                 .from('deposits')
                 .insert({
                     tx_hash: paymentData.payment_id,
-                    wallet_address: userWallet || null,
                     user_id: userId,
                     amount: depositAmount,
                     token: (paymentData.pay_currency || 'USDT').toString().slice(0, 32),
                     credits_awarded: creditsAwarded,
-                    fee_amount: depositFee,
-                    vault_fee: vaultFeeAmount,
-                    trading_fund_fee: tradingFundFeeAmount,
+                    deposit_fee: depositFee,
                     status: 'processed',
-                    payment_id: paymentData.payment_id,
-                    payment_data: paymentData,
                     processed_at: new Date().toISOString(),
                     created_at: new Date().toISOString()
                 })
@@ -842,10 +846,17 @@ class NOWPaymentsService {
                 throw new Error(`Failed to record deposit: ${depositError.message}`);
             }
 
-            // Update vault balance (DB tracking)
+            // Update vault balance (DB tracking).
+            // CRÍTICO: la funcion real (migración 002) espera los parámetros
+            // `amount_to_add` y `tx_hash_param` — esta llamada usaba
+            // `amount_param`/`transaction_type_param`, que no existen en la
+            // función real, así que SIEMPRE fallaba (con el error atrapado
+            // abajo como "no crítico"). El Vault nunca se fondeó con la
+            // comisión de ningún depósito de NOWPayments por esta causa,
+            // independientemente del bug del insert de arriba.
             const { error: vaultError } = await supabase.rpc('update_vault_balance', {
-                amount_param: vaultFeeAmount,
-                transaction_type_param: 'deposit_fee'
+                amount_to_add: vaultFeeAmount,
+                tx_hash_param: paymentData.payment_id
             });
 
             if (vaultError) {
