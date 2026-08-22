@@ -33,7 +33,7 @@ from __future__ import annotations
 import time
 import uuid
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Optional
 
 from flask import Flask, jsonify, request
 
@@ -81,7 +81,16 @@ def _today_key() -> str:
     return time.strftime("%Y-%m-%d", time.gmtime())
 
 
-def _check_and_reserve_daily_cap(amount_usd: float) -> None:
+def _check_and_reserve_daily_cap(amount_usd: float, reserve: bool) -> None:
+    """Raises CircuitBreakerOpen if adding amount_usd would exceed the daily
+    cap. Only WRITES the reservation back to Firestore when `reserve` is
+    True — a dry_run call must be able to check "would this fit under the
+    cap" without actually eating into the real cap, otherwise dry-run
+    testing (explicitly meant to be side-effect-free, see process_payment)
+    silently consumes real daily capacity and can make legitimate payouts
+    fail later that same day. This was a real bug: found live when a dry_run
+    test call was immediately followed by cfo_daily_totals showing the test
+    amount reserved for real."""
     doc_id = _today_key()
     day = store.get("cfo_daily_totals", doc_id) or {"total_usd": 0.0}
     new_total = day["total_usd"] + amount_usd
@@ -89,14 +98,23 @@ def _check_and_reserve_daily_cap(amount_usd: float) -> None:
         raise CircuitBreakerOpen(
             f"Daily cap exceeded: {day['total_usd']} + {amount_usd} > {DAILY_CAP_USD}"
         )
-    store.set("cfo_daily_totals", doc_id, {"total_usd": new_total})
+    if reserve:
+        store.set("cfo_daily_totals", doc_id, {"total_usd": new_total})
 
 
 def process_payment(event: PaymentEvent) -> dict[str, Any]:
     """Core CFO logic: validate, split, cap-check, payout, log. Idempotent per
     payment_id. Returns a result dict; never raises for expected rejections —
-    those are returned as {"status": "rejected", "reason": ...} and still
-    logged to BigQuery so the P&L reflects reality."""
+    those are returned as {"status": "rejected", "reason": ...} and, for real
+    (non-dry-run) events, logged to BigQuery so the P&L reflects reality.
+
+    dry_run contract: a dry_run event must leave ZERO trace — no BigQuery
+    ledger row, no Firestore alert, no daily-cap reservation, no idempotency
+    record. That's what makes it safe to use for testing against production.
+    Every write below is gated on `not event.dry_run` for exactly that reason
+    (an earlier version only gated the very last step, so dry_run calls were
+    still writing alerts/ledger rows and reserving real daily-cap capacity —
+    caught via live testing, see git history)."""
 
     idempotency_key = f"payment:{event.payment_id}"
     existing = store.get("cfo_processed_payments", idempotency_key)
@@ -113,32 +131,29 @@ def process_payment(event: PaymentEvent) -> dict[str, Any]:
         "processed_at": time.time(),
     }
 
-    if event.amount_usd <= 0:
-        row.update(status="rejected", reason="non_positive_amount")
-        ledger.insert_row(row)
+    def _reject(reason: str, alert: Optional[str] = None) -> dict[str, Any]:
+        row.update(status="rejected", reason=reason)
+        if not event.dry_run:
+            if alert:
+                store.add("cfo_alerts", {**row, "alert": alert})
+            ledger.insert_row(row)
         return row
+
+    if event.amount_usd <= 0:
+        return _reject("non_positive_amount")
 
     if event.amount_usd > PER_TX_CAP_USD:
-        row.update(status="rejected", reason=f"exceeds_per_tx_cap({PER_TX_CAP_USD})")
-        store.add("cfo_alerts", {**row, "alert": "PER_TX_CAP_EXCEEDED"})
-        ledger.insert_row(row)
-        return row
+        return _reject(f"exceeds_per_tx_cap({PER_TX_CAP_USD})", alert="PER_TX_CAP_EXCEEDED")
 
     try:
-        _check_and_reserve_daily_cap(event.amount_usd)
+        _check_and_reserve_daily_cap(event.amount_usd, reserve=not event.dry_run)
     except CircuitBreakerOpen as exc:
-        row.update(status="rejected", reason=str(exc))
-        store.add("cfo_alerts", {**row, "alert": "DAILY_CAP_EXCEEDED"})
-        ledger.insert_row(row)
         logger.warning("[cfo] Circuit breaker open: %s", exc)
-        return row
+        return _reject(str(exc), alert="DAILY_CAP_EXCEEDED")
 
     artist_wallet = supabase.get_artist_wallet(event.artist_user_id)
     if not artist_wallet:
-        row.update(status="rejected", reason="artist_wallet_not_on_file")
-        store.add("cfo_alerts", {**row, "alert": "NO_WALLET_ON_FILE"})
-        ledger.insert_row(row)
-        return row
+        return _reject("artist_wallet_not_on_file", alert="NO_WALLET_ON_FILE")
 
     artist_amount = round(event.amount_usd * (ARTIST_SPLIT_PCT / 100), 6)
     mtr_amount = round(event.amount_usd - artist_amount, 6)
@@ -152,11 +167,8 @@ def process_payment(event: PaymentEvent) -> dict[str, Any]:
 
     if event.dry_run:
         # Verifies every guardrail (idempotency, caps, wallet-of-record
-        # lookup) without ever calling the backend's real payout route.
-        # No money moves, no BigQuery ledger row is written (nothing
-        # actually happened), and idempotency state is not recorded either
-        # so a real follow-up call with the same payment_id still goes
-        # through normally.
+        # lookup) without ever calling the backend's real payout route, and
+        # without writing anything anywhere (see docstring above).
         row.update(status="dry_run_ok")
         return row
 

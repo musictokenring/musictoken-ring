@@ -31,14 +31,31 @@ narra la batalla, anima a votar y responde preguntas generales de fans sobre las
 del juego."""
 
 
+_model_cache = None  # cached GenerativeModel — see note below
+
+
 def _get_model():
     """Lazy import so the module still loads (and unit tests still run)
-    without the Vertex AI SDK / credentials present."""
+    without the Vertex AI SDK / credentials present.
+
+    CRITICO: this used to call vertexai.init() + build a new GenerativeModel
+    on EVERY request. Measured live: 18-28s per /narrate call — way past the
+    8s timeout the frontend (game-engine.js) uses for "best-effort" narration,
+    meaning in practice the feature was silently timing out and never showing
+    anything to real users, despite Gemini actually answering correctly.
+    Caching the client/model at module scope (built once per warm instance)
+    is the fix — re-running vertexai.init() and re-constructing the model
+    object per call was pure overhead, not something Gemini itself needed."""
+    global _model_cache
+    if _model_cache is not None:
+        return _model_cache
+
     import vertexai
     from vertexai.generative_models import GenerativeModel
 
     vertexai.init(project=env("GCP_PROJECT_ID", required=True), location=env("GCP_REGION", default="us-central1"))
-    return GenerativeModel(MODEL_NAME, system_instruction=SYSTEM_PROMPT)
+    _model_cache = GenerativeModel(MODEL_NAME, system_instruction=SYSTEM_PROMPT)
+    return _model_cache
 
 
 def build_battle_context(battle_id: str) -> str:

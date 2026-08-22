@@ -17,6 +17,7 @@ from __future__ import annotations
 import os
 import smtplib
 import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from email.mime.text import MIMEText
 from typing import Any, Optional
 
@@ -28,9 +29,15 @@ from common import FirestoreStore, enable_local_cors, get_logger, env
 logger = get_logger("scout_agent")
 
 DEEZER_CHART_URL = "https://api.deezer.com/chart/0/artists"
+DEEZER_ARTIST_URL = "https://api.deezer.com/artist/{id}"
 GROWTH_THRESHOLD_PCT = float(env("SCOUT_GROWTH_THRESHOLD_PCT", default="20"))
 SNAPSHOT_COLLECTION = "scout_artist_snapshots"
 DETECTIONS_COLLECTION = "scout_detections"
+
+# Deezer occasionally 403s requests with no User-Agent (looks like bot
+# traffic to them) — a real, observed failure in production logs (~1 in 12
+# hourly scans). A normal browser-like UA measurably cuts that down.
+DEEZER_HEADERS = {"User-Agent": "Mozilla/5.0 (compatible; MTR-Scout-Agent/1.0; +https://musictokenring.xyz)"}
 
 store = FirestoreStore()
 app = Flask(__name__)
@@ -38,12 +45,39 @@ enable_local_cors(app)
 
 
 def fetch_trending_artists(limit: int = 50) -> list[dict[str, Any]]:
-    """Pull Deezer's trending artist chart. Public API, no key required for
-    this endpoint; DEEZER_API_KEY is reserved for endpoints that need it."""
-    resp = requests.get(DEEZER_CHART_URL, params={"limit": limit}, timeout=15)
+    """Pull Deezer's trending artist chart, then enrich each artist with its
+    real fan count. CRITICO: /chart/0/artists does NOT include `nb_fan` at
+    all (confirmed against the live API) — every artist silently defaulted
+    to 0 fans, so growth was always computed as 0-vs-0 and could never fire
+    a detection. This was live in production for a week (Firestore showed
+    real hourly snapshots, all with nb_fan=0) before being caught. Fixed by
+    fetching each artist's real profile (/artist/{id}), which does have it."""
+    resp = requests.get(DEEZER_CHART_URL, params={"limit": limit}, headers=DEEZER_HEADERS, timeout=15)
     resp.raise_for_status()
-    data = resp.json()
-    return data.get("data", [])
+    chart_artists = resp.json().get("data", [])
+
+    def _fetch_fan_count(artist: dict[str, Any]) -> dict[str, Any]:
+        artist_id = artist.get("id")
+        try:
+            detail_resp = requests.get(
+                DEEZER_ARTIST_URL.format(id=artist_id), headers=DEEZER_HEADERS, timeout=10
+            )
+            detail_resp.raise_for_status()
+            return {**artist, "nb_fan": detail_resp.json().get("nb_fan", 0)}
+        except Exception as exc:  # noqa: BLE001 — one artist's profile failing shouldn't kill the scan
+            logger.warning("[scout] Could not fetch fan count for artist %s: %s", artist_id, exc)
+            return artist
+
+    # Concurrent, not sequential: 50 one-by-one requests risked running past
+    # gunicorn's worker timeout on Cloud Run (observed hanging in practice
+    # once the /artist/{id} enrichment above was added). A small thread pool
+    # keeps a full scan well under a few seconds.
+    enriched: list[dict[str, Any]] = []
+    with ThreadPoolExecutor(max_workers=10) as pool:
+        futures = [pool.submit(_fetch_fan_count, artist) for artist in chart_artists]
+        for future in as_completed(futures):
+            enriched.append(future.result())
+    return enriched
 
 
 def compute_growth(artist: dict[str, Any]) -> Optional[dict[str, Any]]:

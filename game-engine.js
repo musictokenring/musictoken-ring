@@ -34,8 +34,14 @@ const HOST_AGENT_URL = 'https://host-agent-287417719690.us-central1.run.app';
 async function triggerHostNarration(battleId, eventType, contextText) {
     const el = document.getElementById('hostCommentary');
     try {
+        // CRITICO: medido en vivo, gemini-2.5-pro responde en 13-26s en este
+        // agente (ver DEPLOY_GCP.md/PITCH.md). Con 8s acá, el fetch se
+        // abortaba SIEMPRE antes de que llegara la respuesta real — la
+        // narración nunca llegaba a mostrarse en producción pese a que el
+        // agente sí contestaba bien. 25s le da margen real sin bloquear la
+        // batalla (el resto de la UI sigue andando mientras esto corre).
         const controller = new AbortController();
-        const timeout = setTimeout(() => controller.abort(), 8000);
+        const timeout = setTimeout(() => controller.abort(), 25000);
         const resp = await fetch(HOST_AGENT_URL + '/narrate', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
