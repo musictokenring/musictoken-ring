@@ -31,8 +31,18 @@ function promptLoginRequired(message) {
 // estado vive acá en el cliente, así que es la fuente real de verdad.
 const HOST_AGENT_URL = 'https://host-agent-287417719690.us-central1.run.app';
 
+// CRITICO: se dispara una vez al arrancar la batalla ('hype') y otra vez al
+// terminar ('result'), pero cada respuesta tarda 13-28s en llegar — no hay
+// garantía de que lleguen en orden. Se vio en vivo: la narración de "arranca
+// la batalla" llegando y pisando el mensaje DESPUÉS de que ya se mostraba el
+// resultado, algo sin sentido para quien lo lee. Este contador descarta
+// cualquier respuesta que ya no sea la más reciente disparada, así una
+// llamada vieja que llega tarde nunca pisa a una más nueva.
+let hostNarrationSeq = 0;
+
 async function triggerHostNarration(battleId, eventType, contextText) {
     const el = document.getElementById('hostCommentary');
+    const mySeq = ++hostNarrationSeq;
     try {
         // CRITICO: medido en vivo, gemini-2.5-pro responde en 13-26s en este
         // agente (ver DEPLOY_GCP.md/PITCH.md). Con 8s acá, el fetch se
@@ -50,7 +60,9 @@ async function triggerHostNarration(battleId, eventType, contextText) {
         });
         clearTimeout(timeout);
         if (!resp.ok) return;
+        if (mySeq !== hostNarrationSeq) return; // ya hay un evento más nuevo, descartar esta respuesta vieja
         const data = await resp.json();
+        if (mySeq !== hostNarrationSeq) return; // re-chequear: pudo dispararse uno nuevo mientras esperábamos el JSON
         if (el && data && data.reply) {
             el.textContent = '🎙️ ' + data.reply;
             el.classList.remove('hidden');
