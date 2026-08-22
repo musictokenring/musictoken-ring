@@ -980,7 +980,7 @@
                     </div>
                 </div>
 
-                <div class="grid gap-3 sm:grid-cols-2">
+                <div class="grid gap-3 sm:grid-cols-3">
                     <button type="button" onclick="openNowPaymentsModal('fiat')" class="deposit-flow-btn group relative overflow-hidden rounded-xl border border-fuchsia-500/35 bg-gradient-to-br from-fuchsia-950/50 to-gray-900/80 px-4 py-4 text-left transition hover:border-fuchsia-400/50 hover:shadow-lg hover:shadow-fuchsia-500/10">
                         <span class="block text-xs font-medium text-fuchsia-300/90 mb-1">Tarjeta / fiat</span>
                         <span class="block text-base font-bold text-white">Comprar con Fiat</span>
@@ -990,6 +990,11 @@
                         <span class="block text-xs font-medium text-cyan-300/90 mb-1">Cripto</span>
                         <span class="block text-base font-bold text-white">Depositar con Cripto</span>
                         <span class="mt-2 block text-[11px] text-gray-500">Stablecoins y otras monedas admitidas</span>
+                    </button>
+                    <button type="button" onclick="openMercadoPagoModal()" class="deposit-flow-btn group relative overflow-hidden rounded-xl border border-yellow-500/40 bg-gradient-to-br from-yellow-950/40 to-gray-900/80 px-4 py-4 text-left transition hover:border-yellow-400/55 hover:shadow-lg hover:shadow-yellow-500/10">
+                        <span class="block text-xs font-medium text-yellow-300/90 mb-1">Colombia</span>
+                        <span class="block text-base font-bold text-white">Mercado Pago</span>
+                        <span class="mt-2 block text-[11px] text-gray-500">PSE, Nequi o tarjeta (COP)</span>
                     </button>
                 </div>
 
@@ -1282,6 +1287,143 @@
                 }
             });
             validateNpDepositAmount(false);
+        })();
+        </script>
+
+        <div id="mercadopagoModal" class="fixed inset-0 z-[10000] hidden" aria-hidden="true">
+            <div class="absolute inset-0 bg-black/75 backdrop-blur-sm" onclick="closeMercadoPagoModal()"></div>
+            <div class="relative z-10 flex min-h-full items-center justify-center p-4 pointer-events-none">
+                <div class="pointer-events-auto w-full max-w-md rounded-2xl border border-yellow-500/25 bg-gray-950 shadow-2xl shadow-black/50 overflow-hidden flex flex-col">
+                    <div class="flex flex-col gap-0.5 px-4 py-3 border-b border-white/10 bg-gray-900/90 sm:flex-row sm:items-center sm:justify-between">
+                        <div>
+                            <span class="text-sm font-semibold text-yellow-300">Mercado Pago</span>
+                            <p class="text-[11px] text-gray-500 font-normal mt-0.5">PSE, Nequi o tarjeta, en pesos colombianos (COP). Te vamos a redirigir al checkout oficial de Mercado Pago.</p>
+                        </div>
+                        <button type="button" onclick="closeMercadoPagoModal()" class="rounded-lg px-2.5 py-1 text-gray-400 hover:text-white hover:bg-white/10 text-xl leading-none self-end" aria-label="Cerrar">&times;</button>
+                    </div>
+                    <div class="flex flex-col gap-4 p-5 sm:p-6">
+                        <label class="text-xs text-gray-400" for="mpUsdAmount">Importe a depositar (USD)</label>
+                        <input id="mpUsdAmount" type="number" min="12" step="0.01" value="12" placeholder="12" inputmode="decimal" class="w-full rounded-lg border border-white/15 bg-gray-900/80 px-3 py-2.5 text-white text-base focus:border-yellow-500/50 focus:outline-none" />
+                        <p id="mpMinDepositHint" class="text-[11px] text-gray-500">Debes tener sesión iniciada (misma cuenta que en MusicToken Ring). <strong class="text-yellow-400/90">Depósito mínimo: 12 USD</strong>. Se cobra en COP al tipo de cambio del momento; el checkout se abre en una <strong class="text-gray-400">nueva pestaña</strong>.</p>
+                        <button type="button" id="mpStartCheckoutBtn" class="w-full rounded-xl bg-gradient-to-r from-yellow-500 to-amber-600 py-3 text-sm font-bold text-white shadow-lg shadow-yellow-900/30 hover:opacity-95 transition disabled:opacity-40 disabled:cursor-not-allowed">Continuar al pago</button>
+                        <p id="mpCheckoutErr" class="hidden text-red-300 text-sm"></p>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <script>
+        (function () {
+            var MIN_MP_DEPOSIT_USD = 12;
+
+            function parseMpUsdAmount(raw) {
+                return parseFloat(String(raw == null ? '' : raw).replace(',', '.'), 10);
+            }
+
+            window.openMercadoPagoModal = function () {
+                var modal = document.getElementById('mercadopagoModal');
+                if (!modal) return;
+                var inp = document.getElementById('mpUsdAmount');
+                var errEl = document.getElementById('mpCheckoutErr');
+                if (inp) inp.value = String(MIN_MP_DEPOSIT_USD);
+                if (errEl) {
+                    errEl.textContent = '';
+                    errEl.classList.add('hidden');
+                }
+                modal.classList.remove('hidden');
+                modal.setAttribute('aria-hidden', 'false');
+                document.body.style.overflow = 'hidden';
+            };
+            window.closeMercadoPagoModal = function () {
+                var modal = document.getElementById('mercadopagoModal');
+                if (modal) {
+                    modal.classList.add('hidden');
+                    modal.setAttribute('aria-hidden', 'true');
+                }
+                document.body.style.overflow = '';
+            };
+            document.addEventListener('click', async function (ev) {
+                var t = ev.target;
+                if (!t || !t.id || t.id !== 'mpStartCheckoutBtn') return;
+                var errEl = document.getElementById('mpCheckoutErr');
+                var inp = document.getElementById('mpUsdAmount');
+                if (errEl) {
+                    errEl.textContent = '';
+                    errEl.classList.add('hidden');
+                }
+                var amt = inp ? parseMpUsdAmount(inp.value) : NaN;
+                if (!Number.isFinite(amt) || amt < MIN_MP_DEPOSIT_USD) {
+                    if (errEl) {
+                        errEl.textContent = 'Indicá un importe válido (mínimo ' + MIN_MP_DEPOSIT_USD + ' USD).';
+                        errEl.classList.remove('hidden');
+                    }
+                    return;
+                }
+                var supa = window.supabaseClient;
+                var sess = supa ? await supa.auth.getSession() : { data: {} };
+                if (!sess.data.session) {
+                    if (errEl) {
+                        errEl.textContent = 'Debes iniciar sesión (email o Google) para vincular el pago a tu cuenta.';
+                        errEl.classList.remove('hidden');
+                    }
+                    return;
+                }
+                var base = (window.CONFIG && window.CONFIG.BACKEND_API) || '';
+                base = String(base).replace(/\/$/, '');
+                if (!base) {
+                    if (errEl) {
+                        errEl.textContent = 'Error de configuración del backend.';
+                        errEl.classList.remove('hidden');
+                    }
+                    return;
+                }
+                t.disabled = true;
+                try {
+                    var path = '/api/deposit/mercadopago/create';
+                    if (/\/api$/i.test(base)) {
+                        path = '/deposit/mercadopago/create';
+                    }
+                    var r = await fetch(base + path, {
+                        method: 'POST',
+                        credentials: 'omit',
+                        cache: 'no-store',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            Authorization: 'Bearer ' + sess.data.session.access_token
+                        },
+                        body: JSON.stringify({ amount_usd: amt })
+                    });
+                    var j = await r.json().catch(function () { return {}; });
+                    if (!r.ok || !j.ok || !j.init_point) {
+                        var msg = (j && j.error) ? j.error : ('Error ' + r.status);
+                        if (errEl) {
+                            errEl.textContent = msg;
+                            errEl.classList.remove('hidden');
+                        }
+                        return;
+                    }
+                    var payWin = window.open(j.init_point, '_blank', 'noopener,noreferrer');
+                    if (!payWin && errEl) {
+                        errEl.textContent = 'Permite ventanas emergentes para abrir el checkout de Mercado Pago.';
+                        errEl.classList.remove('hidden');
+                    } else {
+                        closeMercadoPagoModal();
+                    }
+                } catch (e) {
+                    console.warn('[MercadoPago] create payment:', e);
+                    if (errEl) {
+                        errEl.textContent = e.message || 'Error de red';
+                        errEl.classList.remove('hidden');
+                    }
+                } finally {
+                    t.disabled = false;
+                }
+            });
+            document.addEventListener('keydown', function (e) {
+                var m = document.getElementById('mercadopagoModal');
+                if (e.key === 'Escape' && m && !m.classList.contains('hidden')) {
+                    closeMercadoPagoModal();
+                }
+            });
         })();
         </script>
 

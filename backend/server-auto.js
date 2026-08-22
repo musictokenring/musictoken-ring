@@ -17,6 +17,7 @@ const { LiquidityManager } = require('./liquidity-manager');
 const { WalletLinkService } = require('./wallet-link-service');
 const { TradingFundService } = require('./trading-fund-service');
 const { NOWPaymentsService } = require('./nowpayments-service');
+const { MercadoPagoService } = require('./mercadopago-service');
 const { requireEvmPlatformWallet, getNowPaymentsSettlementAddress, isEvmAddress, resolveEvmPlatformWallet } = require('./platform-addresses');
 const { createClient } = require('@supabase/supabase-js');
 const {
@@ -129,6 +130,7 @@ let liquidityManager;
 let walletLinkService;
 let tradingFundService;
 let nowPaymentsService;
+let mercadoPagoService;
 let tournamentScheduler;
 
 // 🔒 SEGURIDAD: Validar variables de entorno críticas
@@ -289,6 +291,17 @@ async function initializeServices() {
             console.log('[server] ✅ NOWPayments service initialized');
         } catch (npError) {
             console.error('[server] ⚠️ Error initializing NOWPayments service:', npError.message);
+        }
+
+        try {
+            if (process.env.MERCADOPAGO_ACCESS_TOKEN) {
+                mercadoPagoService = new MercadoPagoService();
+                console.log('[server] ✅ Mercado Pago service initialized');
+            } else {
+                console.log('[server] ℹ️ MERCADOPAGO_ACCESS_TOKEN no configurado — Mercado Pago deshabilitado');
+            }
+        } catch (mpError) {
+            console.error('[server] ⚠️ Error initializing Mercado Pago service:', mpError.message);
         }
 
         try {
@@ -2401,12 +2414,101 @@ app.post('/webhook/moonpay', express.raw({ type: 'application/json' }), (req, re
     res.status(410).json({ error: 'legacy_moonpay_disabled', message: 'MoonPay retirado; usar NOWPayments.' });
 });
 
-app.post('/webhook/mercadopago', express.json(), (req, res) => {
-    res.status(410).json({ error: 'legacy_mercadopago_disabled', message: 'Mercado Pago retirado; usar NOWPayments.' });
+/**
+ * Webhook de Mercado Pago (IPN). Público en internet por definición — por
+ * eso la firma x-signature SIEMPRE se valida antes de procesar nada (ver
+ * mercadopago-service.js::verifyWebhookSignature). data.id llega como query
+ * param en la URL que Mercado Pago llama (a veces también en el body).
+ */
+app.post('/webhook/mercadopago', express.json(), async (req, res) => {
+    try {
+        if (!mercadoPagoService) {
+            console.error('[mercadopago-webhook] Service not initialized');
+            return res.status(503).json({ error: 'Mercado Pago service unavailable' });
+        }
+
+        const dataId = req.query['data.id'] || req.query.id || req.body?.data?.id;
+        const signatureOk = mercadoPagoService.verifyWebhookSignature(req.headers, dataId);
+        if (!signatureOk) {
+            console.error('[mercadopago-webhook] Firma inválida o faltante — notificación rechazada');
+            return res.status(401).json({ error: 'Invalid signature' });
+        }
+
+        const notification = {
+            type: req.body?.type || req.query.type,
+            data: { id: dataId }
+        };
+        console.log('[mercadopago-webhook] Notificación válida:', notification);
+
+        const result = await mercadoPagoService.processDeposit(notification);
+
+        // Responder 200 rápido (Mercado Pago espera respuesta dentro de ~22s)
+        res.status(200).json({ received: true, processed: result.processed });
+    } catch (error) {
+        console.error('[mercadopago-webhook] Error procesando webhook:', error);
+        // 200 igual, para que Mercado Pago no reintente infinito un error nuestro;
+        // el log ya quedó arriba para investigar.
+        res.status(200).json({ received: true, error: error.message });
+    }
 });
 
-app.post('/api/deposit/mercadopago/create', (req, res) => {
-    res.status(410).json({ error: 'legacy_mercadopago_disabled', message: 'Mercado Pago retirado; usar NOWPayments.' });
+/**
+ * Crea una preferencia de checkout de Mercado Pago (PSE/Nequi/tarjeta en COP).
+ * Requiere Authorization: Bearer (Supabase), mismo patrón que NOWPayments.
+ * Body: { amount_usd: number }.
+ */
+app.post('/api/deposit/mercadopago/create', depositRateLimiter, async (req, res) => {
+    try {
+        if (!mercadoPagoService) {
+            return res.status(503).json({ error: 'Mercado Pago service unavailable' });
+        }
+        const authHeader = req.headers.authorization;
+        if (!authHeader || !authHeader.startsWith('Bearer ')) {
+            return res.status(401).json({ error: 'Authentication required' });
+        }
+        const token = authHeader.replace('Bearer ', '');
+        const { data: { user: authUser }, error: authError } = await supabase.auth.getUser(token);
+        if (authError || !authUser) {
+            return res.status(401).json({ error: 'Invalid or expired token' });
+        }
+
+        const { data: row } = await supabase
+            .from('users')
+            .select('id')
+            .eq('id', authUser.id)
+            .maybeSingle();
+        let publicUserId = row?.id;
+        if (!publicUserId && authUser.email) {
+            const { data: byEmail } = await supabase
+                .from('users')
+                .select('id')
+                .ilike('email', authUser.email)
+                .maybeSingle();
+            publicUserId = byEmail?.id;
+        }
+        if (!publicUserId) {
+            return res.status(400).json({
+                error: 'Usuario no encontrado. Regístrate o inicia sesión en la plataforma antes de pagar.'
+            });
+        }
+
+        const raw = req.body && (req.body.amount_usd ?? req.body.price_amount);
+        const amountUsd = typeof raw === 'string' ? parseFloat(raw) : Number(raw);
+        if (!Number.isFinite(amountUsd) || amountUsd <= 0) {
+            return res.status(400).json({ error: 'amount_usd inválido' });
+        }
+
+        const result = await mercadoPagoService.createCheckoutPreference({
+            amountUsd,
+            userId: publicUserId,
+            email: authUser.email,
+            description: 'MusicToken Ring — depósito de saldo'
+        });
+        res.json({ ok: true, ...result });
+    } catch (e) {
+        console.error('[mercadopago-create]', e);
+        res.status(500).json({ ok: false, error: e.message || 'Error creando el pago' });
+    }
 });
 
 try {

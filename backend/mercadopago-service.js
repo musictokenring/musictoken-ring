@@ -1,11 +1,52 @@
 /**
  * Mercado Pago Service
  * Handles Mercado Pago checkout integration and webhook processing
- * Depósitos fiat (COP/USD) → créditos en USD nominal (equivalente 1:1 a USDC en Base on-chain)
+ * Depósitos fiat (COP vía PSE/Nequi/tarjeta) → créditos en USD nominal
+ * (mismo saldo jugable 1:1 USD que NOWPayments, ver unified-balance.js)
+ *
+ * Seguridad: mismo criterio que el resto de la plataforma tras el incidente
+ * documentado en ANALISIS-VULNERABILIDAD-CONFIRMADA.md — el webhook es
+ * público en internet, así que su firma SIEMPRE se valida antes de acreditar
+ * nada (ver verifyWebhookSignature), y el usuario a acreditar viene del
+ * external_reference que generamos nosotros al crear la preferencia (con la
+ * sesión ya autenticada), nunca de un campo que el webhook pueda inventar.
  */
 
 const { createClient } = require('@supabase/supabase-js');
 const crypto = require('crypto');
+
+// --------------------------------------------------------------------------
+// Tasa de cambio USD/COP en vivo, con cache y fallback conservador.
+// Antes esto era un `1 / 4000` fijo en el código — con el peso colombiano
+// moviéndose bastante, eso podía sub/sobre-acreditar saldo real de forma
+// silenciosa. Fuente: exchangerate-api (gratis, sin key). Cache de 6h para
+// no depender de esa API en cada webhook, con fallback a la última tasa
+// buena conocida (o a un valor conservador si nunca se pudo obtener una).
+// --------------------------------------------------------------------------
+const FX_CACHE_TTL_MS = 6 * 60 * 60 * 1000; // 6 horas
+const FX_FALLBACK_COP_PER_USD = 4000; // solo si la API falla Y nunca hubo cache
+let fxCache = { copPerUsd: null, fetchedAt: 0 };
+
+async function getCopPerUsd() {
+    const now = Date.now();
+    if (fxCache.copPerUsd && (now - fxCache.fetchedAt) < FX_CACHE_TTL_MS) {
+        return fxCache.copPerUsd;
+    }
+    try {
+        const resp = await fetch('https://open.er-api.com/v6/latest/USD', { signal: AbortSignal.timeout(8000) });
+        if (!resp.ok) throw new Error(`FX API status ${resp.status}`);
+        const data = await resp.json();
+        const rate = data?.rates?.COP;
+        if (!Number.isFinite(rate) || rate <= 0) throw new Error('FX API devolvió una tasa COP inválida');
+        fxCache = { copPerUsd: rate, fetchedAt: now };
+        return rate;
+    } catch (err) {
+        console.error('[mercadopago] ⚠️ No se pudo obtener tasa USD/COP en vivo, usando fallback:', err.message);
+        // Si hay una tasa vieja en cache (aunque venció el TTL), es mejor que el fallback fijo.
+        if (fxCache.copPerUsd) return fxCache.copPerUsd;
+        return FX_FALLBACK_COP_PER_USD;
+    }
+}
 
 class MercadoPagoService {
     constructor() {
@@ -13,12 +54,12 @@ class MercadoPagoService {
             process.env.SUPABASE_URL || 'https://bscmgcnynbxalcuwdqlm.supabase.co',
             process.env.SUPABASE_SERVICE_ROLE_KEY
         );
-        
+
         // Mercado Pago credentials (from environment)
         this.accessToken = process.env.MERCADOPAGO_ACCESS_TOKEN;
         this.publicKey = process.env.MERCADOPAGO_PUBLIC_KEY;
         this.webhookSecret = process.env.MERCADOPAGO_WEBHOOK_SECRET;
-        
+
         // Fee distribution: 5% total, 75% vault, 25% trading fund
         this.depositFeePercent = 0.05;
         this.vaultFeePercent = 0.75;
@@ -26,235 +67,270 @@ class MercadoPagoService {
     }
 
     /**
-     * Create a Mercado Pago checkout preference
-     * @param {Object} params - { amount, currency, userId, email, description }
-     * @returns {Promise<Object>} - Checkout preference data
+     * Create a Mercado Pago checkout preference (Checkout Pro).
+     * El importe SIEMPRE se recibe en USD (mismo criterio que el resto de la
+     * app, ver depositSectionMain / NOWPayments) y se convierte a COP acá
+     * adentro, porque PSE/Nequi solo existen en COP en el checkout de MP.
+     * @param {Object} params - { amountUsd, userId, email, description }
      */
     async createCheckoutPreference(params) {
-        const { amount, currency = 'COP', userId, email, description } = params;
-        
+        const { amountUsd, userId, email, description } = params;
+
         if (!this.accessToken) {
             throw new Error('Mercado Pago access token not configured');
         }
+        const usd = parseFloat(amountUsd);
+        if (!Number.isFinite(usd) || usd <= 0) {
+            throw new Error('amountUsd inválido');
+        }
+        if (!userId) {
+            throw new Error('userId es requerido');
+        }
 
-        // Convert amount to Mercado Pago format (COP or USD)
-        // For now, we'll use COP (Colombian Pesos) as default
-        const mpAmount = parseFloat(amount);
-        
-        // Create preference
+        const copPerUsd = await getCopPerUsd();
+        // MP Colombia exige montos enteros de COP (sin centavos).
+        const copAmount = Math.round(usd * copPerUsd);
+
         const preference = {
             items: [
                 {
                     title: description || 'Depósito MusicToken Ring',
                     quantity: 1,
-                    unit_price: mpAmount,
-                    currency_id: currency
+                    unit_price: copAmount,
+                    currency_id: 'COP'
                 }
             ],
             payer: {
-                email: email || 'user@example.com'
+                email: email || undefined
             },
             back_urls: {
-                success: `${process.env.FRONTEND_URL || 'https://musictokenring.xyz'}/deposit-success`,
-                failure: `${process.env.FRONTEND_URL || 'https://musictokenring.xyz'}/deposit-failure`,
-                pending: `${process.env.FRONTEND_URL || 'https://musictokenring.xyz'}/deposit-pending`
+                success: `${process.env.FRONTEND_URL || 'https://musictokenring.xyz'}/?mp_payment=success`,
+                failure: `${process.env.FRONTEND_URL || 'https://musictokenring.xyz'}/?mp_payment=failure`,
+                pending: `${process.env.FRONTEND_URL || 'https://musictokenring.xyz'}/?mp_payment=pending`
             },
             auto_return: 'approved',
-            external_reference: userId, // Store userId for webhook processing
+            // CRÍTICO: external_reference es el ÚNICO lugar de donde el webhook
+            // toma el userId a acreditar — lo fijamos acá con la sesión ya
+            // autenticada, el webhook nunca puede inventar/cambiar este valor.
+            external_reference: String(userId),
             notification_url: `${process.env.BACKEND_URL || 'https://musictoken-ring.onrender.com'}/webhook/mercadopago`,
             statement_descriptor: 'MTR Deposit'
         };
 
-        try {
-            const response = await fetch('https://api.mercadopago.com/checkout/preferences', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${this.accessToken}`
-                },
-                body: JSON.stringify(preference)
-            });
+        const response = await fetch('https://api.mercadopago.com/checkout/preferences', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                Authorization: `Bearer ${this.accessToken}`
+            },
+            body: JSON.stringify(preference)
+        });
 
-            if (!response.ok) {
-                const errorData = await response.json();
-                throw new Error(`Mercado Pago API error: ${errorData.message || response.statusText}`);
-            }
-
-            const data = await response.json();
-            return {
-                preference_id: data.id,
-                init_point: data.init_point, // URL to redirect user
-                sandbox_init_point: data.sandbox_init_point,
-                public_key: this.publicKey
-            };
-        } catch (error) {
-            console.error('[mercadopago] Error creating preference:', error);
-            throw error;
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            throw new Error(`Mercado Pago API error: ${errorData.message || response.statusText}`);
         }
+
+        const data = await response.json();
+        return {
+            preference_id: data.id,
+            init_point: data.init_point, // URL de checkout para redirigir al usuario
+            sandbox_init_point: data.sandbox_init_point,
+            public_key: this.publicKey,
+            requested_amount_usd: usd,
+            cop_amount: copAmount,
+            fx_rate_used: copPerUsd
+        };
     }
 
     /**
-     * Verify webhook signature (if Mercado Pago provides one)
-     * @param {Object} payload - Webhook payload
-     * @param {string} signature - Signature header
+     * Verify the x-signature header Mercado Pago sends on every webhook call.
+     * Algoritmo oficial (docs de Mercado Pago, "Webhooks / notificaciones"):
+     *   manifest = `id:{dataId};request-id:{requestId};ts:{ts};`
+     *   (dataId en minúsculas)
+     *   HMAC-SHA256(manifest, MERCADOPAGO_WEBHOOK_SECRET) debe == v1
+     * Antes esta función devolvía `true` siempre (placeholder) — cualquiera
+     * en internet podía POSTear una notificación falsa y hacerse acreditar
+     * saldo. Ahora se verifica de verdad, en comparación de tiempo constante.
+     * @param {Object} headers - { xSignature, xRequestId }
+     * @param {string} dataId - el id de pago (query `data.id` o body.data.id)
      * @returns {boolean}
      */
-    verifyWebhookSignature(payload, signature) {
-        // Mercado Pago doesn't always provide signatures, but we can verify by checking the payment status
-        // For now, we'll rely on idempotency checks and payment status verification
-        return true; // Placeholder - implement if Mercado Pago provides signature verification
+    verifyWebhookSignature(headers, dataId) {
+        if (!this.webhookSecret) {
+            console.error('[mercadopago] ⚠️ MERCADOPAGO_WEBHOOK_SECRET no configurado — rechazando webhook');
+            return false;
+        }
+        const xSignature = headers?.['x-signature'] || headers?.xSignature;
+        const xRequestId = headers?.['x-request-id'] || headers?.xRequestId;
+        if (!xSignature || !xRequestId || !dataId) {
+            console.error('[mercadopago] ⚠️ Falta x-signature, x-request-id o data.id en el webhook');
+            return false;
+        }
+
+        const parts = {};
+        String(xSignature).split(',').forEach((p) => {
+            const i = p.indexOf('=');
+            if (i === -1) return;
+            parts[p.slice(0, i).trim()] = p.slice(i + 1).trim();
+        });
+        const { ts, v1 } = parts;
+        if (!ts || !v1) {
+            console.error('[mercadopago] ⚠️ x-signature con formato inesperado:', xSignature);
+            return false;
+        }
+
+        const manifest = `id:${String(dataId).toLowerCase()};request-id:${xRequestId};ts:${ts};`;
+        const expectedHex = crypto.createHmac('sha256', this.webhookSecret).update(manifest).digest('hex');
+
+        const a = Buffer.from(expectedHex, 'hex');
+        const b = Buffer.from(String(v1), 'hex');
+        if (a.length !== b.length || a.length === 0) {
+            return false;
+        }
+        return crypto.timingSafeEqual(a, b);
     }
 
     /**
-     * Process deposit from Mercado Pago webhook
+     * Process deposit from Mercado Pago webhook. SOLO llamar después de que
+     * verifyWebhookSignature() devolvió true.
      * @param {Object} notification - Mercado Pago notification payload
      * @returns {Promise<Object>} - Processing result
      */
     async processDeposit(notification) {
-        try {
-            const { type, data } = notification;
-            
-            // Mercado Pago sends different notification types
-            // We're interested in 'payment' notifications
-            if (type !== 'payment') {
-                console.log('[mercadopago] Ignoring notification type:', type);
-                return { processed: false, reason: 'Not a payment notification' };
-            }
+        const { type, data } = notification;
 
-            const paymentId = data.id;
-            
-            // Check idempotency (prevent duplicate processing)
-            const { data: existingDeposit } = await this.supabase
-                .from('deposits')
-                .select('id')
-                .eq('external_payment_id', `mp_${paymentId}`)
-                .maybeSingle();
-
-            if (existingDeposit) {
-                console.log('[mercadopago] Payment already processed:', paymentId);
-                return { processed: false, reason: 'Already processed', deposit_id: existingDeposit.id };
-            }
-
-            // Fetch payment details from Mercado Pago API
-            const paymentResponse = await fetch(`https://api.mercadopago.com/v1/payments/${paymentId}`, {
-                headers: {
-                    'Authorization': `Bearer ${this.accessToken}`
-                }
-            });
-
-            if (!paymentResponse.ok) {
-                throw new Error(`Failed to fetch payment ${paymentId} from Mercado Pago`);
-            }
-
-            const payment = await paymentResponse.json();
-
-            // Only process approved payments
-            if (payment.status !== 'approved') {
-                console.log('[mercadopago] Payment not approved:', payment.status);
-                return { processed: false, reason: `Payment status: ${payment.status}` };
-            }
-
-            // Get userId from external_reference (stored in preference)
-            const userId = payment.external_reference;
-            if (!userId) {
-                throw new Error('No userId in payment external_reference');
-            }
-
-            // Get user email
-            const payerEmail = payment.payer?.email;
-            
-            // Amount in payment currency (COP or USD)
-            const paymentAmount = parseFloat(payment.transaction_amount);
-            const paymentCurrency = payment.currency_id;
-
-            // Convert to USD (if COP, use approximate rate 1 USD = 4000 COP)
-            // TODO: Use real-time exchange rate API
-            const usdRate = paymentCurrency === 'USD' ? 1 : (1 / 4000); // Approximate
-            const usdAmount = paymentAmount * usdRate;
-
-            // Calculate fees
-            const depositFee = usdAmount * this.depositFeePercent;
-            const netAmount = usdAmount - depositFee;
-            const vaultFee = depositFee * this.vaultFeePercent;
-            const tradingFundFee = depositFee * this.tradingFundFeePercent;
-
-            // Créditos en USD nominal (1 crédito = 1 USD nominal)
-            const creditsToAward = netAmount;
-
-            // Update user fiat balance
-            const { error: updateError } = await this.supabase.rpc('increment_user_fiat_balance', {
-                user_id_param: userId,
-                amount_to_add: creditsToAward
-            });
-
-            if (updateError) {
-                throw new Error(`Failed to credit user balance: ${updateError.message}`);
-            }
-
-            // Update vault balance (75% of fee)
-            if (vaultFee > 0) {
-                const { error: vaultError } = await this.supabase.rpc('update_vault_balance', {
-                    amount_to_add: vaultFee,
-                    tx_hash_param: `mp_${paymentId}`
-                });
-                if (vaultError) {
-                    console.error('[mercadopago] Error updating vault:', vaultError);
-                }
-            }
-
-            // Update trading fund balance (25% of fee)
-            if (tradingFundFee > 0 && process.env.TRADING_FUND_WALLET) {
-                // TODO: Implement trading fund balance update
-                console.log('[mercadopago] Trading fund fee:', tradingFundFee);
-            }
-
-            // Record deposit in database
-            const { data: depositRecord, error: depositError } = await this.supabase
-                .from('deposits')
-                .insert({
-                    user_id: userId,
-                    tx_hash: `mp_${paymentId}`, // Use payment ID as tx_hash
-                    token: 'FIAT', // Fiat deposit
-                    amount: paymentAmount,
-                    credits_awarded: creditsToAward,
-                    rate_used: 1, // 1:1 USD nominal
-                    status: 'processed',
-                    external_payment_id: `mp_${paymentId}`,
-                    payment_method: 'mercadopago',
-                    payment_currency: paymentCurrency,
-                    usdc_value_at_deposit: usdAmount,
-                    deposit_fee: depositFee
-                })
-                .select('id')
-                .single();
-
-            if (depositError) {
-                console.error('[mercadopago] Error recording deposit:', depositError);
-                // Don't throw - balance was already credited
-            }
-
-            console.log('[mercadopago] ✅ Deposit processed:', {
-                paymentId,
-                userId,
-                amount: paymentAmount,
-                currency: paymentCurrency,
-                creditsAwarded: creditsToAward,
-                fee: depositFee
-            });
-
-            return {
-                processed: true,
-                deposit_id: depositRecord?.id,
-                payment_id: paymentId,
-                credits_awarded: creditsToAward,
-                fee: depositFee
-            };
-
-        } catch (error) {
-            console.error('[mercadopago] Error processing deposit:', error);
-            throw error;
+        // Mercado Pago sends different notification types; solo nos interesan 'payment'.
+        if (type !== 'payment') {
+            console.log('[mercadopago] Ignoring notification type:', type);
+            return { processed: false, reason: 'Not a payment notification' };
         }
+
+        const paymentId = data.id;
+
+        // Check idempotency (prevent duplicate processing)
+        const { data: existingDeposit } = await this.supabase
+            .from('deposits')
+            .select('id')
+            .eq('external_payment_id', `mp_${paymentId}`)
+            .maybeSingle();
+
+        if (existingDeposit) {
+            console.log('[mercadopago] Payment already processed:', paymentId);
+            return { processed: false, reason: 'Already processed', deposit_id: existingDeposit.id };
+        }
+
+        // Fetch payment details from Mercado Pago API (nunca confiar en el body del webhook solo)
+        const paymentResponse = await fetch(`https://api.mercadopago.com/v1/payments/${paymentId}`, {
+            headers: { Authorization: `Bearer ${this.accessToken}` }
+        });
+
+        if (!paymentResponse.ok) {
+            throw new Error(`Failed to fetch payment ${paymentId} from Mercado Pago`);
+        }
+
+        const payment = await paymentResponse.json();
+
+        // Only process approved payments
+        if (payment.status !== 'approved') {
+            console.log('[mercadopago] Payment not approved:', payment.status);
+            return { processed: false, reason: `Payment status: ${payment.status}` };
+        }
+
+        // Get userId from external_reference (fijado por nosotros al crear la preferencia)
+        const userId = payment.external_reference;
+        if (!userId) {
+            throw new Error('No userId in payment external_reference');
+        }
+
+        const payerEmail = payment.payer?.email;
+        const paymentAmount = parseFloat(payment.transaction_amount);
+        const paymentCurrency = payment.currency_id;
+
+        // Convertir a USD con tasa en vivo (antes: 1/4000 fijo).
+        const copPerUsd = await getCopPerUsd();
+        const usdRate = paymentCurrency === 'USD' ? 1 : (1 / copPerUsd);
+        const usdAmount = paymentAmount * usdRate;
+
+        // Calculate fees
+        const depositFee = usdAmount * this.depositFeePercent;
+        const netAmount = usdAmount - depositFee;
+        const vaultFee = depositFee * this.vaultFeePercent;
+        const tradingFundFee = depositFee * this.tradingFundFeePercent;
+
+        // Créditos en USD nominal (1 crédito = 1 USD nominal)
+        const creditsToAward = netAmount;
+
+        // Update user fiat balance
+        const { error: updateError } = await this.supabase.rpc('increment_user_fiat_balance', {
+            user_id_param: userId,
+            amount_to_add: creditsToAward
+        });
+
+        if (updateError) {
+            throw new Error(`Failed to credit user balance: ${updateError.message}`);
+        }
+
+        // Update vault balance (75% of fee)
+        if (vaultFee > 0) {
+            const { error: vaultError } = await this.supabase.rpc('update_vault_balance', {
+                amount_to_add: vaultFee,
+                tx_hash_param: `mp_${paymentId}`
+            });
+            if (vaultError) {
+                console.error('[mercadopago] Error updating vault:', vaultError);
+            }
+        }
+
+        if (tradingFundFee > 0 && process.env.TRADING_FUND_WALLET) {
+            console.log('[mercadopago] Trading fund fee:', tradingFundFee);
+        }
+
+        // Record deposit in database
+        const { data: depositRecord, error: depositError } = await this.supabase
+            .from('deposits')
+            .insert({
+                user_id: userId,
+                tx_hash: `mp_${paymentId}`,
+                token: 'FIAT',
+                amount: paymentAmount,
+                credits_awarded: creditsToAward,
+                rate_used: usdRate,
+                status: 'processed',
+                external_payment_id: `mp_${paymentId}`,
+                payment_method: 'mercadopago',
+                payment_currency: paymentCurrency,
+                usdc_value_at_deposit: usdAmount,
+                deposit_fee: depositFee
+            })
+            .select('id')
+            .single();
+
+        if (depositError) {
+            console.error('[mercadopago] Error recording deposit:', depositError);
+            // No relanzamos: el saldo ya se acreditó, perder el registro de auditoría
+            // es preferible a dejar al usuario sin su depósito por un error de log.
+        }
+
+        console.log('[mercadopago] ✅ Deposit processed:', {
+            paymentId,
+            userId,
+            payerEmail,
+            amount: paymentAmount,
+            currency: paymentCurrency,
+            fxRateUsed: copPerUsd,
+            creditsAwarded: creditsToAward,
+            fee: depositFee
+        });
+
+        return {
+            processed: true,
+            deposit_id: depositRecord?.id,
+            payment_id: paymentId,
+            credits_awarded: creditsToAward,
+            fee: depositFee
+        };
     }
 }
 
-module.exports = { MercadoPagoService };
+module.exports = { MercadoPagoService, getCopPerUsd };
