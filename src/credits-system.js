@@ -108,24 +108,55 @@
                     this.updateCreditsDisplay();
                     return;
                 }
+
+                // CRÍTICO: si hay una sesión de Supabase activa, esa identidad SIEMPRE
+                // gana sobre la wallet conectada, incluso cuando walletAddress también
+                // llegó a esta función (el 99% de las llamadas la pasan). Antes, con una
+                // wallet conectada, todo esto se resolvía por la wallet (el endpoint
+                // /api/user/credits/:walletAddress busca por wallet_address, sin mirar
+                // sesión) — si esa wallet estaba vinculada a una cuenta DISTINTA a la
+                // logueada (mismo patrón de bug de resolución de usuario ya visto en
+                // apuestas y Desafío Social), el saldo mostrado terminaba siendo el de
+                // esa otra cuenta. Confirmado en vivo: una cuenta logueada por Google con
+                // una wallet vinculada a otra cuenta mostraba el saldo de esa otra cuenta.
+                let sessionUserId = null;
+                if (typeof supabaseClient !== 'undefined') {
+                    try {
+                        const { data: { session } } = await supabaseClient.auth.getSession();
+                        if (session && session.user) {
+                            sessionUserId = session.user.id;
+                        }
+                    } catch (e) {
+                        console.warn('[credits-system] No se pudo obtener sesión Supabase (prioridad de sesión):', e);
+                    }
+                }
+
                 // 🔗 NUEVO: Try to get userId from wallet link if no Supabase session (MOBILE ONLY)
                 let userIdFromWallet = null;
                 const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-                
+
                 // Detectar si estamos en navegador interno de wallet
-                const isWalletBrowser = typeof window.isWalletBrowser === 'function' 
-                    ? window.isWalletBrowser() 
-                    : (navigator.userAgent.toLowerCase().includes('metamask') || 
+                let isWalletBrowser = typeof window.isWalletBrowser === 'function'
+                    ? window.isWalletBrowser()
+                    : (navigator.userAgent.toLowerCase().includes('metamask') ||
                        navigator.userAgent.toLowerCase().includes('mmsb') ||
                        navigator.userAgent.toLowerCase().includes('trust') ||
                        navigator.userAgent.toLowerCase().includes('binance'));
-                
+
+                let data = {};
+
+                if (sessionUserId) {
+                    // Hay sesión activa: es la identidad autoritativa, no hace falta
+                    // resolver nada por wallet ni pegarle al endpoint /api/user/credits/:walletAddress
+                    // (ese endpoint busca por wallet_address y puede devolver OTRA cuenta).
+                    console.log('[credits-system] ✅ Sesión activa detectada, se prioriza sobre la wallet conectada:', sessionUserId);
+                } else {
                 console.log('[credits-system] 🔄 Verificando wallet link...', {
                     isMobile: isMobile,
                     isWalletBrowser: isWalletBrowser,
                     hasSupabaseClient: typeof supabaseClient !== 'undefined'
                 });
-                
+
                 // En navegador interno de wallet, SIEMPRE verificar wallet link primero
                 if (isMobile && (isWalletBrowser || typeof supabaseClient === 'undefined')) {
                     try {
@@ -138,7 +169,7 @@
                                 // Ignorar errores de sesión
                             }
                         }
-                        
+
                         if (!hasSupabaseSession) {
                             // No Supabase session - try wallet-based auth (CRÍTICO para navegadores internos)
                             console.log('[credits-system] [MOBILE] [WALLET-BROWSER] No Supabase session, checking wallet link...');
@@ -164,16 +195,16 @@
                 console.log('[credits-system] 🔄 Llamando al backend:', creditsUrl);
                 console.log('[credits-system] 🔄 Backend URL completa:', creditsUrl);
                 console.log('[credits-system] 🔄 Wallet address:', walletAddress);
-                
+
                 // CRÍTICO: Agregar timeout para evitar que la promise quede colgada
                 const controller = new AbortController();
                 const timeoutId = setTimeout(() => {
                     console.error('[credits-system] ❌ TIMEOUT: Backend no respondió después de 25 segundos');
                     controller.abort();
                 }, 25000);
-                
+
                 console.log('[credits-system] 🔄 Iniciando fetch con timeout de 25 segundos...');
-                
+
                 let response;
                 try {
                     response = await fetch(creditsUrl, {
@@ -191,7 +222,7 @@
                     }
                     throw fetchError;
                 }
-                
+
                 console.log('[credits-system] 🔄 Respuesta del backend recibida:', {
                     ok: response.ok,
                     status: response.status,
@@ -209,7 +240,8 @@
                     throw new Error(`HTTP ${response.status}: ${errorText}`);
                 }
 
-                const data = await response.json();
+                data = await response.json();
+                } // fin del else (!sessionUserId)
 
                 console.log('[credits-system] 🔍🔍🔍 RESPUESTA DEL BACKEND:', {
                     data: data,
@@ -226,8 +258,9 @@
                 let rawCredits = 0;
                 let usarBackend = false;
                 
-                // Intentar obtener userId para consultar Supabase
-                let userId = this.currentUserId;
+                // Intentar obtener userId para consultar Supabase.
+                // sessionUserId (la sesión activa) va primero — ver nota CRÍTICO más arriba.
+                let userId = sessionUserId || this.currentUserId;
                 if (!userId && walletAddress) {
                     userId = await this.getUserId(walletAddress);
                 }
@@ -372,8 +405,12 @@
                 this.currentRate = null; // Ya no se usa rate variable
                 this.currentMtrPrice = null; // Ya no relevante para créditos
 
-                // Store userId for later use
-                if (data.userId) {
+                // Store userId for later use. sessionUserId primero — si no, se cae en
+                // caché la próxima vez este.currentUserId quedaría "envenenado" con el id
+                // de la wallet en vez del de la sesión (la causa real del bug de arriba).
+                if (sessionUserId) {
+                    this.currentUserId = sessionUserId;
+                } else if (data.userId) {
                     this.currentUserId = data.userId;
                 } else if (userIdFromWallet) {
                     this.currentUserId = userIdFromWallet;
