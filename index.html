@@ -1302,9 +1302,9 @@
                         <button type="button" onclick="closeMercadoPagoModal()" class="rounded-lg px-2.5 py-1 text-gray-400 hover:text-white hover:bg-white/10 text-xl leading-none self-end" aria-label="Cerrar">&times;</button>
                     </div>
                     <div class="flex flex-col gap-4 p-5 sm:p-6">
-                        <label class="text-xs text-gray-400" for="mpUsdAmount">Importe a depositar (USD)</label>
-                        <input id="mpUsdAmount" type="number" min="12" step="0.01" value="12" placeholder="12" inputmode="decimal" class="w-full rounded-lg border border-white/15 bg-gray-900/80 px-3 py-2.5 text-white text-base focus:border-yellow-500/50 focus:outline-none" />
-                        <p id="mpMinDepositHint" class="text-[11px] text-gray-500">Debes tener sesión iniciada (misma cuenta que en MusicToken Ring). <strong class="text-yellow-400/90">Depósito mínimo: 12 USD</strong>. Se cobra en COP al tipo de cambio del momento; el checkout se abre en una <strong class="text-gray-400">nueva pestaña</strong>.</p>
+                        <label class="text-xs text-gray-400" for="mpCopAmount">Importe a depositar (COP)</label>
+                        <input id="mpCopAmount" type="number" min="10000" step="1000" value="10000" placeholder="10000" inputmode="numeric" class="w-full rounded-lg border border-white/15 bg-gray-900/80 px-3 py-2.5 text-white text-base focus:border-yellow-500/50 focus:outline-none" />
+                        <p id="mpMinDepositHint" class="text-[11px] text-gray-500">Debes tener sesión iniciada (misma cuenta que en MusicToken Ring). <strong class="text-yellow-400/90">Depósito mínimo: 10.000 COP</strong>. El checkout se abre en una <strong class="text-gray-400">nueva pestaña</strong>.</p>
                         <button type="button" id="mpStartCheckoutBtn" class="w-full rounded-xl bg-gradient-to-r from-yellow-500 to-amber-600 py-3 text-sm font-bold text-white shadow-lg shadow-yellow-900/30 hover:opacity-95 transition disabled:opacity-40 disabled:cursor-not-allowed">Continuar al pago</button>
                         <p id="mpCheckoutErr" class="hidden text-red-300 text-sm"></p>
                     </div>
@@ -1313,18 +1313,18 @@
         </div>
         <script>
         (function () {
-            var MIN_MP_DEPOSIT_USD = 12;
+            var MIN_MP_DEPOSIT_COP = 10000;
 
-            function parseMpUsdAmount(raw) {
-                return parseFloat(String(raw == null ? '' : raw).replace(',', '.'), 10);
+            function parseMpCopAmount(raw) {
+                return parseFloat(String(raw == null ? '' : raw).replace(/[.,\s]/g, ''), 10);
             }
 
             window.openMercadoPagoModal = function () {
                 var modal = document.getElementById('mercadopagoModal');
                 if (!modal) return;
-                var inp = document.getElementById('mpUsdAmount');
+                var inp = document.getElementById('mpCopAmount');
                 var errEl = document.getElementById('mpCheckoutErr');
-                if (inp) inp.value = String(MIN_MP_DEPOSIT_USD);
+                if (inp) inp.value = String(MIN_MP_DEPOSIT_COP);
                 if (errEl) {
                     errEl.textContent = '';
                     errEl.classList.add('hidden');
@@ -1345,15 +1345,15 @@
                 var t = ev.target;
                 if (!t || !t.id || t.id !== 'mpStartCheckoutBtn') return;
                 var errEl = document.getElementById('mpCheckoutErr');
-                var inp = document.getElementById('mpUsdAmount');
+                var inp = document.getElementById('mpCopAmount');
                 if (errEl) {
                     errEl.textContent = '';
                     errEl.classList.add('hidden');
                 }
-                var amt = inp ? parseMpUsdAmount(inp.value) : NaN;
-                if (!Number.isFinite(amt) || amt < MIN_MP_DEPOSIT_USD) {
+                var amt = inp ? parseMpCopAmount(inp.value) : NaN;
+                if (!Number.isFinite(amt) || amt < MIN_MP_DEPOSIT_COP) {
                     if (errEl) {
-                        errEl.textContent = 'Indicá un importe válido (mínimo ' + MIN_MP_DEPOSIT_USD + ' USD).';
+                        errEl.textContent = 'Indicá un importe válido (mínimo ' + MIN_MP_DEPOSIT_COP + ' COP).';
                         errEl.classList.remove('hidden');
                     }
                     return;
@@ -1390,7 +1390,7 @@
                             'Content-Type': 'application/json',
                             Authorization: 'Bearer ' + sess.data.session.access_token
                         },
-                        body: JSON.stringify({ amount_usd: amt })
+                        body: JSON.stringify({ amount_cop: amt })
                     });
                     var j = await r.json().catch(function () { return {}; });
                     if (!r.ok || !j.ok || !j.init_point) {

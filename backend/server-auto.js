@@ -2492,18 +2492,26 @@ app.post('/api/deposit/mercadopago/create', depositRateLimiter, async (req, res)
             });
         }
 
-        const raw = req.body && (req.body.amount_usd ?? req.body.price_amount);
-        const amountUsd = typeof raw === 'string' ? parseFloat(raw) : Number(raw);
-        if (!Number.isFinite(amountUsd) || amountUsd <= 0) {
-            return res.status(400).json({ error: 'amount_usd inválido' });
+        // Acepta el monto en COP (recargas colombianas, PSE/Nequi) o en USD
+        // (resto de la app) — ver mercadopago-service.js::createCheckoutPreference.
+        const rawCop = req.body && req.body.amount_cop;
+        const rawUsd = req.body && (req.body.amount_usd ?? req.body.price_amount);
+        const params = { userId: publicUserId, email: authUser.email, description: 'MusicToken Ring — depósito de saldo' };
+        if (rawCop != null) {
+            const amountCop = typeof rawCop === 'string' ? parseFloat(rawCop) : Number(rawCop);
+            if (!Number.isFinite(amountCop) || amountCop < 10000) {
+                return res.status(400).json({ error: 'amount_cop inválido (mínimo 10.000 COP)' });
+            }
+            params.amountCop = amountCop;
+        } else {
+            const amountUsd = typeof rawUsd === 'string' ? parseFloat(rawUsd) : Number(rawUsd);
+            if (!Number.isFinite(amountUsd) || amountUsd <= 0) {
+                return res.status(400).json({ error: 'amount_usd inválido' });
+            }
+            params.amountUsd = amountUsd;
         }
 
-        const result = await mercadoPagoService.createCheckoutPreference({
-            amountUsd,
-            userId: publicUserId,
-            email: authUser.email,
-            description: 'MusicToken Ring — depósito de saldo'
-        });
+        const result = await mercadoPagoService.createCheckoutPreference(params);
         res.json({ ok: true, ...result });
     } catch (e) {
         console.error('[mercadopago-create]', e);

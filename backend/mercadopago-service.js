@@ -71,25 +71,46 @@ class MercadoPagoService {
      * El importe SIEMPRE se recibe en USD (mismo criterio que el resto de la
      * app, ver depositSectionMain / NOWPayments) y se convierte a COP acá
      * adentro, porque PSE/Nequi solo existen en COP en el checkout de MP.
-     * @param {Object} params - { amountUsd, userId, email, description }
+     *
+     * Acepta el monto en USD (amountUsd, resto de la app) O directo en COP
+     * (amountCop) — para usuarios colombianos pagando con PSE/Nequi, pedir
+     * el monto en USD (mínimo históricamente $12) no tenía sentido: se pidió
+     * bajar el mínimo a algo real en pesos (10.000 COP), y forzar a alguien
+     * a calcular "¿cuántos dólares son 10.000 pesos?" es mala UX. El monto
+     * real que termina acreditado como saldo siempre sale del pago
+     * CONFIRMADO por Mercado Pago al momento del webhook (ver processDeposit),
+     * así que no importa en qué moneda se pidió acá — esto solo arma la
+     * preferencia de cobro.
+     * @param {Object} params - { amountUsd?, amountCop?, userId, email, description }
      */
     async createCheckoutPreference(params) {
-        const { amountUsd, userId, email, description } = params;
+        const { amountUsd, amountCop, userId, email, description } = params;
 
         if (!this.accessToken) {
             throw new Error('Mercado Pago access token not configured');
-        }
-        const usd = parseFloat(amountUsd);
-        if (!Number.isFinite(usd) || usd <= 0) {
-            throw new Error('amountUsd inválido');
         }
         if (!userId) {
             throw new Error('userId es requerido');
         }
 
         const copPerUsd = await getCopPerUsd();
-        // MP Colombia exige montos enteros de COP (sin centavos).
-        const copAmount = Math.round(usd * copPerUsd);
+        let copAmount;
+        let usd;
+        if (amountCop != null) {
+            const cop = parseFloat(amountCop);
+            if (!Number.isFinite(cop) || cop <= 0) {
+                throw new Error('amountCop inválido');
+            }
+            // MP Colombia exige montos enteros de COP (sin centavos).
+            copAmount = Math.round(cop);
+            usd = cop / copPerUsd;
+        } else {
+            usd = parseFloat(amountUsd);
+            if (!Number.isFinite(usd) || usd <= 0) {
+                throw new Error('amountUsd inválido');
+            }
+            copAmount = Math.round(usd * copPerUsd);
+        }
 
         const preference = {
             items: [
