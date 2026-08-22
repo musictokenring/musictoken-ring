@@ -111,6 +111,61 @@ const SUPABASE_URL = process.env.SUPABASE_URL || 'https://bscmgcnynbxalcuwdqlm.s
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
 
+/**
+ * Devuelve el id de la fila en public.users para un usuario ya autenticado
+ * en Supabase Auth, CREÁNDOLA si todavía no existe.
+ *
+ * CRÍTICO: se descubrió en vivo (probando un depósito real) que una fila en
+ * `users` solo se creaba automáticamente al unirse a un torneo
+ * (tournament-battle.js::ensureCpuUsersExist es la única otra inserción, y
+ * esa es solo para los bots CPU) — cualquier cuenta logueada por Google/email
+ * que nunca jugó un torneo no tenía perfil, y por lo tanto cualquier ruta que
+ * dependiera de `users` (depósitos NOWPayments/Mercado Pago, créditos)
+ * fallaba con "usuario no encontrado" pese a tener sesión válida. Antes cada
+ * ruta de depósito repetía su propia búsqueda por id/email sin crear la fila
+ * si faltaba; ahora la crean todas a través de este helper único.
+ */
+async function ensureUserRow(authUser) {
+    const { data: row } = await supabase.from('users').select('id').eq('id', authUser.id).maybeSingle();
+    if (row?.id) return row.id;
+
+    if (authUser.email) {
+        const { data: byEmail } = await supabase
+            .from('users')
+            .select('id')
+            .ilike('email', authUser.email)
+            .maybeSingle();
+        if (byEmail?.id) return byEmail.id;
+    }
+
+    const provider = authUser.app_metadata?.provider || 'email';
+    const { data: created, error: createError } = await supabase
+        .from('users')
+        .insert([{
+            id: authUser.id,
+            email: authUser.email || null,
+            wallet_address: null,
+            auth_provider: provider,
+            saldo_fiat: 0,
+            saldo_onchain: 0,
+            updated_at: new Date().toISOString()
+        }])
+        .select('id')
+        .single();
+
+    if (createError) {
+        // Carrera posible: otra request creó la fila justo antes (23505 = unique_violation).
+        if (createError.code === '23505') {
+            const { data: retryRow } = await supabase.from('users').select('id').eq('id', authUser.id).maybeSingle();
+            if (retryRow?.id) return retryRow.id;
+        }
+        console.error('[ensureUserRow] No se pudo crear la fila de usuario:', authUser.id, createError.message);
+        return null;
+    }
+    console.log('[ensureUserRow] Fila de usuario creada automáticamente:', authUser.id, authUser.email);
+    return created?.id || null;
+}
+
 const requireCreditMutationAuth = createCreditMutationGuard(supabase, {
     getUserIdFromWallet: (walletAddress) => {
         if (!walletLinkService) return null;
@@ -1989,20 +2044,7 @@ const createNowpaymentsPaymentHandler = async (req, res) => {
             return res.status(401).json({ error: 'Invalid or expired token' });
         }
 
-        const { data: row } = await supabase
-            .from('users')
-            .select('id')
-            .eq('id', authUser.id)
-            .maybeSingle();
-        let publicUserId = row?.id;
-        if (!publicUserId && authUser.email) {
-            const { data: byEmail } = await supabase
-                .from('users')
-                .select('id')
-                .ilike('email', authUser.email)
-                .maybeSingle();
-            publicUserId = byEmail?.id;
-        }
+        const publicUserId = await ensureUserRow(authUser);
         if (!publicUserId) {
             return res.status(400).json({
                 error: 'Usuario no encontrado. Regístrate o inicia sesión en la plataforma antes de pagar.'
@@ -2472,20 +2514,7 @@ app.post('/api/deposit/mercadopago/create', depositRateLimiter, async (req, res)
             return res.status(401).json({ error: 'Invalid or expired token' });
         }
 
-        const { data: row } = await supabase
-            .from('users')
-            .select('id')
-            .eq('id', authUser.id)
-            .maybeSingle();
-        let publicUserId = row?.id;
-        if (!publicUserId && authUser.email) {
-            const { data: byEmail } = await supabase
-                .from('users')
-                .select('id')
-                .ilike('email', authUser.email)
-                .maybeSingle();
-            publicUserId = byEmail?.id;
-        }
+        const publicUserId = await ensureUserRow(authUser);
         if (!publicUserId) {
             return res.status(400).json({
                 error: 'Usuario no encontrado. Regístrate o inicia sesión en la plataforma antes de pagar.'
