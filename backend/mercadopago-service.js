@@ -229,12 +229,25 @@ class MercadoPagoService {
 
         const paymentId = data.id;
 
-        // Check idempotency (prevent duplicate processing)
-        const { data: existingDeposit } = await this.supabase
+        // Check idempotency (prevent duplicate processing).
+        // CRÍTICO: esto filtraba por `external_payment_id`, una columna que
+        // NO EXISTE en la tabla real `deposits` (confirmado en vivo — la
+        // query fallaba silenciosamente, `data` volvía null, y el chequeo de
+        // duplicados nunca detectaba nada). Si Mercado Pago reintentaba la
+        // notificación del mismo pago, se habría vuelto a acreditar. La
+        // columna real que identifica el depósito (igual que en
+        // nowpayments-service.js) es `tx_hash`, que además ya es la que se
+        // usa más abajo al insertar la fila.
+        const { data: existingDeposit, error: existingErr } = await this.supabase
             .from('deposits')
             .select('id')
-            .eq('external_payment_id', `mp_${paymentId}`)
+            .eq('tx_hash', `mp_${paymentId}`)
             .maybeSingle();
+        if (existingErr) {
+            // No asumir "no existe" ante un error real de la consulta — mejor
+            // fallar fuerte que arriesgar un doble pago.
+            throw new Error(`No se pudo verificar idempotencia del pago ${paymentId}: ${existingErr.message}`);
+        }
 
         if (existingDeposit) {
             console.log('[mercadopago] Payment already processed:', paymentId);
@@ -307,7 +320,13 @@ class MercadoPagoService {
             console.log('[mercadopago] Trading fund fee:', tradingFundFee);
         }
 
-        // Record deposit in database
+        // Record deposit in database.
+        // CRÍTICO: `external_payment_id`, `payment_method` y `payment_currency`
+        // NO son columnas reales de `deposits` (confirmado en vivo contra la
+        // tabla real — este insert fallaba silenciosamente en cada depósito,
+        // sin fila de auditoría, aunque el saldo sí se acreditaba bien via la
+        // RPC de arriba). `tx_hash` (con el prefijo `mp_`) ya identifica el
+        // pago de forma única — es la misma columna que usa la idempotencia.
         const { data: depositRecord, error: depositError } = await this.supabase
             .from('deposits')
             .insert({
@@ -318,9 +337,7 @@ class MercadoPagoService {
                 credits_awarded: creditsToAward,
                 rate_used: usdRate,
                 status: 'processed',
-                external_payment_id: `mp_${paymentId}`,
-                payment_method: 'mercadopago',
-                payment_currency: paymentCurrency,
+                network: `mercadopago-${paymentCurrency}`.toLowerCase(),
                 usdc_value_at_deposit: usdAmount,
                 deposit_fee: depositFee
             })
