@@ -2310,7 +2310,20 @@ const GameEngine = {
                         CPU gana esta vez
                     </div>
                    </div>`;
-            
+
+            // CRÍTICO: esta rama (práctica/CPU) nunca disparaba el evento
+            // 'result' del Host IA — solo la rama de batallas reales lo
+            // hacía. Sin este segundo disparo, el contador de secuencia
+            // (ver triggerHostNarration) no tenía nada más nuevo con qué
+            // reemplazar el mensaje de "arranca la batalla" si ese llegaba
+            // tarde — se veía la narración de inicio pisando el resultado
+            // ya mostrado, visto en vivo en práctica. Con este disparo,
+            // el resultado siempre termina siendo el mensaje más reciente.
+            var practiceWinnerArtist = winner === 1
+                ? (match.player1_song_artist || match.player1_label || 'Lado 1')
+                : (match.player2_song_artist || match.player2_label || 'Lado 2');
+            triggerHostNarration(match.id || match.match_id, 'result', (userWon ? '🏆 Ganaste vos' : '🏆 Ganó la CPU') + ' (' + practiceWinnerArtist + '). Batalla de práctica terminada.');
+
             // SCROLL AUTOMÁTICO AL MENSAJE DE RESULTADO
             setTimeout(() => {
                 try {
