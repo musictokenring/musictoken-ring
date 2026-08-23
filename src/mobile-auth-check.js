@@ -87,34 +87,22 @@
                 }
             }
 
-            // 3. Ocultar botón "Iniciar Sesión" si está autenticado o tiene wallet vinculada
-            if (isAuthenticated || hasLinkedWallet) {
-                authButton.style.display = 'none';
-                console.log('[mobile-auth] 🔒 Botón "Iniciar Sesión" ocultado', {
-                    isAuthenticated,
-                    hasLinkedWallet,
-                    inWalletBrowser
-                });
-            } else {
-                // Solo mostrar en navegador externo, no en navegador interno sin wallet vinculada
-                if (!inWalletBrowser) {
-                    authButton.style.display = 'inline-flex';
-                    console.log('[mobile-auth] 🔓 Botón "Iniciar Sesión" visible (navegador externo, no autenticado)');
-                } else {
-                    // En navegador interno sin wallet vinculada, ocultar también (mostrar solo transacciones)
-                    authButton.style.display = 'none';
-                    console.log('[mobile-auth] 🔒 Botón "Iniciar Sesión" ocultado (navegador interno, wallet no vinculada)');
-                }
-            }
+            // ELIMINADO (2026-08-23): este bloque hacía authButton.style.display
+            // = 'none' cuando el usuario estaba autenticado. Venía de una versión
+            // vieja del sitio donde #authButton solo contenía el botón "Iniciar
+            // Sesión" — hoy ese mismo contenedor es el que updateAuthUI()
+            // (auth-system.js) rellena con el avatar/nombre del jugador y el
+            // botón "Salir" cuando SÍ está logueado. Resultado real confirmado
+            // en un iPhone: el header se veía bien una fracción de segundo
+            // (cuando updateAuthUI corría) y un segundo después este script lo
+            // ocultaba por completo — y lo repetía cada 5 segundos para
+            // siempre, dejando visible solo "Wallet". updateAuthUI() ya decide
+            // correctamente qué mostrar/ocultar según el estado de auth, así
+            // que este script no necesita tocar authButton.style.display en
+            // absoluto.
 
         } catch (error) {
             console.error('[mobile-auth] Error verificando autenticación:', error);
-            // En caso de error, mostrar el botón solo en navegador externo
-            if (authButton && !isWalletBrowser()) {
-                authButton.style.display = 'inline-flex';
-            } else if (authButton) {
-                authButton.style.display = 'none';
-            }
         }
     }
 

@@ -1132,7 +1132,7 @@ if (typeof supabaseClient !== 'undefined' && supabaseClient) {
     supabaseClient.auth.onAuthStateChange((event, session) => {
         console.log('Auth state changed:', event);
         updateAuthUI(session);
-        
+
         // Si el usuario se desconecta, desconectar wallet también
         if (event === 'SIGNED_OUT') {
             if (typeof window !== 'undefined') {
