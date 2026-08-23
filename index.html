@@ -3650,12 +3650,11 @@
                     const vaultLinkEl = document.getElementById('publicVaultLink');
 
                     if (vaultBalanceEl) {
-                        // Un "$0.00 (vault)" desnudo se lee como que algo está roto.
-                        // Plataforma nueva en etapa de pruebas: es real, no es un bug —
-                        // pero hay que decirlo, no dejar el número solo sin contexto.
-                        vaultBalanceEl.textContent = balance > 0
-                            ? balance.toFixed(2) + ' USD (vault)'
-                            : 'En fondeo inicial (plataforma en etapa de pruebas)';
+                        // El número solo, sin explicación especial cuando es 0 — un
+                        // contador recién activado en $0 es normal, no hace falta
+                        // disculparse ni sonar como que "estamos en pruebas" en una
+                        // plataforma que ya está en producción real.
+                        vaultBalanceEl.textContent = balance.toFixed(2) + ' USD (vault)';
                         vaultBalanceEl.classList.remove('text-gray-400', 'text-red-400', 'text-gray-500');
                         vaultBalanceEl.classList.add('text-cyan-400');
                     }
@@ -3727,9 +3726,7 @@
                 if (response.ok) {
                     const data = await response.json();
                     const balance = data.balanceCop || 0;
-                    el.textContent = balance > 0
-                        ? balance.toLocaleString('es-CO', { maximumFractionDigits: 0 }) + ' COP (vault)'
-                        : 'En fondeo inicial (plataforma en etapa de pruebas)';
+                    el.textContent = balance.toLocaleString('es-CO', { maximumFractionDigits: 0 }) + ' COP (vault)';
                     el.classList.remove('text-gray-500', 'text-red-400');
                     el.classList.add('text-yellow-400');
                 } else {

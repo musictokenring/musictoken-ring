@@ -302,13 +302,11 @@
                     const vaultLink = document.getElementById('vaultBaseScanLink');
 
                     if (vaultDisplay && vaultAmount) {
-                        // Un "$0.00 (vault)" desnudo se lee como que algo está roto.
-                        // Plataforma nueva en etapa de pruebas: es real, no es un bug,
-                        // pero hay que decirlo en vez de dejar el número solo.
+                        // El número solo — un contador recién activado en $0 no
+                        // necesita explicación especial, y menos sonar como
+                        // "estamos en pruebas" en una plataforma en producción real.
                         if (vaultLine) {
-                            vaultLine.innerHTML = balance > 0
-                                ? 'Balance disponible: <span id="vaultBalanceAmount" class="font-bold">' + balance.toFixed(2) + '</span> USD (vault)'
-                                : 'En fondeo inicial (plataforma en etapa de pruebas)';
+                            vaultLine.innerHTML = 'Balance disponible: <span id="vaultBalanceAmount" class="font-bold">' + balance.toFixed(2) + '</span> USD (vault)';
                         }
                         vaultDisplay.classList.remove('hidden');
 
