@@ -44,14 +44,14 @@ async function triggerHostNarration(battleId, eventType, contextText) {
     const el = document.getElementById('hostCommentary');
     const mySeq = ++hostNarrationSeq;
     try {
-        // CRITICO: medido en vivo, gemini-2.5-pro responde en 13-26s en este
-        // agente (ver DEPLOY_GCP.md/PITCH.md). Con 8s acá, el fetch se
-        // abortaba SIEMPRE antes de que llegara la respuesta real — la
-        // narración nunca llegaba a mostrarse en producción pese a que el
-        // agente sí contestaba bien. 25s le da margen real sin bloquear la
-        // batalla (el resto de la UI sigue andando mientras esto corre).
+        // CRITICO: el Host agent pasó de gemini-2.5-pro (13-26s medido) a
+        // gemini-2.5-flash (3.6-3.8s medido en caliente) justo para que esto
+        // se sienta en vivo, no 12+ segundos tarde. 12s da margen real sobre
+        // lo medido en caliente; si la instancia está fría (primera llamada
+        // tras estar inactiva, ~20-24s), se aborta y no se muestra nada —
+        // mejor eso que forzar a toda la batalla a esperar un caso raro.
         const controller = new AbortController();
-        const timeout = setTimeout(() => controller.abort(), 25000);
+        const timeout = setTimeout(() => controller.abort(), 12000);
         const resp = await fetch(HOST_AGENT_URL + '/narrate', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -2424,15 +2424,13 @@ const GameEngine = {
         var self = this;
         // CRÍTICO: eran solo 5s antes de reemplazar TODA la arena (incluido
         // #hostCommentary) por la pantalla de victoria — pero el Host IA mide
-        // 11-14s reales de respuesta (confirmado en logs de Cloud Run). El
-        // resultado del Host llegaba siempre DESPUÉS de que la pantalla ya
-        // había cambiado, así que nunca se veía; quedaba congelado el
-        // mensaje de "arranca la batalla" de más temprano. 18s da margen real
-        // (mismo criterio que el otro camino de batallas, ver
-        // endBattleWithResult/showVictoryScreen).
+        // Host agent en gemini-2.5-flash ahora (3.6-3.8s medido en caliente,
+        // antes 11-14s con pro) — 8s da margen real sin alargar de más la
+        // pantalla de resultado (mismo criterio en el otro camino, ver
+        // showVictoryScreen más abajo).
         setTimeout(function () {
             self.showVictoryScreen(match, winner, userWon, payouts);
-        }, 18000);
+        }, 8000);
     },
     
     // ==========================================
@@ -3854,13 +3852,12 @@ const GameEngine = {
         
         this.finalizeBattleRhythmAnimation(winner);
 
-        // Mostrar resultado después de un margen que le de tiempo real al
-        // Host IA (11-14s medido en logs de Cloud Run, con jitter de red
-        // encima) para narrar el resultado antes de que esta pantalla borre
-        // #hostCommentary — 15s dejaba apenas ~0.5s de margen, muy justo.
+        // Host agent en gemini-2.5-flash ahora (3.6-3.8s medido en caliente,
+        // antes 11-14s con pro) — 8s da margen real sin alargar de más la
+        // pantalla de resultado.
         setTimeout(() => {
             this.showVictoryScreen(match, winner, userWon, payouts);
-        }, 18000);
+        }, 8000);
     },
     
     showVictoryScreen(match, winner, userWon, payouts) {

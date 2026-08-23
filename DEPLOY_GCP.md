@@ -173,7 +173,7 @@ gcloud run deploy host-agent \
   --image gcr.io/mtr-ai-ops-2026/host-agent \
   --region us-central1 \
   --allow-unauthenticated \
-  --set-env-vars GCP_PROJECT_ID=mtr-ai-ops-2026,GCP_REGION=us-central1,HOST_AGENT_MODEL=gemini-2.5-pro \
+  --set-env-vars GCP_PROJECT_ID=mtr-ai-ops-2026,GCP_REGION=us-central1,HOST_AGENT_MODEL=gemini-2.5-flash \
   --set-secrets SUPABASE_SERVICE_ROLE_KEY=SUPABASE_SERVICE_ROLE_KEY:latest
 ```
 

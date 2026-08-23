@@ -26,7 +26,7 @@ flowchart LR
         Firestore[("Firestore\nagent state, dedupe, alerts")]
         BQ[("BigQuery\npayments_ledger, analytics")]
         SM["Secret Manager\nDeezer / NOWPayments keys"]
-        Vertex["Vertex AI\nGemini 2.5 Pro"]
+        Vertex["Vertex AI\nGemini 2.5 Flash"]
     end
 
     Deezer["Deezer API"]
