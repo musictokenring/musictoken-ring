@@ -2470,19 +2470,6 @@ app.get('/api/payments/nowpayments/create', (req, res) => {
 });
 
 /**
- * DEBUG TEMPORAL (2026-08-23): recibe logs de diagnostico del frontend
- * mobile y los imprime en los logs de Render — para depurar un bug de
- * iOS Safari sin acceso a un Mac/inspector real. Sin auth a proposito
- * (es solo texto de diagnostico, nada sensible, y el volumen esperado es
- * minimo). Quitar una vez resuelto el bug de header/saldo en mobile.
- */
-app.post('/api/debug/mobile-log', express.json(), (req, res) => {
-    const msg = String(req.body?.msg || '').slice(0, 500);
-    console.log('[MOBILE-DEBUG]', new Date().toISOString(), msg);
-    res.json({ ok: true });
-});
-
-/**
  * Health check
  */
 app.get('/api/health', (req, res) => {

@@ -589,20 +589,15 @@ async function updateAuthUI(session) {
         // minutos de logs remotos: la función loadFiatBalance nunca llegó
         // a ejecutarse ni una sola vez, pese a loguearse muchas veces.
         // Se espera activamente (hasta 5s) a que CreditsSystem exista.
-        if (window.__debugBanner) window.__debugBanner('updateAuthUI: esperando CreditsSystem... (ya existe ahora mismo: ' + (typeof window.CreditsSystem !== 'undefined') + ')');
         const creditsSystemReady = await waitForCreditsSystem(5000);
-        if (window.__debugBanner) window.__debugBanner('updateAuthUI: waitForCreditsSystem resolvio -> ' + creditsSystemReady);
         if (creditsSystemReady) {
             try {
                 await window.CreditsSystem.loadBalance(null, session.user.id);
-                if (window.__debugBanner) window.__debugBanner('updateAuthUI: loadBalance terminado, currentCredits=' + window.CreditsSystem.currentCredits);
             } catch (err) {
                 console.warn('[updateAuthUI] Error cargando saldo tras login:', err);
-                if (window.__debugBanner) window.__debugBanner('updateAuthUI: loadBalance lanzo excepcion: ' + (err && err.message));
             }
         } else {
             console.warn('[updateAuthUI] CreditsSystem no llegó a cargar a tiempo, saldo no actualizado en este ciclo');
-            if (window.__debugBanner) window.__debugBanner('updateAuthUI: CreditsSystem NUNCA llego a cargar (timeout 5s)');
         }
 
         // Si mientras esperábamos el saldo llegó un evento de auth más

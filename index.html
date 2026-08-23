@@ -11,57 +11,6 @@
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
     <title>MusicToken Ring - Music Battle Arena</title>
     
-    <!-- DEBUG TEMPORAL (2026-08-23, ronda 5): las rondas anteriores (banner
-         fixed-bottom, banner en flujo normal arriba de todo) mostraron el
-         MISMO comportamiento -- algo se ve una fraccion de segundo y
-         desaparece por completo, incluso un <div> comun sin CSS especial
-         que nada mas en el codigo toca despues de crearlo. Eso solo se
-         explica por una recarga/navegacion real de la pagina completa, no
-         por un bug de visibilidad. Sin acceso a un Mac/inspector real del
-         lado del usuario, se manda cada linea de log al backend (con
-         keepalive:true, para que el request sobreviva aunque la pagina se
-         este cerrando) en vez de confiar en que algo sobreviva en pantalla.
-         Quitar una vez resuelto. -->
-    <script>
-        (function() {
-            var BACKEND = 'https://musictoken-ring.onrender.com';
-            function sendRemote(msg) {
-                try {
-                    fetch(BACKEND + '/api/debug/mobile-log', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ msg: msg }),
-                        keepalive: true
-                    }).catch(function () {});
-                } catch (e) {}
-            }
-            window.__debugBanner = sendRemote;
-            window.addEventListener('error', function (ev) {
-                sendRemote('JS ERROR: ' + (ev.message || ev.error) + ' @ ' + (ev.filename || '?') + ':' + (ev.lineno || '?'));
-            });
-            window.addEventListener('unhandledrejection', function (ev) {
-                sendRemote('PROMISE REJECTION: ' + (ev.reason && ev.reason.message ? ev.reason.message : ev.reason));
-            });
-            // Prueba directa de la hipotesis de "recarga/navegacion completa":
-            // si esto se dispara, la pagina SI se esta yendo/recargando.
-            window.addEventListener('pagehide', function (ev) {
-                sendRemote('PAGEHIDE evento (persisted=' + ev.persisted + ') -- la pagina se esta yendo/recargando');
-            });
-            document.addEventListener('visibilitychange', function () {
-                sendRemote('visibilitychange -> ' + document.visibilityState);
-            });
-            var navType = 'desconocido';
-            try {
-                var navEntries = performance.getEntriesByType && performance.getEntriesByType('navigation');
-                if (navEntries && navEntries[0]) navType = navEntries[0].type;
-            } catch (e) {}
-            sendRemote('--- nueva carga de pagina --- url=' + window.location.href +
-                ' | navType=' + navType +
-                ' | referrer=' + (document.referrer || '(vacio)') +
-                ' | visibilityState=' + document.visibilityState);
-        })();
-    </script>
-
     <!-- Script INMEDIATO - Primera línea ejecutable del documento - SIN BLOQUEOS -->
     <script>
         (function() {
@@ -2384,12 +2333,9 @@
             var fetchUrl = backendUrl + '/src/credits-system.js?nocache=' + timestamp + '&t=' + Date.now();
             var fallbackUrl = './src/credits-system.js?v=' + timestamp + '&t=' + Date.now();
             
-            if (window.__debugBanner) window.__debugBanner('credits-system.js: iniciando fetch a ' + fetchUrl);
-
             // OPTIMIZACIÓN: Cargar directamente sin verificaciones excesivas (solo verificar errores críticos)
             fetch(fetchUrl, { cache: 'no-store' })
                 .then(function(response) {
-                    if (window.__debugBanner) window.__debugBanner('credits-system.js: fetch respondio status=' + response.status);
                     if (!response.ok) throw new Error('HTTP ' + response.status);
                     return response.text();
                 })
@@ -2410,10 +2356,8 @@
                     script.textContent = scriptContent;
                     script.setAttribute('data-version', 'v3.0-no-limits');
                     document.head.appendChild(script);
-                    if (window.__debugBanner) window.__debugBanner('credits-system.js: script inyectado, CreditsSystem existe ahora=' + (typeof window.CreditsSystem !== 'undefined'));
                 })
                 .catch(function(error) {
-                    if (window.__debugBanner) window.__debugBanner('credits-system.js: fetch principal fallo: ' + (error && error.message) + ' -- probando fallback');
                     // Fallback: intentar desde mismo dominio
                     fetch(fallbackUrl, { cache: 'no-store' })
                         .then(function(response) {
@@ -2427,12 +2371,10 @@
                                 script.setAttribute('data-version', 'v3.0-no-limits');
                                 script.setAttribute('data-fallback', 'true');
                                 document.head.appendChild(script);
-                                if (window.__debugBanner) window.__debugBanner('credits-system.js: cargado por FALLBACK ok');
                             }
                         })
-                        .catch(function(fallbackError) {
+                        .catch(function() {
                             console.error('[CACHE-BUST] ❌ No se pudo cargar credits-system.js');
-                            if (window.__debugBanner) window.__debugBanner('credits-system.js: FALLBACK tambien fallo: ' + (fallbackError && fallbackError.message));
                         });
                 });
         })();
