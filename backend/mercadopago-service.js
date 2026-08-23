@@ -19,13 +19,42 @@ const crypto = require('crypto');
 // Tasa de cambio USD/COP en vivo, con cache y fallback conservador.
 // Antes esto era un `1 / 4000` fijo en el código — con el peso colombiano
 // moviéndose bastante, eso podía sub/sobre-acreditar saldo real de forma
-// silenciosa. Fuente: exchangerate-api (gratis, sin key). Cache de 6h para
-// no depender de esa API en cada webhook, con fallback a la última tasa
-// buena conocida (o a un valor conservador si nunca se pudo obtener una).
+// silenciosa.
+//
+// Fuente primaria: la TRM (Tasa Representativa del Mercado) oficial del
+// Banco de la República de Colombia, publicada como dataset abierto del
+// gobierno en datos.gov.co — es la tasa de cambio oficial que usa Colombia
+// por ley, no un agregador genérico de terceros. Se detectó en vivo que
+// exchangerate-api (la fuente anterior) podía dar lecturas hasta ~16%
+// distintas el mismo día (3663 vs 3058 COP/USD) — inaceptable para calcular
+// saldos reales. La TRM se fija una vez al día y no tiene ese problema.
+// Fallback: exchangerate-api, y como último recurso la última tasa buena
+// en cache (o un valor fijo conservador si nunca se pudo obtener ninguna).
+//
+// Cache de 6h para no depender de estas APIs en cada webhook.
 // --------------------------------------------------------------------------
 const FX_CACHE_TTL_MS = 6 * 60 * 60 * 1000; // 6 horas
-const FX_FALLBACK_COP_PER_USD = 4000; // solo si la API falla Y nunca hubo cache
-let fxCache = { copPerUsd: null, fetchedAt: 0 };
+const FX_FALLBACK_COP_PER_USD = 4000; // solo si todas las fuentes fallan Y nunca hubo cache
+const TRM_API_URL = 'https://www.datos.gov.co/resource/32sa-8pi3.json?$order=vigenciadesde%20DESC&$limit=1';
+let fxCache = { copPerUsd: null, fetchedAt: 0, source: null };
+
+async function fetchTrmOficial() {
+    const resp = await fetch(TRM_API_URL, { signal: AbortSignal.timeout(8000) });
+    if (!resp.ok) throw new Error(`TRM API status ${resp.status}`);
+    const rows = await resp.json();
+    const rate = parseFloat(rows?.[0]?.valor);
+    if (!Number.isFinite(rate) || rate <= 0) throw new Error('TRM API devolvió un valor inválido');
+    return rate;
+}
+
+async function fetchExchangeRateApi() {
+    const resp = await fetch('https://open.er-api.com/v6/latest/USD', { signal: AbortSignal.timeout(8000) });
+    if (!resp.ok) throw new Error(`FX API status ${resp.status}`);
+    const data = await resp.json();
+    const rate = data?.rates?.COP;
+    if (!Number.isFinite(rate) || rate <= 0) throw new Error('FX API devolvió una tasa COP inválida');
+    return rate;
+}
 
 async function getCopPerUsd() {
     const now = Date.now();
@@ -33,18 +62,21 @@ async function getCopPerUsd() {
         return fxCache.copPerUsd;
     }
     try {
-        const resp = await fetch('https://open.er-api.com/v6/latest/USD', { signal: AbortSignal.timeout(8000) });
-        if (!resp.ok) throw new Error(`FX API status ${resp.status}`);
-        const data = await resp.json();
-        const rate = data?.rates?.COP;
-        if (!Number.isFinite(rate) || rate <= 0) throw new Error('FX API devolvió una tasa COP inválida');
-        fxCache = { copPerUsd: rate, fetchedAt: now };
+        const rate = await fetchTrmOficial();
+        fxCache = { copPerUsd: rate, fetchedAt: now, source: 'TRM oficial (datos.gov.co)' };
         return rate;
-    } catch (err) {
-        console.error('[mercadopago] ⚠️ No se pudo obtener tasa USD/COP en vivo, usando fallback:', err.message);
-        // Si hay una tasa vieja en cache (aunque venció el TTL), es mejor que el fallback fijo.
-        if (fxCache.copPerUsd) return fxCache.copPerUsd;
-        return FX_FALLBACK_COP_PER_USD;
+    } catch (trmErr) {
+        console.error('[mercadopago] ⚠️ No se pudo obtener la TRM oficial, probando fallback:', trmErr.message);
+        try {
+            const rate = await fetchExchangeRateApi();
+            fxCache = { copPerUsd: rate, fetchedAt: now, source: 'exchangerate-api (fallback)' };
+            return rate;
+        } catch (fxErr) {
+            console.error('[mercadopago] ⚠️ Tampoco se pudo obtener tasa USD/COP de respaldo, usando última conocida o fija:', fxErr.message);
+            // Si hay una tasa vieja en cache (aunque venció el TTL), es mejor que el fallback fijo.
+            if (fxCache.copPerUsd) return fxCache.copPerUsd;
+            return FX_FALLBACK_COP_PER_USD;
+        }
     }
 }
 
