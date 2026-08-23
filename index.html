@@ -2384,9 +2384,12 @@
             var fetchUrl = backendUrl + '/src/credits-system.js?nocache=' + timestamp + '&t=' + Date.now();
             var fallbackUrl = './src/credits-system.js?v=' + timestamp + '&t=' + Date.now();
             
+            if (window.__debugBanner) window.__debugBanner('credits-system.js: iniciando fetch a ' + fetchUrl);
+
             // OPTIMIZACIÓN: Cargar directamente sin verificaciones excesivas (solo verificar errores críticos)
             fetch(fetchUrl, { cache: 'no-store' })
                 .then(function(response) {
+                    if (window.__debugBanner) window.__debugBanner('credits-system.js: fetch respondio status=' + response.status);
                     if (!response.ok) throw new Error('HTTP ' + response.status);
                     return response.text();
                 })
@@ -2407,8 +2410,10 @@
                     script.textContent = scriptContent;
                     script.setAttribute('data-version', 'v3.0-no-limits');
                     document.head.appendChild(script);
+                    if (window.__debugBanner) window.__debugBanner('credits-system.js: script inyectado, CreditsSystem existe ahora=' + (typeof window.CreditsSystem !== 'undefined'));
                 })
                 .catch(function(error) {
+                    if (window.__debugBanner) window.__debugBanner('credits-system.js: fetch principal fallo: ' + (error && error.message) + ' -- probando fallback');
                     // Fallback: intentar desde mismo dominio
                     fetch(fallbackUrl, { cache: 'no-store' })
                         .then(function(response) {
@@ -2422,10 +2427,12 @@
                                 script.setAttribute('data-version', 'v3.0-no-limits');
                                 script.setAttribute('data-fallback', 'true');
                                 document.head.appendChild(script);
+                                if (window.__debugBanner) window.__debugBanner('credits-system.js: cargado por FALLBACK ok');
                             }
                         })
-                        .catch(function() {
+                        .catch(function(fallbackError) {
                             console.error('[CACHE-BUST] ❌ No se pudo cargar credits-system.js');
+                            if (window.__debugBanner) window.__debugBanner('credits-system.js: FALLBACK tambien fallo: ' + (fallbackError && fallbackError.message));
                         });
                 });
         })();
