@@ -142,10 +142,20 @@ class WithdrawalService {
             .map(([k, v]) => `  • ${k}: ${v}`)
             .join('\n');
 
+        // CRÍTICO (2026-08-23): texto plano, SIN parse_mode. Antes usaba
+        // Markdown con *negritas*, pero los datos de pago vienen con guion
+        // bajo (ej. "tipo_llave", "numero_cuenta") — el parser Markdown de
+        // Telegram interpreta "_..._" como cursiva, y como el guion bajo
+        // no cierra ese par, Telegram rechaza el mensaje ENTERO con 400
+        // "can't parse entities" — confirmado en vivo: la solicitud se
+        // guardaba bien pero la notificación nunca llegaba, sin ningún
+        // error visible (el catch de abajo solo loggea, no bloquea el
+        // flujo). Mejor texto plano sin formato que arriesgar que
+        // cualquier dato futuro (una llave, un banco) rompa el envío.
         const text =
-            `🧾 *Nueva solicitud de retiro (COP)*\n\n` +
+            `🧾 Nueva solicitud de retiro (COP)\n\n` +
             `Usuario: ${email || request.user_id}\n` +
-            `Monto a pagar: *${Number(request.amount_cop).toLocaleString('es-CO')} COP*\n` +
+            `Monto a pagar: ${Number(request.amount_cop).toLocaleString('es-CO')} COP\n` +
             `(equivale a ${Number(request.amount_usd_equivalent).toFixed(2)} USD de saldo jugable, ya descontado)\n` +
             `Método: ${request.payout_method}\n` +
             `Datos de pago:\n${detailsLines}\n\n` +
@@ -170,8 +180,7 @@ class WithdrawalService {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 chat_id: this.telegramChatId,
-                text,
-                parse_mode: 'Markdown'
+                text
             }),
             signal: AbortSignal.timeout(8000)
         });
