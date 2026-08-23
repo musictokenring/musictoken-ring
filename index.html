@@ -1923,16 +1923,17 @@
                 <h2 class="text-2xl font-bold text-white mb-6 text-center">🎵 Sala Encontrada</h2>
                 <div class="flex items-center justify-center gap-6 mb-6">
                     <div class="text-center">
-                        <div class="text-3xl mb-1">🎤</div>
+                        <div class="text-3xl mb-1" id="joinPreviewOpponentAvatar">🎤</div>
                         <span class="text-sm text-gray-300 font-medium" id="joinPreviewSongName">-</span>
                         <p class="text-xs text-gray-500" id="joinPreviewSongArtist">-</p>
                     </div>
                     <div class="text-2xl font-bold text-fuchsia-400">VS</div>
                     <div class="text-center">
-                        <div class="text-3xl mb-1">👤</div>
+                        <div class="text-3xl mb-1" id="joinPreviewMyAvatar">👤</div>
                         <span class="text-sm text-gray-300 font-medium">Vos</span>
                     </div>
                 </div>
+                <div id="joinPreviewAvatarPicker"></div>
                 <p class="text-center text-gray-400 text-sm mb-4">
                     Apuesta pedida: <strong id="joinPreviewBet" class="text-fuchsia-400">-</strong> MTR créditos
                 </p>
@@ -4435,6 +4436,38 @@
             }
         }
 
+        // Avatar de jugador para Sala Privada (pedido del usuario: elegir un
+        // avatar + poder reaccionar durante la batalla). Es solo un emoji --
+        // nada de subir fotos, así no hay nada que moderar. Se guarda en
+        // matches.player1_avatar/player2_avatar (ver migración 025) y se
+        // muestra en la pantalla de batalla junto a la canción de cada uno.
+        const MTR_AVATARS = ['🎸', '🎤', '🎧', '🥁', '🕺', '💃', '🔥', '⚡', '👑', '🚀', '🌟', '🦁'];
+        window.__myAvatar = window.__myAvatar || MTR_AVATARS[0];
+        function avatarPickerHtml() {
+            return '<div class="mb-3"><p class="text-xs text-gray-400 mb-1.5">Elegí tu avatar</p><div class="flex flex-wrap gap-1.5">' +
+                MTR_AVATARS.map(function (a) {
+                    var selected = (a === window.__myAvatar);
+                    var cls = selected
+                        ? 'ring-2 ring-cyan-400 bg-cyan-500/20'
+                        : 'bg-white/5 hover:bg-white/10';
+                    return '<button type="button" class="w-9 h-9 rounded-lg text-lg flex items-center justify-center border border-white/10 transition cursor-pointer ' + cls + '" data-avatar="' + a + '" onclick="selectAvatar(this)">' + a + '</button>';
+                }).join('') +
+                '</div></div>';
+        }
+        function selectAvatar(btn) {
+            window.__myAvatar = btn.getAttribute('data-avatar');
+            var container = btn.parentElement;
+            Array.prototype.forEach.call(container.children, function (b) {
+                b.classList.remove('ring-2', 'ring-cyan-400', 'bg-cyan-500/20');
+                b.classList.add('bg-white/5');
+            });
+            btn.classList.remove('bg-white/5');
+            btn.classList.add('ring-2', 'ring-cyan-400', 'bg-cyan-500/20');
+            var myAvatarEl = document.getElementById('joinPreviewMyAvatar');
+            if (myAvatarEl) myAvatarEl.textContent = window.__myAvatar;
+        }
+        window.selectAvatar = selectAvatar;
+
         function updateActionButtons(mode) {
             var buttonsDiv = document.getElementById('actionButtons');
             var btnBase = 'w-full py-3 rounded-lg text-sm font-bold transition-all cursor-pointer';
@@ -4447,7 +4480,8 @@
                 if (sq) sq.dataset.baseState = 'ready';
                 updateBetEligibility();
             } else if (mode === 'private') {
-                buttonsDiv.innerHTML = '<button type="button" onclick="createRoom()" class="' + btnPrimary + '" id="createRoomBtn" disabled>🎵 Crear Sala</button>' +
+                buttonsDiv.innerHTML = avatarPickerHtml() +
+                    '<button type="button" onclick="createRoom()" class="' + btnPrimary + '" id="createRoomBtn" disabled>🎵 Crear Sala</button>' +
                     '<div class="flex items-center gap-3 my-3"><div class="flex-1 h-px bg-white/10"></div><span class="text-xs text-gray-500">o</span><div class="flex-1 h-px bg-white/10"></div></div>' +
                     '<div class="flex gap-2"><input type="text" id="joinRoomCode" placeholder="Código" class="flex-1 px-3 py-2.5 rounded-lg bg-black/40 border border-white/10 text-white text-sm" maxlength="6"' +
                     ' oninput="this.value=this.value.toUpperCase(); if(typeof window.updateBetEligibility===\'function\') window.updateBetEligibility();">' +
@@ -5157,7 +5191,7 @@
             if (!selectedSong) return;
             const minBetAmount = (typeof GameEngine !== 'undefined' && GameEngine.minBet) ? GameEngine.minBet : 1;
             var bet = parseInt(document.getElementById('betAmount').value) || minBetAmount;
-            if (typeof GameEngine !== 'undefined') await GameEngine.createPrivateRoom(selectedSong, bet);
+            if (typeof GameEngine !== 'undefined') await GameEngine.createPrivateRoom(selectedSong, bet, window.__myAvatar);
             else showToast('GameEngine no está cargado', 'error');
         }
         // "Unirse" ya no cobra ni une directo -- primero busca la sala y
@@ -5198,6 +5232,13 @@
             if (artistEl) artistEl.textContent = preview.match.player1_song_artist || '';
             if (betEl) betEl.textContent = betRequired;
 
+            var opponentAvatarEl = document.getElementById('joinPreviewOpponentAvatar');
+            if (opponentAvatarEl) opponentAvatarEl.textContent = preview.match.player1_avatar || '🎤';
+            var myAvatarEl = document.getElementById('joinPreviewMyAvatar');
+            if (myAvatarEl) myAvatarEl.textContent = window.__myAvatar || '👤';
+            var avatarPickerEl = document.getElementById('joinPreviewAvatarPicker');
+            if (avatarPickerEl) avatarPickerEl.innerHTML = avatarPickerHtml();
+
             var insufficientBox = document.getElementById('joinPreviewInsufficientBox');
             var insufficientText = document.getElementById('joinPreviewInsufficientText');
             var confirmBtn = document.getElementById('confirmJoinRoomBtn');
@@ -5234,7 +5275,7 @@
             // 'waiting', saldo, ELO) antes de cobrar -- a propósito, para no
             // confiar en datos de la vista previa que pudieron quedar viejos
             // (por ejemplo si alguien más se unió justo en el medio).
-            await window.GameEngine.joinPrivateRoom(state.roomCode, state.song, betRequired);
+            await window.GameEngine.joinPrivateRoom(state.roomCode, state.song, betRequired, window.__myAvatar);
 
             if (confirmBtn) { confirmBtn.disabled = false; confirmBtn.textContent = '⚔️ Confirmar y Apostar'; }
             window.__joinRoomPreview = null;

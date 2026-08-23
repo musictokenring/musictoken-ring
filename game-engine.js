@@ -1609,7 +1609,7 @@ const GameEngine = {
     // MODO SALA PRIVADA (Private Room)
     // ==========================================
     
-    async createPrivateRoom(song, betAmount) {
+    async createPrivateRoom(song, betAmount, avatar) {
         // Validate minimum bet (MIN_BET_AMOUNT créditos)
         const normalizedBet = Math.max(this.minBet, Math.round(betAmount || this.minBet));
         if (normalizedBet < this.minBet) {
@@ -1637,23 +1637,38 @@ const GameEngine = {
             const roomCode = this.generateRoomCode();
             
             // Crear match
-            const { data: match, error: matchError } = await supabaseClient
+            const matchRow = {
+                match_type: 'private',
+                room_code: roomCode,
+                player1_id: session.user.id,
+                player1_song_id: song.id,
+                player1_song_name: song.name,
+                player1_song_artist: song.artist,
+                player1_song_image: song.image,
+                player1_song_preview: song.preview,
+                player1_bet: normalizedBet,
+                status: 'waiting'
+            };
+            if (avatar) matchRow.player1_avatar = avatar;
+
+            let { data: match, error: matchError } = await supabaseClient
                 .from('matches')
-                .insert([{
-                    match_type: 'private',
-                    room_code: roomCode,
-                    player1_id: session.user.id,
-                    player1_song_id: song.id,
-                    player1_song_name: song.name,
-                    player1_song_artist: song.artist,
-                    player1_song_image: song.image,
-                    player1_song_preview: song.preview,
-                    player1_bet: normalizedBet,
-                    status: 'waiting'
-                }])
+                .insert([matchRow])
                 .select()
                 .single();
-            
+
+            // Si la migración 025 (player1_avatar/player2_avatar) todavía no
+            // corrió en Supabase, reintentar sin esa columna en vez de
+            // romper la creación de sala entera por un avatar opcional.
+            if (matchError && avatar && String(matchError.message || '').indexOf('player1_avatar') !== -1) {
+                delete matchRow.player1_avatar;
+                ({ data: match, error: matchError } = await supabaseClient
+                    .from('matches')
+                    .insert([matchRow])
+                    .select()
+                    .single());
+            }
+
             if (matchError) {
                 // Si falla crear match después de descontar, reembolsar créditos
                 await this.updateBalance(normalizedBet, 'refund', null);
@@ -1734,7 +1749,7 @@ const GameEngine = {
         }
     },
 
-    async joinPrivateRoom(roomCode, song, betAmount) {
+    async joinPrivateRoom(roomCode, song, betAmount, avatar) {
         try {
             const { data: { session } } = await supabaseClient.auth.getSession();
 
@@ -1775,21 +1790,35 @@ const GameEngine = {
             }
 
             // Unirse al match
-            const { error: updateError } = await supabaseClient
+            const updatePayload = {
+                player2_id: session.user.id,
+                player2_song_id: song.id,
+                player2_song_name: song.name,
+                player2_song_artist: song.artist,
+                player2_song_image: song.image,
+                player2_song_preview: song.preview,
+                player2_bet: betAmount,
+                total_pot: match.player1_bet + betAmount,
+                status: 'ready'
+            };
+            if (avatar) updatePayload.player2_avatar = avatar;
+
+            let { error: updateError } = await supabaseClient
                 .from('matches')
-                .update({
-                    player2_id: session.user.id,
-                    player2_song_id: song.id,
-                    player2_song_name: song.name,
-                    player2_song_artist: song.artist,
-                    player2_song_image: song.image,
-                    player2_song_preview: song.preview,
-                    player2_bet: betAmount,
-                    total_pot: match.player1_bet + betAmount,
-                    status: 'ready'
-                })
+                .update(updatePayload)
                 .eq('id', match.id);
-            
+
+            // Mismo fallback que createPrivateRoom: si la migración 025
+            // todavía no corrió, no perder la unión completa por una
+            // columna de avatar opcional.
+            if (updateError && avatar && String(updateError.message || '').indexOf('player2_avatar') !== -1) {
+                delete updatePayload.player2_avatar;
+                ({ error: updateError } = await supabaseClient
+                    .from('matches')
+                    .update(updatePayload)
+                    .eq('id', match.id));
+            }
+
             if (updateError) {
                 // Si falla unirse después de descontar, reembolsar créditos
                 await this.updateBalance(betAmount, 'refund', null);
@@ -3028,6 +3057,62 @@ const GameEngine = {
     battleAnimFrameId: null,
     battleParticles: [],
 
+    // Reacciones rápidas de Sala Privada (pedido del usuario, junto con los
+    // avatares): en vez de chat libre -- que en una app de apuestas reales
+    // abre superficie de moderación/abuso que hoy no existe en ningún otro
+    // modo -- son 4 emojis fijos que no hace falta moderar. Un canal
+    // broadcast de Supabase Realtime por match, igual patrón que
+    // quickMatchChannel para los retos de Modo Rápido.
+    _privateReactionsChannel: null,
+
+    setupPrivateReactionsChannel(match) {
+        if (this._privateReactionsChannel) {
+            try { supabaseClient.removeChannel(this._privateReactionsChannel); } catch (e) { /* noop */ }
+            this._privateReactionsChannel = null;
+        }
+        if (!match || match.match_type !== 'private' || !match.id) return;
+
+        const channel = supabaseClient.channel('private-reactions-' + match.id);
+        channel
+            .on('broadcast', { event: 'reaction' }, (payload) => {
+                const emoji = payload?.payload?.emoji;
+                if (!emoji) return;
+                // Supabase Realtime no hace eco de tus propios broadcasts al
+                // mismo cliente por defecto, así que lo que llega acá es
+                // siempre del rival -- no hace falta filtrar por userId.
+                this.renderPrivateReaction(emoji, false);
+            })
+            .subscribe();
+        this._privateReactionsChannel = channel;
+    },
+
+    async sendPrivateReaction(emoji) {
+        this.renderPrivateReaction(emoji, true); // optimista, se ve al toque
+        if (!this._privateReactionsChannel) return;
+        try {
+            await this._privateReactionsChannel.send({
+                type: 'broadcast',
+                event: 'reaction',
+                payload: { emoji }
+            });
+        } catch (e) {
+            console.warn('[privateReactions] no se pudo enviar:', e && e.message);
+        }
+    },
+
+    renderPrivateReaction(emoji, isMine) {
+        const feed = document.getElementById('privateReactionsFeed');
+        if (!feed) return;
+        const bubble = document.createElement('span');
+        bubble.textContent = (isMine ? 'Vos: ' : 'Rival: ') + emoji;
+        bubble.className = 'px-2.5 py-1 rounded-full text-xs font-medium border ' +
+            (isMine
+                ? 'bg-cyan-500/15 text-cyan-300 border-cyan-500/30'
+                : 'bg-fuchsia-500/15 text-fuchsia-300 border-fuchsia-500/30');
+        feed.appendChild(bubble);
+        setTimeout(() => { bubble.remove(); }, 5000);
+    },
+
     createBattleUI(match) {
         console.log('[createBattleUI] ✅ Creando UI de batalla');
         console.log('[createBattleUI] Match:', match);
@@ -3069,7 +3154,14 @@ const GameEngine = {
         console.log('[createBattleUI] Contenedor principal encontrado');
 
         const pot = (match.player1_bet || 0) + (match.player2_bet || 0);
-        
+        // Avatares de Sala Privada (elegidos al crear/unirse -- ver
+        // createPrivateRoom/joinPrivateRoom). Solo aplica a match_type
+        // 'private'; el resto de los modos mantiene los iconos de nota
+        // musical de siempre.
+        const isPrivateMatch = match.match_type === 'private';
+        const fighter1Badge = (isPrivateMatch && match.player1_avatar) ? match.player1_avatar : '♪';
+        const fighter2Badge = (isPrivateMatch && match.player2_avatar) ? match.player2_avatar : '♫';
+
         // Crear la sección de batalla y agregarla al contenedor
         console.log('[createBattleUI] Creando elemento battleSection...');
         const battleSection = document.createElement('section');
@@ -3096,7 +3188,7 @@ const GameEngine = {
                         <div class="text-center flex-shrink-0" id="fighter1Card" style="flex: 0 0 auto; min-width: 0;">
                             <div class="relative inline-block">
                                 <img src="${match.player1_song_image}" alt="" class="w-16 h-16 sm:w-24 sm:h-24 md:w-28 md:h-28 rounded-full object-cover border-4 border-cyan-400" style="box-shadow:0 0 25px rgba(0,243,255,0.5)" id="fighter1Img">
-                                <div class="absolute -bottom-1 -right-1 w-5 h-5 sm:w-6 sm:h-6 md:w-7 md:h-7 rounded-full bg-cyan-500 text-black text-xs font-black flex items-center justify-center" id="fighter1Badge">♪</div>
+                                <div class="absolute -bottom-1 -right-1 w-5 h-5 sm:w-6 sm:h-6 md:w-7 md:h-7 rounded-full bg-cyan-500 text-black text-xs font-black flex items-center justify-center" id="fighter1Badge">${fighter1Badge}</div>
                             </div>
                             <h3 class="text-white font-bold text-xs sm:text-sm md:text-base mt-1 sm:mt-2 max-w-[90px] sm:max-w-[120px] md:max-w-[140px] truncate">${match.player1_song_name}</h3>
                             <p class="text-cyan-400 text-[10px] sm:text-xs">${match.player1_song_artist}</p>
@@ -3129,7 +3221,7 @@ const GameEngine = {
                         <div class="text-center flex-shrink-0" id="fighter2Card" style="flex: 0 0 auto; min-width: 0;">
                             <div class="relative inline-block">
                                 <img src="${match.player2_song_image}" alt="" class="w-16 h-16 sm:w-24 sm:h-24 md:w-28 md:h-28 rounded-full object-cover border-4 border-fuchsia-400" style="box-shadow:0 0 25px rgba(236,72,153,0.5)" id="fighter2Img">
-                                <div class="absolute -bottom-1 -right-1 w-5 h-5 sm:w-6 sm:h-6 md:w-7 md:h-7 rounded-full bg-fuchsia-500 text-white text-xs font-black flex items-center justify-center" id="fighter2Badge">♫</div>
+                                <div class="absolute -bottom-1 -right-1 w-5 h-5 sm:w-6 sm:h-6 md:w-7 md:h-7 rounded-full bg-fuchsia-500 text-white text-xs font-black flex items-center justify-center" id="fighter2Badge">${fighter2Badge}</div>
                             </div>
                             <h3 class="text-white font-bold text-xs sm:text-sm md:text-base mt-1 sm:mt-2 max-w-[90px] sm:max-w-[120px] md:max-w-[140px] truncate">${match.player2_song_name}</h3>
                             <p class="text-fuchsia-400 text-[10px] sm:text-xs">${match.player2_song_artist}</p>
@@ -3155,6 +3247,15 @@ const GameEngine = {
             </div>
             <div id="battleStatusText" class="text-center py-4 px-4 mb-4"></div>
             <div id="hostCommentary" class="hidden max-w-3xl mx-auto text-center text-xs sm:text-sm text-amber-300/90 italic px-4 mb-4"></div>
+            ${isPrivateMatch ? `
+            <div class="max-w-3xl mx-auto flex items-center justify-center gap-2 mb-2">
+                <button type="button" class="w-10 h-10 rounded-full bg-white/5 border border-white/10 hover:bg-white/10 text-lg transition cursor-pointer" onclick="GameEngine.sendPrivateReaction('🔥')">🔥</button>
+                <button type="button" class="w-10 h-10 rounded-full bg-white/5 border border-white/10 hover:bg-white/10 text-lg transition cursor-pointer" onclick="GameEngine.sendPrivateReaction('😅')">😅</button>
+                <button type="button" class="w-10 h-10 rounded-full bg-white/5 border border-white/10 hover:bg-white/10 text-lg transition cursor-pointer" onclick="GameEngine.sendPrivateReaction('💪')">💪</button>
+                <button type="button" class="px-3 h-10 rounded-full bg-white/5 border border-white/10 hover:bg-white/10 text-xs font-black transition cursor-pointer" onclick="GameEngine.sendPrivateReaction('GG')">GG</button>
+            </div>
+            <div id="privateReactionsFeed" class="max-w-3xl mx-auto flex flex-wrap justify-center gap-2 mb-4 min-h-[2rem]"></div>
+            ` : ''}
 
             <div id="fanBetPanel" class="max-w-3xl mx-auto rounded-2xl border border-white/10 bg-white/5 p-4 mb-4">
                 <p class="text-center text-xs text-gray-400 uppercase tracking-widest mb-1">🎤 Apostá por tu favorito</p>
@@ -3192,6 +3293,7 @@ const GameEngine = {
             console.log('[createBattleUI] ✅ battleArena visible');
             this.bindBattleArenaAudio(addedArena);
             this.setupFanBetPanel(match);
+            if (isPrivateMatch) this.setupPrivateReactionsChannel(match);
 
             triggerHostNarration(
                 match.id || match.match_id,
