@@ -1968,13 +1968,27 @@ app.get('/api/vault/balance-cop-estimate', async (req, res) => {
 
         const totalDepositsCop = totalNetUsd * copPerUsd;
 
-        // TODO: cuando exista un mecanismo real de pago en pesos (Wompi u
-        // otro), restar acá la suma de esos pagos confirmados.
-        const totalWithdrawalsCop = 0;
+        // CRÍTICO (2026-08-23): ya existe el mecanismo real de pago manual en
+        // pesos (withdrawal_requests_cop, ver withdrawal-service.js) — se
+        // resta acá la suma de lo ya efectivamente pagado (status='paid').
+        // Encontrado por el usuario probando un retiro real de punta a
+        // punta: pagó de verdad y el estimado no bajó nada, seguía mostrando
+        // el total bruto de depósitos como si ese dinero siguiera disponible.
+        const { data: paidWithdrawals, error: withdrawalsError } = await supabase
+            .from('withdrawal_requests_cop')
+            .select('amount_cop')
+            .eq('status', 'paid');
+
+        if (withdrawalsError) {
+            console.warn('[server] No se pudo obtener retiros pagados para el estimado del vault:', withdrawalsError.message);
+        }
+
+        const totalWithdrawalsCop = (paidWithdrawals || []).reduce((sum, row) => sum + (parseFloat(row.amount_cop) || 0), 0);
 
         res.json({
             estimatedBalanceCop: Math.round((totalDepositsCop - totalWithdrawalsCop) * 100) / 100,
             depositsCount: (deposits || []).length,
+            paidWithdrawalsCount: (paidWithdrawals || []).length,
             isEstimate: true
         });
     } catch (error) {

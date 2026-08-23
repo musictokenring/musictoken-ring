@@ -216,17 +216,27 @@ class WithdrawalService {
             .update({ status: 'paid', admin_notes: adminNotes || null, processed_at: new Date().toISOString() })
             .eq('id', requestId)
             .eq('status', 'pending') // no permitir marcar dos veces / sobre una ya rechazada
-            .select()
+            .select('*, users(email)')
             .single();
         if (error) throw new Error(error.message);
         if (!data) throw new Error('Solicitud no encontrada o ya procesada');
+
+        // CRÍTICO (2026-08-23): confirmación por Telegram de que quedó
+        // marcada como pagada — pedido explícito del usuario, para tener
+        // un control real y no arriesgarse a pagar la misma solicitud dos
+        // veces si se pierde de vista en el panel (que la saca de la lista
+        // apenas se marca, por diseño).
+        this._notifyStatusChange(data, 'PAGADO ✅', adminNotes).catch((err) => {
+            console.error('[withdrawal-service] No se pudo notificar el pago por Telegram:', err.message);
+        });
+
         return data;
     }
 
     async rejectWithdrawalRequest(requestId, adminNotes) {
         const { data: request, error: fetchError } = await this.supabase
             .from('withdrawal_requests_cop')
-            .select('*')
+            .select('*, users(email)')
             .eq('id', requestId)
             .eq('status', 'pending')
             .single();
@@ -245,10 +255,27 @@ class WithdrawalService {
             .from('withdrawal_requests_cop')
             .update({ status: 'rejected', admin_notes: adminNotes || null, processed_at: new Date().toISOString() })
             .eq('id', requestId)
-            .select()
+            .select('*, users(email)')
             .single();
         if (error) throw new Error(error.message);
+
+        this._notifyStatusChange(data, 'RECHAZADO ❌ (saldo devuelto al usuario)', adminNotes).catch((err) => {
+            console.error('[withdrawal-service] No se pudo notificar el rechazo por Telegram:', err.message);
+        });
+
         return data;
+    }
+
+    async _notifyStatusChange(request, statusLabel, adminNotes) {
+        const email = request.users?.email || request.user_id;
+        const text =
+            `✅ Solicitud actualizada: ${statusLabel}\n\n` +
+            `Usuario: ${email}\n` +
+            `Monto: ${Number(request.amount_cop).toLocaleString('es-CO')} COP\n` +
+            `Método: ${request.payout_method}\n` +
+            (adminNotes ? `Nota: ${adminNotes}\n` : '') +
+            `ID solicitud: ${request.id}`;
+        await this._sendTelegram(text);
     }
 }
 
