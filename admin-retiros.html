@@ -58,10 +58,13 @@
 
     function setStatus(msg) { document.getElementById('status').textContent = msg || ''; }
 
+    var TIPO_LLAVE_LABEL = { celular: 'Celular', cedula: 'Cédula', correo: 'Correo', alfanumerica: 'Llave alfanumérica' };
+
     function fmtDetails(method, details) {
         var d = details || {};
         var lines = [];
         if (d.telefono) lines.push('Teléfono: ' + d.telefono);
+        if (d.llave) lines.push('Llave Bre-B (' + (TIPO_LLAVE_LABEL[d.tipo_llave] || d.tipo_llave || '?') + '): ' + d.llave);
         if (d.banco) lines.push('Banco: ' + d.banco);
         if (d.tipo_cuenta) lines.push('Tipo de cuenta: ' + d.tipo_cuenta);
         if (d.numero_cuenta) lines.push('Número de cuenta: ' + d.numero_cuenta);

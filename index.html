@@ -1460,6 +1460,21 @@
                             <label class="text-xs text-gray-400" for="wcPhone">Número de teléfono (10 dígitos)</label>
                             <input id="wcPhone" type="tel" placeholder="3001234567" inputmode="numeric" class="mt-1 w-full rounded-lg border border-white/15 bg-gray-900/80 px-3 py-2.5 text-white text-base focus:border-yellow-500/50 focus:outline-none" />
                         </div>
+                        <div id="wcFieldsBreB" class="hidden flex-col gap-3">
+                            <div>
+                                <label class="text-xs text-gray-400" for="wcBreBTipo">Tipo de llave Bre-B</label>
+                                <select id="wcBreBTipo" class="mt-1 w-full rounded-lg border border-white/15 bg-gray-900/80 px-3 py-2.5 text-white text-base focus:border-yellow-500/50 focus:outline-none">
+                                    <option value="celular">Celular</option>
+                                    <option value="cedula">Cédula</option>
+                                    <option value="correo">Correo electrónico</option>
+                                    <option value="alfanumerica">Llave alfanumérica (empieza con @)</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="text-xs text-gray-400" for="wcBreBLlave">Tu llave Bre-B</label>
+                                <input id="wcBreBLlave" type="text" placeholder="Ej. 3001234567, 1032xxxxxxx, correo@ejemplo.com o @tubanco123" class="mt-1 w-full rounded-lg border border-white/15 bg-gray-900/80 px-3 py-2.5 text-white text-base focus:border-yellow-500/50 focus:outline-none" />
+                            </div>
+                        </div>
                         <div id="wcFieldsBank" class="hidden flex-col gap-3">
                             <div id="wcFieldsBankName">
                                 <label class="text-xs text-gray-400" for="wcBankName">Nombre del banco</label>
@@ -1511,11 +1526,15 @@
             function updateWcFieldsVisibility() {
                 var method = document.getElementById('wcPayoutMethod').value;
                 var phoneBox = document.getElementById('wcFieldsPhone');
+                var breBBox = document.getElementById('wcFieldsBreB');
                 var bankBox = document.getElementById('wcFieldsBank');
                 var bankNameBox = document.getElementById('wcFieldsBankName');
-                var isPhone = method === 'nequi' || method === 'bre-b' || method === 'daviplata';
+                var isPhone = method === 'nequi' || method === 'daviplata';
+                var isBreB = method === 'bre-b';
                 var isBank = method === 'bancolombia' || method === 'otro_banco';
                 if (phoneBox) phoneBox.classList.toggle('hidden', !isPhone);
+                if (breBBox) breBBox.classList.toggle('hidden', !isBreB);
+                if (breBBox) breBBox.classList.toggle('flex', isBreB);
                 if (bankBox) bankBox.classList.toggle('hidden', !isBank);
                 if (bankBox) bankBox.classList.toggle('flex', isBank);
                 if (bankNameBox) bankNameBox.classList.toggle('hidden', method !== 'otro_banco');
@@ -1594,8 +1613,11 @@
 
                 var method = document.getElementById('wcPayoutMethod').value;
                 var details = {};
-                if (method === 'nequi' || method === 'bre-b' || method === 'daviplata') {
+                if (method === 'nequi' || method === 'daviplata') {
                     details.telefono = (document.getElementById('wcPhone').value || '').trim();
+                } else if (method === 'bre-b') {
+                    details.tipo_llave = document.getElementById('wcBreBTipo').value;
+                    details.llave = (document.getElementById('wcBreBLlave').value || '').trim();
                 } else {
                     details.tipo_cuenta = document.getElementById('wcAccountType').value;
                     details.numero_cuenta = (document.getElementById('wcAccountNumber').value || '').trim();

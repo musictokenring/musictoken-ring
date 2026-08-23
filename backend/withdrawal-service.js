@@ -34,9 +34,22 @@ class WithdrawalService {
      */
     _validatePayoutDetails(payoutMethod, payoutDetails) {
         const d = payoutDetails || {};
-        if (payoutMethod === 'nequi' || payoutMethod === 'bre-b' || payoutMethod === 'daviplata') {
+        if (payoutMethod === 'nequi' || payoutMethod === 'daviplata') {
             if (!d.telefono || !/^\d{10}$/.test(String(d.telefono).replace(/\D/g, ''))) {
                 throw new Error('Falta un número de teléfono válido (10 dígitos) para este método de pago');
+            }
+        } else if (payoutMethod === 'bre-b') {
+            // La llave Bre-B NO es siempre un teléfono: el Banco de la República
+            // permite 4 tipos — cédula, celular, correo, o un identificador
+            // alfanumérico generado por la entidad (empieza con @). Se valida
+            // solo que venga algo razonable, no un formato fijo de 10 dígitos.
+            const llave = String(d.llave || '').trim();
+            if (!llave || llave.length < 3) {
+                throw new Error('Falta la llave Bre-B (cédula, celular, correo o llave alfanumérica)');
+            }
+            const validTipos = ['celular', 'cedula', 'correo', 'alfanumerica'];
+            if (d.tipo_llave && !validTipos.includes(d.tipo_llave)) {
+                throw new Error(`tipo_llave inválido. Debe ser uno de: ${validTipos.join(', ')}`);
             }
         } else if (payoutMethod === 'bancolombia' || payoutMethod === 'otro_banco') {
             if (!d.numero_cuenta || !d.tipo_cuenta) {
