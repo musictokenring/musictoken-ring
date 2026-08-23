@@ -1895,29 +1895,81 @@ app.get('/api/vault/balance', async (req, res) => {
 });
 
 /**
- * Vault EN PESOS (COP) — separado del vault on-chain de arriba a propósito
- * (ver migración 022_fiat_vault_cop.sql y mercadopago-service.js). No hay
- * ninguna wallet ni saldo on-chain que verificar acá, es un contador simple.
+ * Saldo ESTIMADO de la cuenta real de Mercado Pago (pesos colombianos).
+ *
+ * CRÍTICO — por qué "estimado" y no "verificado": a diferencia del vault
+ * cripto (verificable en vivo contra la blockchain, on-chain, sin tener
+ * que confiar en nuestra palabra), Mercado Pago NO tiene una API pública
+ * de "saldo actual en tiempo real" — solo un sistema de reportes contables
+ * asíncrono, con datos de hasta un día de rezago (webhook + hasta 60 días
+ * hacia atrás). No sirve para mostrar "el saldo ahora mismo".
+ *
+ * Se descartó a propósito un "vault en pesos" como sub-contador separado
+ * (ver mercadopago-service.js): toda la plata de pesos —lo que se le debe
+ * a los usuarios en créditos y la ganancia de la plataforma— ya está junta
+ * en una única cuenta real de Mercado Pago, no hay una wallet separada que
+ * fondear como sí pasa con cripto.
+ *
+ * Entonces esto es un ESTIMADO calculado con nuestros propios registros:
+ *   saldo estimado = suma de depósitos NETOS reales confirmados (ya
+ *                     descontada la comisión real de Mercado Pago, no la
+ *                     bruta que pagó el usuario)
+ *                   − suma de retiros/pagos en COP ya realizados
+ *
+ * Hoy el segundo término siempre es 0 — todavía no existe ningún mecanismo
+ * que pague en pesos a un usuario (necesitaría algo como Wompi, ver
+ * discusión sobre Nequi/Bre-B). El día que exista, hay que sumar acá la
+ * resta de esos pagos reales — dejado listo para eso, no hay que rediseñar
+ * el cálculo entero.
+ *
+ * Puede desviarse de la realidad si pasa algo por fuera de nuestro código
+ * (un reembolso manual desde el panel de Mercado Pago, un contracargo,
+ * etc.) — el dato 100% confiable siempre es la app real de Mercado Pago.
  */
-app.get('/api/vault/balance-cop', async (req, res) => {
+app.get('/api/vault/balance-cop-estimate', async (req, res) => {
     try {
-        const { data, error } = await supabase
-            .from('vault_balance_cop')
-            .select('balance_cop, last_updated')
-            .order('last_updated', { ascending: false })
-            .limit(1)
-            .maybeSingle();
+        const { data: deposits, error } = await supabase
+            .from('deposits')
+            .select('usdc_value_at_deposit')
+            .ilike('network', 'mercadopago-cop%')
+            .eq('status', 'processed');
 
         if (error) {
             return res.status(500).json({ error: error.message });
         }
 
+        // usdc_value_at_deposit = neto en USD de cada depósito (ya descontada
+        // la comisión real de Mercado Pago). CRÍTICO: NO se usa la columna
+        // `rate_used` para reconvertir a COP — es DECIMAL de poca precisión
+        // y trunca tasas USD/COP (~0.00027) a 0.00, lo que habría dado un
+        // estimado de $0 pese a depósitos reales (encontrado probando esto
+        // en vivo). En cambio, se suma el neto en USD de todos los depósitos
+        // y se convierte UNA sola vez con la tasa ACTUAL — es una
+        // aproximación (no la tasa exacta de cada día), aceptable porque
+        // esto ya está etiquetado como estimado, no como dato verificado.
+        const totalNetUsd = (deposits || []).reduce((sum, row) => sum + (parseFloat(row.usdc_value_at_deposit) || 0), 0);
+
+        let copPerUsd = 4000; // fallback conservador si la API de tasa falla
+        try {
+            const { getCopPerUsd } = require('./mercadopago-service');
+            copPerUsd = await getCopPerUsd();
+        } catch (rateErr) {
+            console.warn('[server] No se pudo obtener tasa USD/COP para el estimado del vault, usando fallback:', rateErr.message);
+        }
+
+        const totalDepositsCop = totalNetUsd * copPerUsd;
+
+        // TODO: cuando exista un mecanismo real de pago en pesos (Wompi u
+        // otro), restar acá la suma de esos pagos confirmados.
+        const totalWithdrawalsCop = 0;
+
         res.json({
-            balanceCop: data?.balance_cop || 0,
-            lastUpdated: data?.last_updated || null
+            estimatedBalanceCop: Math.round((totalDepositsCop - totalWithdrawalsCop) * 100) / 100,
+            depositsCount: (deposits || []).length,
+            isEstimate: true
         });
     } catch (error) {
-        console.error('[server] Error getting vault balance (COP):', error);
+        console.error('[server] Error estimating Mercado Pago balance:', error);
         res.status(500).json({ error: error.message });
     }
 });

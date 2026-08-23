@@ -1705,23 +1705,25 @@
                     </div>
                 </div>
 
-                <!-- Vault separado en pesos colombianos (depósitos por Mercado Pago) —
-                     ver migración 022_fiat_vault_cop.sql. Nunca se mezcla con el vault
-                     on-chain de arriba: un pago en COP no genera USDC real que mover. -->
+                <!-- Saldo ESTIMADO de la cuenta real de Mercado Pago (pesos colombianos).
+                     A propósito NO se llama "vault": toda la plata en pesos ya está
+                     junta en una única cuenta real, no hay una wallet separada que
+                     fondear como con cripto. Ver GET /api/vault/balance-cop-estimate
+                     en server-auto.js para la lógica completa y sus límites. -->
                 <div class="p-4 rounded-lg bg-yellow-500/10 border border-yellow-500/20 mb-4">
                     <div class="flex items-center justify-between">
                         <div>
-                            <div class="text-sm text-gray-400 mb-1">Balance del Vault (pesos, Mercado Pago):</div>
+                            <div class="text-sm text-gray-400 mb-1">Saldo estimado en pesos (Mercado Pago):</div>
                             <div id="publicVaultBalanceCop" class="text-2xl font-bold text-yellow-400">Cargando...</div>
-                            <div class="text-xs text-gray-500 mt-1">Comisión reservada en COP, en la cuenta de Mercado Pago de la plataforma</div>
+                            <div class="text-xs text-gray-500 mt-1">Estimado según nuestros registros — no verificable en vivo (Mercado Pago no ofrece saldo en tiempo real vía API)</div>
                         </div>
                         <div class="text-4xl">🇨🇴</div>
                     </div>
                 </div>
 
                 <div class="text-xs text-gray-500 space-y-1">
-                    <div>✓ El vault se alimenta con fees: 5% depósito, 2% apuesta, 5% retiro</div>
-                    <div>✓ Todos los retiros se pagan desde el vault que corresponda a su moneda</div>
+                    <div>✓ El vault cripto se alimenta con fees: 5% depósito, 2% apuesta, 5% retiro</div>
+                    <div>✓ Todos los retiros se pagan desde el vault/saldo que corresponda a su moneda</div>
                     <div>✓ Balance del vault cripto verificado en tiempo real contra la blockchain</div>
                     <a id="publicVaultLink" href="#" target="_blank" class="text-cyan-400 hover:text-cyan-300 underline inline-block mt-2">Ver vault en BaseScan</a>
                 </div>
@@ -3714,19 +3716,20 @@
         // Actualizar balance del vault cada 60 segundos
         setInterval(loadPublicVaultBalance, 60000);
 
-        // Vault EN PESOS (Mercado Pago) — separado a propósito del vault
-        // on-chain de arriba, ver migración 022_fiat_vault_cop.sql.
+        // Saldo ESTIMADO de la cuenta real de Mercado Pago — no es un "vault"
+        // separado (ver nota en index.html y server-auto.js). Se calcula
+        // sumando depósitos netos reales confirmados, no se verifica en vivo.
         async function loadPublicVaultBalanceCop() {
             try {
                 const backendUrl = window.CONFIG?.BACKEND_API || 'https://musictoken-ring.onrender.com';
-                const response = await fetch(`${backendUrl}/api/vault/balance-cop`);
+                const response = await fetch(`${backendUrl}/api/vault/balance-cop-estimate`);
                 const el = document.getElementById('publicVaultBalanceCop');
                 if (!el) return;
 
                 if (response.ok) {
                     const data = await response.json();
-                    const balance = data.balanceCop || 0;
-                    el.textContent = balance.toLocaleString('es-CO', { maximumFractionDigits: 0 }) + ' COP (vault)';
+                    const balance = data.estimatedBalanceCop || 0;
+                    el.textContent = balance.toLocaleString('es-CO', { maximumFractionDigits: 0 }) + ' COP (estimado)';
                     el.classList.remove('text-gray-500', 'text-red-400');
                     el.classList.add('text-yellow-400');
                 } else {

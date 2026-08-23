@@ -60,10 +60,12 @@ class MercadoPagoService {
         this.publicKey = process.env.MERCADOPAGO_PUBLIC_KEY;
         this.webhookSecret = process.env.MERCADOPAGO_WEBHOOK_SECRET;
 
-        // Fee distribution: 5% total, 75% vault, 25% trading fund
+        // Comisión propia de la plataforma sobre cada depósito: 5%.
+        // vaultFeePercent solo aplica al caso raro de pago en USD por esta
+        // pasarela (ahí sí es comparable al vault on-chain existente). Para
+        // COP no hay reparto — ver la nota CRÍTICO en processDeposit.
         this.depositFeePercent = 0.05;
         this.vaultFeePercent = 0.75;
-        this.tradingFundFeePercent = 0.25;
     }
 
     /**
@@ -317,7 +319,6 @@ class MercadoPagoService {
         // Calculate fees
         const depositFee = usdAmount * this.depositFeePercent;
         const netAmount = usdAmount - depositFee;
-        const tradingFundFee = depositFee * this.tradingFundFeePercent;
 
         // Créditos en USD nominal (1 crédito = 1 USD nominal)
         const creditsToAward = netAmount;
@@ -332,30 +333,28 @@ class MercadoPagoService {
             throw new Error(`Failed to credit user balance: ${updateError.message}`);
         }
 
-        // CRÍTICO: la comisión de un depósito en COP va al vault EN PESOS
-        // (update_vault_balance_cop, migración 022), NUNCA al vault on-chain
-        // de USDC (update_vault_balance) — ese representa una wallet real en
-        // Base, y un pago en pesos no genera ningún USDC real que mover ahí.
-        // Antes esto sí se sumaba al vault on-chain por error, lo que habría
-        // mostrado un número de "Vault de Liquidez" no respaldado por fondos
-        // reales — exactamente el tipo de mensaje engañoso que ya se corrigió
-        // hoy en otras partes de la app.
-        if (paymentCurrency === 'COP') {
-            // Sobre netReceivedCop (lo que de verdad entró), no sobre el bruto —
-            // mismo criterio que el resto de este cálculo, ver nota CRÍTICO arriba.
-            const vaultFeeCop = netReceivedCop * this.depositFeePercent * this.vaultFeePercent;
-            if (vaultFeeCop > 0) {
-                const { error: vaultCopError } = await this.supabase.rpc('update_vault_balance_cop', {
-                    amount_to_add: vaultFeeCop,
-                    tx_hash_param: `mp_${paymentId}`
-                });
-                if (vaultCopError) {
-                    console.error('[mercadopago] Error updating vault (COP):', vaultCopError);
-                }
-            }
-        } else {
-            // Pagos en USD por esta pasarela (poco común, pero soportado) sí
-            // son comparables al resto del vault on-chain en USD nominal.
+        // CRÍTICO: se sacó el "vault en pesos" (update_vault_balance_cop,
+        // migración 022) y el reparto a "trading fund" para pagos en COP —
+        // discutido con el usuario y confirmado que no tenían sentido:
+        //   1) El trading fund existe para hacer market-making del token MTR
+        //      en un DEX — no hay ningún "mercado" para pesos colombianos
+        //      sentados en una cuenta de Mercado Pago, ese concepto es
+        //      puramente cripto y no aplica acá.
+        //   2) Un "vault reservado" como sub-contador separado no tiene
+        //      sentido cuando TODA la plata (lo que se le debe a los
+        //      usuarios en créditos y la ganancia de la plataforma) ya está
+        //      junta en una única cuenta real de Mercado Pago — no hay una
+        //      wallet separada que fondear como sí pasa con cripto.
+        // El respaldo real para pesos es simplemente el saldo real de esa
+        // cuenta de Mercado Pago — ver GET /api/vault/balance-cop-estimate
+        // en server-auto.js, que lo estima sumando los depósitos netos
+        // reales ya registrados (no hay forma de consultarlo en vivo vía
+        // API de Mercado Pago, ver nota en ese endpoint).
+        //
+        // Pagos en USD por esta pasarela (caso raro, pero soportado) sí son
+        // comparables al resto del vault on-chain existente en USD nominal,
+        // así que esos siguen alimentando ese vault normalmente.
+        if (paymentCurrency !== 'COP') {
             const vaultFee = depositFee * this.vaultFeePercent;
             if (vaultFee > 0) {
                 const { error: vaultError } = await this.supabase.rpc('update_vault_balance', {
@@ -366,10 +365,6 @@ class MercadoPagoService {
                     console.error('[mercadopago] Error updating vault:', vaultError);
                 }
             }
-        }
-
-        if (tradingFundFee > 0 && process.env.TRADING_FUND_WALLET) {
-            console.log('[mercadopago] Trading fund fee:', tradingFundFee);
         }
 
         // Record deposit in database.
