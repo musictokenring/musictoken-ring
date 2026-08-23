@@ -11,27 +11,40 @@
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
     <title>MusicToken Ring - Music Battle Arena</title>
     
-    <!-- DEBUG TEMPORAL (2026-08-23, ronda 3): banner abajo de pantalla,
-         esta vez apuntado a loadFiatBalance para ver por que el saldo real
-         no llega a mostrarse tras el login. Quitar una vez resuelto. -->
+    <!-- DEBUG TEMPORAL (2026-08-23, ronda 4): el banner "fixed;bottom:0" de
+         la ronda anterior quedaba tapado por la barra de herramientas de
+         Safari en iPhone (zona que la app nunca puede pintar) — el usuario
+         nunca llego a verlo. Esta vez va insertado arriba de TODO, en el
+         flujo normal de la pagina (no fixed), imposible de tapar. Quitar
+         una vez resuelto. -->
     <script>
         (function() {
             var lines = [];
+            function insertBanner() {
+                var el = document.getElementById('__debugBannerTop');
+                if (el) return el;
+                el = document.createElement('div');
+                el.id = '__debugBannerTop';
+                el.style.cssText = 'position:static;background:#052e16;color:#a7f3d0;font:10px monospace;padding:8px;white-space:pre-wrap;word-break:break-all;max-height:45vh;overflow:auto;border-bottom:3px solid #22c55e;';
+                if (document.body) {
+                    document.body.insertBefore(el, document.body.firstChild);
+                } else {
+                    document.documentElement.appendChild(el);
+                }
+                return el;
+            }
             function showDebugBanner(msg) {
                 try {
                     var t = new Date().toISOString().slice(11, 23);
                     lines.push('[' + t + '] ' + msg);
                     if (lines.length > 14) lines.shift();
-                    var el = document.getElementById('__debugBannerBottom');
-                    if (!el) {
-                        el = document.createElement('div');
-                        el.id = '__debugBannerBottom';
-                        el.style.cssText = 'position:fixed;bottom:0;left:0;right:0;z-index:999999;background:#052e16;color:#a7f3d0;font:10px monospace;padding:6px;white-space:pre-wrap;word-break:break-all;max-height:40vh;overflow:auto;border-top:2px solid #22c55e;';
-                        (document.body || document.documentElement).appendChild(el);
-                    }
+                    var el = insertBanner();
                     el.textContent = lines.join('\n');
                 } catch (e) {}
             }
+            document.addEventListener('DOMContentLoaded', function () {
+                if (lines.length) insertBanner().textContent = lines.join('\n');
+            });
             window.__debugBanner = showDebugBanner;
             window.addEventListener('error', function (ev) {
                 showDebugBanner('JS ERROR: ' + (ev.message || ev.error) + ' @ ' + (ev.filename || '?') + ':' + (ev.lineno || '?'));
