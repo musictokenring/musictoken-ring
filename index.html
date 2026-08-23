@@ -50,7 +50,15 @@
             document.addEventListener('visibilitychange', function () {
                 sendRemote('visibilitychange -> ' + document.visibilityState);
             });
-            sendRemote('--- nueva carga de pagina --- url=' + window.location.href);
+            var navType = 'desconocido';
+            try {
+                var navEntries = performance.getEntriesByType && performance.getEntriesByType('navigation');
+                if (navEntries && navEntries[0]) navType = navEntries[0].type;
+            } catch (e) {}
+            sendRemote('--- nueva carga de pagina --- url=' + window.location.href +
+                ' | navType=' + navType +
+                ' | referrer=' + (document.referrer || '(vacio)') +
+                ' | visibilityState=' + document.visibilityState);
         })();
     </script>
 
