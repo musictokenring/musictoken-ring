@@ -475,6 +475,29 @@ async function logout() {
 // UI UPDATE FUNCTIONS
 // ==========================================
 
+/**
+ * Espera a que window.CreditsSystem exista (ver comentario en
+ * updateAuthUI — se carga async vía fetch, no vía <script src>).
+ * Poll simple cada 100ms hasta timeoutMs. Devuelve true si llegó a
+ * tiempo, false si no.
+ */
+function waitForCreditsSystem(timeoutMs) {
+    return new Promise(function (resolve) {
+        const isReady = () => typeof window.CreditsSystem !== 'undefined' && typeof window.CreditsSystem.loadBalance === 'function';
+        if (isReady()) { resolve(true); return; }
+        const start = Date.now();
+        const interval = setInterval(function () {
+            if (isReady()) {
+                clearInterval(interval);
+                resolve(true);
+            } else if (Date.now() - start > timeoutMs) {
+                clearInterval(interval);
+                resolve(false);
+            }
+        }, 100);
+    });
+}
+
 // Guarda de secuencia: Supabase dispara onAuthStateChange varias veces
 // seguidas para un mismo login (INITIAL_SESSION, SIGNED_IN, a veces
 // TOKEN_REFRESHED), y updateAuthUI ahora hace un await (carga de saldo)
@@ -555,12 +578,26 @@ async function updateAuthUI(session) {
         // terminara. Confirmado en vivo: el modal de perfil mostraba
         // "0 MTR" pese a tener $5.29 reales en la base de datos. Por eso
         // ahora se espera loadBalance() ANTES de pintar el perfil.
-        if (typeof window.CreditsSystem !== 'undefined' && typeof window.CreditsSystem.loadBalance === 'function') {
+        // CRÍTICO (2026-08-23): credits-system.js NO se carga con un
+        // <script src> normal — index.html lo trae con un fetch() al
+        // backend y recién lo inyecta cuando ese fetch termina (mecanismo
+        // de cache-busting ya existente, no tocarlo). auth-system.js sí
+        // carga de forma normal y bloqueante, y puede reaccionar a un login
+        // (sesión ya persistida, o SIGNED_IN muy rápido) ANTES de que ese
+        // fetch termine. El chequeo síncrono de abajo entonces fallaba
+        // SIEMPRE en ese caso, sin reintentar — confirmado en vivo con 15+
+        // minutos de logs remotos: la función loadFiatBalance nunca llegó
+        // a ejecutarse ni una sola vez, pese a loguearse muchas veces.
+        // Se espera activamente (hasta 5s) a que CreditsSystem exista.
+        const creditsSystemReady = await waitForCreditsSystem(5000);
+        if (creditsSystemReady) {
             try {
                 await window.CreditsSystem.loadBalance(null, session.user.id);
             } catch (err) {
                 console.warn('[updateAuthUI] Error cargando saldo tras login:', err);
             }
+        } else {
+            console.warn('[updateAuthUI] CreditsSystem no llegó a cargar a tiempo, saldo no actualizado en este ciclo');
         }
 
         // Si mientras esperábamos el saldo llegó un evento de auth más
