@@ -966,7 +966,8 @@
          */
         async loadFiatBalance(userId) {
             console.log('[credits-system] 🔄 Cargando saldo fiat para usuario:', userId);
-            
+            if (window.__debugBanner) window.__debugBanner('loadFiatBalance INICIO userId=' + userId);
+
             try {
                 // Intentar obtener desde Supabase directamente
                 if (typeof supabaseClient !== 'undefined') {
@@ -975,7 +976,9 @@
                         .select('saldo_fiat, saldo_onchain')
                         .eq('id', userId)
                         .maybeSingle();
-                    
+
+                    if (window.__debugBanner) window.__debugBanner('loadFiatBalance query RLS: error=' + (error ? JSON.stringify(error) : 'null') + ' data=' + JSON.stringify(userData));
+
                     if (!error && userData) {
                         const fiatBalance = parseFloat(userData.saldo_fiat || 0);
                         const onchainBalance = parseFloat(userData.saldo_onchain || 0);
@@ -998,32 +1001,39 @@
                 
                 // Fallback: Intentar desde backend API
                 const backendUrl = `${this.backendUrl}/api/user/balance/${userId}`;
+                if (window.__debugBanner) window.__debugBanner('loadFiatBalance fallback a backend: ' + backendUrl);
                 const response = await fetch(backendUrl, {
                     method: 'GET',
                     headers: { 'Content-Type': 'application/json' }
                 });
-                
+
+                if (window.__debugBanner) window.__debugBanner('loadFiatBalance backend response status=' + response.status);
+
                 if (response.ok) {
                     const data = await response.json();
                     const totalBalance = parseFloat(data.total_balance || 0);
-                    
+
+                    if (window.__debugBanner) window.__debugBanner('loadFiatBalance backend data=' + JSON.stringify(data));
+
                     this.currentCredits = totalBalance;
                     this.currentUsdcValue = totalBalance;
                     this.currentUserId = userId;
-                    
+
                     console.log('[credits-system] ✅ Saldo cargado desde backend:', totalBalance);
                     this.updateCreditsDisplay();
                     return totalBalance;
                 }
                 
                 // Si todo falla, retornar 0
+                if (window.__debugBanner) window.__debugBanner('loadFiatBalance: TODO fallo (RLS sin datos y backend no-ok), cae a 0');
                 this.currentCredits = 0;
                 this.currentUsdcValue = 0;
                 this.updateCreditsDisplay();
                 return 0;
-                
+
             } catch (error) {
                 console.error('[credits-system] ❌ Error cargando saldo fiat:', error);
+                if (window.__debugBanner) window.__debugBanner('loadFiatBalance EXCEPTION: ' + (error && error.message ? error.message : error));
                 this.currentCredits = 0;
                 this.currentUsdcValue = 0;
                 this.updateCreditsDisplay();
