@@ -6749,11 +6749,20 @@
                 if (window.CreditsSystem && typeof window.CreditsSystem.stopPeriodicUpdates === 'function') {
                     window.CreditsSystem.stopPeriodicUpdates();
                 }
-                
-                // Ocultar display móvil cuando no hay wallet
-                const mobileDisplay = document.getElementById('creditsCombinedDisplayMobile');
-                if (mobileDisplay) mobileDisplay.classList.add('hidden');
-                
+
+                // CRÍTICO (2026-08-23): ANTES esto ocultaba el badge de saldo
+                // mobile (creditsCombinedDisplayMobile) cada vez que no había
+                // wallet cripto conectada — sin importar si el usuario tenía
+                // saldo real cargado por sesión (email/Google, sin wallet).
+                // credits-system.js::updateCreditsDisplay() ya decide bien la
+                // visibilidad de ESTE MISMO elemento (currentCredits > 0 ||
+                // connectedAddress) — renderWallet() no tiene por qué tocarlo.
+                // Con renderWallet() llamándose desde ~18 lugares distintos
+                // (carga inicial, reconexión periódica de wallet, cambios de
+                // red, etc.), esto pisaba el saldo recién mostrado una y otra
+                // vez para cualquier cuenta sin wallet — confirmado en vivo:
+                // "aparece y desaparece", "algo lo oculta".
+
                 // Disparar evento para mobile-auth-check
                 if (window.dispatchEvent) {
                     window.dispatchEvent(new CustomEvent('walletDisconnected'));
