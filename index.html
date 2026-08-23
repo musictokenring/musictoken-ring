@@ -253,33 +253,18 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
     <link href="./styles/tournament-ui.css?v=v1.2-podium-anim" rel="stylesheet">
 
-    <!-- Tailwind CSS - Cargar con defer para no bloquear renderizado -->
-    <script src="https://cdn.tailwindcss.com" defer></script>
-    <script defer>
-        // Tailwind config se aplicará cuando el script cargue
-        if (typeof tailwind !== 'undefined') {
-            tailwind.config = {
-                theme: {
-                    extend: {
-                        fontFamily: { sans: ['Inter', 'system-ui', 'sans-serif'] }
-                    }
-                }
-            };
-        } else {
-            // Si tailwind aún no está cargado, esperar
-            document.addEventListener('DOMContentLoaded', function() {
-                if (typeof tailwind !== 'undefined') {
-                    tailwind.config = {
-                        theme: {
-                            extend: {
-                                fontFamily: { sans: ['Inter', 'system-ui', 'sans-serif'] }
-                            }
-                        }
-                    };
-                }
-            });
-        }
-    </script>
+    <!-- Tailwind CSS: hasta hoy se cargaba vía el CDN JIT
+         (cdn.tailwindcss.com), que compila TODAS las clases del HTML en
+         vivo, en el navegador, en cada carga de página — el propio script
+         lo advierte en consola: "should not be used in production". Con
+         index.html pesando 521KB/8500 líneas, eso es una recompilación
+         real y pesada en cada visita. Reemplazado por un CSS estático
+         pre-compilado (generado con `npx tailwindcss@3 -i
+         src/tailwind-input.css -o tailwind.css --minify`, ver
+         tailwind.config.js) — mismo resultado visual, sin recompilar nada
+         en el dispositivo del usuario. Regenerar este archivo si se
+         agregan clases de Tailwind nuevas al HTML. -->
+    <link rel="stylesheet" href="./tailwind.css">
 
     <link rel="icon" type="image/png" href="https://pink-blank-vicuna-260.mypinata.cloud/ipfs/bafybeie24pisqmw6teijdng4flzjwumgwpesilowjxq3kww3p7kxlmuywm">
 
