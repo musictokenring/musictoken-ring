@@ -2422,9 +2422,17 @@ const GameEngine = {
         }
         this.updatePracticeBetDisplay();
         var self = this;
+        // CRÍTICO: eran solo 5s antes de reemplazar TODA la arena (incluido
+        // #hostCommentary) por la pantalla de victoria — pero el Host IA mide
+        // 11-14s reales de respuesta (confirmado en logs de Cloud Run). El
+        // resultado del Host llegaba siempre DESPUÉS de que la pantalla ya
+        // había cambiado, así que nunca se veía; quedaba congelado el
+        // mensaje de "arranca la batalla" de más temprano. 18s da margen real
+        // (mismo criterio que el otro camino de batallas, ver
+        // endBattleWithResult/showVictoryScreen).
         setTimeout(function () {
             self.showVictoryScreen(match, winner, userWon, payouts);
-        }, 5000);
+        }, 18000);
     },
     
     // ==========================================
@@ -3846,10 +3854,13 @@ const GameEngine = {
         
         this.finalizeBattleRhythmAnimation(winner);
 
-        // Mostrar resultado después de 15 segundos
+        // Mostrar resultado después de un margen que le de tiempo real al
+        // Host IA (11-14s medido en logs de Cloud Run, con jitter de red
+        // encima) para narrar el resultado antes de que esta pantalla borre
+        // #hostCommentary — 15s dejaba apenas ~0.5s de margen, muy justo.
         setTimeout(() => {
             this.showVictoryScreen(match, winner, userWon, payouts);
-        }, 15000);
+        }, 18000);
     },
     
     showVictoryScreen(match, winner, userWon, payouts) {
