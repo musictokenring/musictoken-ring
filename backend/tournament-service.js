@@ -19,6 +19,7 @@ const {
 } = require('./tournament-genres');
 const { TournamentBattleEngine, isHumanParticipantRow, isCpuParticipantRow } = require('./tournament-battle');
 const { deductUnifiedBalance } = require('./unified-balance');
+const { requestGenreCuration } = require('../integrations/gcpConnector');
 const { upsertBattleRow, bumpUserStats, recordTournamentBattles } = require('./player-battle-history');
 
 class TournamentService {
@@ -768,6 +769,26 @@ class TournamentService {
       return { ok: false, error: 'Torneo lleno' };
     }
 
+    // Curador de género IA (agents/curator_agent.py) — autoritativo, corre
+    // server-side y ANTES de cobrar la inscripción a propósito: si bloquea,
+    // no hay nada que revertir. El front puede llamar al mismo agente por su
+    // cuenta para dar feedback inmediato mientras el usuario elige canción,
+    // pero esa llamada es solo UX — esta es la que de verdad decide.
+    let genreCheck = null;
+    if (song && song.artist && song.name) {
+      const genre = getGenreById(tournament.genre_id);
+      const genreLabel = genre ? genre.label : (tournament.genre_id || 'género establecido');
+      genreCheck = await requestGenreCuration({ artist: song.artist, title: song.name, genreLabel });
+      if (genreCheck.verdict === 'block') {
+        return {
+          ok: false,
+          error: `Esta canción no encaja con el género "${genreLabel}" (${genreCheck.confidence}% de coincidencia): ${genreCheck.reason}`,
+          genreBlocked: true,
+          genreCheck
+        };
+      }
+    }
+
     const entryFee = Number(tournament.entry_fee) || 3;
     const deduction = await deductUnifiedBalance(this.supabase, debitUserId, entryFee);
     if (!deduction.ok) {
@@ -797,6 +818,11 @@ class TournamentService {
       participantRow.song_image = song.image || '';
       participantRow.song_preview = song.preview || '';
     }
+    if (genreCheck) {
+      participantRow.genre_match_confidence = genreCheck.confidence;
+      participantRow.genre_match_verdict = genreCheck.verdict;
+      participantRow.genre_match_reason = genreCheck.reason;
+    }
 
     let insertError = null;
     ({ error: insertError } = await this.supabase
@@ -813,6 +839,12 @@ class TournamentService {
       }
       if (msg.indexOf('display_name') !== -1) {
         delete retryRow.display_name;
+        stripped = true;
+      }
+      if (msg.indexOf('genre_match') !== -1) {
+        delete retryRow.genre_match_confidence;
+        delete retryRow.genre_match_verdict;
+        delete retryRow.genre_match_reason;
         stripped = true;
       }
       if (stripped) {

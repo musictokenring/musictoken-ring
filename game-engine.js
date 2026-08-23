@@ -2591,7 +2591,12 @@ const GameEngine = {
                     msg += ' (servidor ve ' + Number(result.total_balance).toFixed(2) + ' MTR créditos)';
                 }
                 console.error('[joinTournament] falló:', result);
-                if (response.status === 400 && walletAddress) {
+                // El fallback local inserta la inscripción directo desde el
+                // cliente sin pasar por el curador de género — si el backend
+                // ya bloqueó la canción (genreBlocked), NUNCA debe intentarse
+                // este fallback, o se estaría dejando entrar exactamente lo
+                // que el filtro de género existe para impedir.
+                if (response.status === 400 && walletAddress && !result.genreBlocked) {
                     const localOk = await this.joinTournamentLocalFallback(
                         session.user.id,
                         tournamentId,

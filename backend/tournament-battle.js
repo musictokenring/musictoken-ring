@@ -130,7 +130,10 @@ function participantPayload(row) {
     songArtist: row.song_artist || '',
     songImage: row.song_image || '',
     songPreview: row.song_preview || '',
-    bracketSlot: row.bracket_slot
+    bracketSlot: row.bracket_slot,
+    genreMatchConfidence: row.genre_match_confidence,
+    genreMatchVerdict: row.genre_match_verdict,
+    genreMatchReason: row.genre_match_reason
   };
 }
 
@@ -203,11 +206,22 @@ class TournamentBattleEngine {
 
   async loadHumans(tournamentId) {
     const cols =
-      'user_id, tournament_id, song_id, song_name, song_artist, song_image, song_preview, display_name, bracket_slot, is_cpu';
-    const { data, error } = await this.supabase
+      'user_id, tournament_id, song_id, song_name, song_artist, song_image, song_preview, display_name, bracket_slot, is_cpu, genre_match_confidence, genre_match_verdict, genre_match_reason';
+    let { data, error } = await this.supabase
       .from('tournament_participants')
       .select(cols)
       .eq('tournament_id', tournamentId);
+    if (error && String(error.message || '').indexOf('genre_match') !== -1) {
+      // Fallback si la migración 024_tournament_genre_curation.sql todavía
+      // no corrió en Supabase — no debe tumbar la carga de TODOS los
+      // torneos por columnas que aún no existen.
+      const fallbackCols =
+        'user_id, tournament_id, song_id, song_name, song_artist, song_image, song_preview, display_name, bracket_slot, is_cpu';
+      ({ data, error } = await this.supabase
+        .from('tournament_participants')
+        .select(fallbackCols)
+        .eq('tournament_id', tournamentId));
+    }
     if (error) {
       console.error('[tournament-battle] loadHumans:', error.message);
       return [];
@@ -365,8 +379,38 @@ class TournamentBattleEngine {
     const champion = bracketResult.champion;
     const duels = bracketResult.duels;
 
+    // Descalificación automática por género: si el campeón es humano y el
+    // curador de IA (agents/curator_agent.py, corrido server-side al
+    // inscribirse) le dio menos de 80% de coincidencia con el género del
+    // torneo, no se paga premio — se devuelve la apuesta de entrada a todos
+    // los jugadores humanos en su lugar (elección explícita del dueño del
+    // proyecto: descalificación totalmente automática por la IA, con
+    // reembolso a todos los jugadores en vez de repartir el pozo).
+    const championGenreConfidence = (champion && !champion.isCpu)
+      ? Number(champion.genreMatchConfidence)
+      : null;
+    const genreDisqualified = championGenreConfidence != null &&
+      !Number.isNaN(championGenreConfidence) && championGenreConfidence < 80;
+
     let prizeAwarded = 0;
-    if (payoutMode === 'human_pool' && champion && !champion.isCpu) {
+    if (genreDisqualified) {
+      const entryFee = Number(tournament.entry_fee || 3);
+      const humanUserIds = allParticipants
+        .filter(function (p) { return !isCpuParticipantRow(p); })
+        .map(function (p) { return p.user_id; })
+        .filter(Boolean);
+      await Promise.all(humanUserIds.map((uid) =>
+        this.supabase.rpc('increment_user_credits', { user_id_param: uid, credits_to_add: entryFee })
+          .then(({ error }) => {
+            if (error) {
+              console.error('[tournament-battle] Reembolso por descalificación de género falló para', uid, error.message);
+            }
+          })
+      ));
+      console.warn('[tournament-battle] 🚫 Campeón descalificado por género:', champion.displayName,
+        '—', champion.songArtist, '-', champion.songName, 'confianza:', championGenreConfidence + '%',
+        '— apuesta devuelta a', humanUserIds.length, 'jugador(es) humano(s)');
+    } else if (payoutMode === 'human_pool' && champion && !champion.isCpu) {
       const humanPool = humanCount * Number(tournament.entry_fee || 3);
       const platformRate = 0.08;
       prizeAwarded = Math.round(humanPool * (1 - platformRate) * 10) / 10;
@@ -380,14 +424,18 @@ class TournamentBattleEngine {
       }
     }
 
-    const resultMessage = buildResultMessage(
-      tournament.tournament_type,
-      payoutMode,
-      humanCount,
-      cpuCount,
-      champion && !champion.isCpu,
-      prizeAwarded
-    );
+    const resultMessage = genreDisqualified
+      ? `⚠️ "${champion.songName}" de ${champion.songArtist} no encajaba con el género del torneo ` +
+        `(${championGenreConfidence}% de coincidencia según el curador de IA) — el campeón quedó ` +
+        `descalificado y se devolvió la apuesta de entrada a todos los jugadores.`
+      : buildResultMessage(
+          tournament.tournament_type,
+          payoutMode,
+          humanCount,
+          cpuCount,
+          champion && !champion.isCpu,
+          prizeAwarded
+        );
 
     const payloads = allParticipants
       .slice()
@@ -410,7 +458,9 @@ class TournamentBattleEngine {
       winnerIsHuman: champion ? !champion.isCpu : false,
       prizeAwarded,
       championName: champion?.displayName,
-      championSong: champion?.songName
+      championSong: champion?.songName,
+      genreDisqualified,
+      championGenreConfidence
     };
 
     if (champion?.userId) {
