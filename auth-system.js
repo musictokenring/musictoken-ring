@@ -475,8 +475,21 @@ async function logout() {
 // UI UPDATE FUNCTIONS
 // ==========================================
 
+// Guarda de secuencia: Supabase dispara onAuthStateChange varias veces
+// seguidas para un mismo login (INITIAL_SESSION, SIGNED_IN, a veces
+// TOKEN_REFRESHED), y updateAuthUI ahora hace un await (carga de saldo)
+// antes de terminar — sin esto, dos llamadas superpuestas pueden
+// resolver en cualquier orden, y la que termina último "gana" aunque
+// haya arrancado antes con datos más viejos. Confirmado en vivo:
+// updateAuthUI se disparaba 3 veces por login, reconstruyendo el header
+// cada vez ("se reacomoda todo el encabezado") y a veces la última en
+// terminar dejaba el saldo sin mostrar. Mismo patrón ya usado en
+// game-engine.js para las narraciones del Host IA (mySeq).
+let authUiSeq = 0;
+
 async function updateAuthUI(session) {
     const authButton = document.getElementById('authButton');
+    const mySeq = ++authUiSeq;
 
     if (!authButton) return;
 
@@ -549,6 +562,12 @@ async function updateAuthUI(session) {
                 console.warn('[updateAuthUI] Error cargando saldo tras login:', err);
             }
         }
+
+        // Si mientras esperábamos el saldo llegó un evento de auth más
+        // nuevo (ya en curso, con su propia carga de saldo corriendo),
+        // esta llamada quedó obsoleta — dejar que la más nueva termine el
+        // trabajo, para no pisarla con datos más viejos.
+        if (mySeq !== authUiSeq) return;
 
         loadPlayerProfile(session.user);
 
