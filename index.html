@@ -1427,6 +1427,235 @@
         })();
         </script>
 
+        <!-- Retiro manual en pesos (COP): sin desembolso automático, ver
+             withdrawal-service.js. El saldo se descuenta al confirmar; el
+             operador recibe una notificación y paga a mano por Nequi/transferencia. -->
+        <div id="withdrawalCopModal" class="fixed inset-0 z-[10000] hidden" aria-hidden="true">
+            <div class="absolute inset-0 bg-black/75 backdrop-blur-sm" onclick="closeWithdrawalCopModal()"></div>
+            <div class="relative z-10 flex min-h-full items-center justify-center p-4 pointer-events-none">
+                <div class="pointer-events-auto w-full max-w-md rounded-2xl border border-yellow-500/25 bg-gray-950 shadow-2xl shadow-black/50 overflow-hidden flex flex-col max-h-[90vh]">
+                    <div class="flex flex-col gap-0.5 px-4 py-3 border-b border-white/10 bg-gray-900/90 sm:flex-row sm:items-center sm:justify-between">
+                        <div>
+                            <span class="text-sm font-semibold text-yellow-300">Retirar en pesos (COP)</span>
+                            <p class="text-[11px] text-gray-500 font-normal mt-0.5">Pago manual por Nequi, Bre-B o transferencia bancaria. Tu saldo se descuenta al confirmar la solicitud.</p>
+                        </div>
+                        <button type="button" onclick="closeWithdrawalCopModal()" class="rounded-lg px-2.5 py-1 text-gray-400 hover:text-white hover:bg-white/10 text-xl leading-none self-end" aria-label="Cerrar">&times;</button>
+                    </div>
+                    <div class="flex flex-col gap-4 p-5 sm:p-6 overflow-y-auto">
+                        <div>
+                            <label class="text-xs text-gray-400" for="wcCopAmount">Monto a recibir (COP)</label>
+                            <input id="wcCopAmount" type="number" min="10000" step="1000" value="10000" placeholder="10000" inputmode="numeric" class="mt-1 w-full rounded-lg border border-white/15 bg-gray-900/80 px-3 py-2.5 text-white text-base focus:border-yellow-500/50 focus:outline-none" />
+                        </div>
+                        <div>
+                            <label class="text-xs text-gray-400" for="wcPayoutMethod">Método de pago</label>
+                            <select id="wcPayoutMethod" class="mt-1 w-full rounded-lg border border-white/15 bg-gray-900/80 px-3 py-2.5 text-white text-base focus:border-yellow-500/50 focus:outline-none">
+                                <option value="nequi">Nequi</option>
+                                <option value="bre-b">Bre-B (llave)</option>
+                                <option value="bancolombia">Bancolombia (cuenta)</option>
+                                <option value="daviplata">Daviplata</option>
+                                <option value="otro_banco">Otro banco</option>
+                            </select>
+                        </div>
+                        <div id="wcFieldsPhone">
+                            <label class="text-xs text-gray-400" for="wcPhone">Número de teléfono (10 dígitos)</label>
+                            <input id="wcPhone" type="tel" placeholder="3001234567" inputmode="numeric" class="mt-1 w-full rounded-lg border border-white/15 bg-gray-900/80 px-3 py-2.5 text-white text-base focus:border-yellow-500/50 focus:outline-none" />
+                        </div>
+                        <div id="wcFieldsBank" class="hidden flex-col gap-3">
+                            <div id="wcFieldsBankName">
+                                <label class="text-xs text-gray-400" for="wcBankName">Nombre del banco</label>
+                                <input id="wcBankName" type="text" placeholder="Ej. Davivienda" class="mt-1 w-full rounded-lg border border-white/15 bg-gray-900/80 px-3 py-2.5 text-white text-base focus:border-yellow-500/50 focus:outline-none" />
+                            </div>
+                            <div>
+                                <label class="text-xs text-gray-400" for="wcAccountType">Tipo de cuenta</label>
+                                <select id="wcAccountType" class="mt-1 w-full rounded-lg border border-white/15 bg-gray-900/80 px-3 py-2.5 text-white text-base focus:border-yellow-500/50 focus:outline-none">
+                                    <option value="ahorros">Ahorros</option>
+                                    <option value="corriente">Corriente</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="text-xs text-gray-400" for="wcAccountNumber">Número de cuenta</label>
+                                <input id="wcAccountNumber" type="text" placeholder="Número de cuenta" class="mt-1 w-full rounded-lg border border-white/15 bg-gray-900/80 px-3 py-2.5 text-white text-base focus:border-yellow-500/50 focus:outline-none" />
+                            </div>
+                        </div>
+                        <p class="text-[11px] text-gray-500">Mínimo 10.000 COP. El pago se realiza a mano, normalmente en 24-48h hábiles — no es instantáneo.</p>
+                        <button type="button" id="wcSubmitBtn" class="w-full rounded-xl bg-gradient-to-r from-yellow-500 to-amber-600 py-3 text-sm font-bold text-white shadow-lg shadow-yellow-900/30 hover:opacity-95 transition disabled:opacity-40 disabled:cursor-not-allowed">Solicitar retiro</button>
+                        <p id="wcErr" class="hidden text-red-300 text-sm"></p>
+                        <p id="wcOk" class="hidden text-emerald-300 text-sm"></p>
+                        <div id="wcHistory" class="mt-2 border-t border-white/10 pt-3">
+                            <p class="text-xs text-gray-500 mb-2">Tus solicitudes recientes</p>
+                            <div id="wcHistoryList" class="flex flex-col gap-1.5 text-xs text-gray-400"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <script>
+        (function () {
+            var MIN_WC_COP = 10000;
+            var STATUS_LABEL = { pending: '⏳ Pendiente', paid: '✅ Pagado', rejected: '❌ Rechazado' };
+
+            function parseWcCopAmount(raw) {
+                return parseFloat(String(raw == null ? '' : raw).replace(/[.,\s]/g, ''), 10);
+            }
+
+            function backendBase() {
+                var base = (window.CONFIG && window.CONFIG.BACKEND_API) || '';
+                return String(base).replace(/\/$/, '');
+            }
+
+            function apiPath(p) {
+                var base = backendBase();
+                return /\/api$/i.test(base) ? p.replace(/^\/api/, '') : p;
+            }
+
+            function updateWcFieldsVisibility() {
+                var method = document.getElementById('wcPayoutMethod').value;
+                var phoneBox = document.getElementById('wcFieldsPhone');
+                var bankBox = document.getElementById('wcFieldsBank');
+                var bankNameBox = document.getElementById('wcFieldsBankName');
+                var isPhone = method === 'nequi' || method === 'bre-b' || method === 'daviplata';
+                var isBank = method === 'bancolombia' || method === 'otro_banco';
+                if (phoneBox) phoneBox.classList.toggle('hidden', !isPhone);
+                if (bankBox) bankBox.classList.toggle('hidden', !isBank);
+                if (bankBox) bankBox.classList.toggle('flex', isBank);
+                if (bankNameBox) bankNameBox.classList.toggle('hidden', method !== 'otro_banco');
+            }
+
+            async function loadWcHistory() {
+                var listEl = document.getElementById('wcHistoryList');
+                if (!listEl) return;
+                listEl.textContent = 'Cargando...';
+                try {
+                    var supa = window.supabaseClient;
+                    var sess = supa ? await supa.auth.getSession() : { data: {} };
+                    if (!sess.data.session) { listEl.textContent = ''; return; }
+                    var walletAddress = window.connectedAddress || localStorage.getItem('mtr_wallet') || '';
+                    var url = backendBase() + apiPath('/api/withdrawals/cop/mine') + (walletAddress ? ('?walletAddress=' + encodeURIComponent(walletAddress)) : '');
+                    var r = await fetch(url, {
+                        headers: { Authorization: 'Bearer ' + sess.data.session.access_token }
+                    });
+                    var j = await r.json().catch(function () { return {}; });
+                    if (!r.ok || !j.ok || !Array.isArray(j.requests) || j.requests.length === 0) {
+                        listEl.textContent = 'Sin solicitudes todavía.';
+                        return;
+                    }
+                    listEl.innerHTML = j.requests.slice(0, 5).map(function (req) {
+                        var cop = Number(req.amount_cop).toLocaleString('es-CO');
+                        var label = STATUS_LABEL[req.status] || req.status;
+                        return '<div class="flex justify-between gap-2"><span>' + cop + ' COP · ' + req.payout_method + '</span><span>' + label + '</span></div>';
+                    }).join('');
+                } catch (e) {
+                    listEl.textContent = '';
+                    console.warn('[withdrawal-cop] history:', e);
+                }
+            }
+
+            window.openWithdrawalCopModal = function () {
+                var modal = document.getElementById('withdrawalCopModal');
+                if (!modal) return;
+                var inp = document.getElementById('wcCopAmount');
+                var errEl = document.getElementById('wcErr');
+                var okEl = document.getElementById('wcOk');
+                if (inp) inp.value = String(MIN_WC_COP);
+                if (errEl) { errEl.textContent = ''; errEl.classList.add('hidden'); }
+                if (okEl) { okEl.textContent = ''; okEl.classList.add('hidden'); }
+                updateWcFieldsVisibility();
+                modal.classList.remove('hidden');
+                modal.setAttribute('aria-hidden', 'false');
+                document.body.style.overflow = 'hidden';
+                loadWcHistory();
+            };
+            window.closeWithdrawalCopModal = function () {
+                var modal = document.getElementById('withdrawalCopModal');
+                if (modal) {
+                    modal.classList.add('hidden');
+                    modal.setAttribute('aria-hidden', 'true');
+                }
+                document.body.style.overflow = '';
+            };
+
+            document.addEventListener('change', function (ev) {
+                if (ev.target && ev.target.id === 'wcPayoutMethod') updateWcFieldsVisibility();
+            });
+
+            document.addEventListener('click', async function (ev) {
+                var t = ev.target;
+                if (!t || !t.id || t.id !== 'wcSubmitBtn') return;
+                var errEl = document.getElementById('wcErr');
+                var okEl = document.getElementById('wcOk');
+                if (errEl) { errEl.textContent = ''; errEl.classList.add('hidden'); }
+                if (okEl) { okEl.textContent = ''; okEl.classList.add('hidden'); }
+
+                var amt = parseWcCopAmount(document.getElementById('wcCopAmount').value);
+                if (!Number.isFinite(amt) || amt < MIN_WC_COP) {
+                    if (errEl) { errEl.textContent = 'Indicá un importe válido (mínimo ' + MIN_WC_COP + ' COP).'; errEl.classList.remove('hidden'); }
+                    return;
+                }
+
+                var method = document.getElementById('wcPayoutMethod').value;
+                var details = {};
+                if (method === 'nequi' || method === 'bre-b' || method === 'daviplata') {
+                    details.telefono = (document.getElementById('wcPhone').value || '').trim();
+                } else {
+                    details.tipo_cuenta = document.getElementById('wcAccountType').value;
+                    details.numero_cuenta = (document.getElementById('wcAccountNumber').value || '').trim();
+                    if (method === 'otro_banco') {
+                        details.banco = (document.getElementById('wcBankName').value || '').trim();
+                    }
+                }
+
+                var supa = window.supabaseClient;
+                var sess = supa ? await supa.auth.getSession() : { data: {} };
+                if (!sess.data.session) {
+                    if (errEl) { errEl.textContent = 'Debes iniciar sesión para solicitar un retiro.'; errEl.classList.remove('hidden'); }
+                    return;
+                }
+                if (!backendBase()) {
+                    if (errEl) { errEl.textContent = 'Error de configuración del backend.'; errEl.classList.remove('hidden'); }
+                    return;
+                }
+
+                var walletAddress = window.connectedAddress || localStorage.getItem('mtr_wallet') || null;
+                t.disabled = true;
+                try {
+                    var r = await fetch(backendBase() + apiPath('/api/withdrawals/cop/request'), {
+                        method: 'POST',
+                        credentials: 'omit',
+                        cache: 'no-store',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            Authorization: 'Bearer ' + sess.data.session.access_token
+                        },
+                        body: JSON.stringify({ amount_cop: amt, payout_method: method, payout_details: details, walletAddress: walletAddress })
+                    });
+                    var j = await r.json().catch(function () { return {}; });
+                    if (!r.ok || !j.ok) {
+                        var msg = (j && j.error) ? j.error : ('Error ' + r.status);
+                        if (errEl) { errEl.textContent = msg; errEl.classList.remove('hidden'); }
+                        return;
+                    }
+                    if (okEl) {
+                        okEl.textContent = 'Solicitud enviada. Vas a recibir el pago por ' + method + ' en las próximas 24-48h hábiles.';
+                        okEl.classList.remove('hidden');
+                    }
+                    loadWcHistory();
+                } catch (e) {
+                    console.warn('[withdrawal-cop] request:', e);
+                    if (errEl) { errEl.textContent = e.message || 'Error de red'; errEl.classList.remove('hidden'); }
+                } finally {
+                    t.disabled = false;
+                }
+            });
+
+            document.addEventListener('keydown', function (e) {
+                var m = document.getElementById('withdrawalCopModal');
+                if (e.key === 'Escape' && m && !m.classList.contains('hidden')) {
+                    closeWithdrawalCopModal();
+                }
+            });
+        })();
+        </script>
+
         <!-- GAME MODE SELECTOR (shown when logged in) -->
         <section id="modeSelector" class="hidden mb-16">
             <div class="text-center mb-10">

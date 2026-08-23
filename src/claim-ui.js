@@ -121,11 +121,16 @@
                         <div class="flex flex-col sm:flex-row gap-3 mb-4">
                             <input id="claimCreditsAmount" type="number" min="5" placeholder="Mínimo 5 créditos (~$5)"
                                    class="flex-1 px-4 py-3 rounded-lg bg-black/40 border border-white/10 text-white placeholder-gray-500 text-sm focus:outline-none focus:border-fuchsia-500/50 focus:ring-1 focus:ring-fuchsia-500/20 transition">
-                            <button type="button" onclick="ClaimUI.processClaim()" 
+                            <button type="button" onclick="ClaimUI.processClaim()"
                                     class="px-6 py-3 rounded-lg text-sm font-bold bg-gradient-to-r from-fuchsia-500 to-purple-600 text-white hover:opacity-90 transition-all shadow-lg shadow-fuchsia-500/20 cursor-pointer whitespace-nowrap">
                                 💸 Reclamar fondos
                             </button>
                         </div>
+
+                        <button type="button" onclick="window.openWithdrawalCopModal && window.openWithdrawalCopModal()"
+                                class="w-full mb-4 px-4 py-2.5 rounded-lg text-sm font-semibold bg-yellow-500/10 border border-yellow-500/30 text-yellow-300 hover:bg-yellow-500/20 transition cursor-pointer">
+                            🇨🇴 Retirar en pesos (Nequi / Bancolombia / Bre-B)
+                        </button>
 
                         <div id="claimStatus" class="hidden p-4 rounded-lg bg-green-500/10 border border-green-500/20 mb-4">
                             <div class="text-sm text-green-400" id="claimStatusText"></div>

@@ -1,0 +1,169 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Admin · Retiros COP</title>
+<style>
+    :root { color-scheme: dark; }
+    body {
+        margin: 0;
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+        background: #0a0a0f;
+        color: #e5e5e5;
+        padding: 1.5rem;
+    }
+    h1 { font-size: 1.1rem; color: #fbbf24; margin: 0 0 1rem; }
+    .secret-box { display: flex; gap: 0.5rem; margin-bottom: 1.5rem; }
+    .secret-box input {
+        flex: 1; padding: 0.6rem 0.8rem; border-radius: 8px;
+        border: 1px solid #333; background: #16161f; color: #eee; font-size: 0.85rem;
+    }
+    button {
+        padding: 0.6rem 1rem; border-radius: 8px; border: 1px solid #444;
+        background: #1c1c26; color: #eee; font-size: 0.85rem; cursor: pointer;
+    }
+    button:hover { background: #26262f; }
+    button.primary { background: linear-gradient(to right, #eab308, #d97706); border: none; color: #fff; font-weight: 700; }
+    button.reject { border-color: #7f1d1d; color: #fca5a5; }
+    button.paid { border-color: #14532d; color: #86efac; }
+    #status { font-size: 0.8rem; color: #888; margin-bottom: 1rem; }
+    .req-card {
+        border: 1px solid #262633; border-radius: 12px; padding: 1rem;
+        margin-bottom: 0.9rem; background: #111118;
+    }
+    .req-top { display: flex; justify-content: space-between; align-items: baseline; flex-wrap: wrap; gap: 0.5rem; }
+    .req-amount { font-size: 1.15rem; font-weight: 700; color: #fbbf24; }
+    .req-meta { font-size: 0.75rem; color: #888; }
+    .req-details { font-size: 0.82rem; color: #ccc; margin: 0.6rem 0; line-height: 1.5; }
+    .req-actions { display: flex; gap: 0.5rem; margin-top: 0.6rem; }
+    .empty { color: #666; font-size: 0.85rem; }
+</style>
+</head>
+<body>
+    <h1>🧾 Retiros pendientes (COP)</h1>
+    <div class="secret-box">
+        <input id="secretInput" type="password" placeholder="BACKEND_INTERNAL_SECRET">
+        <button class="primary" onclick="saveSecretAndLoad()">Entrar</button>
+    </div>
+    <div id="status"></div>
+    <div id="list"></div>
+
+<script>
+    var BACKEND_API = 'https://musictoken-ring.onrender.com';
+
+    function getSecret() { return sessionStorage.getItem('mtr_admin_secret') || ''; }
+    function setSecret(s) { sessionStorage.setItem('mtr_admin_secret', s); }
+
+    function setStatus(msg) { document.getElementById('status').textContent = msg || ''; }
+
+    function fmtDetails(method, details) {
+        var d = details || {};
+        var lines = [];
+        if (d.telefono) lines.push('Teléfono: ' + d.telefono);
+        if (d.banco) lines.push('Banco: ' + d.banco);
+        if (d.tipo_cuenta) lines.push('Tipo de cuenta: ' + d.tipo_cuenta);
+        if (d.numero_cuenta) lines.push('Número de cuenta: ' + d.numero_cuenta);
+        return lines.join(' · ') || '(sin detalles)';
+    }
+
+    function renderRequests(requests) {
+        var listEl = document.getElementById('list');
+        if (!requests || requests.length === 0) {
+            listEl.innerHTML = '<p class="empty">No hay solicitudes pendientes.</p>';
+            return;
+        }
+        listEl.innerHTML = requests.map(function (r) {
+            var email = (r.users && r.users.email) || r.user_id;
+            var cop = Number(r.amount_cop).toLocaleString('es-CO');
+            var usd = Number(r.amount_usd_equivalent).toFixed(2);
+            var created = new Date(r.created_at).toLocaleString('es-CO');
+            return '' +
+                '<div class="req-card" data-id="' + r.id + '">' +
+                    '<div class="req-top">' +
+                        '<span class="req-amount">' + cop + ' COP</span>' +
+                        '<span class="req-meta">' + created + '</span>' +
+                    '</div>' +
+                    '<div class="req-meta">Usuario: ' + email + ' · equivale a ' + usd + ' USD · método: ' + r.payout_method + '</div>' +
+                    '<div class="req-details">' + fmtDetails(r.payout_method, r.payout_details) + '</div>' +
+                    '<div class="req-actions">' +
+                        '<button class="paid" onclick="markPaid(\'' + r.id + '\')">✅ Marcar pagado</button>' +
+                        '<button class="reject" onclick="rejectRequest(\'' + r.id + '\')">❌ Rechazar (devuelve saldo)</button>' +
+                    '</div>' +
+                '</div>';
+        }).join('');
+    }
+
+    async function loadRequests() {
+        var secret = getSecret();
+        if (!secret) return;
+        setStatus('Cargando...');
+        try {
+            var r = await fetch(BACKEND_API + '/api/admin/withdrawals/cop', {
+                headers: { 'x-internal-secret': secret }
+            });
+            var j = await r.json().catch(function () { return {}; });
+            if (!r.ok || !j.ok) {
+                setStatus('Error: ' + (j.error || r.status) + (r.status === 401 || r.status === 403 ? ' (clave incorrecta)' : ''));
+                return;
+            }
+            setStatus(j.requests.length + ' solicitud(es) pendiente(s)');
+            renderRequests(j.requests);
+        } catch (e) {
+            setStatus('Error de red: ' + e.message);
+        }
+    }
+
+    function saveSecretAndLoad() {
+        var v = document.getElementById('secretInput').value.trim();
+        if (!v) return;
+        setSecret(v);
+        loadRequests();
+    }
+
+    async function markPaid(id) {
+        var notes = window.prompt('Nota opcional (ej. referencia de la transferencia):', '') || '';
+        var secret = getSecret();
+        setStatus('Guardando...');
+        try {
+            var r = await fetch(BACKEND_API + '/api/admin/withdrawals/cop/' + id + '/mark-paid', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'x-internal-secret': secret },
+                body: JSON.stringify({ notes: notes })
+            });
+            var j = await r.json().catch(function () { return {}; });
+            if (!r.ok || !j.ok) { setStatus('Error: ' + (j.error || r.status)); return; }
+            loadRequests();
+        } catch (e) {
+            setStatus('Error de red: ' + e.message);
+        }
+    }
+
+    async function rejectRequest(id) {
+        var notes = window.prompt('Motivo del rechazo (se le devuelve el saldo al usuario):', '') || '';
+        if (!window.confirm('¿Seguro que quieres rechazar esta solicitud? Se le devuelve el saldo al usuario.')) return;
+        var secret = getSecret();
+        setStatus('Guardando...');
+        try {
+            var r = await fetch(BACKEND_API + '/api/admin/withdrawals/cop/' + id + '/reject', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'x-internal-secret': secret },
+                body: JSON.stringify({ notes: notes })
+            });
+            var j = await r.json().catch(function () { return {}; });
+            if (!r.ok || !j.ok) { setStatus('Error: ' + (j.error || r.status)); return; }
+            loadRequests();
+        } catch (e) {
+            setStatus('Error de red: ' + e.message);
+        }
+    }
+
+    // Si ya hay una clave guardada en esta pestaña, cargar directo.
+    if (getSecret()) {
+        document.getElementById('secretInput').value = getSecret();
+        loadRequests();
+    }
+</script>
+</body>
+</html>

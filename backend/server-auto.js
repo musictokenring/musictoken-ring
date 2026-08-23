@@ -18,6 +18,7 @@ const { WalletLinkService } = require('./wallet-link-service');
 const { TradingFundService } = require('./trading-fund-service');
 const { NOWPaymentsService } = require('./nowpayments-service');
 const { MercadoPagoService } = require('./mercadopago-service');
+const { WithdrawalService, MIN_WITHDRAWAL_COP, VALID_PAYOUT_METHODS } = require('./withdrawal-service');
 const { requireEvmPlatformWallet, getNowPaymentsSettlementAddress, isEvmAddress, resolveEvmPlatformWallet } = require('./platform-addresses');
 const { createClient } = require('@supabase/supabase-js');
 const {
@@ -186,6 +187,7 @@ let walletLinkService;
 let tradingFundService;
 let nowPaymentsService;
 let mercadoPagoService;
+let withdrawalService;
 let tournamentScheduler;
 
 // 🔒 SEGURIDAD: Validar variables de entorno críticas
@@ -357,6 +359,13 @@ async function initializeServices() {
             }
         } catch (mpError) {
             console.error('[server] ⚠️ Error initializing Mercado Pago service:', mpError.message);
+        }
+
+        try {
+            withdrawalService = new WithdrawalService(supabase);
+            console.log('[server] ✅ Withdrawal service (retiros manuales COP) initialized');
+        } catch (wsError) {
+            console.error('[server] ⚠️ Error initializing withdrawal service:', wsError.message);
         }
 
         try {
@@ -2625,6 +2634,110 @@ app.post('/api/deposit/mercadopago/create', depositRateLimiter, async (req, res)
     } catch (e) {
         console.error('[mercadopago-create]', e);
         res.status(500).json({ ok: false, error: e.message || 'Error creando el pago' });
+    }
+});
+
+// --------------------------------------------------------------------------
+// Retiros manuales en pesos (COP). No hay desembolso automático (ver
+// withdrawal-service.js) — esto descuenta el saldo de forma atómica y avisa
+// al operador por Telegram para que pague a mano. Reusa claimRateLimiter
+// (5 solicitudes / 15 min): es literalmente un retiro, mismo criterio que
+// los retiros cripto.
+// --------------------------------------------------------------------------
+app.post('/api/withdrawals/cop/request', claimRateLimiter, requireCreditMutationAuth, async (req, res) => {
+    try {
+        if (!withdrawalService) {
+            return res.status(503).json({ error: 'Withdrawal service unavailable' });
+        }
+        const { amount_cop, payout_method, payout_details, walletAddress } = req.body;
+
+        if (!req.authUser) {
+            return res.status(401).json({ error: 'Authentication required' });
+        }
+
+        // Mismo patrón que /api/user/deduct-credits: la cuenta con saldo real
+        // puede estar bajo un id distinto al de la sesión (cuentas con wallet
+        // vinculada) — resolveCreditsUserId elige la correcta.
+        const resolved = await resolveCreditsUserId(supabase, {
+            getUserIdFromWallet: (addr) =>
+                walletLinkService ? walletLinkService.getUserIdFromWallet(addr) : null
+        }, req.authUser, walletAddress || null);
+
+        const request = await withdrawalService.createWithdrawalRequest({
+            userId: resolved.userId,
+            email: req.authUser.email,
+            amountCop: amount_cop,
+            payoutMethod: payout_method,
+            payoutDetails: payout_details
+        });
+
+        res.json({ ok: true, request });
+    } catch (e) {
+        console.error('[withdrawals-cop-request]', e);
+        res.status(400).json({ ok: false, error: e.message || 'Error creando la solicitud de retiro' });
+    }
+});
+
+app.get('/api/withdrawals/cop/mine', requireCreditMutationAuth, async (req, res) => {
+    try {
+        if (!withdrawalService) {
+            return res.status(503).json({ error: 'Withdrawal service unavailable' });
+        }
+        if (!req.authUser) {
+            return res.status(401).json({ error: 'Authentication required' });
+        }
+        const walletAddress = req.query.walletAddress || null;
+        const resolved = await resolveCreditsUserId(supabase, {
+            getUserIdFromWallet: (addr) =>
+                walletLinkService ? walletLinkService.getUserIdFromWallet(addr) : null
+        }, req.authUser, walletAddress);
+
+        const requests = await withdrawalService.listUserWithdrawalRequests(resolved.userId);
+        res.json({ ok: true, requests, minWithdrawalCop: MIN_WITHDRAWAL_COP, validPayoutMethods: VALID_PAYOUT_METHODS });
+    } catch (e) {
+        console.error('[withdrawals-cop-mine]', e);
+        res.status(500).json({ ok: false, error: e.message });
+    }
+});
+
+// Panel de administración (solo el operador, protegido con BACKEND_INTERNAL_SECRET —
+// misma clave que ya se usa para llamadas backend-to-backend, ver auth-middleware.js).
+app.get('/api/admin/withdrawals/cop', requireInternalSecret, async (req, res) => {
+    try {
+        if (!withdrawalService) {
+            return res.status(503).json({ error: 'Withdrawal service unavailable' });
+        }
+        const requests = await withdrawalService.listPendingWithdrawalRequests();
+        res.json({ ok: true, requests });
+    } catch (e) {
+        console.error('[admin-withdrawals-cop-list]', e);
+        res.status(500).json({ ok: false, error: e.message });
+    }
+});
+
+app.post('/api/admin/withdrawals/cop/:id/mark-paid', requireInternalSecret, async (req, res) => {
+    try {
+        if (!withdrawalService) {
+            return res.status(503).json({ error: 'Withdrawal service unavailable' });
+        }
+        const updated = await withdrawalService.markWithdrawalPaid(req.params.id, req.body?.notes);
+        res.json({ ok: true, request: updated });
+    } catch (e) {
+        console.error('[admin-withdrawals-cop-mark-paid]', e);
+        res.status(400).json({ ok: false, error: e.message });
+    }
+});
+
+app.post('/api/admin/withdrawals/cop/:id/reject', requireInternalSecret, async (req, res) => {
+    try {
+        if (!withdrawalService) {
+            return res.status(503).json({ error: 'Withdrawal service unavailable' });
+        }
+        const updated = await withdrawalService.rejectWithdrawalRequest(req.params.id, req.body?.notes);
+        res.json({ ok: true, request: updated });
+    } catch (e) {
+        console.error('[admin-withdrawals-cop-reject]', e);
+        res.status(400).json({ ok: false, error: e.message });
     }
 });
 
