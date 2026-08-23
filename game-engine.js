@@ -1710,10 +1710,34 @@ const GameEngine = {
         return code;
     },
     
+    // Consulta de solo lectura, sin cobrar nada -- pensada para mostrarle a
+    // quien recibe una invitación contra quién va a competir y cuánto pide
+    // la sala ANTES de pedirle saldo. Antes, el saldo insuficiente bloqueaba
+    // directo el botón "Unirse" sin explicar nada; ahora se puede ver la
+    // sala igual y recién ahí se le pide recargar si hace falta.
+    async previewPrivateRoom(roomCode) {
+        try {
+            const { data: match, error: matchError } = await supabaseClient
+                .from('matches')
+                .select('*')
+                .eq('room_code', roomCode)
+                .eq('status', 'waiting')
+                .single();
+
+            if (matchError || !match) {
+                return { ok: false, error: 'Sala no encontrada. Verifica el código.' };
+            }
+            return { ok: true, match };
+        } catch (error) {
+            console.error('Error previewing room:', error);
+            return { ok: false, error: 'Error al buscar la sala' };
+        }
+    },
+
     async joinPrivateRoom(roomCode, song, betAmount) {
         try {
             const { data: { session } } = await supabaseClient.auth.getSession();
-            
+
             // Buscar match
             const { data: match, error: matchError } = await supabaseClient
                 .from('matches')

@@ -1881,17 +1881,23 @@
         <section id="roomScreen" class="hidden mb-16">
             <div class="max-w-lg mx-auto p-8 rounded-2xl border border-fuchsia-500/15 bg-gray-900/50">
                 <h2 class="text-2xl font-bold text-white mb-6 text-center">🎵 Sala Privada</h2>
-                <div class="flex items-center justify-center gap-3 mb-6">
-                    <span class="text-gray-400">Código:</span>
-                    <strong id="roomCode" class="text-2xl font-mono text-fuchsia-400">XXXXX</strong>
-                    <button type="button" onclick="copyRoomCode()" class="px-2 py-1 rounded bg-white/5 text-gray-400 hover:text-white transition cursor-pointer">📋</button>
-                </div>
-                <div class="mb-6">
-                    <label for="roomInviteLink" class="text-sm text-gray-400 mb-1 block">Link privado</label>
+                <!-- El link es la forma principal de invitar: un clic y quien lo abre
+                     entra directo a esta sala con el código ya cargado (ver ?room= en
+                     index.html). El código de abajo queda como respaldo para compartir
+                     hablado/por texto (WhatsApp de voz, decirlo en persona, etc.) -- no
+                     se elimina porque ese uso es real, pero deja de competir en
+                     protagonismo con el link. -->
+                <div class="mb-4">
+                    <label for="roomInviteLink" class="text-sm text-gray-400 mb-1 block">Compartí este link para invitar a alguien</label>
                     <div class="flex gap-2">
                         <input id="roomInviteLink" type="text" readonly class="flex-1 px-3 py-2 rounded-lg bg-black/40 border border-white/10 text-white text-sm">
-                        <button type="button" onclick="copyRoomLink()" class="px-4 py-2 rounded-lg text-sm bg-white/5 border border-white/10 text-gray-300 hover:text-white transition cursor-pointer">Copiar</button>
+                        <button type="button" onclick="copyRoomLink()" class="px-4 py-2 rounded-lg text-sm font-bold bg-gradient-to-r from-cyan-500 to-fuchsia-500 text-white hover:opacity-90 shadow-lg shadow-cyan-500/20 transition cursor-pointer whitespace-nowrap">📋 Copiar y compartir</button>
                     </div>
+                </div>
+                <div class="flex items-center justify-center gap-2 mb-6 text-sm">
+                    <span class="text-gray-500">o compartí el código:</span>
+                    <strong id="roomCode" class="font-mono text-fuchsia-400">XXXXX</strong>
+                    <button type="button" onclick="copyRoomCode()" class="px-1.5 py-0.5 rounded bg-white/5 text-gray-500 hover:text-white transition cursor-pointer text-xs">📋</button>
                 </div>
                 <div class="flex items-center justify-center gap-6 mb-6">
                     <div id="player1Card" class="text-center">
@@ -1905,6 +1911,39 @@
                     </div>
                 </div>
                 <button type="button" onclick="leaveRoom()" class="w-full py-2.5 rounded-lg text-sm font-medium bg-white/5 border border-white/10 text-gray-300 hover:text-white transition cursor-pointer">Salir de la Sala</button>
+            </div>
+        </section>
+
+        <!-- Vista previa de sala al "Unirse": muestra contra quién se compite y
+             cuánto pide de apuesta ANTES de cobrar nada. Si el saldo no
+             alcanza, se avisa acá con un link directo a recargar en vez de
+             dejar el botón "Unirse" gris sin explicación (como pasaba antes). -->
+        <section id="joinRoomPreview" class="hidden mb-16">
+            <div class="max-w-lg mx-auto p-8 rounded-2xl border border-fuchsia-500/15 bg-gray-900/50">
+                <h2 class="text-2xl font-bold text-white mb-6 text-center">🎵 Sala Encontrada</h2>
+                <div class="flex items-center justify-center gap-6 mb-6">
+                    <div class="text-center">
+                        <div class="text-3xl mb-1">🎤</div>
+                        <span class="text-sm text-gray-300 font-medium" id="joinPreviewSongName">-</span>
+                        <p class="text-xs text-gray-500" id="joinPreviewSongArtist">-</p>
+                    </div>
+                    <div class="text-2xl font-bold text-fuchsia-400">VS</div>
+                    <div class="text-center">
+                        <div class="text-3xl mb-1">👤</div>
+                        <span class="text-sm text-gray-300 font-medium">Vos</span>
+                    </div>
+                </div>
+                <p class="text-center text-gray-400 text-sm mb-4">
+                    Apuesta pedida: <strong id="joinPreviewBet" class="text-fuchsia-400">-</strong> MTR créditos
+                </p>
+                <div id="joinPreviewInsufficientBox" class="hidden mb-4 p-4 rounded-lg bg-red-500/10 border border-red-500/20 text-center">
+                    <p class="text-red-300 text-sm mb-3" id="joinPreviewInsufficientText"></p>
+                    <button type="button" onclick="if (typeof window.openMercadoPagoModal === 'function') { window.openMercadoPagoModal(); } else { showToast('Buscá la sección de recarga (Mercado Pago) en la página principal.', 'info'); }" class="w-full py-2 rounded-lg text-sm font-bold bg-gradient-to-r from-cyan-500 to-fuchsia-500 text-white hover:opacity-90 transition cursor-pointer">💳 Recargar saldo</button>
+                </div>
+                <div class="flex gap-3">
+                    <button type="button" onclick="cancelJoinRoomPreview()" class="flex-1 py-2.5 rounded-lg text-sm font-medium bg-white/5 border border-white/10 text-gray-300 hover:text-white transition cursor-pointer">Cancelar</button>
+                    <button type="button" onclick="confirmJoinRoom()" id="confirmJoinRoomBtn" class="flex-1 py-2.5 rounded-lg text-sm font-bold bg-gradient-to-r from-cyan-500 to-fuchsia-500 text-white hover:opacity-90 shadow-lg shadow-cyan-500/20 transition cursor-pointer">⚔️ Confirmar y Apostar</button>
+                </div>
             </div>
         </section>
 
@@ -4067,6 +4106,9 @@
             document.getElementById('songSelection').classList.remove('hidden');
             var hideHub = document.getElementById('tournamentHub');
             if (hideHub) hideHub.classList.add('hidden');
+            var hideJoinPreview = document.getElementById('joinRoomPreview');
+            if (hideJoinPreview) hideJoinPreview.classList.add('hidden');
+            window.__joinRoomPreview = null;
             // CRÍTICO: Verificar si hay un desafío pendiente para actualizar título
             var isAcceptingChallenge = window.pendingChallengeId && window.pendingChallengeId !== null;
             var challengeInfo = window.pendingChallengeInfo || null;
@@ -4977,15 +5019,17 @@
             if (joinRoomBtn) {
                 // "Unirse" nunca se habilitaba: se creaba con disabled y
                 // ningún código en todo el repo volvía a tocar su estado.
+                // OJO: a propósito NO exige saldo suficiente para habilitarse
+                // -- "Unirse" ahora abre una vista previa de la sala (rival,
+                // canción, apuesta pedida) sin cobrar nada; recién si confirma
+                // se valida el saldo. Antes, saldo insuficiente dejaba el
+                // botón gris sin explicar nada.
                 var joinRoomCodeEl = document.getElementById('joinRoomCode');
                 var roomCodeVal = (joinRoomCodeEl && joinRoomCodeEl.value ? joinRoomCodeEl.value : '').trim();
-                var canCoverJoinBet = !!bet && bet > 0 && credits >= bet;
-                var shouldEnableJoin = !!selectedSong && canCoverJoinBet && roomCodeVal.length === 6;
+                var shouldEnableJoin = !!selectedSong && roomCodeVal.length === 6;
                 joinRoomBtn.disabled = !shouldEnableJoin;
                 joinRoomBtn.title = (!shouldEnableJoin) ?
-                    (!selectedSong ? 'Selecciona una canción primero' :
-                        (roomCodeVal.length !== 6 ? 'Ingresa el código de 6 caracteres de la sala' :
-                            (!canCoverJoinBet ? `MTR créditos jugables insuficientes (necesitas ${bet}, tienes ${credits.toFixed(2)})` : ''))) : '';
+                    (!selectedSong ? 'Selecciona una canción primero' : 'Ingresa el código de 6 caracteres de la sala') : '';
             }
 
             // Para desafíos sociales, verificar créditos y mínimo dinámico
@@ -5116,14 +5160,87 @@
             if (typeof GameEngine !== 'undefined') await GameEngine.createPrivateRoom(selectedSong, bet);
             else showToast('GameEngine no está cargado', 'error');
         }
+        // "Unirse" ya no cobra ni une directo -- primero busca la sala y
+        // muestra una vista previa (contra quién se compite, cuánto pide de
+        // apuesta) sin tocar el saldo. El saldo recién se valida al confirmar,
+        // en confirmJoinRoom(). Así alguien sin fondos puede igual ver la
+        // invitación y saber qué necesita, en vez de un botón gris sin
+        // explicación.
         async function joinRoom() {
             if (!selectedSong) return;
             var roomCode = document.getElementById('joinRoomCode').value.toUpperCase();
-            const minBetAmount = (typeof GameEngine !== 'undefined' && GameEngine.minBet) ? GameEngine.minBet : 1;
-            var bet = parseInt(document.getElementById('betAmount').value) || minBetAmount;
-            if (typeof window.GameEngine !== 'undefined') await window.GameEngine.joinPrivateRoom(roomCode, selectedSong, bet);
-            else showToast('GameEngine no está cargado', 'error');
+            if (roomCode.length !== 6) return;
+            if (typeof window.GameEngine === 'undefined') { showToast('GameEngine no está cargado', 'error'); return; }
+
+            var joinBtn = document.getElementById('joinRoomBtn');
+            var originalLabel = joinBtn ? joinBtn.textContent : '';
+            if (joinBtn) { joinBtn.disabled = true; joinBtn.textContent = 'Buscando...'; }
+
+            var preview = await window.GameEngine.previewPrivateRoom(roomCode);
+
+            if (joinBtn) { joinBtn.disabled = false; joinBtn.textContent = originalLabel || 'Unirse'; }
+
+            if (!preview.ok) {
+                showToast(preview.error || 'Sala no encontrada', 'error');
+                return;
+            }
+
+            window.__joinRoomPreview = { match: preview.match, roomCode: roomCode, song: selectedSong };
+
+            var credits = window.CreditsSystem ? (window.CreditsSystem.currentCredits || 0) : 0;
+            var betRequired = Number(preview.match.player1_bet) || 1;
+            var canCover = credits >= betRequired;
+
+            var nameEl = document.getElementById('joinPreviewSongName');
+            var artistEl = document.getElementById('joinPreviewSongArtist');
+            var betEl = document.getElementById('joinPreviewBet');
+            if (nameEl) nameEl.textContent = preview.match.player1_song_name || 'Sin título';
+            if (artistEl) artistEl.textContent = preview.match.player1_song_artist || '';
+            if (betEl) betEl.textContent = betRequired;
+
+            var insufficientBox = document.getElementById('joinPreviewInsufficientBox');
+            var insufficientText = document.getElementById('joinPreviewInsufficientText');
+            var confirmBtn = document.getElementById('confirmJoinRoomBtn');
+            if (!canCover) {
+                if (insufficientText) insufficientText.textContent = `Necesitás ${betRequired} créditos, tenés ${credits.toFixed(2)}.`;
+                if (insufficientBox) insufficientBox.classList.remove('hidden');
+                if (confirmBtn) { confirmBtn.disabled = true; confirmBtn.classList.add('opacity-50', 'cursor-not-allowed'); }
+            } else {
+                if (insufficientBox) insufficientBox.classList.add('hidden');
+                if (confirmBtn) { confirmBtn.disabled = false; confirmBtn.classList.remove('opacity-50', 'cursor-not-allowed'); }
+            }
+
+            document.getElementById('songSelection').classList.add('hidden');
+            document.getElementById('joinRoomPreview').classList.remove('hidden');
         }
+
+        function cancelJoinRoomPreview() {
+            window.__joinRoomPreview = null;
+            document.getElementById('joinRoomPreview').classList.add('hidden');
+            document.getElementById('songSelection').classList.remove('hidden');
+        }
+        window.cancelJoinRoomPreview = cancelJoinRoomPreview;
+
+        async function confirmJoinRoom() {
+            var state = window.__joinRoomPreview;
+            if (!state || !state.match) return;
+            if (typeof window.GameEngine === 'undefined') { showToast('GameEngine no está cargado', 'error'); return; }
+
+            var confirmBtn = document.getElementById('confirmJoinRoomBtn');
+            if (confirmBtn) { confirmBtn.disabled = true; confirmBtn.textContent = '⏳ Uniendo...'; }
+
+            var betRequired = Number(state.match.player1_bet) || 1;
+            // joinPrivateRoom vuelve a revalidar todo desde cero (sala sigue
+            // 'waiting', saldo, ELO) antes de cobrar -- a propósito, para no
+            // confiar en datos de la vista previa que pudieron quedar viejos
+            // (por ejemplo si alguien más se unió justo en el medio).
+            await window.GameEngine.joinPrivateRoom(state.roomCode, state.song, betRequired);
+
+            if (confirmBtn) { confirmBtn.disabled = false; confirmBtn.textContent = '⚔️ Confirmar y Apostar'; }
+            window.__joinRoomPreview = null;
+            document.getElementById('joinRoomPreview').classList.add('hidden');
+        }
+        window.confirmJoinRoom = confirmJoinRoom;
         async function startPractice() {
             console.log('[startPractice] ✅ Función llamada');
             
