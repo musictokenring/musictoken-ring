@@ -36,9 +36,26 @@
     .req-top { display: flex; justify-content: space-between; align-items: baseline; flex-wrap: wrap; gap: 0.5rem; }
     .req-amount { font-size: 1.15rem; font-weight: 700; color: #fbbf24; }
     .req-meta { font-size: 0.75rem; color: #888; }
-    .req-details { font-size: 0.82rem; color: #ccc; margin: 0.6rem 0; line-height: 1.5; }
-    .req-actions { display: flex; gap: 0.5rem; margin-top: 0.6rem; }
+    .req-details { font-size: 0.82rem; color: #ccc; margin: 0.6rem 0; }
     .empty { color: #666; font-size: 0.85rem; }
+    /* Filas de datos de pago copiables -- pensadas para que el operador nunca
+       tenga que digitar a mano el monto/telefono/cuenta al pagar (riesgo real
+       de error de digitación con plata real). */
+    .copy-row {
+        display: flex; align-items: center; gap: 0.5rem;
+        padding: 0.35rem 0.5rem; border-radius: 6px; background: #16161f;
+        margin-bottom: 0.3rem;
+    }
+    .copy-label { color: #888; white-space: nowrap; }
+    .copy-value { color: #eee; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; word-break: break-all; flex: 1; }
+    .copy-btn {
+        padding: 0.2rem 0.45rem; font-size: 0.85rem; line-height: 1;
+        border-radius: 6px; border: 1px solid #333; background: #1c1c26;
+        flex-shrink: 0;
+    }
+    .copy-btn:hover { background: #26262f; border-color: #eab308; }
+    .copy-btn.copied { border-color: #14532d; background: #0f2718; }
+    .req-actions { display: flex; gap: 0.5rem; margin-top: 0.6rem; }
 </style>
 </head>
 <body>
@@ -60,15 +77,35 @@
 
     var TIPO_LLAVE_LABEL = { celular: 'Celular', cedula: 'Cédula', correo: 'Correo', alfanumerica: 'Llave alfanumérica' };
 
+    function escapeHtml(s) {
+        return String(s)
+            .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+    }
+
+    // Fila de dato copiable: monto/teléfono/cuenta/llave, todo lo que el
+    // operador tendría que teclear a mano al pagar. El botón 📋 copia el
+    // valor tal cual (sin formatear), para evitar errores de digitación
+    // con plata real.
+    function copyRow(label, rawValue) {
+        if (rawValue === undefined || rawValue === null || rawValue === '') return '';
+        return '' +
+            '<div class="copy-row">' +
+                '<span class="copy-label">' + escapeHtml(label) + ':</span>' +
+                '<span class="copy-value">' + escapeHtml(rawValue) + '</span>' +
+                '<button type="button" class="copy-btn" data-copy-value="' + escapeHtml(rawValue) + '" title="Copiar">📋</button>' +
+            '</div>';
+    }
+
     function fmtDetails(method, details) {
         var d = details || {};
-        var lines = [];
-        if (d.telefono) lines.push('Teléfono: ' + d.telefono);
-        if (d.llave) lines.push('Llave Bre-B (' + (TIPO_LLAVE_LABEL[d.tipo_llave] || d.tipo_llave || '?') + '): ' + d.llave);
-        if (d.banco) lines.push('Banco: ' + d.banco);
-        if (d.tipo_cuenta) lines.push('Tipo de cuenta: ' + d.tipo_cuenta);
-        if (d.numero_cuenta) lines.push('Número de cuenta: ' + d.numero_cuenta);
-        return lines.join(' · ') || '(sin detalles)';
+        var rows = '';
+        if (d.telefono) rows += copyRow('Teléfono', d.telefono);
+        if (d.llave) rows += copyRow('Llave Bre-B (' + (TIPO_LLAVE_LABEL[d.tipo_llave] || d.tipo_llave || '?') + ')', d.llave);
+        if (d.banco) rows += copyRow('Banco', d.banco);
+        if (d.tipo_cuenta) rows += copyRow('Tipo de cuenta', d.tipo_cuenta);
+        if (d.numero_cuenta) rows += copyRow('Número de cuenta', d.numero_cuenta);
+        return rows || '<p class="empty">(sin detalles)</p>';
     }
 
     function renderRequests(requests) {
@@ -88,8 +125,11 @@
                         '<span class="req-amount">' + cop + ' COP</span>' +
                         '<span class="req-meta">' + created + '</span>' +
                     '</div>' +
-                    '<div class="req-meta">Usuario: ' + email + ' · equivale a ' + usd + ' USD · método: ' + r.payout_method + '</div>' +
-                    '<div class="req-details">' + fmtDetails(r.payout_method, r.payout_details) + '</div>' +
+                    '<div class="req-meta">Usuario: ' + escapeHtml(email) + ' · equivale a ' + usd + ' USD · método: ' + escapeHtml(r.payout_method) + '</div>' +
+                    '<div class="req-details">' +
+                        copyRow('Monto a pagar', String(r.amount_cop) + ' COP') +
+                        fmtDetails(r.payout_method, r.payout_details) +
+                    '</div>' +
                     '<div class="req-actions">' +
                         '<button class="paid" onclick="markPaid(\'' + r.id + '\')">✅ Marcar pagado</button>' +
                         '<button class="reject" onclick="rejectRequest(\'' + r.id + '\')">❌ Rechazar (devuelve saldo)</button>' +
@@ -97,6 +137,43 @@
                 '</div>';
         }).join('');
     }
+
+    function copyValue(value, btn) {
+        if (!value) return;
+        function showCopied() {
+            var original = btn.textContent;
+            btn.textContent = '✅';
+            btn.classList.add('copied');
+            setTimeout(function () { btn.textContent = original; btn.classList.remove('copied'); }, 1200);
+        }
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(String(value)).then(showCopied).catch(function () { fallbackCopy(value, showCopied); });
+        } else {
+            fallbackCopy(value, showCopied);
+        }
+    }
+
+    function fallbackCopy(value, onDone) {
+        try {
+            var ta = document.createElement('textarea');
+            ta.value = String(value);
+            ta.style.position = 'fixed';
+            ta.style.opacity = '0';
+            document.body.appendChild(ta);
+            ta.select();
+            document.execCommand('copy');
+            document.body.removeChild(ta);
+            onDone();
+        } catch (e) {
+            window.alert('No se pudo copiar automáticamente. Valor: ' + value);
+        }
+    }
+
+    document.addEventListener('click', function (ev) {
+        var btn = ev.target.closest ? ev.target.closest('.copy-btn') : null;
+        if (!btn) return;
+        copyValue(btn.getAttribute('data-copy-value'), btn);
+    });
 
     async function loadRequests() {
         var secret = getSecret();
