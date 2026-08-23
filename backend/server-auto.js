@@ -1895,6 +1895,34 @@ app.get('/api/vault/balance', async (req, res) => {
 });
 
 /**
+ * Vault EN PESOS (COP) — separado del vault on-chain de arriba a propósito
+ * (ver migración 022_fiat_vault_cop.sql y mercadopago-service.js). No hay
+ * ninguna wallet ni saldo on-chain que verificar acá, es un contador simple.
+ */
+app.get('/api/vault/balance-cop', async (req, res) => {
+    try {
+        const { data, error } = await supabase
+            .from('vault_balance_cop')
+            .select('balance_cop, last_updated')
+            .order('last_updated', { ascending: false })
+            .limit(1)
+            .maybeSingle();
+
+        if (error) {
+            return res.status(500).json({ error: error.message });
+        }
+
+        res.json({
+            balanceCop: data?.balance_cop || 0,
+            lastUpdated: data?.last_updated || null
+        });
+    } catch (error) {
+        console.error('[server] Error getting vault balance (COP):', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+/**
  * Add fee to vault
  */
 app.post('/api/vault/add-fee', requireVaultFeeAuth, async (req, res) => {

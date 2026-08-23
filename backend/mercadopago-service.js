@@ -289,7 +289,6 @@ class MercadoPagoService {
         // Calculate fees
         const depositFee = usdAmount * this.depositFeePercent;
         const netAmount = usdAmount - depositFee;
-        const vaultFee = depositFee * this.vaultFeePercent;
         const tradingFundFee = depositFee * this.tradingFundFeePercent;
 
         // Créditos en USD nominal (1 crédito = 1 USD nominal)
@@ -305,14 +304,37 @@ class MercadoPagoService {
             throw new Error(`Failed to credit user balance: ${updateError.message}`);
         }
 
-        // Update vault balance (75% of fee)
-        if (vaultFee > 0) {
-            const { error: vaultError } = await this.supabase.rpc('update_vault_balance', {
-                amount_to_add: vaultFee,
-                tx_hash_param: `mp_${paymentId}`
-            });
-            if (vaultError) {
-                console.error('[mercadopago] Error updating vault:', vaultError);
+        // CRÍTICO: la comisión de un depósito en COP va al vault EN PESOS
+        // (update_vault_balance_cop, migración 022), NUNCA al vault on-chain
+        // de USDC (update_vault_balance) — ese representa una wallet real en
+        // Base, y un pago en pesos no genera ningún USDC real que mover ahí.
+        // Antes esto sí se sumaba al vault on-chain por error, lo que habría
+        // mostrado un número de "Vault de Liquidez" no respaldado por fondos
+        // reales — exactamente el tipo de mensaje engañoso que ya se corrigió
+        // hoy en otras partes de la app.
+        if (paymentCurrency === 'COP') {
+            const vaultFeeCop = paymentAmount * this.depositFeePercent * this.vaultFeePercent;
+            if (vaultFeeCop > 0) {
+                const { error: vaultCopError } = await this.supabase.rpc('update_vault_balance_cop', {
+                    amount_to_add: vaultFeeCop,
+                    tx_hash_param: `mp_${paymentId}`
+                });
+                if (vaultCopError) {
+                    console.error('[mercadopago] Error updating vault (COP):', vaultCopError);
+                }
+            }
+        } else {
+            // Pagos en USD por esta pasarela (poco común, pero soportado) sí
+            // son comparables al resto del vault on-chain en USD nominal.
+            const vaultFee = depositFee * this.vaultFeePercent;
+            if (vaultFee > 0) {
+                const { error: vaultError } = await this.supabase.rpc('update_vault_balance', {
+                    amount_to_add: vaultFee,
+                    tx_hash_param: `mp_${paymentId}`
+                });
+                if (vaultError) {
+                    console.error('[mercadopago] Error updating vault:', vaultError);
+                }
             }
         }
 
