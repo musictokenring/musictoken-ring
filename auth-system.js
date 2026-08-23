@@ -478,6 +478,10 @@ async function logout() {
 function updateAuthUI(session) {
     const authButton = document.getElementById('authButton');
 
+    if (window.__debugBanner) {
+        window.__debugBanner('[DEBUG] updateAuthUI llamado. authButton encontrado: ' + !!authButton + ' | session: ' + (session && session.user ? session.user.email : 'null'));
+    }
+
     if (!authButton) return;
 
     if (session && session.user) {
@@ -524,9 +528,27 @@ function updateAuthUI(session) {
                 Salir
             </button>
         `;
-        
+
+        if (window.__debugBanner) {
+            window.__debugBanner('[DEBUG] authButton.innerHTML seteado. displayName=' + displayName + ' | authButton.children.length=' + authButton.children.length + ' | authButton offsetWidth/Height=' + authButton.offsetWidth + '/' + authButton.offsetHeight);
+        }
+
         loadPlayerProfile(session.user);
-        
+
+        // CRÍTICO: cargar el saldo jugable (fiat/unificado) apenas se loguea.
+        // Antes esto SOLO pasaba dentro de showLoginWall() — que no se llama
+        // en un login recién hecho (acá se llama showModeSelector() en su
+        // lugar) — así que CreditsSystem.currentCredits se quedaba en 0 hasta
+        // que algún otro flujo lo recargara por su cuenta. Confirmado en vivo:
+        // usuario logueado por primera vez veía "Fichas jugables insuficientes
+        // ... tenés 0.00" pese a tener saldo real, y solo se corregía tras
+        // recargar la página (momento en el que showLoginWall() sí corre).
+        if (typeof window.CreditsSystem !== 'undefined' && typeof window.CreditsSystem.loadBalance === 'function') {
+            window.CreditsSystem.loadBalance(null, session.user.id).catch(function (err) {
+                console.warn('[updateAuthUI] Error cargando saldo tras login:', err);
+            });
+        }
+
         // Mostrar selector de modos
         if (typeof showModeSelector === 'function') {
             showModeSelector();
