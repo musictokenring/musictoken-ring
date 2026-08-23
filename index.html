@@ -516,6 +516,20 @@
         .btn-logout:hover { background: rgba(239, 68, 68, 1); transform: translateY(-1px); box-shadow: 0 4px 12px rgba(239, 68, 68, 0.4); }
         .btn-login { padding: 8px 16px; border-radius: 8px; font-size: 14px; font-weight: 600; color: #c084fc; background: rgba(192,132,252,0.1); border: 1px solid rgba(192,132,252,0.25); cursor: pointer; transition: all 0.2s; }
         .btn-login:hover { background: rgba(192,132,252,0.2); }
+        /* Header en mobile: la fila de botones (créditos/wallet/usuario) puede
+           necesitar más ancho del que hay disponible en pantallas chicas —
+           antes eso quedaba "escondido" en un scroll vertical invisible
+           (overflow-x:auto sin overflow-y explícito => Safari trata el eje Y
+           como auto también, sin mostrar scrollbar). Ya se corrigió esa causa
+           (overflow-y: visible inline en el contenedor), y acá además se
+           reduce la huella para que en la práctica nunca haga falta scroll. */
+        @media (max-width: 639px) {
+            #authButton { gap: 6px; }
+            .user-profile { gap: 4px; }
+            .user-avatar { display: none; }
+            .user-name { max-width: 72px; font-size: 12px; }
+            .btn-logout { padding: 6px 10px; font-size: 11px; }
+        }
 
         @keyframes fadeInUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
         @keyframes bounce { 0% { transform: scale(0.3); opacity: 0; } 50% { transform: scale(1.1); } 100% { transform: scale(1); opacity: 1; } }
@@ -845,7 +859,7 @@
                     <span class="text-base sm:text-xl lg:text-2xl font-extrabold text-cyan-400 neon-text-cyan tracking-tight">MusicToken Ring</span>
                 </div>
 
-                <div class="flex items-center gap-1 sm:gap-1.5 sm:gap-2 lg:gap-4 text-sm flex-shrink-0 overflow-x-auto" style="max-width: 100%;">
+                <div class="flex items-center gap-1 sm:gap-1.5 sm:gap-2 lg:gap-4 text-sm flex-shrink-0 overflow-x-auto" style="max-width: 100%; overflow-y: visible;">
                     <!-- Saldos en móvil (compacto) -->
                     <span id="creditsCombinedDisplayMobile" class="sm:hidden px-1.5 py-0.5 rounded text-[10px] bg-fuchsia-500/10 text-fuchsia-400 font-semibold whitespace-nowrap cursor-help" title="MTR créditos jugables: fichas estables 1:1 USD nominal">
                         <span id="creditsDisplayMobile">0</span> <span id="usdcValueDisplayMobile" class="text-gray-400">$0</span>
