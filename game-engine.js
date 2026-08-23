@@ -535,20 +535,22 @@ const GameEngine = {
                 .single();
             
             if (data) {
-                // CRÍTICO: Para desafíos sociales, SIEMPRE usar 5 créditos como mínimo
-                // No usar min_bet de la base de datos que puede ser 100
-                // Solo usar min_bet de la base de datos para otros modos (Quick Match, Sala Privada, Torneo)
-                const dbMinBet = data.min_bet || MIN_BET_AMOUNT;
-                // Si el valor de la BD es mayor a 1, usar 1 como mínimo
-                // Todos los modos ahora usan mínimo 1 crédito
-                this.minBet = Math.max(1, dbMinBet); // Asegurar mínimo 1
+                // CRÍTICO: game_config.min_bet en la base real sigue en 100 (de
+                // cuando el juego pedía 100 MTR mínimo). Ya hubo un intento de
+                // arreglar esto acá mismo, pero con la lógica invertida:
+                // Math.max(1, dbMinBet) con dbMinBet=100 sigue dando 100, no 1
+                // -- confirmado en vivo: bloqueó "Crear Sala" con apuesta de 1
+                // pidiendo 100 créditos. Todos los modos usan mínimo 1 crédito
+                // por diseño actual (1 crédito ≈ 1 USD), así que no tiene
+                // sentido seguir leyendo min_bet de la base para esto.
+                this.minBet = MIN_BET_AMOUNT;
                 this.battleDuration = data.battle_duration;
                 this.victoryAudioDuration = data.victory_audio_duration;
                 if (data.platform_fee_rate) this.platformFeeRate = data.platform_fee_rate;
                 if (data.jackpot_rate) this.jackpotRate = data.jackpot_rate;
                 if (data.platform_revenue_target) this.platformRevenueTarget = data.platform_revenue_target;
                 
-                console.log('[loadGameConfig] minBet cargado desde BD:', this.minBet, '(Mínimo: 1 crédito para todos los modos)');
+                console.log('[loadGameConfig] minBet forzado a', this.minBet, '(fijo, ignora game_config.min_bet -- todos los modos usan mínimo 1 crédito)');
             }
         } catch (error) {
             console.error('Error loading config:', error);
