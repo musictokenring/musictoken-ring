@@ -18,7 +18,14 @@ from common import SupabaseReadClient, enable_local_cors, env, get_logger
 
 logger = get_logger("host_agent")
 
-MODEL_NAME = env("HOST_AGENT_MODEL", default="gemini-2.5-pro")
+# Flash en vez de Pro a propósito: medido en vivo, Pro respondía en
+# 11-14s reales (logs de Cloud Run), demasiado lento para sentirse "en
+# vivo" durante una batalla de 50-60s -- la narración de arranque llegaba
+# bien pasada la mitad de la batalla, y a veces ni con eso alcanzaba a
+# mostrarse antes de que la pantalla de resultado ya hubiera reemplazado
+# la arena. Flash responde bien en 1-3s para una frase corta de hype,
+# que es exactamente lo que necesita este agente.
+MODEL_NAME = env("HOST_AGENT_MODEL", default="gemini-2.5-flash")
 supabase = SupabaseReadClient()
 app = Flask(__name__)
 enable_local_cors(app)
