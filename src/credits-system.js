@@ -260,26 +260,37 @@
                 
                 // Intentar obtener userId para consultar Supabase.
                 // sessionUserId (la sesión activa) va primero — ver nota CRÍTICO más arriba.
-                let userId = sessionUserId || this.currentUserId;
-                if (!userId && walletAddress) {
-                    userId = await this.getUserId(walletAddress);
+                // CRÍTICO (2026-08-23): esta variable se llamaba "userId", igual que el
+                // PARÁMETRO de la función — un "let userId" declarado acá abajo hace que
+                // TODA la función (desde la línea 1) trate cualquier referencia a "userId"
+                // como perteneciente a ESTE binding, no al parámetro, por las reglas de
+                // temporal dead zone de let/const. Resultado real: el chequeo
+                // "if (!walletAddress && userId)" de mucho más arriba (el atajo para
+                // cuentas por email/sesión, sin wallet) tiraba
+                // "ReferenceError: Cannot access 'userId' before initialization" en cada
+                // login por email — atrapado en el catch de más abajo, que silenciosamente
+                // mantenía el saldo en 0 sin ningún error visible para el usuario.
+                // Renombrada a resolvedUserId para que no choque con el parámetro.
+                let resolvedUserId = sessionUserId || this.currentUserId;
+                if (!resolvedUserId && walletAddress) {
+                    resolvedUserId = await this.getUserId(walletAddress);
                 }
-                
+
                 // CRÍTICO: Consultar balance unificado (fiat + onchain + credits) PRIMERO
-                if (typeof supabaseClient !== 'undefined' && userId) {
+                if (typeof supabaseClient !== 'undefined' && resolvedUserId) {
                     try {
                         console.log('[credits-system] 🔄🔴 CONSULTANDO BALANCE UNIFICADO (fuente de verdad)...', {
-                            userId: userId,
+                            userId: resolvedUserId,
                             onchainBalance: onchainBalance
                         });
-                        
+
                         // Método 1: Intentar usar función RPC unificada (si existe y migración ejecutada)
                         let unifiedBalance = null;
                         let useRPC = false;
                         try {
                             const { data: rpcBalance, error: rpcError } = await supabaseClient
-                                .rpc('get_user_unified_balance', { user_id_param: userId });
-                            
+                                .rpc('get_user_unified_balance', { user_id_param: resolvedUserId });
+
                             if (!rpcError && rpcBalance !== null && rpcBalance !== undefined) {
                                 unifiedBalance = parseFloat(rpcBalance) || 0;
                                 console.log('[credits-system] ✅ Balance unificado desde RPC:', unifiedBalance);
@@ -290,22 +301,22 @@
                         } catch (rpcError) {
                             console.log('[credits-system] RPC no disponible o migración no ejecutada:', rpcError.message);
                         }
-                        
+
                         // Método 2: Si RPC no está disponible, calcular manualmente
                         if (!useRPC) {
                             console.log('[credits-system] Calculando balance manualmente...');
-                            
+
                             let fiatBalance = 0;
                             let onchainBalanceFromDB = 0;
-                            
+
                             // Intentar obtener datos de users (puede fallar si migración no ejecutada)
                             try {
                                 const { data: userData, error: userError } = await supabaseClient
                                     .from('users')
                                     .select('saldo_fiat, saldo_onchain')
-                                    .eq('id', userId)
+                                    .eq('id', resolvedUserId)
                                     .maybeSingle();
-                                
+
                                 if (!userError && userData) {
                                     fiatBalance = parseFloat(userData.saldo_fiat || 0);
                                     onchainBalanceFromDB = parseFloat(userData.saldo_onchain || 0);
@@ -316,27 +327,27 @@
                             } catch (userError) {
                                 console.log('[credits-system] Error obteniendo saldo_fiat/saldo_onchain (migración no ejecutada):', userError.message);
                             }
-                            
+
                             // Obtener credits (siempre disponible)
                             const { data: creditsData, error: creditsError } = await supabaseClient
                                 .from('user_credits')
                                 .select('credits')
-                                .eq('user_id', userId)
+                                .eq('user_id', resolvedUserId)
                                 .maybeSingle();
-                            
+
                             const creditsBalance = parseFloat(creditsData?.credits || 0);
-                            
+
                             unifiedBalance = fiatBalance + onchainBalanceFromDB + creditsBalance;
-                            
+
                             console.log('[credits-system] ✅ Balance calculado manualmente:', {
                                 fiat: fiatBalance,
                                 onchain: onchainBalanceFromDB,
                                 credits: creditsBalance,
                                 total: unifiedBalance,
-                                userId: userId
+                                userId: resolvedUserId
                             });
                         }
-                        
+
                         if (unifiedBalance !== null && unifiedBalance !== undefined) {
                             rawCredits = unifiedBalance;
                             console.log('[credits-system] ✅✅✅ Saldo unificado obtenido:', rawCredits);
@@ -352,8 +363,8 @@
                 } else {
                     console.warn('[credits-system] ⚠️ No se pudo consultar balance unificado:', {
                         tieneSupabase: typeof supabaseClient !== 'undefined',
-                        tieneUserId: !!userId,
-                        userId: userId
+                        tieneUserId: !!resolvedUserId,
+                        userId: resolvedUserId
                     });
                     usarBackend = true;
                 }
@@ -414,8 +425,8 @@
                     this.currentUserId = data.userId;
                 } else if (userIdFromWallet) {
                     this.currentUserId = userIdFromWallet;
-                } else if (userId) {
-                    this.currentUserId = userId;
+                } else if (resolvedUserId) {
+                    this.currentUserId = resolvedUserId;
                 }
 
                 console.log('[credits-system] ✅✅✅ Saldos cargados y actualizados:', {
