@@ -11,47 +11,46 @@
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
     <title>MusicToken Ring - Music Battle Arena</title>
     
-    <!-- DEBUG TEMPORAL (2026-08-23, ronda 4): el banner "fixed;bottom:0" de
-         la ronda anterior quedaba tapado por la barra de herramientas de
-         Safari en iPhone (zona que la app nunca puede pintar) — el usuario
-         nunca llego a verlo. Esta vez va insertado arriba de TODO, en el
-         flujo normal de la pagina (no fixed), imposible de tapar. Quitar
-         una vez resuelto. -->
+    <!-- DEBUG TEMPORAL (2026-08-23, ronda 5): las rondas anteriores (banner
+         fixed-bottom, banner en flujo normal arriba de todo) mostraron el
+         MISMO comportamiento -- algo se ve una fraccion de segundo y
+         desaparece por completo, incluso un <div> comun sin CSS especial
+         que nada mas en el codigo toca despues de crearlo. Eso solo se
+         explica por una recarga/navegacion real de la pagina completa, no
+         por un bug de visibilidad. Sin acceso a un Mac/inspector real del
+         lado del usuario, se manda cada linea de log al backend (con
+         keepalive:true, para que el request sobreviva aunque la pagina se
+         este cerrando) en vez de confiar en que algo sobreviva en pantalla.
+         Quitar una vez resuelto. -->
     <script>
         (function() {
-            var lines = [];
-            function insertBanner() {
-                var el = document.getElementById('__debugBannerTop');
-                if (el) return el;
-                el = document.createElement('div');
-                el.id = '__debugBannerTop';
-                el.style.cssText = 'position:static;background:#052e16;color:#a7f3d0;font:10px monospace;padding:8px;white-space:pre-wrap;word-break:break-all;max-height:45vh;overflow:auto;border-bottom:3px solid #22c55e;';
-                if (document.body) {
-                    document.body.insertBefore(el, document.body.firstChild);
-                } else {
-                    document.documentElement.appendChild(el);
-                }
-                return el;
-            }
-            function showDebugBanner(msg) {
+            var BACKEND = 'https://musictoken-ring.onrender.com';
+            function sendRemote(msg) {
                 try {
-                    var t = new Date().toISOString().slice(11, 23);
-                    lines.push('[' + t + '] ' + msg);
-                    if (lines.length > 14) lines.shift();
-                    var el = insertBanner();
-                    el.textContent = lines.join('\n');
+                    fetch(BACKEND + '/api/debug/mobile-log', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ msg: msg }),
+                        keepalive: true
+                    }).catch(function () {});
                 } catch (e) {}
             }
-            document.addEventListener('DOMContentLoaded', function () {
-                if (lines.length) insertBanner().textContent = lines.join('\n');
-            });
-            window.__debugBanner = showDebugBanner;
+            window.__debugBanner = sendRemote;
             window.addEventListener('error', function (ev) {
-                showDebugBanner('JS ERROR: ' + (ev.message || ev.error) + ' @ ' + (ev.filename || '?') + ':' + (ev.lineno || '?'));
+                sendRemote('JS ERROR: ' + (ev.message || ev.error) + ' @ ' + (ev.filename || '?') + ':' + (ev.lineno || '?'));
             });
             window.addEventListener('unhandledrejection', function (ev) {
-                showDebugBanner('PROMISE REJECTION: ' + (ev.reason && ev.reason.message ? ev.reason.message : ev.reason));
+                sendRemote('PROMISE REJECTION: ' + (ev.reason && ev.reason.message ? ev.reason.message : ev.reason));
             });
+            // Prueba directa de la hipotesis de "recarga/navegacion completa":
+            // si esto se dispara, la pagina SI se esta yendo/recargando.
+            window.addEventListener('pagehide', function (ev) {
+                sendRemote('PAGEHIDE evento (persisted=' + ev.persisted + ') -- la pagina se esta yendo/recargando');
+            });
+            document.addEventListener('visibilitychange', function () {
+                sendRemote('visibilitychange -> ' + document.visibilityState);
+            });
+            sendRemote('--- nueva carga de pagina --- url=' + window.location.href);
         })();
     </script>
 
