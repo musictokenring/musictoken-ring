@@ -11,33 +11,6 @@
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
     <title>MusicToken Ring - Music Battle Arena</title>
     
-    <!-- DEBUG TEMPORAL (2026-08-23): banner visible de errores JS, para
-         diagnosticar un bug de header en mobile que no se puede reproducir
-         en emulador. Quitar una vez resuelto. -->
-    <script>
-        (function() {
-            function showJsErrorBanner(msg) {
-                try {
-                    var el = document.getElementById('__jsErrorBanner');
-                    if (!el) {
-                        el = document.createElement('div');
-                        el.id = '__jsErrorBanner';
-                        el.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:999999;background:#7f1d1d;color:#fff;font:12px monospace;padding:8px;white-space:pre-wrap;word-break:break-all;max-height:40vh;overflow:auto;';
-                        (document.body || document.documentElement).appendChild(el);
-                    }
-                    el.textContent += (el.textContent ? '\n---\n' : '') + msg;
-                } catch (e) {}
-            }
-            window.__debugBanner = showJsErrorBanner;
-            window.addEventListener('error', function (ev) {
-                showJsErrorBanner('JS ERROR: ' + (ev.message || ev.error) + ' @ ' + (ev.filename || '?') + ':' + (ev.lineno || '?'));
-            });
-            window.addEventListener('unhandledrejection', function (ev) {
-                showJsErrorBanner('PROMISE REJECTION: ' + (ev.reason && ev.reason.message ? ev.reason.message : ev.reason));
-            });
-        })();
-    </script>
-
     <!-- Script INMEDIATO - Primera línea ejecutable del documento - SIN BLOQUEOS -->
     <script>
         (function() {

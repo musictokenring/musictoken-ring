@@ -478,10 +478,6 @@ async function logout() {
 function updateAuthUI(session) {
     const authButton = document.getElementById('authButton');
 
-    if (window.__debugBanner) {
-        window.__debugBanner('[DEBUG] updateAuthUI llamado. authButton encontrado: ' + !!authButton + ' | session: ' + (session && session.user ? session.user.email : 'null'));
-    }
-
     if (!authButton) return;
 
     if (session && session.user) {
@@ -528,10 +524,6 @@ function updateAuthUI(session) {
                 Salir
             </button>
         `;
-
-        if (window.__debugBanner) {
-            window.__debugBanner('[DEBUG] authButton.innerHTML seteado. displayName=' + displayName + ' | authButton.children.length=' + authButton.children.length + ' | authButton offsetWidth/Height=' + authButton.offsetWidth + '/' + authButton.offsetHeight);
-        }
 
         loadPlayerProfile(session.user);
 
