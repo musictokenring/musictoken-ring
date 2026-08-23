@@ -278,13 +278,41 @@ class MercadoPagoService {
         }
 
         const payerEmail = payment.payer?.email;
-        const paymentAmount = parseFloat(payment.transaction_amount);
+        const paymentAmount = parseFloat(payment.transaction_amount); // lo que pagó el usuario (bruto)
         const paymentCurrency = payment.currency_id;
+
+        // CRÍTICO: encontrado en vivo con un pago real — Mercado Pago se
+        // queda con SU propia comisión antes de que la plata llegue a la
+        // cuenta de la plataforma (en un pago de 10.000 COP, llegaron
+        // 8.656 COP reales — MP se quedó con 13,44%, no el 5% que este
+        // código asumía). Antes se calculaba todo sobre el monto BRUTO, lo
+        // que significa que la plataforma podía estar acreditando más valor
+        // en créditos del que realmente tiene en caja — un riesgo de
+        // solvencia real, no cosmético. Ahora se usa
+        // transaction_details.net_received_amount (documentado por MP como
+        // lo que de verdad se deposita en la cuenta del vendedor) como base
+        // real; si por algún motivo esa API no lo trae, se cae de vuelta al
+        // monto bruto (mejor una estimación optimista rara vez que romper
+        // el depósito).
+        const netReceivedRaw = payment.transaction_details?.net_received_amount;
+        const netReceivedCop = Number.isFinite(parseFloat(netReceivedRaw))
+            ? parseFloat(netReceivedRaw)
+            : paymentAmount;
+        if (netReceivedCop < paymentAmount) {
+            console.log('[mercadopago] Comisión real de Mercado Pago sobre este pago:', {
+                bruto: paymentAmount,
+                netoRecibido: netReceivedCop,
+                comisionMP: (paymentAmount - netReceivedCop).toFixed(2)
+            });
+        }
 
         // Convertir a USD con tasa en vivo (antes: 1/4000 fijo).
         const copPerUsd = await getCopPerUsd();
         const usdRate = paymentCurrency === 'USD' ? 1 : (1 / copPerUsd);
-        const usdAmount = paymentAmount * usdRate;
+        // La comisión propia de la plataforma (5%) se calcula sobre lo que
+        // REALMENTE entró (neto de la comisión de Mercado Pago), no sobre
+        // el bruto que pagó el usuario.
+        const usdAmount = netReceivedCop * usdRate;
 
         // Calculate fees
         const depositFee = usdAmount * this.depositFeePercent;
@@ -313,7 +341,9 @@ class MercadoPagoService {
         // reales — exactamente el tipo de mensaje engañoso que ya se corrigió
         // hoy en otras partes de la app.
         if (paymentCurrency === 'COP') {
-            const vaultFeeCop = paymentAmount * this.depositFeePercent * this.vaultFeePercent;
+            // Sobre netReceivedCop (lo que de verdad entró), no sobre el bruto —
+            // mismo criterio que el resto de este cálculo, ver nota CRÍTICO arriba.
+            const vaultFeeCop = netReceivedCop * this.depositFeePercent * this.vaultFeePercent;
             if (vaultFeeCop > 0) {
                 const { error: vaultCopError } = await this.supabase.rpc('update_vault_balance_cop', {
                     amount_to_add: vaultFeeCop,
