@@ -475,7 +475,7 @@ async function logout() {
 // UI UPDATE FUNCTIONS
 // ==========================================
 
-function updateAuthUI(session) {
+async function updateAuthUI(session) {
     const authButton = document.getElementById('authButton');
 
     if (!authButton) return;
@@ -525,21 +525,32 @@ function updateAuthUI(session) {
             </button>
         `;
 
-        loadPlayerProfile(session.user);
-
-        // CRÍTICO: cargar el saldo jugable (fiat/unificado) apenas se loguea.
-        // Antes esto SOLO pasaba dentro de showLoginWall() — que no se llama
-        // en un login recién hecho (acá se llama showModeSelector() en su
-        // lugar) — así que CreditsSystem.currentCredits se quedaba en 0 hasta
-        // que algún otro flujo lo recargara por su cuenta. Confirmado en vivo:
-        // usuario logueado por primera vez veía "Fichas jugables insuficientes
-        // ... tenés 0.00" pese a tener saldo real, y solo se corregía tras
-        // recargar la página (momento en el que showLoginWall() sí corre).
+        // CRÍTICO: cargar el saldo jugable (fiat/unificado) apenas se loguea,
+        // y ESPERARLO antes de pintar el perfil. Antes esto SOLO pasaba
+        // dentro de showLoginWall() — que no se llama en un login recién
+        // hecho (acá se llama showModeSelector() en su lugar) — así que
+        // CreditsSystem.currentCredits se quedaba en 0 hasta que algún otro
+        // flujo lo recargara por su cuenta. Confirmado en vivo: usuario
+        // logueado por primera vez veía "Fichas jugables insuficientes...
+        // tenés 0.00" pese a tener saldo real.
+        //
+        // Un primer intento de este fix llamaba a loadBalance() sin esperarlo
+        // Y DESPUÉS de loadPlayerProfile() — loadPlayerProfile lee
+        // CreditsSystem.currentCredits de forma síncrona, así que capturaba
+        // el 0 por defecto (currentCredits >= 0 es cierto incluso para 0,
+        // así que "confiaba" en ese valor viejo) antes de que la carga real
+        // terminara. Confirmado en vivo: el modal de perfil mostraba
+        // "0 MTR" pese a tener $5.29 reales en la base de datos. Por eso
+        // ahora se espera loadBalance() ANTES de pintar el perfil.
         if (typeof window.CreditsSystem !== 'undefined' && typeof window.CreditsSystem.loadBalance === 'function') {
-            window.CreditsSystem.loadBalance(null, session.user.id).catch(function (err) {
+            try {
+                await window.CreditsSystem.loadBalance(null, session.user.id);
+            } catch (err) {
                 console.warn('[updateAuthUI] Error cargando saldo tras login:', err);
-            });
+            }
         }
+
+        loadPlayerProfile(session.user);
 
         // Mostrar selector de modos
         if (typeof showModeSelector === 'function') {
