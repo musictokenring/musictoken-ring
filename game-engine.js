@@ -5545,28 +5545,39 @@ const GameEngine = {
             // If betting, deduct credits instead of legacy balance
             if (type === 'bet' && window.CreditsSystem) {
                 const walletAddress = this.connectedWallet || localStorage.getItem('mtr_wallet');
+                // CRÍTICO: userId se resuelve ANTES del gate de abajo, y el gate
+                // usa "walletAddress || userId" (no solo walletAddress) a
+                // propósito -- antes, un usuario logueado por email/Google sin
+                // wallet conectada (session.user.id existe, walletAddress no)
+                // caía siempre al sistema legacy de más abajo, que llama a un
+                // RPC de Supabase (update_user_balance) con dos versiones
+                // ambiguas cargadas en la base -- Postgres nunca puede elegir
+                // cuál usar y ese RPC falla el 100% de las veces (confirmado
+                // en vivo). Resultado real: apostar en Modo Rápido o Sala
+                // Privada estaba roto para cualquiera sin wallet conectada.
+                let userId = session?.user?.id || null;
+                if (!userId && walletAddress) {
+                    userId = await window.CreditsSystem.getUserId(walletAddress);
+                }
                 console.log('[updateBalance] Intentando descontar créditos:', {
                     walletAddress: walletAddress,
+                    userId: userId,
                     amount: amount,
                     type: type,
                     hasCreditsSystem: !!window.CreditsSystem
                 });
-                
-                if (walletAddress) {
+
+                if (walletAddress || userId) {
                     const backendUrl = window.CONFIG?.BACKEND_API || window.CreditsSystem?.backendUrl || 'https://musictoken-ring.onrender.com';
-                    let userId = session?.user?.id || null;
-                    if (!userId) {
-                        userId = await window.CreditsSystem.getUserId(walletAddress);
-                    }
                     console.log('[updateBalance] ✅ userId obtenido:', userId);
-                    
+
                     if (!userId) {
                         console.error('[updateBalance] ❌❌❌ NO se pudo obtener userId para wallet:', walletAddress);
                         console.error('[updateBalance] ❌ Esto puede indicar que la wallet no está vinculada al usuario');
                         showToast('Error: Wallet no vinculada. Por favor, recarga la página y vuelve a conectar tu wallet.', 'error');
                         return false;
                     }
-                    
+
                     if (userId) {
                         const creditsToDeduct = Math.abs(amount);
                         console.log('[updateBalance] Descontando créditos:', {
@@ -5658,7 +5669,7 @@ const GameEngine = {
                                 }
                                 
                                 // Recargar balance desde backend
-                                await window.CreditsSystem.loadBalance(walletAddress);
+                                await window.CreditsSystem.loadBalance(walletAddress, userId);
                                 
                                 // Esperar un momento para que se actualice
                                 await new Promise(resolve => setTimeout(resolve, 500));
@@ -5699,7 +5710,7 @@ const GameEngine = {
                                     if (retryResponse.ok) {
                                         const retryData = await retryResponse.json();
                                         console.log('[updateBalance] ✅✅✅ Créditos descontados exitosamente después de recargar:', retryData);
-                                        await window.CreditsSystem.loadBalance(walletAddress);
+                                        await window.CreditsSystem.loadBalance(walletAddress, userId);
                                         return true;
                                     } else {
                                         const retryErrorText = await retryResponse.text();
@@ -5858,7 +5869,7 @@ const GameEngine = {
                                         await new Promise(resolve => setTimeout(resolve, 500));
                                         
                                         // Recargar balance antes de intentar descontar
-                                        await window.CreditsSystem.loadBalance(walletAddress);
+                                        await window.CreditsSystem.loadBalance(walletAddress, userId);
                                         
                                         console.log('[updateBalance] 🔄 Intentando descontar créditos después de conversión...');
                                         
@@ -5883,7 +5894,7 @@ const GameEngine = {
                                         if (retryResponse.ok) {
                                             const retryData = await retryResponse.json();
                                             console.log('[updateBalance] ✅✅✅ Créditos descontados exitosamente después de conversión:', retryData);
-                                            await window.CreditsSystem.loadBalance(walletAddress);
+                                            await window.CreditsSystem.loadBalance(walletAddress, userId);
                                             return true;
                                         } else {
                                             const retryErrorText = await retryResponse.text();
@@ -5939,7 +5950,7 @@ const GameEngine = {
                             const responseData = await response.json();
                             console.log('[updateBalance] ✅ Créditos descontados exitosamente:', responseData);
                             
-                            await window.CreditsSystem.loadBalance(walletAddress);
+                            await window.CreditsSystem.loadBalance(walletAddress, userId);
                             return true; // Return early, don't update legacy balance
                         }
                     } else {
