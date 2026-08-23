@@ -930,7 +930,7 @@
         <!-- BATTLE ANIMATION -->
         <div id="battle-animation" class="h-96 w-full max-w-5xl mx-auto my-12 relative overflow-hidden rounded-xl border border-cyan-500/30 bg-black/40 neon-border-cyan">
             <!-- Video en loop para Batallas en vivo -->
-            <video id="batallasVideo" muted loop playsinline preload="none" class="absolute inset-0 w-full h-full object-cover z-0" style="display: none;">
+            <video id="batallasVideo" autoplay muted loop playsinline class="absolute inset-0 w-full h-full object-cover z-0" style="display: none;">
                 <source src="./assets/videos/batallas-en-vivo.mp4" type="video/mp4">
                 <source src="./assets/videos/batallas-en-vivo.webm" type="video/webm">
             </video>
@@ -8384,22 +8384,6 @@
                 var video = document.getElementById('batallasVideo');
                 var canvas = document.getElementById('pulse-canvas');
 
-                // CRÍTICO (2026-08-23): el video pesa 14MB con autoplay+loop
-                // infinito — decodificación continua de video es de las cosas
-                // que más memoria/batería consume en un navegador mobile.
-                // Encontrado como causa muy probable de que iOS Safari mate y
-                // reabra la pestaña sola cada pocos segundos en un iPhone real
-                // (confirmado con logs: recargas tipo "navigate" con referrer
-                // vacío — la firma de Safari reclamando memoria, no de
-                // ningún reload() del código). En mobile directamente no se
-                // carga el video, se deja solo la animación de canvas
-                // (mucho más liviana) como reemplazo decorativo.
-                var isMobileForVideo = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-                if (isMobileForVideo) {
-                    if (canvas) canvas.style.display = 'block';
-                    return; // el <video> se deja sin cargar (preload="none", ya sin autoplay en el HTML)
-                }
-
                 if (video && canvas) {
                     // Ocultar canvas cuando el video se carga correctamente
                     video.addEventListener('loadeddata', function() {
@@ -8413,14 +8397,9 @@
                         if (video) video.style.display = 'none';
                     }, { once: true });
 
-                    // Cargar y reproducir (ya no tiene autoplay en el HTML, ver
-                    // arriba — se dispara acá solo en desktop)
+                    // Intentar cargar el video (con timeout para no bloquear)
                     try {
                         video.load();
-                        var playPromise = video.play();
-                        if (playPromise && typeof playPromise.catch === 'function') {
-                            playPromise.catch(function () { /* autoplay bloqueado por el navegador, se queda el canvas */ });
-                        }
                     } catch (e) {
                         // Si falla, mostrar canvas
                         if (canvas) canvas.style.display = 'block';
