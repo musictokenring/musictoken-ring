@@ -2614,11 +2614,20 @@ const GameEngine = {
                 preview: song.preview
             } : null;
 
+            // CRÍTICO: la wallet NUNCA fue obligatoria para esto -- el backend
+            // (authorizeTournamentJoin en backend/auth-middleware.js) autoriza
+            // de entrada a cualquier usuario logueado cuyos créditos sean los
+            // de su propia cuenta (el caso normal de un login por email/
+            // Google), sin pedir wallet en absoluto; solo la exige para el
+            // caso especial de una cuenta con créditos vinculados a OTRA
+            // identidad via wallet. Este bloqueo era puramente del frontend,
+            // más estricto de lo que el backend en verdad requiere -- un
+            // usuario real con créditos de sobra no podía inscribirse a un
+            // torneo por esto. Ahora solo se manda la wallet si hay una
+            // conectada; si no hay, se deja que el backend decida (y con una
+            // cuenta normal, va a aprobar).
             const walletAddress = (this.connectedWallet || localStorage.getItem('mtr_wallet') || '').trim();
-            if (!walletAddress || !/^0x[a-fA-F0-9]{40}$/i.test(walletAddress)) {
-                showToast('Conecta tu wallet antes de inscribirte en el torneo.', 'error');
-                return;
-            }
+            const hasValidWallet = /^0x[a-fA-F0-9]{40}$/i.test(walletAddress);
             const isExpressJoin = enrollment?.type === 'express' && enrollment?.genreId;
             const joinUrl = isExpressJoin
                 ? backendUrl + '/api/tournaments/express/join'
@@ -2628,7 +2637,7 @@ const GameEngine = {
                 headers: await this.getBackendAuthHeaders({ 'Content-Type': 'application/json' }),
                 body: JSON.stringify({
                     song: songPayload,
-                    walletAddress: walletAddress.toLowerCase(),
+                    walletAddress: hasValidWallet ? walletAddress.toLowerCase() : null,
                     genreId: enrollment?.genreId || null,
                     tournamentId: enrollment?.id || tournamentId || null
                 })
@@ -2702,9 +2711,11 @@ const GameEngine = {
                 return;
             }
 
-            const walletAddressAfter = this.connectedWallet || localStorage.getItem('mtr_wallet');
-            if (walletAddressAfter && window.CreditsSystem) {
-                await window.CreditsSystem.loadBalance(walletAddressAfter);
+            // Sin wallet, loadBalance(null, userId) igual resuelve el saldo
+            // real por sesión (mismo atajo agregado hoy en updateBalance()).
+            const walletAddressAfter = this.connectedWallet || localStorage.getItem('mtr_wallet') || null;
+            if (window.CreditsSystem) {
+                await window.CreditsSystem.loadBalance(walletAddressAfter, session?.user?.id || null);
                 this.updateBalanceDisplay();
             }
 
