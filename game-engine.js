@@ -31,6 +31,35 @@ function promptLoginRequired(message) {
 // estado vive acá en el cliente, así que es la fuente real de verdad.
 const HOST_AGENT_URL = 'https://host-agent-287417719690.us-central1.run.app';
 
+// Curador de género IA (agents/curator_agent.py). Esta llamada es la mitad
+// "UX" del filtro: le avisa al jugador EN EL MOMENTO de elegir la canción
+// para un torneo, antes de confirmar la inscripción -- así puede cambiarla
+// si no encaja, en vez de enterarse recién al confirmar. El chequeo que de
+// verdad decide (y nunca confía en lo que diga el cliente) es el del
+// backend en tournament-service.js::joinTournament(); si esta llamada del
+// cliente falla o alguien la saltea, esa otra sigue bloqueando igual.
+const CURATOR_AGENT_URL = 'https://curator-agent-287417719690.us-central1.run.app';
+
+async function requestGenreCurationClient(artist, title, genreLabel) {
+    try {
+        const resp = await fetch(CURATOR_AGENT_URL + '/curate', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ artist, title, genreLabel }),
+            signal: AbortSignal.timeout(20000)
+        });
+        if (!resp.ok) throw new Error('curator-agent /curate failed: ' + resp.status);
+        return await resp.json();
+    } catch (err) {
+        console.warn('[curator] requestGenreCurationClient falló, dejando pasar con advertencia:', err && err.message);
+        return {
+            confidence: 50,
+            verdict: 'warn',
+            reason: 'No se pudo verificar automáticamente (curador de género no disponible ahora mismo).'
+        };
+    }
+}
+
 // CRITICO: se dispara una vez al arrancar la batalla ('hype') y otra vez al
 // terminar ('result'), pero cada respuesta tarda 13-28s en llegar — no hay
 // garantía de que lleguen en orden. Se vio en vivo: la narración de "arranca

@@ -4923,9 +4923,59 @@
 
         // La función selectSongForBattle ya está definida arriba antes de app.js
         // Aquí solo actualizamos las variables locales cuando se llama
+        // Curador de género IA en el momento de elegir la canción para un
+        // torneo -- este es el aviso "en vivo" mientras se elige; el que de
+        // verdad decide y nunca confía en el cliente es el chequeo server-side
+        // en tournament-service.js::joinTournament(). Devuelve true si debe
+        // seguir con esta canción, false si el usuario prefiere buscar otra
+        // (o si quedó bloqueada).
+        async function checkTournamentSongGenre(song) {
+            var enrollment = window.tournamentEnrollment;
+            if (!enrollment || !enrollment.genreLabel || !song || !song.artist || !song.name) {
+                return true; // no estamos en flujo de torneo, no hay nada que chequear
+            }
+            if (typeof requestGenreCurationClient !== 'function') return true;
+
+            var checkingToast = typeof showToast === 'function'
+                ? showToast('🤖 Verificando que la canción encaje con el género...', 'info')
+                : null;
+
+            var result = await requestGenreCurationClient(song.artist, song.name, enrollment.genreLabel);
+
+            if (result.verdict === 'block') {
+                showToast(
+                    `🚫 "${song.name}" de ${song.artist} no encaja con el género "${enrollment.genreLabel}" ` +
+                    `(${result.confidence}% de coincidencia): ${result.reason} — elegí otra canción.`,
+                    'error'
+                );
+                return false;
+            }
+
+            if (result.verdict === 'warn') {
+                var continuar = window.confirm(
+                    `⚠️ "${song.name}" de ${song.artist} tiene ${result.confidence}% de coincidencia con ` +
+                    `el género "${enrollment.genreLabel}": ${result.reason}\n\n` +
+                    `Podés seguir con esta canción, pero si ganás el torneo con ella la IA te descalifica ` +
+                    `automáticamente y se les devuelve la apuesta a los demás jugadores.\n\n` +
+                    `¿Continuar con esta canción de todos modos? (Cancelar para elegir otra)`
+                );
+                if (!continuar) return false;
+            }
+
+            return true; // 'match', o 'warn' aceptado
+        }
+        window.checkTournamentSongGenre = checkTournamentSongGenre;
+
         if (typeof window.selectSongForBattle === 'function') {
             var originalSelectSong = window.selectSongForBattle;
             window.selectSongForBattle = async function(song) {
+                // Si estamos inscribiéndonos a un torneo, avisar ANTES de
+                // confirmar la selección -- coincide con el diseño original
+                // (avisar al elegir la canción, no recién al confirmar la
+                // inscripción, que es lo único que había hasta ahora).
+                var shouldProceed = await checkTournamentSongGenre(song);
+                if (!shouldProceed) return;
+
                 // Actualizar variables locales del scope
                 selectedSong = song;
                 window.selectedSong = song;
