@@ -1004,7 +1004,7 @@ const GameEngine = {
     // MODO DESAFÍO SOCIAL (Social Challenge)
     // ==========================================
     
-    async createSocialChallenge(song, betAmount) {
+    async createSocialChallenge(song, betAmount, genreId, genreLabel, genreCheck) {
         // Mínimo 1 crédito para todos los modos (incluyendo desafíos sociales)
         const SOCIAL_CHALLENGE_MIN_BET = 1;
         
@@ -1073,24 +1073,49 @@ const GameEngine = {
             const challengeId = this.generateChallengeId();
             
             // Crear desafío en la base de datos
-            const { data: challenge, error: challengeError } = await supabaseClient
+            const challengeRow = {
+                challenge_id: challengeId,
+                challenger_id: session.user.id,
+                challenger_song_id: song.id,
+                challenger_song_name: song.name,
+                challenger_song_artist: song.artist,
+                challenger_song_image: song.image,
+                challenger_song_preview: song.preview,
+                bet_amount: normalizedBet,
+                status: 'pending',
+                created_at: new Date().toISOString(),
+                expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString() // 7 días
+            };
+            if (genreId) {
+                challengeRow.genre_id = genreId;
+                challengeRow.genre_label = genreLabel || genreId;
+                if (genreCheck) {
+                    challengeRow.challenger_genre_confidence = genreCheck.confidence;
+                    challengeRow.challenger_genre_verdict = genreCheck.verdict;
+                }
+            }
+
+            let { data: challenge, error: challengeError } = await supabaseClient
                 .from('social_challenges')
-                .insert([{
-                    challenge_id: challengeId,
-                    challenger_id: session.user.id,
-                    challenger_song_id: song.id,
-                    challenger_song_name: song.name,
-                    challenger_song_artist: song.artist,
-                    challenger_song_image: song.image,
-                    challenger_song_preview: song.preview,
-                    bet_amount: normalizedBet,
-                    status: 'pending',
-                    created_at: new Date().toISOString(),
-                    expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString() // 7 días
-                }])
+                .insert([challengeRow])
                 .select()
                 .single();
-            
+
+            // Si la migración 026 (género en desafíos sociales) todavía no
+            // corrió en Supabase, reintentar sin esas columnas en vez de
+            // romper la creación entera del desafío por un dato opcional.
+            if (challengeError && genreId && String(challengeError.message || '').indexOf('genre') !== -1) {
+                delete challengeRow.genre_id;
+                delete challengeRow.genre_label;
+                delete challengeRow.challenger_genre_confidence;
+                delete challengeRow.challenger_genre_verdict;
+                ({ data: challenge, error: challengeError } = await supabaseClient
+                    .from('social_challenges')
+                    .insert([challengeRow])
+                    .select()
+                    .single());
+            }
+
             if (challengeError) throw challengeError;
             
             // Descontar créditos del desafío ANTES de mostrar UI
@@ -1291,7 +1316,27 @@ const GameEngine = {
                 showToast(`La apuesta mínima para este desafío es ${challenge.bet_amount} créditos`, 'error');
                 return;
             }
-            
+
+            // Si el creador eligió un género para este desafío, la canción de
+            // quien acepta también pasa por el curador de IA antes de seguir
+            // -- misma lógica que ya se aplicó a la canción del creador al
+            // armar el desafío.
+            let accepterGenreCheck = null;
+            if (challenge.genre_id && challenge.genre_label && song && song.artist && song.name
+                && typeof requestGenreCurationClient === 'function') {
+                accepterGenreCheck = await requestGenreCurationClient(song.artist, song.name, challenge.genre_label);
+                if (accepterGenreCheck.verdict === 'block') {
+                    showToast(
+                        `🚫 "${song.name}" de ${song.artist} no encaja con el género "${challenge.genre_label}" ` +
+                        `de este desafío (${accepterGenreCheck.confidence}% de coincidencia): ${accepterGenreCheck.reason} ` +
+                        `— elegí otra canción.`,
+                        'error',
+                        12000
+                    );
+                    return;
+                }
+            }
+
             // CRÍTICO: Obtener wallet del usuario que acepta
             // Si es usuario nuevo, puede que no tenga wallet conectada todavía
             let walletAddress = this.connectedWallet || localStorage.getItem('mtr_wallet');
@@ -1305,16 +1350,14 @@ const GameEngine = {
                 return;
             }
 
-            // Si no tiene wallet conectada, pedirle que la conecte
-            if (!walletAddress) {
-                showToast('Debes conectar tu wallet para aceptar el desafío. Conecta tu wallet y vuelve a intentar.', 'error');
-                // Mostrar modal de conexión de wallet si está disponible
-                if (typeof renderWallet === 'function') {
-                    renderWallet();
-                }
-                return;
-            }
-            
+            // CRÍTICO: la wallet NUNCA fue obligatoria para aceptar un desafío
+            // -- mismo bug ya encontrado y corregido hoy en joinTournament().
+            // Un usuario nuevo que llega por un link de red social y se
+            // registra con email/Google (sin wallet) quedaba bloqueado acá
+            // mismo, justo el caso que más importa mejorar para gente nueva.
+            // Si no hay wallet, se sigue igual -- updateBalance() y
+            // createMatch() ya resuelven el saldo por sesión sin necesitarla.
+
             console.log('[acceptSocialChallenge] 🔍 Usuario aceptando desafío:', {
                 userId: session.user.id,
                 walletAddress: walletAddress,
@@ -1346,21 +1389,29 @@ const GameEngine = {
             // CRÍTICO: Recargar balance ANTES de verificar créditos
             // Esto asegura que tenemos los datos más recientes del backend
             console.log('[acceptSocialChallenge] 🔄 Recargando balance antes de verificar créditos...');
-            await window.CreditsSystem.loadBalance(walletAddress);
-            
-            // Verificar créditos directamente con el backend antes de proceder
+            await window.CreditsSystem.loadBalance(walletAddress, session.user.id);
+
+            // Verificar créditos: por wallet si hay una conectada (como
+            // siempre), por sesión si no -- sin esto, un usuario sin wallet
+            // pegaba contra /api/user/credits/null y quedaba con
+            // userCredits=0 aunque tuviera saldo real, bloqueando la
+            // aceptación por "créditos insuficientes" de mentira.
             const backendUrl = window.CONFIG?.BACKEND_API || window.CreditsSystem?.backendUrl || 'https://musictoken-ring.onrender.com';
-            const creditsResponse = await fetch(`${backendUrl}/api/user/credits/${walletAddress}`);
-            
             let userCredits = 0;
-            if (creditsResponse.ok) {
-                const creditsData = await creditsResponse.json();
-                userCredits = creditsData.credits || 0;
-                console.log('[acceptSocialChallenge] 💰 Créditos del backend:', creditsData);
+            if (walletAddress) {
+                const creditsResponse = await fetch(`${backendUrl}/api/user/credits/${walletAddress}`);
+                if (creditsResponse.ok) {
+                    const creditsData = await creditsResponse.json();
+                    userCredits = creditsData.credits || 0;
+                    console.log('[acceptSocialChallenge] 💰 Créditos del backend:', creditsData);
+                } else {
+                    console.warn('[acceptSocialChallenge] ⚠️ No se pudo verificar créditos con el backend');
+                }
             } else {
-                console.warn('[acceptSocialChallenge] ⚠️ No se pudo verificar créditos con el backend');
+                userCredits = window.CreditsSystem?.currentCredits || 0;
+                console.log('[acceptSocialChallenge] 💰 Créditos (sin wallet, por sesión):', userCredits);
             }
-            
+
             // CRÍTICO: Si el usuario no tiene créditos suficientes, intentar convertir MTR on-chain automáticamente
             if (!userCredits || userCredits < normalizedBet) {
                 const missingCredits = normalizedBet - userCredits;
@@ -1471,29 +1522,44 @@ const GameEngine = {
             
             // Verificar créditos suficientes (después de recargar y posible conversión)
             // CRÍTICO: Recargar créditos una vez más después de la conversión para asegurar sincronización
-            await window.CreditsSystem.loadBalance(walletAddress);
+            await window.CreditsSystem.loadBalance(walletAddress, session.user.id);
             await new Promise(resolve => setTimeout(resolve, 300));
             
             const hasEnoughCredits = await this.hasSufficientCredits(normalizedBet);
             if (!hasEnoughCredits) {
-                // Verificar créditos directamente desde el backend una última vez
-                const finalBackendUrl = window.CONFIG?.BACKEND_API || window.CreditsSystem?.backendUrl || 'https://musictoken-ring.onrender.com';
-                const finalCreditsResponse = await fetch(`${finalBackendUrl}/api/user/credits/${walletAddress}`);
+                // Verificar créditos: por wallet si hay, por sesión si no
+                // (mismo criterio que en el chequeo de arriba -- sin esto,
+                // un usuario nuevo sin wallet pegaba contra
+                // /api/user/credits/null y quedaba con 0 de mentira).
                 let finalUserCredits = 0;
-                if (finalCreditsResponse.ok) {
-                    const finalCreditsData = await finalCreditsResponse.json();
-                    finalUserCredits = finalCreditsData.credits || 0;
+                if (walletAddress) {
+                    const finalBackendUrl = window.CONFIG?.BACKEND_API || window.CreditsSystem?.backendUrl || 'https://musictoken-ring.onrender.com';
+                    const finalCreditsResponse = await fetch(`${finalBackendUrl}/api/user/credits/${walletAddress}`);
+                    if (finalCreditsResponse.ok) {
+                        const finalCreditsData = await finalCreditsResponse.json();
+                        finalUserCredits = finalCreditsData.credits || 0;
+                    }
+                } else {
+                    finalUserCredits = window.CreditsSystem?.currentCredits || 0;
                 }
-                
+
                 if (finalUserCredits < normalizedBet) {
                     console.error('[acceptSocialChallenge] ❌❌❌ Créditos insuficientes después de todos los intentos');
                     console.error('[acceptSocialChallenge] Créditos actuales:', finalUserCredits);
                     console.error('[acceptSocialChallenge] Créditos requeridos:', normalizedBet);
+                    // Pedido del usuario: a quien llega nuevo por un desafío
+                    // y no tiene saldo, sugerirle recargar de inmediato --
+                    // acá se abre directo el modal de Mercado Pago en vez de
+                    // solo describirle dónde encontrarlo.
                     showToast(
-                        `Créditos insuficientes. Tienes ${finalUserCredits.toFixed(2)} créditos, necesitas ${normalizedBet}. ` +
-                        `Por favor, recarga créditos desde el menú de depósitos.`,
-                        'error'
+                        `Créditos insuficientes para aceptar este desafío. Tenés ${finalUserCredits.toFixed(2)} créditos, necesitás ${normalizedBet}. ` +
+                        `Te abrimos la recarga para que puedas completarla y aceptar.`,
+                        'error',
+                        10000
                     );
+                    if (typeof window.openMercadoPagoModal === 'function') {
+                        window.openMercadoPagoModal();
+                    }
                     return; // NO continuar si no hay créditos suficientes
                 } else {
                     console.log('[acceptSocialChallenge] ✅ Créditos suficientes después de verificación final');
@@ -1531,22 +1597,33 @@ const GameEngine = {
             );
             
             // Actualizar estado del desafío
-            await supabaseClient
+            const acceptUpdate = {
+                status: 'accepted',
+                accepter_id: session.user.id,
+                accepted_at: new Date().toISOString()
+            };
+            if (accepterGenreCheck) {
+                acceptUpdate.accepter_genre_confidence = accepterGenreCheck.confidence;
+                acceptUpdate.accepter_genre_verdict = accepterGenreCheck.verdict;
+            }
+            let { error: acceptUpdateError } = await supabaseClient
                 .from('social_challenges')
-                .update({
-                    status: 'accepted',
-                    accepter_id: session.user.id,
-                    accepted_at: new Date().toISOString()
-                })
+                .update(acceptUpdate)
                 .eq('id', challenge.id);
-            
+            if (acceptUpdateError && accepterGenreCheck && String(acceptUpdateError.message || '').indexOf('genre') !== -1) {
+                delete acceptUpdate.accepter_genre_confidence;
+                delete acceptUpdate.accepter_genre_verdict;
+                await supabaseClient.from('social_challenges').update(acceptUpdate).eq('id', challenge.id);
+            }
+
             // CRÍTICO: Recargar saldo DESPUÉS de crear el match para reflejar la deducción
-            // CRÍTICO: Usar walletAddress ya declarado arriba, no redeclarar
-            if (walletAddress && window.CreditsSystem) {
+            // Mismo fix que en tournament-bracket.js: sin wallet esto nunca
+            // se disparaba, dejando el saldo viejo en pantalla.
+            if (window.CreditsSystem) {
                 console.log('[acceptSocialChallenge] 🔄 Recargando saldo después de crear match...');
                 await new Promise(resolve => setTimeout(resolve, 500));
-                await window.CreditsSystem.loadBalance(walletAddress);
-                
+                await window.CreditsSystem.loadBalance(walletAddress || null, session.user.id);
+
                 // Forzar actualización de UI
                 if (typeof window.CreditsSystem.updateCreditsDisplay === 'function') {
                     window.CreditsSystem.updateCreditsDisplay();

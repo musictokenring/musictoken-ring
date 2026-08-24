@@ -3779,9 +3779,24 @@
                             
                         if (typeof showToast === 'function') showToast('Desafío detectado. Selecciona tu canción para aceptarlo.', 'info');
                     } else {
-                            // Si no hay sesión, mostrar mensaje pero aún cargar el desafío
+                            // Si no hay sesión, mostrar mensaje pero aún cargar el desafío.
+                            // Pedido del usuario: quien llega nuevo (nunca se registró) por
+                            // un link de desafío en redes sociales necesita entender la
+                            // mecánica del juego, no solo "iniciá sesión" a secas -- eso lo
+                            // deja perdido sin saber a qué está entrando.
                             console.log('[INIT] ⚠️ No hay sesión, pero cargando desafío de todas formas...');
-                        if (typeof showToast === 'function') showToast('Inicia sesión para aceptar el desafío', 'info');
+                        if (typeof showToast === 'function') {
+                            showToast(
+                                '🎵 ¡Te desafiaron a una batalla musical en MusicToken Ring! Elegís tu canción, ' +
+                                'ambos apuestan créditos, y gana quien consiga más reproducciones en vivo durante ' +
+                                'la batalla. Iniciá sesión gratis (email o Google) para ver el desafío y aceptarlo.',
+                                'info',
+                                14000
+                            );
+                        }
+                        if (typeof window.openAuthModal === 'function') {
+                            setTimeout(function () { window.openAuthModal(); }, 600);
+                        }
                         }
                     }
                     
@@ -4460,6 +4475,41 @@
         // muestra en la pantalla de batalla junto a la canción de cada uno.
         const MTR_AVATARS = ['🎸', '🎤', '🎧', '🥁', '🕺', '💃', '🔥', '⚡', '👑', '🚀', '🌟', '🦁'];
         window.__myAvatar = window.__myAvatar || MTR_AVATARS[0];
+
+        // Mismos 14 géneros que backend/tournament-genres.js (duplicado acá
+        // porque ese archivo es un módulo Node, no se puede importar tal
+        // cual en el navegador). Usado para el selector opcional de género
+        // en Desafío Social -- si el creador elige uno, el curador de IA
+        // evalúa tanto su canción como la de quien acepte.
+        const MTR_SOCIAL_GENRES = [
+            { id: 'reggaeton', label: 'Reggaeton' },
+            { id: 'pop_en', label: 'Pop en inglés' },
+            { id: 'salsa', label: 'Salsa' },
+            { id: 'rock_en', label: 'Rock en inglés' },
+            { id: 'cumbia', label: 'Cumbia' },
+            { id: 'hip_hop_en', label: 'Hip hop / R&B (EN)' },
+            { id: 'vallenato', label: 'Vallenato' },
+            { id: 'pop_latino', label: 'Pop latino' },
+            { id: 'rock_es', label: 'Rock en español' },
+            { id: 'electronic_en', label: 'Electrónica / EDM (EN)' },
+            { id: 'bachata', label: 'Bachata' },
+            { id: 'trap_latino', label: 'Trap latino' },
+            { id: 'merengue', label: 'Merengue' },
+            { id: 'regional', label: 'Regional / Corridos' }
+        ];
+        function socialGenreSelectHtml() {
+            var opts = MTR_SOCIAL_GENRES.map(function (g) {
+                return '<option value="' + g.id + '">' + g.label + '</option>';
+            }).join('');
+            return '<div class="mb-3">' +
+                '<label class="text-xs text-gray-400 mb-1 block">Género del desafío (opcional)</label>' +
+                '<select id="socialChallengeGenre" class="w-full px-3 py-2.5 rounded-lg bg-black/40 border border-white/10 text-white text-sm" onchange="window.__socialChallengeGenreId = this.value;">' +
+                '<option value="">Cualquier género (sin curador de IA)</option>' +
+                opts +
+                '</select>' +
+                '<p class="text-[11px] text-gray-500 mt-1">Si elegís un género, la IA verifica que tu canción (y la de quien acepte) encaje antes de arrancar.</p>' +
+                '</div>';
+        }
         function avatarPickerHtml() {
             return '<div class="mb-3"><p class="text-xs text-gray-400 mb-1.5">Elegí tu avatar</p><div class="flex flex-wrap gap-1.5">' +
                 MTR_AVATARS.map(function (a) {
@@ -4819,8 +4869,17 @@
                     }
                 };
                 
-                // Limpiar contenido anterior e insertar botón
+                // Limpiar contenido anterior e insertar selector de género
+                // (solo al CREAR -- el género ya lo fijó el creador, quien
+                // acepta no elige otro) + botón
                 buttonsDiv.innerHTML = '';
+                if (!finalIsAccepting) {
+                    var genreWrap = document.createElement('div');
+                    genreWrap.innerHTML = socialGenreSelectHtml();
+                    buttonsDiv.appendChild(genreWrap.firstElementChild);
+                    var genreSelectEl = document.getElementById('socialChallengeGenre');
+                    if (genreSelectEl) genreSelectEl.value = window.__socialChallengeGenreId || '';
+                }
                 buttonsDiv.appendChild(btn);
                 
                 // Guardar referencia global del botón INMEDIATAMENTE
@@ -5518,9 +5577,38 @@
                 return;
             }
             
+            // Género opcional (pedido del usuario): si el creador eligió uno,
+            // el curador de IA evalúa su canción ANTES de crear el desafío.
+            // "Cualquier género" (sin elegir nada) = sin curación, como
+            // siempre. Este chequeo es client-side -- a diferencia de
+            // torneos, los desafíos sociales se crean directo contra
+            // Supabase sin un endpoint de backend propio, así que no hay
+            // dónde poner un gate autoritativo del lado servidor (mismo
+            // criterio ya usado acá mismo para el gate de ELO).
+            var socialGenreId = window.__socialChallengeGenreId || '';
+            var socialGenreLabel = '';
+            var socialGenreCheck = null;
+            if (socialGenreId) {
+                var genreMeta = MTR_SOCIAL_GENRES.find(function (g) { return g.id === socialGenreId; });
+                socialGenreLabel = genreMeta ? genreMeta.label : socialGenreId;
+                if (typeof requestGenreCurationClient === 'function' && song.artist && song.name) {
+                    showToast('🤖 Verificando que la canción encaje con el género...', 'info');
+                    socialGenreCheck = await requestGenreCurationClient(song.artist, song.name, socialGenreLabel);
+                    if (socialGenreCheck.verdict === 'block') {
+                        showToast(
+                            `🚫 "${song.name}" de ${song.artist} no encaja con el género "${socialGenreLabel}" ` +
+                            `(${socialGenreCheck.confidence}% de coincidencia): ${socialGenreCheck.reason} — elegí otra canción.`,
+                            'error',
+                            12000
+                        );
+                        return;
+                    }
+                }
+            }
+
             try {
                 logFn('[createSocialChallenge] ✅ Ejecutando GameEngine.createSocialChallenge...');
-                var result = await GameEngine.createSocialChallenge(song, bet);
+                var result = await GameEngine.createSocialChallenge(song, bet, socialGenreId || null, socialGenreLabel || null, socialGenreCheck);
                 logFn('[createSocialChallenge] ✅✅✅ GameEngine.createSocialChallenge ejecutado exitosamente');
                 logFn('[createSocialChallenge] Resultado:', result);
             } catch(error) {
