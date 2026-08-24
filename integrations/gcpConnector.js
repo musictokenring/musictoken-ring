@@ -62,11 +62,20 @@ async function requestHostNarration({ battleId, eventType = 'hype', message = ''
  */
 async function requestGenreCuration({ artist, title, genreLabel }) {
     try {
+        // CRÍTICO: 8s no alcanzaba con la instancia fría de Cloud Run
+        // (~20-24s medido en el Host agent, mismo modelo/infra) -- un
+        // usuario probó a propósito una canción de Rock en un torneo de
+        // Salsa y el curador nunca llegó a responder a tiempo, cayendo al
+        // fallback "warn" en silencio y dejando pasar una canción que
+        // claramente no encajaba. Esta llamada SÍ bloquea la respuesta de
+        // inscripción (a diferencia del Host, que es fire-and-forget), así
+        // que hay un costo real en esperar más -- pero es mejor que el
+        // filtro anti-trampa quede inútil en cualquier arranque en frío.
         const resp = await fetch(`${CURATOR_AGENT_URL}/curate`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ artist, title, genreLabel }),
-            signal: AbortSignal.timeout(8000)
+            signal: AbortSignal.timeout(20000)
         });
         if (!resp.ok) throw new Error(`curator-agent /curate failed: ${resp.status}`);
         return await resp.json();
