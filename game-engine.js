@@ -3952,28 +3952,50 @@ const GameEngine = {
     },
 
     async endBattle(match, health1, health2, isPlayer1, plays1, plays2) {
-        // Determine winner based on real-time stream percentages
+        // Determine winner based on real-time stream percentages (cálculo
+        // LOCAL de este dispositivo -- puede diverger del otro jugador, ver
+        // nota más abajo sobre por qué eso ya no es un problema).
         let winner = null;
         if (window.StreamsRealtime) {
             winner = window.StreamsRealtime.determineWinner(match.id);
         }
-        
+
         // Fallback to plays comparison if real-time determination fails
         if (winner === null) {
             winner = plays1 > plays2 ? 1 : 2;
         }
-        
-        const userWon = (isPlayer1 && winner === 1) || (!isPlayer1 && winner === 2);
-        const payouts = this.calculateMatchPayouts(match.total_pot);
-        
+
         // Stop streams tracking
         this.stopStreamsTracking(match.id);
-        
+
         // Detener canción del usuario
         this.stopUserSong();
-        
-        // Actualizar match
-        await supabaseClient
+
+        // CRÍTICO -- bug real encontrado y confirmado en código: en Modo
+        // Rápido y Sala Privada, CADA dispositivo corre su propia
+        // simulación de la batalla en el navegador (plays/health se arman
+        // con calculatePlaysIncrement(), que usa Math.random() SIN ninguna
+        // semilla compartida entre los dos jugadores). Antes de este fix,
+        // ambos dispositivos calculaban "winner" por su cuenta y cada uno
+        // escribía matches.update({status:'finished', winner, ...}) y
+        // llamaba a awardCredits() de forma independiente -- sin ninguna
+        // garantía de que los dos calcularan el mismo ganador, y sin nada
+        // que impidiera pagarle el premio al ganador DOS veces (una vez
+        // desde cada dispositivo).
+        //
+        // Fix: el UPDATE que cierra la batalla queda condicionado a que el
+        // match siga en status='playing'. Postgres resuelve ese UPDATE de
+        // forma atómica -- de los dos dispositivos, solo el que llegue
+        // primero de verdad cambia la fila (gana la "carrera"); el segundo
+        // no afecta ninguna fila porque para cuando corre, status ya no es
+        // 'playing'. Sea cual sea el que gane la carrera, SU cálculo queda
+        // como el oficial, y es el ÚNICO que paga premios/registra
+        // historial. El que pierde la carrera relee el resultado real de
+        // la base y lo usa para su propia pantalla, en vez de confiar en su
+        // cálculo local -- así los dos dispositivos SIEMPRE terminan
+        // mostrando el mismo ganador, y el premio se paga exactamente una
+        // vez por batalla, nunca dos ni cero.
+        const { data: claimedRow, error: claimError } = await supabaseClient
             .from('matches')
             .update({
                 status: 'finished',
@@ -3984,33 +4006,73 @@ const GameEngine = {
                 player2_streams: Math.round(plays2),
                 finished_at: new Date().toISOString()
             })
-            .eq('id', match.id);
-        
+            .eq('id', match.id)
+            .eq('status', 'playing')
+            .select('winner, player1_final_health, player2_final_health, player1_streams, player2_streams')
+            .maybeSingle();
+
+        const wonResolutionRace = !claimError && !!claimedRow;
+
+        if (!wonResolutionRace) {
+            console.warn('[endBattle] Este dispositivo no ganó la carrera de resolución (match_type=' + match.match_type + ') -- usando el resultado oficial ya guardado en la base en vez del cálculo propio.');
+            const { data: officialMatch } = await supabaseClient
+                .from('matches')
+                .select('winner, player1_final_health, player2_final_health, player1_streams, player2_streams')
+                .eq('id', match.id)
+                .maybeSingle();
+            if (officialMatch && officialMatch.winner != null) {
+                winner = officialMatch.winner;
+                if (officialMatch.player1_final_health != null) health1 = officialMatch.player1_final_health;
+                if (officialMatch.player2_final_health != null) health2 = officialMatch.player2_final_health;
+                if (officialMatch.player1_streams != null) plays1 = officialMatch.player1_streams;
+                if (officialMatch.player2_streams != null) plays2 = officialMatch.player2_streams;
+            }
+            // Si por algún motivo ni siquiera la relectura trajo un ganador
+            // (ej. error de red), se sigue con el cálculo local como último
+            // recurso -- no debería pasar en el uso normal.
+        }
+
+        const userWon = (isPlayer1 && winner === 1) || (!isPlayer1 && winner === 2);
+        const payouts = this.calculateMatchPayouts(match.total_pot);
+
         // Reproducir canción ganadora
         const winnerSong = winner === 1 ? match.player1_song_preview : match.player2_song_preview;
         this.playVictorySong(winnerSong);
-        
+
         const { data: { session } } = await supabaseClient.auth.getSession();
 
-        // Procesar premios y sincronizar historial de batallas
+        // Procesar premios y sincronizar historial de batallas -- SOLO el
+        // dispositivo que ganó la carrera de resolución de arriba, para que
+        // esto corra exactamente una vez por batalla en vez de una vez por
+        // dispositivo.
         if (match.match_type !== 'practice') {
-            const winnerUserId = winner === 1 ? match.player1_id : match.player2_id;
-            const loserUserId = winner === 1 ? match.player2_id : match.player1_id;
-            const creditsWon = payouts.winnerPayout;
+            if (wonResolutionRace) {
+                const winnerUserId = winner === 1 ? match.player1_id : match.player2_id;
+                const loserUserId = winner === 1 ? match.player2_id : match.player1_id;
+                const creditsWon = payouts.winnerPayout;
 
-            await this.recordMatchBattleHistory(match, winner, creditsWon);
+                await this.recordMatchBattleHistory(match, winner, creditsWon);
 
-            if (loserUserId) {
-                await this.updateUserStats(loserUserId, false, 0, match.id);
+                if (loserUserId) {
+                    await this.updateUserStats(loserUserId, false, 0, match.id);
+                }
+
+                if (winnerUserId) {
+                    await this.awardCredits(creditsWon, match.id, winnerUserId);
+                }
+                // Enviar fee de apuesta (2%) al vault
+                await this.sendBetFeeToVault(payouts.platformFee, match.id);
+                this.addToPlatformRevenue(payouts.platformFee);
+                await this.logPlatformFeeTransaction(match.id, payouts.platformFee);
+            } else if (userWon) {
+                // Este dispositivo perdió la carrera pero su usuario es el
+                // ganador oficial -- el otro dispositivo ya pagó el premio,
+                // acá solo hace falta refrescar el saldo propio para verlo.
+                const walletAddress = this.connectedWallet || localStorage.getItem('mtr_wallet');
+                if (walletAddress && window.CreditsSystem) {
+                    setTimeout(() => { window.CreditsSystem.loadBalance(walletAddress); }, 1500);
+                }
             }
-
-            if (winnerUserId) {
-                await this.awardCredits(creditsWon, match.id, winnerUserId);
-            }
-            // Enviar fee de apuesta (2%) al vault
-            await this.sendBetFeeToVault(payouts.platformFee, match.id);
-            this.addToPlatformRevenue(payouts.platformFee);
-            await this.logPlatformFeeTransaction(match.id, payouts.platformFee);
         } else {
             if (userWon) {
                 // En práctica, calcular ganancias correctamente: pozo total - fee 2%
@@ -4022,7 +4084,7 @@ const GameEngine = {
                 this.updatePracticeBetDisplay();
             }
         }
-        
+
         this.finalizeBattleRhythmAnimation(winner);
 
         // Host agent en gemini-2.5-flash ahora (3.6-3.8s medido en caliente,
