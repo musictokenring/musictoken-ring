@@ -3657,6 +3657,23 @@
                     var joinInput = document.getElementById('joinRoomCode');
                     if (joinInput) joinInput.value = roomParam.toUpperCase();
                     if (typeof showToast === 'function') showToast('Sala privada detectada. Selecciona tu canción para unirte.', 'info');
+                    // Quien abre el link llegaba a la app pero quedaba "perdido"
+                    // en cualquier parte de la página -- el modo cambiaba
+                    // igual, pero nada llevaba la vista hasta ahí. Scrollear
+                    // a songSelection (con un pequeño delay: recién se está
+                    // armando el DOM del modo elegido) y resaltar el campo de
+                    // código un momento para que sea obvio que ya está listo.
+                    setTimeout(function () {
+                        var songSelectionEl = document.getElementById('songSelection');
+                        if (songSelectionEl) songSelectionEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                        var codeFieldNow = document.getElementById('joinRoomCode');
+                        if (codeFieldNow) {
+                            codeFieldNow.classList.add('ring-2', 'ring-fuchsia-400');
+                            setTimeout(function () {
+                                codeFieldNow.classList.remove('ring-2', 'ring-fuchsia-400');
+                            }, 2500);
+                        }
+                    }, 300);
                 }
                 var challengeParam = urlParams.get('challenge');
                 if (challengeParam) {

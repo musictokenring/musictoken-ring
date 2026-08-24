@@ -46,12 +46,16 @@ async function triggerHostNarration(battleId, eventType, contextText) {
     try {
         // CRITICO: el Host agent pasó de gemini-2.5-pro (13-26s medido) a
         // gemini-2.5-flash (3.6-3.8s medido en caliente) justo para que esto
-        // se sienta en vivo, no 12+ segundos tarde. 12s da margen real sobre
-        // lo medido en caliente; si la instancia está fría (primera llamada
-        // tras estar inactiva, ~20-24s), se aborta y no se muestra nada —
-        // mejor eso que forzar a toda la batalla a esperar un caso raro.
+        // se sienta en vivo. Esta llamada es fire-and-forget (nunca se
+        // espera con await desde createBattleUI), así que un timeout más
+        // largo NO bloquea nada de la batalla -- solo decide hasta cuándo
+        // vale la pena esperar antes de rendirse. Subido de 12s a 20s tras
+        // una prueba real con dos dispositivos donde un lado no mostró
+        // comentario y el otro sí: con instancia fría (~20-24s medido) 12s
+        // corta la espera casi siempre, mejor dar más margen ya que llegar
+        // un poco tarde (mid-batalla) sigue siendo mejor que no llegar nunca.
         const controller = new AbortController();
-        const timeout = setTimeout(() => controller.abort(), 12000);
+        const timeout = setTimeout(() => controller.abort(), 20000);
         const resp = await fetch(HOST_AGENT_URL + '/narrate', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -3755,11 +3759,28 @@ const GameEngine = {
         let health1 = 100;
         let health2 = 100;
         let timeLeft = this.battleDuration;
-        
-        const battleInterval = setInterval(() => {
-            timeLeft--;
-            
-            document.getElementById('battleTimer').textContent = timeLeft;
+
+        // CRÍTICO: timeLeft se calcula desde el tiempo real transcurrido
+        // (Date.now() - battleStartTime), no restando 1 en cada tick. Los
+        // navegadores frenan los setInterval en pestañas en segundo plano
+        // (Chrome los puede bajar a 1 vez por minuto, iOS puede suspenderlos
+        // del todo con la pantalla bloqueada) -- con un contador simple esa
+        // pestaña se queda "congelada" sin nunca llegar a 0 ni mostrar el
+        // resultado. Confirmado en una prueba real con dos dispositivos: el
+        // lado que quedó en segundo plano (PC, mientras se usaba el celular
+        // para el otro jugador) nunca mostró la derrota. Calculando por
+        // tiempo real, el próximo tick que sí llegue a correr se pone al día
+        // de una sola vez en vez de arrastrar el atraso indefinidamente.
+        const battleStartTime = Date.now();
+        const battleDurationSec = this.battleDuration;
+        let battleEnded = false;
+
+        const tick = () => {
+            if (battleEnded) return;
+            timeLeft = Math.max(0, battleDurationSec - Math.floor((Date.now() - battleStartTime) / 1000));
+
+            const timerEl = document.getElementById('battleTimer');
+            if (timerEl) timerEl.textContent = timeLeft;
 
             // Use real-time streams data if available, otherwise fallback to calculated
             const streamData = this.getRealTimeStreams(match.id);
@@ -3779,20 +3800,28 @@ const GameEngine = {
                 health1 = Math.max(0, Math.min(100, share1));
                 health2 = Math.max(0, Math.min(100, share2));
             }
-            
+
             this.updateBattleRhythmAnimation(timeLeft, plays1, plays2);
-            
+
             // Actualizar UI
-            document.getElementById('health1Fill').style.width = `${health1}%`;
-            document.getElementById('health2Fill').style.width = `${health2}%`;
-            document.getElementById('health1Text').textContent = `${Math.round(health1)}%`;
-            document.getElementById('health2Text').textContent = `${Math.round(health2)}%`;
-            document.getElementById('plays1').textContent = Math.round(plays1).toLocaleString('es-ES');
-            document.getElementById('plays2').textContent = Math.round(plays2).toLocaleString('es-ES');
-            
+            const health1FillEl = document.getElementById('health1Fill');
+            const health2FillEl = document.getElementById('health2Fill');
+            const health1TextEl = document.getElementById('health1Text');
+            const health2TextEl = document.getElementById('health2Text');
+            const plays1El = document.getElementById('plays1');
+            const plays2El = document.getElementById('plays2');
+            if (health1FillEl) health1FillEl.style.width = `${health1}%`;
+            if (health2FillEl) health2FillEl.style.width = `${health2}%`;
+            if (health1TextEl) health1TextEl.textContent = `${Math.round(health1)}%`;
+            if (health2TextEl) health2TextEl.textContent = `${Math.round(health2)}%`;
+            if (plays1El) plays1El.textContent = Math.round(plays1).toLocaleString('es-ES');
+            if (plays2El) plays2El.textContent = Math.round(plays2).toLocaleString('es-ES');
+
             // Fin de batalla
             if (timeLeft <= 0) {
+                battleEnded = true;
                 clearInterval(battleInterval);
+                document.removeEventListener('visibilitychange', onVisibilityChange);
                 // Use real-time streams for final determination
                 const finalStreamData = this.getRealTimeStreams(match.id);
                 if (finalStreamData) {
@@ -3803,7 +3832,18 @@ const GameEngine = {
                 }
                 this.endBattle(match, health1, health2, isPlayer1, plays1, plays2);
             }
-        }, 1000);
+        };
+
+        // Catch-up al volver a la pestaña: si el setInterval quedó frenado o
+        // suspendido en segundo plano (ver nota arriba), esto fuerza un tick
+        // inmediato apenas la pestaña vuelve a estar visible, en vez de
+        // esperar a que el intervalo retome su ritmo normal por su cuenta.
+        const onVisibilityChange = () => {
+            if (document.visibilityState === 'visible') tick();
+        };
+        document.addEventListener('visibilitychange', onVisibilityChange);
+
+        const battleInterval = setInterval(tick, 1000);
     },
     updateBattleRhythmAnimation(timeLeft, plays1, plays2) {
         const rhythmEl = document.getElementById('battleRhythm');
