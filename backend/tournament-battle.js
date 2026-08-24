@@ -392,8 +392,35 @@ class TournamentBattleEngine {
     const genreDisqualified = championGenreConfidence != null &&
       !Number.isNaN(championGenreConfidence) && championGenreConfidence < 80;
 
+    // Menos de 2 jugadores humanos reales: no hubo competencia de verdad (la
+    // CPU completó el bracket sola contra el único humano), así que no debe
+    // haber ni premio ni pérdida — se devuelve la apuesta de entrada de
+    // inmediato. Bug real encontrado: pickPayoutMode() ya marcaba
+    // 'no_payout' para este caso, pero nada devolvía la apuesta -- la
+    // plataforma se quedaba con el dinero de una inscripción que nunca tuvo
+    // rival humano real. Solo aplica con 0-1 humanos; con 2+ humanos ya hay
+    // competencia real entre personas y rige la regla normal (gana/pierde
+    // según corresponda, sin reembolso).
+    const notEnoughHumans = humanCount < 2;
+
     let prizeAwarded = 0;
-    if (genreDisqualified) {
+    if (notEnoughHumans) {
+      const entryFee = Number(tournament.entry_fee || 3);
+      const soloHumanIds = allParticipants
+        .filter(function (p) { return !isCpuParticipantRow(p); })
+        .map(function (p) { return p.user_id; })
+        .filter(Boolean);
+      await Promise.all(soloHumanIds.map((uid) =>
+        this.supabase.rpc('increment_user_credits', { user_id_param: uid, credits_to_add: entryFee })
+          .then(({ error }) => {
+            if (error) {
+              console.error('[tournament-battle] Reembolso por falta de jugadores humanos falló para', uid, error.message);
+            }
+          })
+      ));
+      console.warn('[tournament-battle] ↩️ Menos de 2 humanos reales (' + humanCount + ') -- apuesta devuelta a',
+        soloHumanIds.length, 'jugador(es)');
+    } else if (genreDisqualified) {
       const entryFee = Number(tournament.entry_fee || 3);
       const humanUserIds = allParticipants
         .filter(function (p) { return !isCpuParticipantRow(p); })
@@ -424,18 +451,22 @@ class TournamentBattleEngine {
       }
     }
 
-    const resultMessage = genreDisqualified
-      ? `⚠️ "${champion.songName}" de ${champion.songArtist} no encajaba con el género del torneo ` +
-        `(${championGenreConfidence}% de coincidencia según el curador de IA) — el campeón quedó ` +
-        `descalificado y se devolvió la apuesta de entrada a todos los jugadores.`
-      : buildResultMessage(
-          tournament.tournament_type,
-          payoutMode,
-          humanCount,
-          cpuCount,
-          champion && !champion.isCpu,
-          prizeAwarded
-        );
+    const resultMessage = notEnoughHumans
+      ? 'No hubo suficientes jugadores reales en este ' +
+        (tournament.tournament_type === 'weekly' ? 'Grand Prix' : 'Express') +
+        ' (se necesitan al menos 2) — se te devolvió tu apuesta de entrada de inmediato.'
+      : genreDisqualified
+        ? `⚠️ "${champion.songName}" de ${champion.songArtist} no encajaba con el género del torneo ` +
+          `(${championGenreConfidence}% de coincidencia según el curador de IA) — el campeón quedó ` +
+          `descalificado y se devolvió la apuesta de entrada a todos los jugadores.`
+        : buildResultMessage(
+            tournament.tournament_type,
+            payoutMode,
+            humanCount,
+            cpuCount,
+            champion && !champion.isCpu,
+            prizeAwarded
+          );
 
     const payloads = allParticipants
       .slice()
@@ -460,7 +491,8 @@ class TournamentBattleEngine {
       championName: champion?.displayName,
       championSong: champion?.songName,
       genreDisqualified,
-      championGenreConfidence
+      championGenreConfidence,
+      refundedNotEnoughHumans: notEnoughHumans
     };
 
     if (champion?.userId) {
