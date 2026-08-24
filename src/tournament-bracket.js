@@ -112,8 +112,13 @@
       closeAbandonModal();
       toast(data.message || 'Has abandonado el torneo. Perdiste tu apuesta.', 'warning');
       close({ keepEnrollment: false });
-      if (window.CreditsSystem && window.connectedAddress) {
-        window.CreditsSystem.loadBalance(window.connectedAddress);
+      // Sin wallet conectada (login por email/Google), connectedAddress es
+      // falsy -- antes eso hacía que el saldo NUNCA se refrescara solo acá,
+      // dejando el numero viejo hasta que el usuario recargaba la página a
+      // mano (reportado en vivo: tuvo que hacer F5 después de un torneo).
+      // loadBalance(null, userId) resuelve igual el saldo real por sesión.
+      if (window.CreditsSystem) {
+        window.CreditsSystem.loadBalance(window.connectedAddress || null, window.CreditsSystem.currentUserId || null);
       }
       if (typeof selectMode === 'function') selectMode('tournament');
     } catch (e) {
@@ -844,8 +849,11 @@
         }
         finishTournamentPresentation(data.bracket);
         if (champPreview) toast('🏆 Campeón: ' + champPreview, 'success');
-        if (window.CreditsSystem && window.connectedAddress) {
-          window.CreditsSystem.loadBalance(window.connectedAddress);
+        // Mismo fix que en abandonTournament(): sin wallet conectada, esto
+        // nunca refrescaba el saldo -- justo el caso que reportó el usuario
+        // (tuvo que recargar la página a mano después de un torneo).
+        if (window.CreditsSystem) {
+          window.CreditsSystem.loadBalance(window.connectedAddress || null, window.CreditsSystem.currentUserId || null);
         }
         document.getElementById('depositSectionMain')?.classList.remove('hidden');
         document.getElementById('contactSection')?.classList.remove('hidden');
