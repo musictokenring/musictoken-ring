@@ -1132,11 +1132,18 @@ const GameEngine = {
             showToast('Desafío creado. Comparte el link con tu amigo.', 'success');
             
         } catch (error) {
-            console.error('Error creating social challenge:', error);
-            showToast('Error al crear desafío', 'error');
+            // CRÍTICO: antes este catch mostraba solo "Error al crear
+            // desafío" sin ningún detalle, y como no relanza la excepción,
+            // el catch de index.html (que sí arma un mensaje con
+            // error.message) nunca llega a ejecutarse -- un usuario real
+            // reportó justo este mensaje genérico sin forma de saber la
+            // causa real ni yo de diagnosticarla a distancia. Ahora se
+            // incluye el detalle real del error en el toast.
+            console.error('[createSocialChallenge] Error creando desafío social:', error);
+            showToast('Error al crear desafío: ' + (error?.message || 'error desconocido'), 'error');
         }
     },
-    
+
     generateChallengeId() {
         const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
         let id = '';
