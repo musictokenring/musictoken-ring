@@ -44,6 +44,20 @@ function showToast(message, type = 'info', duration = 3000) {
     const container = document.getElementById('toastContainer');
     if (!container) return;
 
+    // CRÍTICO: el contenedor usaba un top fijo (top-20, 80px) que no
+    // alcanzaba cuando el header crece (mobile con nombre de usuario largo,
+    // 2 líneas -- ver fix de header mobile de esta misma sesión). Medido en
+    // vivo: header a 94px de alto en mobile, toast arrancando a 80px -- 14px
+    // de superposición real, tapando el inicio del mensaje. Se veía como si
+    // el aviso "desapareciera rapidísimo" cuando en realidad nacía tapado.
+    // Recalcular contra la altura REAL del header en cada toast, no un
+    // número fijo, cubre cualquier alto (1 o 2 líneas, mobile o desktop).
+    const headerEl = document.querySelector('header');
+    if (headerEl) {
+        const headerBottom = headerEl.getBoundingClientRect().bottom;
+        container.style.top = Math.max(16, headerBottom + 8) + 'px';
+    }
+
     const toast = document.createElement('div');
     toast.className = `toast toast-${type}`;
     toast.textContent = message;
