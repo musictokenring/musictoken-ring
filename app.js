@@ -33,22 +33,38 @@
 // TOAST NOTIFICATION SYSTEM
 // =========================================
 
-function showToast(message, type = 'info') {
+// duration opcional: la mayoría de los toasts son avisos cortos y 3s
+// (el default de siempre) alcanza de sobra. Pero para mensajes largos que
+// el usuario realmente necesita leer con calma -- como el motivo del
+// curador de género al rechazar una canción -- 3s no alcanza ni para
+// terminar de leer la primera oración (reportado en vivo: "se desvaneció
+// al instante"). Los llamados existentes sin este 3er argumento siguen
+// exactamente igual que antes.
+function showToast(message, type = 'info', duration = 3000) {
     const container = document.getElementById('toastContainer');
     if (!container) return;
-    
+
     const toast = document.createElement('div');
     toast.className = `toast toast-${type}`;
     toast.textContent = message;
-    
+    // Click para cerrar antes de tiempo -- útil sobre todo en los toasts
+    // largos con duration extendida, para no obligar a esperar los 12s
+    // completos si ya se terminó de leer.
+    toast.style.cursor = 'pointer';
+    toast.title = 'Clic para cerrar';
+    toast.addEventListener('click', () => {
+        toast.classList.remove('show');
+        setTimeout(() => toast.remove(), 300);
+    });
+
     container.appendChild(toast);
-    
+
     setTimeout(() => toast.classList.add('show'), 10);
-    
+
     setTimeout(() => {
         toast.classList.remove('show');
         setTimeout(() => toast.remove(), 300);
-    }, 3000);
+    }, duration);
 }
 
 // =========================================

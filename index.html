@@ -4943,10 +4943,15 @@
             var result = await requestGenreCurationClient(song.artist, song.name, enrollment.genreLabel);
 
             if (result.verdict === 'block') {
+                // duration larga (12s) + el toast ahora se puede cerrar con
+                // un clic -- reportado en vivo que el mensaje (largo, con la
+                // razón completa del curador) se desvanecía en 3s, muy rápido
+                // para leerlo con calma.
                 showToast(
                     `🚫 "${song.name}" de ${song.artist} no encaja con el género "${enrollment.genreLabel}" ` +
                     `(${result.confidence}% de coincidencia): ${result.reason} — elegí otra canción.`,
-                    'error'
+                    'error',
+                    12000
                 );
                 return false;
             }
