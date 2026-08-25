@@ -612,10 +612,37 @@ async function updateAuthUI(session) {
         if (typeof showModeSelector === 'function') {
             showModeSelector();
         }
-        
+
         // Inicializar GameEngine si existe
         if (typeof GameEngine !== 'undefined') {
             GameEngine.init();
+        }
+
+        // Pedido real del usuario: si dejó un Desafío Social creado
+        // esperando respuesta y volvió a entrar (se desloguea, pierde
+        // conexión, cierra sin querer), avisarle acá mismo al loguearse en
+        // vez de que tenga que acordarse de ir a Desafío Social por su
+        // cuenta a buscarlo. Solo una vez por carga de página (auth puede
+        // re-disparar este mismo flujo varias veces, ej. refresh de token).
+        if (!window.__pendingChallengesNudgeShown) {
+            window.__pendingChallengesNudgeShown = true;
+            setTimeout(async () => {
+                try {
+                    if (typeof GameEngine !== 'undefined' && typeof GameEngine.loadMyPendingChallenges === 'function') {
+                        const pending = await GameEngine.loadMyPendingChallenges();
+                        if (pending && pending.length > 0 && typeof showToast === 'function') {
+                            const label = pending.length === 1 ? 'desafío' : 'desafíos';
+                            showToast(
+                                `⏳ Tenés ${pending.length} ${label} social${pending.length === 1 ? '' : 'es'} esperando que alguien lo acepte. Entrá a "Desafío Social" para ver el link o cancelarlo.`,
+                                'info',
+                                10000
+                            );
+                        }
+                    }
+                } catch (e) {
+                    console.warn('[updateAuthUI] No se pudo chequear desafíos pendientes:', e);
+                }
+            }, 1500);
         }
     } else {
         // Usuario NO logueado - mostrar mensaje de autenticación requerida

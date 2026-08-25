@@ -1722,7 +1722,36 @@ const GameEngine = {
             showToast('Error al cancelar desafío', 'error');
         }
     },
-    
+
+    // Desafíos que YO creé y siguen esperando que alguien los acepte.
+    // Pedido real del usuario: antes, si creabas un desafío y salías de la
+    // app (se desloguea, pierde conexión, cierra sin querer), al volver no
+    // había ningún rastro -- la única forma de verlo era la pantalla que
+    // aparecía una sola vez justo al crearlo. Esto los vuelve a traer desde
+    // la base, no dependen de estado local que se pierde con la sesión.
+    async loadMyPendingChallenges() {
+        try {
+            const { data: { session } } = await supabaseClient.auth.getSession();
+            if (!session) return [];
+
+            const { data, error } = await supabaseClient
+                .from('social_challenges')
+                .select('*')
+                .eq('challenger_id', session.user.id)
+                .eq('status', 'pending')
+                .order('created_at', { ascending: false });
+
+            if (error) {
+                console.warn('[loadMyPendingChallenges]', error.message);
+                return [];
+            }
+            return data || [];
+        } catch (e) {
+            console.warn('[loadMyPendingChallenges]', e && e.message);
+            return [];
+        }
+    },
+
     // MODO SALA PRIVADA (Private Room)
     // ==========================================
     

@@ -1826,6 +1826,12 @@
                     <p class="text-gray-400 text-sm" id="socialChallengeSubtitle">Elige tu canción y realiza tu apuesta</p>
                 </div>
             </div>
+            <!-- Desafíos sociales pendientes del usuario -- pedido explícito:
+                 si creás un desafío y salís de la app (se desloguea, pierde
+                 conexión, cierra sin querer), al volver antes se perdía todo
+                 rastro de que ese desafío existía. Ahora se re-lista solo al
+                 entrar a Desafío Social (ver loadMyPendingChallenges()). -->
+            <div id="myPendingChallenges" class="mb-6 hidden"></div>
             <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
                 <div class="p-6 rounded-2xl border border-white/5 bg-white/[0.02]">
                     <h3 class="text-lg font-bold text-white mb-4">🎵 Busca tu Canción</h3>
@@ -4510,6 +4516,63 @@
                 '<p class="text-[11px] text-gray-500 mt-1">Si elegís un género, la IA verifica que tu canción (y la de quien acepte) encaje antes de arrancar.</p>' +
                 '</div>';
         }
+        // Re-lista los desafíos sociales que el usuario ya creó y siguen
+        // pendientes de que alguien los acepte -- se llama cada vez que se
+        // entra a Desafío Social a crear uno nuevo, así nunca dependen de
+        // estado local que se pierde si se cierra la app entre medio.
+        async function renderMyPendingChallenges() {
+            var container = document.getElementById('myPendingChallenges');
+            if (!container) return;
+            if (typeof window.GameEngine === 'undefined' || typeof window.GameEngine.loadMyPendingChallenges !== 'function') return;
+
+            var challenges = await window.GameEngine.loadMyPendingChallenges();
+            if (!challenges || !challenges.length) {
+                container.innerHTML = '';
+                container.classList.add('hidden');
+                return;
+            }
+
+            var cardsHtml = challenges.map(function (c) {
+                var link = window.location.origin + window.location.pathname + '?challenge=' + c.challenge_id;
+                var genreBadge = c.genre_label
+                    ? '<span class="text-[11px] px-2 py-0.5 rounded-full bg-purple-500/15 border border-purple-500/30 text-purple-300">' + c.genre_label + '</span>'
+                    : '';
+                var created = c.created_at ? new Date(c.created_at).toLocaleDateString('es-CO', { day: '2-digit', month: 'short' }) : '';
+                return '<div class="flex items-center gap-3 p-3 rounded-xl bg-black/30 border border-white/10">' +
+                    '<img src="' + (c.challenger_song_image || '') + '" class="w-12 h-12 rounded-lg object-cover flex-shrink-0" alt="">' +
+                    '<div class="flex-1 min-w-0">' +
+                    '<p class="text-white text-sm font-semibold truncate">' + (c.challenger_song_name || 'Sin título') + '</p>' +
+                    '<p class="text-gray-400 text-xs truncate">' + (c.challenger_song_artist || '') + ' · ' + Number(c.bet_amount) + ' créditos · ' + created + '</p>' +
+                    (genreBadge ? '<div class="mt-1">' + genreBadge + '</div>' : '') +
+                    '</div>' +
+                    '<div class="flex flex-col gap-1.5 flex-shrink-0">' +
+                    '<button type="button" onclick="copyPendingChallengeLink(\'' + link + '\')" class="px-3 py-1.5 rounded-lg text-xs font-medium bg-cyan-500/15 border border-cyan-500/30 text-cyan-300 hover:bg-cyan-500/25 transition cursor-pointer">📋 Copiar link</button>' +
+                    '<button type="button" onclick="if(typeof GameEngine!==\'undefined\')GameEngine.cancelSocialChallenge(\'' + c.challenge_id + '\').then(renderMyPendingChallenges)" class="px-3 py-1.5 rounded-lg text-xs font-medium bg-red-500/10 border border-red-500/30 text-red-300 hover:bg-red-500/20 transition cursor-pointer">Cancelar</button>' +
+                    '</div>' +
+                    '</div>';
+            }).join('');
+
+            container.innerHTML = '<div class="p-4 rounded-2xl border border-orange-500/20 bg-orange-500/5">' +
+                '<h3 class="text-sm font-bold text-orange-300 mb-3">⏳ Tus desafíos esperando respuesta (' + challenges.length + ')</h3>' +
+                '<div class="space-y-2">' + cardsHtml + '</div>' +
+                '</div>';
+            container.classList.remove('hidden');
+        }
+        window.renderMyPendingChallenges = renderMyPendingChallenges;
+
+        function copyPendingChallengeLink(link) {
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(link).then(function () {
+                    showToast('Link copiado. Compartilo con tu amigo.', 'success');
+                }).catch(function () {
+                    showToast('No se pudo copiar automáticamente: ' + link, 'info', 8000);
+                });
+            } else {
+                showToast('No se pudo copiar automáticamente: ' + link, 'info', 8000);
+            }
+        }
+        window.copyPendingChallengeLink = copyPendingChallengeLink;
+
         function avatarPickerHtml() {
             return '<div class="mb-3"><p class="text-xs text-gray-400 mb-1.5">Elegí tu avatar</p><div class="flex flex-wrap gap-1.5">' +
                 MTR_AVATARS.map(function (a) {
@@ -4620,7 +4683,18 @@
                 var isAcceptingChallenge = window.pendingChallengeId && window.pendingChallengeId !== null;
                 var challengeBetAmount = window.pendingChallengeBetAmount || null;
                 var challengeInfo = window.pendingChallengeInfo || null;
-                
+
+                // Si NO estamos aceptando un desafío ajeno (o sea, venimos a
+                // crear uno propio), mostrar los desafíos que YO ya creé y
+                // siguen esperando respuesta -- para no perderlos de vista si
+                // se sale de la app entre medio.
+                if (!isAcceptingChallenge && typeof renderMyPendingChallenges === 'function') {
+                    renderMyPendingChallenges();
+                } else {
+                    var pendingContainer = document.getElementById('myPendingChallenges');
+                    if (pendingContainer) pendingContainer.classList.add('hidden');
+                }
+
                 console.log('[updateActionButtons] 🔍 Verificando desafío pendiente:', {
                     isAcceptingChallenge: isAcceptingChallenge,
                     pendingChallengeId: window.pendingChallengeId,
