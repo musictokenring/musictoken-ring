@@ -6552,7 +6552,47 @@ const GameEngine = {
             }
                 // If CreditsSystem not available, fall through to legacy system
             }
-            
+
+            // CRÍTICO: bug real encontrado en vivo (cancelar un desafío
+            // social/sala privada tiraba "No se pudo reembolsar el crédito")
+            // -- el gate de arriba solo maneja type==='bet', así que TODO
+            // reembolso (cancelSocialChallenge, leavePrivateRoom, y
+            // cualquier rollback interno si algo falla a mitad de camino)
+            // caía derecho al RPC legacy de más abajo (update_user_balance),
+            // que está roto sin remedio -- dos versiones ambiguas cargadas
+            // en la base, confirmado con curl directo (PGRST203), falla el
+            // 100% de las veces. Usa el mismo RPC ya probado y funcionando
+            // en awardCredits() / tournament-battle.js para pagos y
+            // devoluciones -- increment_user_credits -- en vez del legacy.
+            if (type === 'refund') {
+                const walletAddress = this.connectedWallet || localStorage.getItem('mtr_wallet');
+                let userId = session?.user?.id || null;
+                if (!userId && walletAddress && window.CreditsSystem) {
+                    userId = await window.CreditsSystem.getUserId(walletAddress);
+                }
+                if (!userId) {
+                    console.error('[updateBalance] ❌ No se pudo resolver userId para reembolsar');
+                    return false;
+                }
+
+                const refundCredits = Math.abs(Number(amount) || 0);
+                const { error: refundError } = await supabaseClient.rpc('increment_user_credits', {
+                    user_id_param: userId,
+                    credits_to_add: refundCredits
+                });
+
+                if (refundError) {
+                    console.error('[updateBalance] ❌ Error al reembolsar vía increment_user_credits:', refundError);
+                    return false;
+                }
+
+                console.log('[updateBalance] ✅ Reembolso aplicado vía increment_user_credits:', refundCredits);
+                if (window.CreditsSystem) {
+                    await window.CreditsSystem.loadBalance(walletAddress || null, userId);
+                }
+                return true;
+            }
+
             // Legacy balance system (for practice mode and compatibility)
             const { data } = await supabaseClient
                 .rpc('update_user_balance', {
