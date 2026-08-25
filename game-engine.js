@@ -1311,14 +1311,18 @@ const GameEngine = {
                 </div>
             </div>
             
-            <div class="text-center">
-                <button type="button" onclick="cancelSocialChallenge('${challenge.challenge_id}')" 
+            <div class="flex items-center justify-center gap-3">
+                <button type="button" onclick="document.getElementById('socialChallengeShare')?.classList.add('hidden'); if (typeof selectMode === 'function') selectMode('social');"
                         class="px-6 py-2 rounded-lg text-sm font-medium bg-white/5 border border-white/10 text-gray-300 hover:text-white transition cursor-pointer">
+                    ← Volver
+                </button>
+                <button type="button" onclick="cancelSocialChallenge('${challenge.challenge_id}')"
+                        class="px-6 py-2 rounded-lg text-sm font-medium bg-red-500/10 border border-red-500/30 text-red-300 hover:bg-red-500/20 transition cursor-pointer">
                     Cancelar Desafío
                 </button>
             </div>
         `;
-        
+
         shareContainer.classList.remove('hidden');
     },
     
