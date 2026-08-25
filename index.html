@@ -1019,14 +1019,18 @@
                 <p class="text-xs text-gray-400 mb-3">¿Primera vez? Elegí <strong class="text-white">Tarjeta</strong> o <strong class="text-white">Pesos (COP)</strong> — no necesitás tener criptomonedas ni wallet.</p>
                 <div class="grid gap-3 sm:grid-cols-3">
                     <button type="button" onclick="openNowPaymentsModal('fiat')" class="deposit-flow-btn group relative overflow-hidden rounded-xl border-2 border-fuchsia-400/60 bg-gradient-to-br from-fuchsia-950/50 to-gray-900/80 px-4 py-4 text-left transition hover:border-fuchsia-400/80 hover:shadow-lg hover:shadow-fuchsia-500/10">
-                        <span class="absolute top-2 right-2 text-[9px] font-bold uppercase tracking-wide text-fuchsia-300 bg-fuchsia-500/15 border border-fuchsia-500/30 rounded-full px-2 py-0.5">Recomendado</span>
-                        <span class="block text-xs font-medium text-fuchsia-300/90 mb-1">Tarjeta / fiat</span>
+                        <div class="flex items-center justify-between gap-2 mb-1">
+                            <span class="text-xs font-medium text-fuchsia-300/90">Tarjeta / fiat</span>
+                            <span class="flex-shrink-0 text-[9px] font-bold uppercase tracking-wide text-fuchsia-300 bg-fuchsia-500/15 border border-fuchsia-500/30 rounded-full px-2 py-0.5">Recomendado</span>
+                        </div>
                         <span class="block text-base font-bold text-white">Comprar con Tarjeta</span>
                         <span class="mt-2 block text-[11px] text-gray-500">Pagás con tu tarjeta de crédito/débito. No necesitás wallet.</span>
                     </button>
                     <button type="button" onclick="openMercadoPagoModal()" class="deposit-flow-btn group relative overflow-hidden rounded-xl border-2 border-yellow-400/60 bg-gradient-to-br from-yellow-950/40 to-gray-900/80 px-4 py-4 text-left transition hover:border-yellow-400/80 hover:shadow-lg hover:shadow-yellow-500/10">
-                        <span class="absolute top-2 right-2 text-[9px] font-bold uppercase tracking-wide text-yellow-300 bg-yellow-500/15 border border-yellow-500/30 rounded-full px-2 py-0.5">Recomendado</span>
-                        <span class="block text-xs font-medium text-yellow-300/90 mb-1">🇨🇴 Colombia · Mercado Pago</span>
+                        <div class="flex items-center justify-between gap-2 mb-1">
+                            <span class="text-xs font-medium text-yellow-300/90">🇨🇴 Colombia · Mercado Pago</span>
+                            <span class="flex-shrink-0 text-[9px] font-bold uppercase tracking-wide text-yellow-300 bg-yellow-500/15 border border-yellow-500/30 rounded-full px-2 py-0.5">Recomendado</span>
+                        </div>
                         <span class="block text-base font-bold text-white">Pagar en pesos (COP)</span>
                         <span class="mt-2 block text-[11px] text-gray-400">PSE · Nequi · Bancolombia · Visa · Mastercard. No necesitás wallet.</span>
                     </button>
