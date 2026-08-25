@@ -139,6 +139,16 @@ function togglePreview(url, button) {
         } else {
             currentAudio.pause();
             button.textContent = '▶ Preview';
+            // Bug real reportado en vivo ("suena doble", "pause no
+            // detiene"): holdBattleAudioSession() deja una segunda pista
+            // sonando de fondo en volumen casi nulo (para desbloquear el
+            // autoplay antes de la batalla real) que este botón nunca
+            // pausaba -- quedaba sonando por debajo, mezclándose con la
+            // próxima vista previa. pauseBattleAudioSession() la pausa sin
+            // deshacer el desbloqueo ya logrado.
+            if (window.GameEngine && typeof window.GameEngine.pauseBattleAudioSession === 'function') {
+                window.GameEngine.pauseBattleAudioSession();
+            }
         }
     } else {
         // Stop previous audio
@@ -148,7 +158,7 @@ function togglePreview(url, button) {
                 btn.textContent = '▶ Preview';
             });
         }
-        
+
         // Play new audio
         currentAudio = new Audio(url);
         currentAudio.play();
@@ -160,9 +170,12 @@ function togglePreview(url, button) {
             }
         }
         button.textContent = '⏸ Pause';
-        
+
         currentAudio.onended = () => {
             button.textContent = '▶ Preview';
+            if (window.GameEngine && typeof window.GameEngine.pauseBattleAudioSession === 'function') {
+                window.GameEngine.pauseBattleAudioSession();
+            }
         };
     }
 }
@@ -175,6 +188,9 @@ function stopAllPreviews() {
     document.querySelectorAll('.btn-preview').forEach(btn => {
         btn.textContent = '▶ Preview';
     });
+    if (window.GameEngine && typeof window.GameEngine.pauseBattleAudioSession === 'function') {
+        window.GameEngine.pauseBattleAudioSession();
+    }
 }
 
 // =========================================

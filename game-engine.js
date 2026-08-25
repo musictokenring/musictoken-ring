@@ -4841,6 +4841,22 @@ const GameEngine = {
         this._audioSessionHeld = false;
     },
 
+    // Distinto de releaseBattleAudioSession() (que SUBE el volumen a 1 para
+    // la batalla real) -- esto pausa la sesión "en espera" que
+    // holdBattleAudioSession() deja sonando de fondo en volumen casi nulo
+    // (0.002) para desbloquear el autoplay del navegador antes de tiempo.
+    // Bug real reportado en vivo: el botón Preview del buscador nunca
+    // pausaba esto -- quedaba sonando de fondo aunque el usuario le diera
+    // Pause a la vista previa, mezclándose con la siguiente canción que
+    // reproducía ("suena doble", "pause no detiene"). Pausar acá NO
+    // deshace el desbloqueo de autoplay ya logrado (eso se recuerda aparte
+    // en _battleAudioUnlocked, no depende de que el audio siga sonando).
+    pauseBattleAudioSession() {
+        if (this._userAudioEl && !this._userAudioEl.paused) {
+            this._userAudioEl.pause();
+        }
+    },
+
     primeBattleAudio(url) {
         if (!url) return;
         this._lastPreviewUrl = url;
