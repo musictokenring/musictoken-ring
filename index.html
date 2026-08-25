@@ -924,7 +924,7 @@
         <!-- LOGIN WALL - Onboarding Mejorado con Wallet Opcional -->
         <section id="loginWall" class="mb-16">
             <div class="max-w-3xl mx-auto text-center py-16 px-8 rounded-2xl border border-white/5 bg-white/[0.02]">
-                <div class="text-6xl mb-6">🥊</div>
+                <div class="flex justify-center mb-6"><span data-mtr-icon="swords" data-mtr-color="cyan" data-mtr-badge-size="88" data-mtr-size="44"></span></div>
                 <h1 class="text-3xl sm:text-4xl font-extrabold text-white mb-4">Bienvenido a <span class="text-cyan-400 neon-text-cyan">MusicToken Ring</span></h1>
                 <p class="text-gray-400 text-lg mb-8 max-w-md mx-auto">
                     Batalla con tus canciones favoritas, apuesta créditos y demuestra quién tiene mejor gusto musical.
@@ -932,7 +932,7 @@
                 
                 <!-- Detección móvil: Mostrar recomendación si es móvil -->
                 <div id="mobileRecommendation" class="hidden mb-6 p-4 rounded-xl bg-blue-500/10 border border-blue-500/30 text-blue-300 text-sm">
-                    <p class="font-semibold mb-1">📱 Modo Sin Wallet Recomendado</p>
+                    <p class="font-semibold mb-1"><span data-mtr-icon="mobile" data-mtr-color="cyan" data-mtr-inline></span>Modo Sin Wallet Recomendado</p>
                     <p class="text-xs">Para evitar problemas de conexión en móvil, te recomendamos usar Email/Google. Puedes conectar tu wallet después.</p>
                 </div>
                 
@@ -940,14 +940,14 @@
                 <div class="flex flex-col sm:flex-row gap-4 justify-center mb-8">
                     <!-- Botón: Conectar Wallet -->
                     <button type="button" id="connectWalletOnboardingBtn" class="px-8 py-3 rounded-xl text-lg font-bold bg-gradient-to-r from-cyan-500 to-blue-500 text-white hover:opacity-90 transition-all duration-200 shadow-lg shadow-cyan-500/25 cursor-pointer flex items-center justify-center gap-2">
-                        <span>🔗</span>
+                        <span data-mtr-icon="link" data-mtr-plain data-mtr-size="20"></span>
                         <span>Conectar Wallet</span>
                         <span class="text-sm opacity-75">(Crypto instantáneo)</span>
                 </button>
                     
                     <!-- Botón: Entrar con Email/Google -->
                     <button type="button" id="emailSignupOnboardingBtn" onclick="if(typeof openAuthModal === 'function') { openAuthModal(); } else if(typeof window.openAuthModal === 'function') { window.openAuthModal(); } else { console.error('openAuthModal no disponible'); }" class="px-8 py-3 rounded-xl text-lg font-bold bg-gradient-to-r from-fuchsia-500 to-pink-500 text-white hover:opacity-90 transition-all duration-200 shadow-lg shadow-fuchsia-500/25 cursor-pointer flex items-center justify-center gap-2">
-                        <span>📧</span>
+                        <span data-mtr-icon="mail" data-mtr-plain data-mtr-size="20"></span>
                         <span>Entrar con Email/Google</span>
                         <span class="text-sm opacity-75">(Sin wallet)</span>
                     </button>
@@ -956,22 +956,22 @@
                 <!-- Preview de Contenido (siempre visible, incluso sin login) -->
                 <div class="grid grid-cols-2 sm:grid-cols-4 gap-4 mt-12">
                     <div class="flex flex-col items-center gap-2 p-4 rounded-xl bg-white/[0.03] border border-white/5 hover:border-cyan-500/30 transition">
-                        <span class="text-2xl">⚔️</span>
+                        <span data-mtr-icon="bolt" data-mtr-color="cyan" data-mtr-badge-size="40" data-mtr-size="20"></span>
                         <span class="text-sm text-gray-300 font-medium">Modo Rápido</span>
                         <span class="text-xs text-gray-500">Apuestas rápidas</span>
                     </div>
                     <div class="flex flex-col items-center gap-2 p-4 rounded-xl bg-white/[0.03] border border-white/5 hover:border-cyan-500/30 transition">
-                        <span class="text-2xl">🎵</span>
+                        <span data-mtr-icon="lock" data-mtr-color="magenta" data-mtr-badge-size="40" data-mtr-size="20"></span>
                         <span class="text-sm text-gray-300 font-medium">Salas Privadas</span>
                         <span class="text-xs text-gray-500">Juega con amigos</span>
                     </div>
                     <div class="flex flex-col items-center gap-2 p-4 rounded-xl bg-white/[0.03] border border-white/5 hover:border-cyan-500/30 transition">
-                        <span class="text-2xl">🏆</span>
+                        <span data-mtr-icon="trophy" data-mtr-color="purple" data-mtr-badge-size="40" data-mtr-size="20"></span>
                         <span class="text-sm text-gray-300 font-medium">Torneos</span>
                         <span class="text-xs text-gray-500">Competencias</span>
                     </div>
                     <div class="flex flex-col items-center gap-2 p-4 rounded-xl bg-white/[0.03] border border-white/5 hover:border-cyan-500/30 transition">
-                        <span class="text-2xl">🎯</span>
+                        <span data-mtr-icon="target" data-mtr-color="cyan" data-mtr-badge-size="40" data-mtr-size="20"></span>
                         <span class="text-sm text-gray-300 font-medium">Práctica</span>
                         <span class="text-xs text-gray-500">Sin apuestas</span>
                     </div>
@@ -1723,56 +1723,56 @@
             <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
 
                 <div class="group p-6 rounded-2xl border border-cyan-500/40 bg-gray-900/50 transition-all duration-300 card-glow neon-border-cyan cursor-pointer" onclick="selectMode('quick')">
-                    <div class="text-4xl mb-4">⚔️</div>
+                    <div class="mb-4"><span data-mtr-icon="bolt" data-mtr-color="cyan"></span></div>
                     <h3 class="text-lg font-bold text-white mb-2 group-hover:text-cyan-400 transition-colors">Modo Rápido</h3>
                     <p class="text-gray-400 text-sm mb-4">Matchmaking automático. Encuentra rival en segundos.</p>
                     <div class="flex flex-wrap gap-1.5 mb-5">
-                        <span class="text-xs px-2 py-1 rounded-full bg-cyan-500/10 text-cyan-400 border border-cyan-500/20">🎯 Auto-match</span>
+                        <span class="text-xs px-2 py-1 rounded-full bg-cyan-500/10 text-cyan-400 border border-cyan-500/20"><span data-mtr-icon="target" data-mtr-color="cyan" data-mtr-inline data-mtr-size="13" style="margin-right:4px"></span>Auto-match</span>
                         <span class="text-xs px-2 py-1 rounded-full bg-cyan-500/10 text-cyan-400 border border-cyan-500/20">⏱️ 1 min</span>
                     </div>
                     <button type="button" class="w-full py-2.5 rounded-lg text-sm font-bold bg-cyan-500/15 border border-cyan-500/30 text-cyan-400 hover:bg-cyan-500/25 transition-all cursor-pointer" onclick="selectMode('quick')">Jugar Ahora</button>
                 </div>
 
                 <div class="group p-6 rounded-2xl border border-fuchsia-500/40 bg-gray-900/50 transition-all duration-300 card-glow-magenta neon-border-magenta cursor-pointer" onclick="selectMode('private')">
-                    <div class="text-4xl mb-4">🎵</div>
+                    <div class="mb-4"><span data-mtr-icon="lock" data-mtr-color="magenta"></span></div>
                     <h3 class="text-lg font-bold text-white mb-2 group-hover:text-fuchsia-400 transition-colors">Sala Privada</h3>
                     <p class="text-gray-400 text-sm mb-4">Invita a tus amigos. Personaliza reglas y apuestas.</p>
                     <div class="flex flex-wrap gap-1.5 mb-5">
-                        <span class="text-xs px-2 py-1 rounded-full bg-fuchsia-500/10 text-fuchsia-400 border border-fuchsia-500/20">👥 Amigos</span>
-                        <span class="text-xs px-2 py-1 rounded-full bg-fuchsia-500/10 text-fuchsia-400 border border-fuchsia-500/20">🔗 Código</span>
+                        <span class="text-xs px-2 py-1 rounded-full bg-fuchsia-500/10 text-fuchsia-400 border border-fuchsia-500/20"><span data-mtr-icon="users" data-mtr-color="magenta" data-mtr-inline data-mtr-size="13" style="margin-right:4px"></span>Amigos</span>
+                        <span class="text-xs px-2 py-1 rounded-full bg-fuchsia-500/10 text-fuchsia-400 border border-fuchsia-500/20"><span data-mtr-icon="link" data-mtr-color="magenta" data-mtr-inline data-mtr-size="13" style="margin-right:4px"></span>Código</span>
                     </div>
                     <button type="button" class="w-full py-2.5 rounded-lg text-sm font-bold bg-fuchsia-500/15 border border-fuchsia-500/30 text-fuchsia-400 hover:bg-fuchsia-500/25 transition-all cursor-pointer" onclick="selectMode('private')">Crear Sala</button>
                 </div>
 
                 <div class="group p-6 rounded-2xl border border-orange-500/40 bg-gray-900/50 transition-all duration-300 card-glow-orange neon-border-orange cursor-pointer" onclick="selectMode('social')">
-                    <div class="text-4xl mb-4">⚔️</div>
+                    <div class="mb-4"><span data-mtr-icon="swords" data-mtr-color="orange"></span></div>
                     <h3 class="text-lg font-bold text-white mb-2 group-hover:text-orange-400 transition-colors">Desafío Social</h3>
                     <p class="text-gray-400 text-sm mb-4">Desafía a un amigo por redes sociales. Mínimo 1 crédito (~$1).</p>
                     <div class="flex flex-wrap gap-1.5 mb-5">
-                        <span class="text-xs px-2 py-1 rounded-full bg-orange-500/10 text-orange-400 border border-orange-500/20">📱 Redes</span>
-                        <span class="text-xs px-2 py-1 rounded-full bg-orange-500/10 text-orange-400 border border-orange-500/20">💯 100+</span>
+                        <span class="text-xs px-2 py-1 rounded-full bg-orange-500/10 text-orange-400 border border-orange-500/20"><span data-mtr-icon="mobile" data-mtr-color="orange" data-mtr-inline data-mtr-size="13" style="margin-right:4px"></span>Redes</span>
+                        <span class="text-xs px-2 py-1 rounded-full bg-orange-500/10 text-orange-400 border border-orange-500/20"><span data-mtr-icon="chart" data-mtr-color="orange" data-mtr-inline data-mtr-size="13" style="margin-right:4px"></span>100+</span>
                     </div>
                     <button type="button" class="w-full py-2.5 rounded-lg text-sm font-bold bg-orange-500/15 border border-orange-500/30 text-orange-400 hover:bg-orange-500/25 transition-all cursor-pointer" onclick="selectMode('social')">Desafiar</button>
                 </div>
 
                 <div class="group p-6 rounded-2xl border border-purple-500/40 bg-gray-900/50 transition-all duration-300 card-glow-purple neon-border-purple cursor-pointer" onclick="selectMode('tournament')">
-                    <div class="text-4xl mb-4">🏆</div>
+                    <div class="mb-4"><span data-mtr-icon="trophy" data-mtr-color="purple"></span></div>
                     <h3 class="text-lg font-bold text-white mb-2 group-hover:text-purple-400 transition-colors">Torneo</h3>
                     <p class="text-gray-400 text-sm mb-4">Express cada 10 min por género. Grand Prix semanal con premio gordo.</p>
                     <div class="flex flex-wrap gap-1.5 mb-5">
-                        <span class="text-xs px-2 py-1 rounded-full bg-purple-500/10 text-purple-400 border border-purple-500/20">💎 Premios</span>
-                        <span class="text-xs px-2 py-1 rounded-full bg-purple-500/10 text-purple-400 border border-purple-500/20">🏅 Ranking</span>
+                        <span class="text-xs px-2 py-1 rounded-full bg-purple-500/10 text-purple-400 border border-purple-500/20"><span data-mtr-icon="diamond" data-mtr-color="purple" data-mtr-inline data-mtr-size="13" style="margin-right:4px"></span>Premios</span>
+                        <span class="text-xs px-2 py-1 rounded-full bg-purple-500/10 text-purple-400 border border-purple-500/20"><span data-mtr-icon="medal" data-mtr-color="purple" data-mtr-inline data-mtr-size="13" style="margin-right:4px"></span>Ranking</span>
                     </div>
                     <button type="button" class="w-full py-2.5 rounded-lg text-sm font-bold bg-purple-500/15 border border-purple-500/30 text-purple-400 hover:bg-purple-500/25 transition-all cursor-pointer" onclick="selectMode('tournament')">Unirse al Torneo</button>
                 </div>
 
                 <div class="group p-6 rounded-2xl border border-cyan-500/40 bg-gray-900/50 transition-all duration-300 card-glow neon-border-cyan cursor-pointer" onclick="selectMode('practice')">
-                    <div class="text-4xl mb-4">🎯</div>
+                    <div class="mb-4"><span data-mtr-icon="target" data-mtr-color="cyan"></span></div>
                     <h3 class="text-lg font-bold text-white mb-2 group-hover:text-cyan-400 transition-colors">Modo Práctica</h3>
                     <p class="text-gray-400 text-sm mb-4">Sin riesgo contra la CPU. Perfecto para empezar.</p>
                     <div class="flex flex-wrap gap-1.5 mb-5">
-                        <span class="text-xs px-2 py-1 rounded-full bg-cyan-500/10 text-cyan-400 border border-cyan-500/20">🎮 Sin riesgo</span>
-                        <span class="text-xs px-2 py-1 rounded-full bg-cyan-500/10 text-cyan-400 border border-cyan-500/20">📚 Aprende</span>
+                        <span class="text-xs px-2 py-1 rounded-full bg-cyan-500/10 text-cyan-400 border border-cyan-500/20"><span data-mtr-icon="gamepad" data-mtr-color="cyan" data-mtr-inline data-mtr-size="13" style="margin-right:4px"></span>Sin riesgo</span>
+                        <span class="text-xs px-2 py-1 rounded-full bg-cyan-500/10 text-cyan-400 border border-cyan-500/20"><span data-mtr-icon="book" data-mtr-color="cyan" data-mtr-inline data-mtr-size="13" style="margin-right:4px"></span>Aprende</span>
                     </div>
                     <button type="button" class="w-full py-2.5 rounded-lg text-sm font-bold bg-cyan-500/15 border border-cyan-500/30 text-cyan-400 hover:bg-cyan-500/25 transition-all cursor-pointer" onclick="selectMode('practice')">Practicar</button>
                 </div>
@@ -1784,9 +1784,9 @@
         <section id="tournamentHub" class="hidden mb-16">
             <div class="tournament-hub-hero">
                 <div class="relative z-10 flex flex-wrap items-center gap-4">
-                    <button type="button" onclick="backToModes()" class="px-4 py-2 rounded-lg text-sm font-medium bg-white/5 border border-white/10 text-gray-300 hover:text-white hover:border-white/20 transition cursor-pointer">← Volver</button>
+                    <button type="button" onclick="backToModes()" class="px-4 py-2 rounded-lg text-sm font-medium bg-white/5 border border-white/10 text-gray-300 hover:text-white hover:border-white/20 transition cursor-pointer flex items-center gap-1.5"><span data-mtr-icon="arrowLeft" data-mtr-plain data-mtr-size="16"></span>Volver</button>
                     <div>
-                        <h2 class="text-2xl sm:text-3xl font-black text-white tracking-tight">🏆 Arena de Torneos</h2>
+                        <h2 class="text-2xl sm:text-3xl font-black text-white tracking-tight flex items-center gap-2"><span data-mtr-icon="trophy" data-mtr-color="purple" data-mtr-badge-size="36" data-mtr-size="18"></span>Arena de Torneos</h2>
                         <p class="text-gray-300 text-sm mt-1">14 géneros · Express cada 10 min · apuestas en <strong class="text-fuchsia-300">MTR créditos</strong> (fichas estables ~$1)</p>
                     </div>
                 </div>
@@ -1868,7 +1868,7 @@
             <div id="myOpenPrivateRoom" class="mb-6 hidden"></div>
             <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
                 <div class="p-6 rounded-2xl border border-white/5 bg-white/[0.02]">
-                    <h3 class="text-lg font-bold text-white mb-4">🎵 Busca tu Canción</h3>
+                    <h3 class="text-lg font-bold text-white mb-4 flex items-center gap-2"><span data-mtr-icon="music" data-mtr-color="cyan" data-mtr-inline data-mtr-size="18" style="margin:0"></span>Busca tu Canción</h3>
                     <div class="flex gap-2 mb-6">
                         <input type="text" id="songSearch" placeholder="Nombre de canción o artista..."
                                class="flex-1 px-4 py-3 rounded-lg bg-black/40 border border-white/10 text-white placeholder-gray-500 text-sm focus:outline-none focus:border-cyan-500/50 focus:ring-1 focus:ring-cyan-500/20 transition">
@@ -1885,7 +1885,7 @@
                         </div>
                     </div>
                     <div class="p-6 rounded-2xl border border-white/5 bg-white/[0.02]">
-                        <h3 class="text-lg font-bold text-white mb-4">💰 Tu Apuesta</h3>
+                        <h3 class="text-lg font-bold text-white mb-4 flex items-center gap-2"><span data-mtr-icon="coin" data-mtr-color="yellow" data-mtr-inline data-mtr-size="18" style="margin:0"></span>Tu Apuesta</h3>
                         <div class="grid grid-cols-2 gap-3 text-sm text-gray-400 mb-4">
                             <span class="hidden"><span id="balanceLabel">Tu MTR (on-chain)</span>: <strong id="onchainMtrBalance" class="text-white">--</strong></span>
                             <span><span id="playableLabel">Fichas jugables</span>: <strong id="userBalance" class="text-white">0</strong> <span id="balanceUnit">MTR créditos</span> <span class="text-xs text-green-400 cursor-help" title="Estas fichas valen siempre $1 cada una. No fluctúan como el token MTR nativo. 1 crédito jugable ≈ $1 USD nominal (1:1)">✓</span></span>
@@ -1920,7 +1920,7 @@
         <!-- ROOM SCREEN -->
         <section id="roomScreen" class="hidden mb-16">
             <div class="max-w-lg mx-auto p-8 rounded-2xl border border-fuchsia-500/40 bg-gray-900/50 neon-border-magenta">
-                <h2 class="text-2xl font-bold text-white mb-6 text-center">🎵 Sala Privada</h2>
+                <h2 class="text-2xl font-bold text-white mb-6 text-center flex items-center justify-center gap-2"><span data-mtr-icon="lock" data-mtr-color="magenta" data-mtr-inline data-mtr-size="20" style="margin:0"></span>Sala Privada</h2>
                 <!-- El link es la forma principal de invitar: un clic y quien lo abre
                      entra directo a esta sala con el código ya cargado (ver ?room= en
                      index.html). El código de abajo queda como respaldo para compartir
@@ -1931,7 +1931,7 @@
                     <label for="roomInviteLink" class="text-sm text-gray-400 mb-1 block">Compartí este link para invitar a alguien</label>
                     <div class="flex gap-2">
                         <input id="roomInviteLink" type="text" readonly class="flex-1 px-3 py-2 rounded-lg bg-black/40 border border-white/10 text-white text-sm">
-                        <button type="button" onclick="copyRoomLink()" class="px-4 py-2 rounded-lg text-sm font-bold bg-gradient-to-r from-cyan-500 to-fuchsia-500 text-white hover:opacity-90 shadow-lg shadow-cyan-500/20 transition cursor-pointer whitespace-nowrap">📋 Copiar y compartir</button>
+                        <button type="button" onclick="copyRoomLink()" class="px-4 py-2 rounded-lg text-sm font-bold bg-gradient-to-r from-cyan-500 to-fuchsia-500 text-white hover:opacity-90 shadow-lg shadow-cyan-500/20 transition cursor-pointer whitespace-nowrap"><span data-mtr-icon="copy" data-mtr-plain data-mtr-size="16" style="display:inline-flex;vertical-align:-3px;margin-right:4px"></span>Copiar y compartir</button>
                     </div>
                 </div>
                 <div class="flex items-center justify-center gap-2 mb-6 text-sm">
@@ -1960,7 +1960,7 @@
              dejar el botón "Unirse" gris sin explicación (como pasaba antes). -->
         <section id="joinRoomPreview" class="hidden mb-16">
             <div class="max-w-lg mx-auto p-8 rounded-2xl border border-fuchsia-500/40 bg-gray-900/50 neon-border-magenta">
-                <h2 class="text-2xl font-bold text-white mb-6 text-center">🎵 Sala Encontrada</h2>
+                <h2 class="text-2xl font-bold text-white mb-6 text-center flex items-center justify-center gap-2"><span data-mtr-icon="music" data-mtr-color="cyan" data-mtr-inline data-mtr-size="20" style="margin:0"></span>Sala Encontrada</h2>
                 <div class="flex items-center justify-center gap-6 mb-6">
                     <div class="text-center">
                         <div class="text-3xl mb-1" id="joinPreviewOpponentAvatar">🎤</div>
@@ -1983,7 +1983,7 @@
                 </div>
                 <div class="flex gap-3">
                     <button type="button" onclick="cancelJoinRoomPreview()" class="flex-1 py-2.5 rounded-lg text-sm font-medium bg-white/5 border border-white/10 text-gray-300 hover:text-white transition cursor-pointer">Cancelar</button>
-                    <button type="button" onclick="confirmJoinRoom()" id="confirmJoinRoomBtn" class="flex-1 py-2.5 rounded-lg text-sm font-bold bg-gradient-to-r from-cyan-500 to-fuchsia-500 text-white hover:opacity-90 shadow-lg shadow-cyan-500/20 transition cursor-pointer">⚔️ Confirmar y Apostar</button>
+                    <button type="button" onclick="confirmJoinRoom()" id="confirmJoinRoomBtn" class="flex-1 py-2.5 rounded-lg text-sm font-bold bg-gradient-to-r from-cyan-500 to-fuchsia-500 text-white hover:opacity-90 shadow-lg shadow-cyan-500/20 transition cursor-pointer"><span data-mtr-icon="swords" data-mtr-plain data-mtr-size="16" style="display:inline-flex;vertical-align:-3px;margin-right:4px"></span>Confirmar y Apostar</button>
                 </div>
             </div>
         </section>
@@ -1997,7 +1997,7 @@
                 <!-- Explicación de Retiro -->
                 <div class="mb-6 p-4 rounded-lg bg-blue-500/10 border border-blue-500/20">
                     <div class="flex items-start gap-2">
-                        <span class="text-blue-400 text-lg">💸</span>
+                        <span data-mtr-icon="cash" data-mtr-color="cyan" data-mtr-inline data-mtr-size="18" style="margin:0"></span>
                         <div class="flex-1">
                             <p class="text-blue-400 text-sm font-semibold mb-1">Retiro a tu wallet</p>
                             <p class="text-gray-300 text-xs">Tus créditos nominales se liquidan 1:1 en valor USD (menos fee). Fee de retiro: 5%.</p>
@@ -2022,14 +2022,14 @@
                     </p>
                 </div>
                 <p id="cashoutQuote" class="text-gray-400 text-sm mb-4">Sin cotización aún.</p>
-                <button type="button" onclick="requestCashout()" class="px-6 py-3 rounded-lg text-sm font-bold bg-gradient-to-r from-fuchsia-500 to-purple-600 text-white hover:opacity-90 transition-all shadow-lg shadow-fuchsia-500/20 cursor-pointer">💸 Solicitar retiro</button>
+                <button type="button" onclick="requestCashout()" class="px-6 py-3 rounded-lg text-sm font-bold bg-gradient-to-r from-fuchsia-500 to-purple-600 text-white hover:opacity-90 transition-all shadow-lg shadow-fuchsia-500/20 cursor-pointer"><span data-mtr-icon="cash" data-mtr-plain data-mtr-size="16" style="display:inline-flex;vertical-align:-3px;margin-right:4px"></span>Solicitar retiro</button>
             </div>
         </section>
 
         <!-- VAULT INFO SECTION -->
         <section id="vaultInfoSection" class="mb-16">
             <div class="max-w-2xl mx-auto p-6 sm:p-8 rounded-2xl border border-cyan-500/40 bg-gray-900/50 neon-border-cyan">
-                <h3 class="text-xl font-bold text-white mb-4">💰 Vault de Liquidez</h3>
+                <h3 class="text-xl font-bold text-white mb-4 flex items-center gap-2"><span data-mtr-icon="wallet" data-mtr-color="cyan" data-mtr-inline data-mtr-size="20" style="margin:0"></span>Vault de Liquidez</h3>
                 <p class="text-gray-400 text-sm mb-4">Transparencia total: Balance disponible para retiros</p>
                 
                 <div class="p-4 rounded-lg bg-cyan-500/10 border border-cyan-500/20 mb-4">
@@ -2311,7 +2311,7 @@
         <div class="modal-overlay" onclick="closeChallengeModal()"></div>
         <div class="modal-box text-center max-w-md">
             <button type="button" onclick="closeChallengeModal()" class="absolute top-4 right-4 text-gray-400 hover:text-white text-2xl leading-none cursor-pointer">×</button>
-            <h2 class="text-2xl font-bold text-white mb-4">⚔️ Reto Social</h2>
+            <h2 class="text-2xl font-bold text-white mb-4 flex items-center gap-2"><span data-mtr-icon="swords" data-mtr-color="orange" data-mtr-inline data-mtr-size="20" style="margin:0"></span>Reto Social</h2>
             
             <!-- Información del reto con animación -->
             <div id="challengeSongInfo" class="mb-6 animate-pulse">
@@ -2459,6 +2459,11 @@
                 });
         })();
     </script>
+    <!-- Iconos profesionales (Tabler Icons inline, sin dependencia externa) --
+         reemplaza los emojis de la UI. Va antes que el resto para que
+         MTRIcons.badge()/inline() estén disponibles cuando los otros
+         scripts arman HTML dinámico. -->
+    <script src="./src/icons.js?v=v1"></script>
     <!-- Mobile Auth Check -->
     <script src="src/mobile-auth-check.js"></script>
     <script src="./src/wallet-credits-integration.js?v=v2.7"></script>
@@ -4450,7 +4455,7 @@
                     (genreBadge ? '<div class="mt-1">' + genreBadge + '</div>' : '') +
                     '</div>' +
                     '<div class="flex flex-col gap-1.5 flex-shrink-0">' +
-                    '<button type="button" onclick="copyPendingChallengeLink(\'' + link + '\')" class="px-3 py-1.5 rounded-lg text-xs font-medium bg-cyan-500/15 border border-cyan-500/30 text-cyan-300 hover:bg-cyan-500/25 transition cursor-pointer">📋 Copiar link</button>' +
+                    '<button type="button" onclick="copyPendingChallengeLink(\'' + link + '\')" class="px-3 py-1.5 rounded-lg text-xs font-medium bg-cyan-500/15 border border-cyan-500/30 text-cyan-300 hover:bg-cyan-500/25 transition cursor-pointer flex items-center gap-1">' + (window.MTRIcons ? window.MTRIcons.svg('copy', {size:13}) : '') + ' Copiar link</button>' +
                     '<button type="button" onclick="if(typeof GameEngine!==\'undefined\')GameEngine.cancelSocialChallenge(\'' + c.challenge_id + '\').then(renderMyPendingChallenges)" class="px-3 py-1.5 rounded-lg text-xs font-medium bg-red-500/10 border border-red-500/30 text-red-300 hover:bg-red-500/20 transition cursor-pointer">Cancelar</button>' +
                     '</div>' +
                     '</div>';
@@ -4504,7 +4509,7 @@
                 '<p class="text-gray-400 text-xs truncate">' + (room.player1_song_artist || '') + ' · ' + Number(room.player1_bet) + ' créditos · código ' + room.room_code + ' · ' + created + '</p>' +
                 '</div>' +
                 '<div class="flex flex-col gap-1.5 flex-shrink-0">' +
-                '<button type="button" onclick="copyPendingChallengeLink(\'' + link + '\')" class="px-3 py-1.5 rounded-lg text-xs font-medium bg-cyan-500/15 border border-cyan-500/30 text-cyan-300 hover:bg-cyan-500/25 transition cursor-pointer">📋 Copiar link</button>' +
+                '<button type="button" onclick="copyPendingChallengeLink(\'' + link + '\')" class="px-3 py-1.5 rounded-lg text-xs font-medium bg-cyan-500/15 border border-cyan-500/30 text-cyan-300 hover:bg-cyan-500/25 transition cursor-pointer flex items-center gap-1">' + (window.MTRIcons ? window.MTRIcons.svg('copy', {size:13}) : '') + ' Copiar link</button>' +
                 '<button type="button" onclick="if(typeof GameEngine!==\'undefined\')GameEngine.leavePrivateRoom(\'' + room.room_code + '\').then(renderMyOpenPrivateRoom)" class="px-3 py-1.5 rounded-lg text-xs font-medium bg-red-500/10 border border-red-500/30 text-red-300 hover:bg-red-500/20 transition cursor-pointer">Cancelar</button>' +
                 '</div>' +
                 '</div>' +
@@ -5429,7 +5434,7 @@
             // (por ejemplo si alguien más se unió justo en el medio).
             await window.GameEngine.joinPrivateRoom(state.roomCode, state.song, betRequired, window.__myAvatar);
 
-            if (confirmBtn) { confirmBtn.disabled = false; confirmBtn.textContent = '⚔️ Confirmar y Apostar'; }
+            if (confirmBtn) { confirmBtn.disabled = false; confirmBtn.innerHTML = (window.MTRIcons ? window.MTRIcons.svg('swords', {size:16}) : '') + ' Confirmar y Apostar'; }
             window.__joinRoomPreview = null;
             document.getElementById('joinRoomPreview').classList.add('hidden');
         }

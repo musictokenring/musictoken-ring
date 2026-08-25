@@ -1261,7 +1261,7 @@ const GameEngine = {
         
         shareContainer.innerHTML = `
             <div class="text-center mb-6">
-                <div class="text-5xl mb-4">⚔️</div>
+                <div class="flex justify-center mb-4">${window.MTRIcons ? window.MTRIcons.badge('swords', {color:'orange', badgeSize:72, size:36}) : ''}</div>
                 <h2 class="text-2xl font-bold text-white mb-2">Desafío Creado</h2>
                 <p class="text-gray-400 text-sm mb-4">Comparte este link con tu amigo para que acepte tu desafío</p>
             </div>
@@ -1282,9 +1282,9 @@ const GameEngine = {
                 <div class="flex gap-2">
                     <input type="text" id="challengeLinkInput" readonly value="${challengeLink}" 
                            class="flex-1 px-4 py-3 rounded-lg bg-black/40 border border-white/10 text-white text-sm">
-                    <button type="button" onclick="copyChallengeLink()" 
-                            class="px-4 py-3 rounded-lg text-sm bg-orange-500/15 border border-orange-500/30 text-orange-400 hover:bg-orange-500/25 transition cursor-pointer">
-                        📋 Copiar
+                    <button type="button" onclick="copyChallengeLink()"
+                            class="px-4 py-3 rounded-lg text-sm bg-orange-500/15 border border-orange-500/30 text-orange-400 hover:bg-orange-500/25 transition cursor-pointer flex items-center gap-1.5">
+                        ${window.MTRIcons ? window.MTRIcons.svg('copy', {size:16}) : ''} Copiar
                     </button>
                 </div>
             </div>
@@ -1292,29 +1292,29 @@ const GameEngine = {
             <div class="mb-6">
                 <p class="text-sm text-gray-400 mb-3 text-center">Compartir en:</p>
                 <div class="flex flex-wrap justify-center gap-3">
-                    <button type="button" onclick="shareChallenge('whatsapp', '${challengeLink}')" 
-                            class="px-4 py-2 rounded-lg text-sm font-semibold bg-green-500/15 border border-green-500/30 text-green-400 hover:bg-green-500/25 transition cursor-pointer">
-                        📱 WhatsApp
+                    <button type="button" onclick="shareChallenge('whatsapp', '${challengeLink}')"
+                            class="px-4 py-2 rounded-lg text-sm font-semibold bg-green-500/15 border border-green-500/30 text-green-400 hover:bg-green-500/25 transition cursor-pointer flex items-center gap-1.5">
+                        ${window.MTRIcons ? window.MTRIcons.svg('whatsapp', {size:16}) : ''} WhatsApp
                     </button>
-                    <button type="button" onclick="shareChallenge('twitter', '${challengeLink}')" 
-                            class="px-4 py-2 rounded-lg text-sm font-semibold bg-blue-500/15 border border-blue-500/30 text-blue-400 hover:bg-blue-500/25 transition cursor-pointer">
-                        🐦 Twitter
+                    <button type="button" onclick="shareChallenge('twitter', '${challengeLink}')"
+                            class="px-4 py-2 rounded-lg text-sm font-semibold bg-blue-500/15 border border-blue-500/30 text-blue-400 hover:bg-blue-500/25 transition cursor-pointer flex items-center gap-1.5">
+                        ${window.MTRIcons ? window.MTRIcons.svg('twitterX', {size:16}) : ''} Twitter
                     </button>
-                    <button type="button" onclick="shareChallenge('facebook', '${challengeLink}')" 
-                            class="px-4 py-2 rounded-lg text-sm font-semibold bg-blue-600/15 border border-blue-600/30 text-blue-500 hover:bg-blue-600/25 transition cursor-pointer">
-                        📘 Facebook
+                    <button type="button" onclick="shareChallenge('facebook', '${challengeLink}')"
+                            class="px-4 py-2 rounded-lg text-sm font-semibold bg-blue-600/15 border border-blue-600/30 text-blue-500 hover:bg-blue-600/25 transition cursor-pointer flex items-center gap-1.5">
+                        ${window.MTRIcons ? window.MTRIcons.svg('facebook', {size:16}) : ''} Facebook
                     </button>
-                    <button type="button" onclick="shareChallenge('telegram', '${challengeLink}')" 
-                            class="px-4 py-2 rounded-lg text-sm font-semibold bg-cyan-500/15 border border-cyan-500/30 text-cyan-400 hover:bg-cyan-500/25 transition cursor-pointer">
-                        ✈️ Telegram
+                    <button type="button" onclick="shareChallenge('telegram', '${challengeLink}')"
+                            class="px-4 py-2 rounded-lg text-sm font-semibold bg-cyan-500/15 border border-cyan-500/30 text-cyan-400 hover:bg-cyan-500/25 transition cursor-pointer flex items-center gap-1.5">
+                        ${window.MTRIcons ? window.MTRIcons.svg('telegram', {size:16}) : ''} Telegram
                     </button>
                 </div>
             </div>
             
             <div class="flex items-center justify-center gap-3">
                 <button type="button" onclick="document.getElementById('socialChallengeShare')?.classList.add('hidden'); if (typeof selectMode === 'function') selectMode('social');"
-                        class="px-6 py-2 rounded-lg text-sm font-medium bg-white/5 border border-white/10 text-gray-300 hover:text-white transition cursor-pointer">
-                    ← Volver
+                        class="px-6 py-2 rounded-lg text-sm font-medium bg-white/5 border border-white/10 text-gray-300 hover:text-white transition cursor-pointer flex items-center gap-1.5">
+                    ${window.MTRIcons ? window.MTRIcons.svg('arrowLeft', {size:16}) : ''} Volver
                 </button>
                 <button type="button" onclick="cancelSocialChallenge('${challenge.challenge_id}')"
                         class="px-6 py-2 rounded-lg text-sm font-medium bg-red-500/10 border border-red-500/30 text-red-300 hover:bg-red-500/20 transition cursor-pointer">

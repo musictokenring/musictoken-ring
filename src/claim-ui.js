@@ -103,12 +103,12 @@
             if (cashoutSection) {
                 cashoutSection.innerHTML = `
                     <div class="max-w-2xl mx-auto p-6 sm:p-8 rounded-2xl border border-fuchsia-500/30 bg-gradient-to-br from-gray-900/80 to-purple-950/30 neon-border-magenta">
-                        <h3 class="text-xl font-bold text-fuchsia-400 neon-text-magenta mb-2">💸 Reclamar Premios</h3>
+                        <h3 class="text-xl font-bold text-fuchsia-400 neon-text-magenta mb-2 flex items-center gap-2">${window.MTRIcons ? window.MTRIcons.inline('cash', {color:'magenta', glow:false, style:'margin:0'}) : ''}Reclamar Premios</h3>
                         <p class="text-gray-400 text-sm mb-6">Elegí cómo retirar tus créditos ganados: en dólares/cripto a tu wallet vía <strong class="text-gray-300">NOWPayments</strong>, o en pesos colombianos vía <strong class="text-gray-300">Mercado Pago</strong>.</p>
 
                         <div id="claimAuthWarning" class="hidden p-4 rounded-lg bg-yellow-500/10 border border-yellow-500/20 mb-4">
-                            <div class="text-sm text-yellow-400">
-                                ⚠️ Debes iniciar sesión para reclamar créditos. <a href="#" onclick="window.location.reload()" class="underline">Iniciar sesión</a>
+                            <div class="text-sm text-yellow-400 flex items-center gap-2">
+                                ${window.MTRIcons ? window.MTRIcons.inline('warning', {color:'yellow', glow:false, style:'margin:0'}) : ''}Debes iniciar sesión para reclamar créditos. <a href="#" onclick="window.location.reload()" class="underline">Iniciar sesión</a>
                             </div>
                         </div>
 
@@ -120,13 +120,13 @@
 
                         <!-- Opción 1: USD / cripto vía NOWPayments -->
                         <div class="mb-4 p-4 rounded-xl border border-cyan-500/30 bg-cyan-500/5">
-                            <p class="text-xs font-bold uppercase tracking-wide text-cyan-300 mb-3">💵 Retirar en USD / cripto · NOWPayments</p>
+                            <p class="text-xs font-bold uppercase tracking-wide text-cyan-300 mb-3 flex items-center gap-1.5">${window.MTRIcons ? window.MTRIcons.inline('coin', {color:'cyan', glow:false, style:'margin:0'}) : ''}Retirar en USD / cripto · NOWPayments</p>
                             <div class="flex flex-col sm:flex-row gap-3">
                                 <input id="claimCreditsAmount" type="number" min="5" placeholder="Mínimo 5 créditos (~$5)"
                                        class="flex-1 px-4 py-3 rounded-lg bg-black/40 border border-white/10 text-white placeholder-gray-500 text-sm focus:outline-none focus:border-cyan-500/50 focus:ring-1 focus:ring-cyan-500/20 transition">
                                 <button type="button" onclick="ClaimUI.processClaim()"
-                                        class="px-6 py-3 rounded-lg text-sm font-bold bg-gradient-to-r from-cyan-500 to-blue-600 text-white hover:opacity-90 transition-all shadow-lg shadow-cyan-500/30 cursor-pointer whitespace-nowrap">
-                                    💸 Reclamar fondos
+                                        class="px-6 py-3 rounded-lg text-sm font-bold bg-gradient-to-r from-cyan-500 to-blue-600 text-white hover:opacity-90 transition-all shadow-lg shadow-cyan-500/30 cursor-pointer whitespace-nowrap flex items-center justify-center gap-1.5">
+                                    ${window.MTRIcons ? window.MTRIcons.svg('cash', {size:16}) : ''} Reclamar fondos
                                 </button>
                             </div>
                         </div>
@@ -147,15 +147,15 @@
 
                         <div class="p-3 rounded-lg bg-green-500/10 border border-green-500/20 mb-4">
                             <div class="text-xs text-green-400 space-y-1">
-                                <div><strong>✓ Créditos estables:</strong> 1 crédito ≈ 1 USD nominal</div>
-                                <div><strong>✓ Sin volatilidad del MTR on-chain:</strong> el valor jugable es estable</div>
-                                <div><strong>✓ Fee de Retiro:</strong> 5% (va al vault de liquidez)</div>
+                                <div class="flex items-start gap-1.5">${window.MTRIcons ? window.MTRIcons.inline('check', {color:'green', glow:false, size:14, style:'margin-top:1px'}) : ''}<span><strong>Créditos estables:</strong> 1 crédito ≈ 1 USD nominal</span></div>
+                                <div class="flex items-start gap-1.5">${window.MTRIcons ? window.MTRIcons.inline('check', {color:'green', glow:false, size:14, style:'margin-top:1px'}) : ''}<span><strong>Sin volatilidad del MTR on-chain:</strong> el valor jugable es estable</span></div>
+                                <div class="flex items-start gap-1.5">${window.MTRIcons ? window.MTRIcons.inline('check', {color:'green', glow:false, size:14, style:'margin-top:1px'}) : ''}<span><strong>Fee de Retiro:</strong> 5% (va al vault de liquidez)</span></div>
                             </div>
                         </div>
 
                         <div id="vaultBalanceDisplay" class="hidden p-3 rounded-lg bg-cyan-500/10 border border-cyan-500/20 mb-4">
                             <div class="text-xs text-cyan-400">
-                                <div class="font-bold mb-1">💰 Vault de Liquidez:</div>
+                                <div class="font-bold mb-1 flex items-center gap-1.5">${window.MTRIcons ? window.MTRIcons.inline('wallet', {color:'cyan', glow:false, size:14, style:'margin:0'}) : ''}Vault de Liquidez:</div>
                                 <div id="vaultBalanceLine">Balance disponible: <span id="vaultBalanceAmount" class="font-bold">-</span> USD (vault)</div>
                                 <a id="vaultBaseScanLink" href="#" target="_blank" class="text-xs underline mt-1 inline-block">Ver en BaseScan</a>
                             </div>
