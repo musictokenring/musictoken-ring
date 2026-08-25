@@ -1729,36 +1729,66 @@ const GameEngine = {
     async cancelSocialChallenge(challengeId) {
         try {
             const { data: { session } } = await supabaseClient.auth.getSession();
-            
-            // Buscar y eliminar el desafío
+
             const { data: challenge } = await supabaseClient
                 .from('social_challenges')
                 .select('*')
                 .eq('challenge_id', challengeId)
                 .eq('challenger_id', session.user.id)
                 .eq('status', 'pending')
-                .single();
-            
-            if (challenge) {
-                // Reembolsar créditos
-                await this.updateBalance(challenge.bet_amount, 'refund', null);
-                
-                // Eliminar desafío
-                await supabaseClient
-                    .from('social_challenges')
-                    .delete()
-                    .eq('id', challenge.id);
-                
-                showToast('Desafío cancelado. Créditos reembolsados.', 'info');
+                .maybeSingle();
+
+            if (!challenge) {
+                showToast('Ese desafío ya no está pendiente (puede que ya lo hayan aceptado, o ya se haya cancelado).', 'info');
+                return false;
             }
-            
+
+            // Reembolsar créditos ANTES de marcarlo cancelado
+            const refunded = await this.updateBalance(challenge.bet_amount, 'refund', null);
+            if (!refunded) {
+                showToast('No se pudo reembolsar el crédito. Intentá de nuevo.', 'error');
+                return false;
+            }
+
+            // CRÍTICO: bug real reportado en vivo -- esto usaba .delete() y
+            // mostraba "Desafío cancelado" SIN verificar si el borrado
+            // realmente afectó alguna fila. El delete fallaba en silencio
+            // (probablemente sin permiso de RLS para borrar filas de esta
+            // tabla), así que el aviso de éxito salía igual mientras el
+            // desafío seguía ahí, intacto, en la lista. Fix: UPDATE a
+            // status='cancelled' en vez de DELETE -- mismo mecanismo que ya
+            // funciona probado en acceptSocialChallenge() -- y se verifica
+            // el resultado antes de avisar éxito.
+            const { data: updated, error: updateError } = await supabaseClient
+                .from('social_challenges')
+                .update({ status: 'cancelled' })
+                .eq('id', challenge.id)
+                .eq('challenger_id', session.user.id)
+                .eq('status', 'pending')
+                .select('id')
+                .maybeSingle();
+
+            if (updateError || !updated) {
+                console.error('[cancelSocialChallenge] No se pudo marcar cancelado:', updateError);
+                // No se pudo confirmar la cancelación -- revertir el
+                // reembolso para no dejar crédito de más sin haber
+                // cancelado de verdad.
+                await this.updateBalance(-challenge.bet_amount, 'bet', null);
+                showToast('No se pudo cancelar el desafío. Intentá de nuevo.', 'error');
+                return false;
+            }
+
+            showToast('Desafío cancelado. Créditos reembolsados.', 'info');
+
             // Volver a selección de modos
             document.getElementById('socialChallengeShare')?.classList.add('hidden');
             document.getElementById('songSelection')?.classList.remove('hidden');
-            
+            return true;
+
         } catch (error) {
             console.error('Error canceling social challenge:', error);
             showToast('Error al cancelar desafío', 'error');
+            return false;
         }
     },
 
@@ -2078,26 +2108,56 @@ const GameEngine = {
                 .eq('player1_id', session.user.id)
                 .maybeSingle();
 
-            if (match && match.status === 'waiting') {
-                const refundAmount = Number(match.player1_bet) || 0;
-                if (refundAmount > 0) {
-                    await this.updateBalance(refundAmount, 'refund', null);
-                }
+            if (!match) {
+                showToast('Esa sala ya no está esperando (puede que ya se haya unido alguien, o ya esté cerrada).', 'info');
+                if (typeof window.renderMyOpenPrivateRoom === 'function') window.renderMyOpenPrivateRoom();
+                return;
+            }
+            if (match.status !== 'waiting') {
+                showToast('Esa sala ya no está esperando rival, no se puede cancelar.', 'info');
+                if (typeof window.renderMyOpenPrivateRoom === 'function') window.renderMyOpenPrivateRoom();
+                return;
             }
 
+            const refundAmount = Number(match.player1_bet) || 0;
+            const refunded = refundAmount > 0 ? await this.updateBalance(refundAmount, 'refund', null) : true;
+            if (!refunded) {
+                showToast('No se pudo reembolsar el crédito. Intentá de nuevo.', 'error');
+                return;
+            }
+
+            // CRÍTICO: mismo bug real ya encontrado y arreglado en
+            // cancelSocialChallenge() -- .delete() sin verificar el
+            // resultado mostraba "sala cerrada" aunque el borrado fallara
+            // en silencio (sin permiso de RLS) y la sala siguiera intacta.
+            // UPDATE a status='cancelled' en vez de DELETE -- loadMyOpenPrivateRoom()
+            // ya filtra por status='waiting', así que esto la saca de la
+            // lista igual, sin depender de un borrado que puede no tener
+            // permiso.
+            const { data: updated, error: updateError } = await supabaseClient
+                .from('matches')
+                .update({ status: 'cancelled' })
+                .eq('id', match.id)
+                .eq('player1_id', session.user.id)
+                .eq('status', 'waiting')
+                .select('id')
+                .maybeSingle();
+
+            if (updateError || !updated) {
+                console.error('[leavePrivateRoom] No se pudo marcar la sala cancelada:', updateError);
+                await this.updateBalance(-refundAmount, 'bet', null);
+                showToast('No se pudo cerrar la sala. Intentá de nuevo.', 'error');
+                return;
+            }
+
+            // Best-effort: borrar la fila de private_rooms (no crítico para
+            // la corrección -- matches.status ya es la fuente real de si la
+            // sala sigue abierta -- pero mantiene esa tabla prolija).
             await supabaseClient
                 .from('private_rooms')
                 .delete()
                 .eq('room_code', roomCode)
                 .eq('creator_id', session.user.id);
-
-            if (match) {
-                await supabaseClient
-                    .from('matches')
-                    .delete()
-                    .eq('id', match.id)
-                    .eq('player1_id', session.user.id);
-            }
 
             if (roomCode === this.currentRoomCode) {
                 this.currentRoomCode = null;
