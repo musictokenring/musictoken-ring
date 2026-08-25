@@ -813,11 +813,21 @@ const GameEngine = {
         
         try {
             const { data: { session } } = await supabaseClient.auth.getSession();
-            
+
             if (this.pendingChallenge) {
                 await this.acceptQuickChallenge(song, betAmount, session.user.id);
                 return;
             }
+
+            // Limpiar cualquier fila vieja de este usuario en la cola antes
+            // de agregar una nueva -- si quedó una de una búsqueda anterior
+            // que se cortó (se cerró la app antes de que el auto-cancel de
+            // 60s local llegara a correr, algo que solo pasa si la pestaña
+            // sigue abierta), evita filas duplicadas o un insert rechazado.
+            await supabaseClient
+                .from('matchmaking_queue')
+                .delete()
+                .eq('user_id', session.user.id);
 
             showToast('Buscando oponente...', 'info');
             await this.broadcastQuickChallenge(song, betAmount, session.user.id);
@@ -996,10 +1006,39 @@ const GameEngine = {
         
         document.getElementById('waitingScreen').classList.add('hidden');
         document.getElementById('songSelection').classList.remove('hidden');
-        
+
         showToast('Búsqueda cancelada', 'info');
     },
-    
+
+    // Fila propia en matchmaking_queue, si quedó alguna de una búsqueda que
+    // no se cerró bien (se cerró la app con la pestaña buscando rival). No
+    // hay plata en juego acá (el crédito recién se descuenta al armarse el
+    // match), pero sirve para no dejar una fila fantasma sin que el usuario
+    // sepa que sigue "buscando" en la base.
+    async loadMyQuickQueueEntry() {
+        try {
+            const { data: { session } } = await supabaseClient.auth.getSession();
+            if (!session) return null;
+
+            const { data, error } = await supabaseClient
+                .from('matchmaking_queue')
+                .select('*')
+                .eq('user_id', session.user.id)
+                .order('created_at', { ascending: false })
+                .limit(1)
+                .maybeSingle();
+
+            if (error) {
+                console.warn('[loadMyQuickQueueEntry]', error.message);
+                return null;
+            }
+            return data || null;
+        } catch (e) {
+            console.warn('[loadMyQuickQueueEntry]', e && e.message);
+            return null;
+        }
+    },
+
     // ==========================================
     // MODO DESAFÍO SOCIAL (Social Challenge)
     // ==========================================
@@ -2003,7 +2042,12 @@ const GameEngine = {
         }, 2000);
     },
 
-    async leavePrivateRoom() {
+    // roomCodeParam es opcional: si se llama desde la pantalla en vivo
+    // "Esperando rival" usa this.currentRoomCode (como siempre); si se llama
+    // desde la lista de "mi sala abierta" después de volver a entrar a la
+    // app (this.currentRoomCode se pierde con cualquier recarga, es una
+    // variable de JS en memoria, no algo persistido), se pasa explícito.
+    async leavePrivateRoom(roomCodeParam) {
         try {
             clearInterval(this.roomWaitInterval);
 
@@ -2013,36 +2057,138 @@ const GameEngine = {
                 return;
             }
 
-            if (this.currentRoomCode) {
-                await supabaseClient
-                    .from('private_rooms')
-                    .delete()
-                    .eq('room_code', this.currentRoomCode)
-                    .eq('creator_id', session.user.id);
+            const roomCode = roomCodeParam || this.currentRoomCode;
+            if (!roomCode) {
+                showToast('No hay sala para cerrar', 'error');
+                return;
             }
 
-            if (this.currentPrivateMatchId) {
+            // CRÍTICO: bug real encontrado revisando esto -- esta función
+            // borraba la sala y el match pero NUNCA reembolsaba la apuesta
+            // que createPrivateRoom() ya había descontado al crearla. Quien
+            // cancelaba su propia sala sin que nadie se uniera perdía el
+            // crédito para siempre, sin nada a cambio. Se busca el monto
+            // real en la base (no se confía en estado local) y se reembolsa
+            // ANTES de borrar, solo si la sala seguía 'waiting' (nadie se
+            // unió todavía).
+            const { data: match } = await supabaseClient
+                .from('matches')
+                .select('id, player1_bet, status')
+                .eq('room_code', roomCode)
+                .eq('player1_id', session.user.id)
+                .maybeSingle();
+
+            if (match && match.status === 'waiting') {
+                const refundAmount = Number(match.player1_bet) || 0;
+                if (refundAmount > 0) {
+                    await this.updateBalance(refundAmount, 'refund', null);
+                }
+            }
+
+            await supabaseClient
+                .from('private_rooms')
+                .delete()
+                .eq('room_code', roomCode)
+                .eq('creator_id', session.user.id);
+
+            if (match) {
                 await supabaseClient
                     .from('matches')
                     .delete()
-                    .eq('id', this.currentPrivateMatchId)
+                    .eq('id', match.id)
                     .eq('player1_id', session.user.id);
             }
 
-            this.currentRoomCode = null;
-            this.currentPrivateMatchId = null;
+            if (roomCode === this.currentRoomCode) {
+                this.currentRoomCode = null;
+                this.currentPrivateMatchId = null;
+            }
 
             document.getElementById('roomScreen')?.classList.add('hidden');
             document.getElementById('songSelection')?.classList.add('hidden');
             document.getElementById('modeSelector')?.classList.remove('hidden');
 
-            showToast('Sala cerrada', 'info');
+            showToast('Sala cerrada. Apuesta reembolsada.', 'info');
+            if (typeof window.renderMyOpenPrivateRoom === 'function') window.renderMyOpenPrivateRoom();
         } catch (error) {
             console.error('Error leaving room:', error);
             showToast('Error al salir de la sala', 'error');
         }
     },
-    
+
+    // Sala privada propia que sigue 'waiting' (nadie se unió todavía) --
+    // mismo criterio que loadMyPendingChallenges(): se re-lista desde la
+    // base cada vez, no depende de estado local que se pierde al recargar,
+    // desloguearse o perder conexión.
+    async loadMyOpenPrivateRoom() {
+        try {
+            const { data: { session } } = await supabaseClient.auth.getSession();
+            if (!session) return null;
+
+            const { data, error } = await supabaseClient
+                .from('matches')
+                .select('*')
+                .eq('player1_id', session.user.id)
+                .eq('match_type', 'private')
+                .eq('status', 'waiting')
+                .order('created_at', { ascending: false })
+                .limit(1)
+                .maybeSingle();
+
+            if (error) {
+                console.warn('[loadMyOpenPrivateRoom]', error.message);
+                return null;
+            }
+            return data || null;
+        } catch (e) {
+            console.warn('[loadMyOpenPrivateRoom]', e && e.message);
+            return null;
+        }
+    },
+
+    // Torneo activo (Express o Grand Prix) en el que el usuario sigue
+    // inscripto como humano, si el torneo todavía no terminó. A diferencia
+    // de Sala Privada/Desafío Social no hay nada que cancelar acá (la
+    // inscripción ya está pagada y el bracket sigue su curso solo) -- esto
+    // es puramente para avisar "seguís en un torneo" si volvió a entrar sin
+    // el localStorage que ya usa tournament-bracket.js para retomar la
+    // vista del bracket (se pierde si cambia de dispositivo/navegador, o si
+    // se limpia el storage).
+    async loadMyActiveTournamentEnrollment() {
+        try {
+            const { data: { session } } = await supabaseClient.auth.getSession();
+            if (!session) return null;
+
+            const { data: rows, error: rowsError } = await supabaseClient
+                .from('tournament_participants')
+                .select('tournament_id')
+                .eq('user_id', session.user.id)
+                .eq('is_cpu', false)
+                .order('joined_at', { ascending: false })
+                .limit(5);
+
+            if (rowsError || !rows || !rows.length) return null;
+
+            const tournamentIds = Array.from(new Set(rows.map((r) => r.tournament_id).filter(Boolean)));
+            if (!tournamentIds.length) return null;
+
+            const { data: tournaments, error: tError } = await supabaseClient
+                .from('tournaments')
+                .select('id, name, status, genre_id, tournament_type')
+                .in('id', tournamentIds)
+                .not('status', 'in', '(completed,cancelled)');
+
+            if (tError) {
+                console.warn('[loadMyActiveTournamentEnrollment]', tError.message);
+                return null;
+            }
+            return (tournaments && tournaments[0]) || null;
+        } catch (e) {
+            console.warn('[loadMyActiveTournamentEnrollment]', e && e.message);
+            return null;
+        }
+    },
+
     // ==========================================
     // MODO PRÁCTICA (Practice)
     // ==========================================

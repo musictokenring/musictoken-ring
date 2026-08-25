@@ -618,29 +618,64 @@ async function updateAuthUI(session) {
             GameEngine.init();
         }
 
-        // Pedido real del usuario: si dejó un Desafío Social creado
-        // esperando respuesta y volvió a entrar (se desloguea, pierde
-        // conexión, cierra sin querer), avisarle acá mismo al loguearse en
-        // vez de que tenga que acordarse de ir a Desafío Social por su
-        // cuenta a buscarlo. Solo una vez por carga de página (auth puede
-        // re-disparar este mismo flujo varias veces, ej. refresh de token).
+        // Pedido real del usuario, extendido a TODOS los modos donde aplica
+        // (Desafío Social, Sala Privada, Torneo -- Modo Rápido no tiene
+        // plata en juego mientras espera, y Práctica es contra CPU al
+        // instante, ninguno de los dos deja nada "pendiente" real): si
+        // dejaste algo esperando y volviste a entrar (se desloguea, pierde
+        // conexión, cierra sin querer), avisarte acá mismo al loguearte en
+        // vez de que tengas que acordarte de ir a buscarlo por tu cuenta.
+        // Solo una vez por carga de página (auth puede re-disparar este
+        // mismo flujo varias veces, ej. refresh de token).
         if (!window.__pendingChallengesNudgeShown) {
             window.__pendingChallengesNudgeShown = true;
             setTimeout(async () => {
+                if (typeof GameEngine === 'undefined' || typeof showToast !== 'function') return;
+
                 try {
-                    if (typeof GameEngine !== 'undefined' && typeof GameEngine.loadMyPendingChallenges === 'function') {
+                    if (typeof GameEngine.loadMyPendingChallenges === 'function') {
                         const pending = await GameEngine.loadMyPendingChallenges();
-                        if (pending && pending.length > 0 && typeof showToast === 'function') {
-                            const label = pending.length === 1 ? 'desafío' : 'desafíos';
+                        if (pending && pending.length > 0) {
+                            const label = pending.length === 1 ? 'desafío social' : 'desafíos sociales';
                             showToast(
-                                `⏳ Tenés ${pending.length} ${label} social${pending.length === 1 ? '' : 'es'} esperando que alguien lo acepte. Entrá a "Desafío Social" para ver el link o cancelarlo.`,
+                                `⏳ Tenés ${pending.length} ${label} esperando que alguien lo acepte. Entrá a "Desafío Social" para ver el link o cancelarlo.`,
                                 'info',
                                 10000
                             );
                         }
                     }
                 } catch (e) {
-                    console.warn('[updateAuthUI] No se pudo chequear desafíos pendientes:', e);
+                    console.warn('[updateAuthUI] No se pudo chequear desafíos sociales pendientes:', e);
+                }
+
+                try {
+                    if (typeof GameEngine.loadMyOpenPrivateRoom === 'function') {
+                        const room = await GameEngine.loadMyOpenPrivateRoom();
+                        if (room) {
+                            showToast(
+                                `⏳ Tenés una Sala Privada abierta (código ${room.room_code}) esperando que alguien se una. Entrá a "Sala Privada" para ver el link o cancelarla.`,
+                                'info',
+                                10000
+                            );
+                        }
+                    }
+                } catch (e) {
+                    console.warn('[updateAuthUI] No se pudo chequear sala privada pendiente:', e);
+                }
+
+                try {
+                    if (typeof GameEngine.loadMyActiveTournamentEnrollment === 'function') {
+                        const tournament = await GameEngine.loadMyActiveTournamentEnrollment();
+                        if (tournament) {
+                            showToast(
+                                `🏆 Seguís inscripto en el torneo "${tournament.name}". Andá al hub de torneos para ver cómo va.`,
+                                'info',
+                                10000
+                            );
+                        }
+                    }
+                } catch (e) {
+                    console.warn('[updateAuthUI] No se pudo chequear torneo activo:', e);
                 }
             }, 1500);
         }

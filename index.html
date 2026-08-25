@@ -1832,6 +1832,11 @@
                  rastro de que ese desafío existía. Ahora se re-lista solo al
                  entrar a Desafío Social (ver loadMyPendingChallenges()). -->
             <div id="myPendingChallenges" class="mb-6 hidden"></div>
+            <!-- Mismo criterio, para Sala Privada: si creaste una sala y
+                 salís de la app antes de que alguien se una, antes se perdía
+                 el código y el crédito quedaba descontado sin forma de
+                 recuperarlo (ver leavePrivateRoom(), ahora reembolsa). -->
+            <div id="myOpenPrivateRoom" class="mb-6 hidden"></div>
             <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
                 <div class="p-6 rounded-2xl border border-white/5 bg-white/[0.02]">
                     <h3 class="text-lg font-bold text-white mb-4">🎵 Busca tu Canción</h3>
@@ -4148,6 +4153,14 @@
             var hideJoinPreview = document.getElementById('joinRoomPreview');
             if (hideJoinPreview) hideJoinPreview.classList.add('hidden');
             window.__joinRoomPreview = null;
+            // Ocultar por defecto las listas de "pendientes" de otros modos --
+            // cada rama de updateActionButtons (social/private) se encarga de
+            // volver a mostrar la suya si corresponde. Sin esto, quedaban
+            // visibles al cambiar de modo (ej. de Social a Sala Privada).
+            var hidePendingChallenges = document.getElementById('myPendingChallenges');
+            if (hidePendingChallenges) hidePendingChallenges.classList.add('hidden');
+            var hideOpenRoom = document.getElementById('myOpenPrivateRoom');
+            if (hideOpenRoom) hideOpenRoom.classList.add('hidden');
             // CRÍTICO: Verificar si hay un desafío pendiente para actualizar título
             var isAcceptingChallenge = window.pendingChallengeId && window.pendingChallengeId !== null;
             var challengeInfo = window.pendingChallengeInfo || null;
@@ -4573,6 +4586,42 @@
         }
         window.copyPendingChallengeLink = copyPendingChallengeLink;
 
+        // Mismo patrón que renderMyPendingChallenges(), para la sala privada
+        // propia que sigue esperando rival -- se llama al entrar a Sala
+        // Privada a crear una nueva (no al unirse a la de otro).
+        async function renderMyOpenPrivateRoom() {
+            var container = document.getElementById('myOpenPrivateRoom');
+            if (!container) return;
+            if (typeof window.GameEngine === 'undefined' || typeof window.GameEngine.loadMyOpenPrivateRoom !== 'function') return;
+
+            var room = await window.GameEngine.loadMyOpenPrivateRoom();
+            if (!room) {
+                container.innerHTML = '';
+                container.classList.add('hidden');
+                return;
+            }
+
+            var link = window.location.origin + window.location.pathname + '?room=' + room.room_code;
+            var created = room.created_at ? new Date(room.created_at).toLocaleDateString('es-CO', { day: '2-digit', month: 'short' }) : '';
+
+            container.innerHTML = '<div class="p-4 rounded-2xl border border-fuchsia-500/20 bg-fuchsia-500/5">' +
+                '<h3 class="text-sm font-bold text-fuchsia-300 mb-3">⏳ Tenés una sala abierta esperando rival</h3>' +
+                '<div class="flex items-center gap-3 p-3 rounded-xl bg-black/30 border border-white/10">' +
+                '<img src="' + (room.player1_song_image || '') + '" class="w-12 h-12 rounded-lg object-cover flex-shrink-0" alt="">' +
+                '<div class="flex-1 min-w-0">' +
+                '<p class="text-white text-sm font-semibold truncate">' + (room.player1_song_name || 'Sin título') + '</p>' +
+                '<p class="text-gray-400 text-xs truncate">' + (room.player1_song_artist || '') + ' · ' + Number(room.player1_bet) + ' créditos · código ' + room.room_code + ' · ' + created + '</p>' +
+                '</div>' +
+                '<div class="flex flex-col gap-1.5 flex-shrink-0">' +
+                '<button type="button" onclick="copyPendingChallengeLink(\'' + link + '\')" class="px-3 py-1.5 rounded-lg text-xs font-medium bg-cyan-500/15 border border-cyan-500/30 text-cyan-300 hover:bg-cyan-500/25 transition cursor-pointer">📋 Copiar link</button>' +
+                '<button type="button" onclick="if(typeof GameEngine!==\'undefined\')GameEngine.leavePrivateRoom(\'' + room.room_code + '\').then(renderMyOpenPrivateRoom)" class="px-3 py-1.5 rounded-lg text-xs font-medium bg-red-500/10 border border-red-500/30 text-red-300 hover:bg-red-500/20 transition cursor-pointer">Cancelar</button>' +
+                '</div>' +
+                '</div>' +
+                '</div>';
+            container.classList.remove('hidden');
+        }
+        window.renderMyOpenPrivateRoom = renderMyOpenPrivateRoom;
+
         function avatarPickerHtml() {
             return '<div class="mb-3"><p class="text-xs text-gray-400 mb-1.5">Elegí tu avatar</p><div class="flex flex-wrap gap-1.5">' +
                 MTR_AVATARS.map(function (a) {
@@ -4617,6 +4666,7 @@
                     ' oninput="this.value=this.value.toUpperCase(); if(typeof window.updateBetEligibility===\'function\') window.updateBetEligibility();">' +
                     '<button type="button" onclick="joinRoom()" class="' + btnSecondary + ' w-auto px-4" id="joinRoomBtn" disabled>Unirse</button></div>';
                 updateBetEligibility();
+                if (typeof renderMyOpenPrivateRoom === 'function') renderMyOpenPrivateRoom();
             } else if (mode === 'practice') {
                 buttonsDiv.innerHTML = '<button type="button" onclick="window.startPractice()" class="' + btnPrimary + '" id="startPracticeBtn" disabled>🎯 Iniciar Práctica</button>';
                 
