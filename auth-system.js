@@ -286,6 +286,91 @@ async function signInWithWallet() {
 }
 window.signInWithWallet = signInWithWallet;
 
+/**
+ * Vincula una wallet de RETIRO a la cuenta YA autenticada (email/Google o
+ * wallet), sin crear ni tocar la sesión -- a diferencia de
+ * signInWithWallet(), que hace login. Pensado para reemplazar la conexión
+ * completa de WalletConnect en el único lugar que todavía la exige de
+ * verdad: retirar en USD/cripto vía NOWPayments necesita saber a qué
+ * dirección mandar el pago. Acá alcanza con UNA firma (personal_sign, sin
+ * gas, sin pareo QR, sin cambiar de red) en vez de establecer una sesión
+ * WalletConnect persistente.
+ *
+ * Requiere window.ethereum (adentro del navegador propio de la wallet, o
+ * una extensión de escritorio). Si no está disponible, devuelve
+ * {ok:false, needsWalletConnect:true} para que quien llama pueda ofrecer
+ * WalletConnect como alternativa en vez de fallar en silencio.
+ *
+ * @returns {Promise<{ok:boolean, address?:string, error?:string, needsWalletConnect?:boolean}>}
+ */
+async function linkWalletForPayout() {
+    try {
+        if (!window.ethereum) {
+            return { ok: false, needsWalletConnect: true };
+        }
+        if (!supabaseClient) {
+            supabaseClient = initSupabaseClient();
+        }
+        const { data: { session } } = (await supabaseClient?.auth.getSession()) || { data: {} };
+        if (!session) {
+            return { ok: false, error: 'Iniciá sesión antes de vincular una wallet de retiro.' };
+        }
+
+        showToast('Conectando con tu wallet...', 'info');
+        const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
+        const address = (accounts && accounts[0] || '').toLowerCase();
+        if (!address) throw new Error('No se pudo obtener la dirección de la wallet');
+
+        const backendUrl = (window.CONFIG && window.CONFIG.BACKEND_API) || 'https://musictoken-ring.onrender.com';
+
+        const nonceRes = await fetch(`${backendUrl}/api/auth/wallet/nonce`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ address })
+        });
+        const nonceData = await nonceRes.json().catch(() => ({}));
+        if (!nonceRes.ok || !nonceData.ok) {
+            throw new Error(nonceData.error || 'No se pudo iniciar la vinculación');
+        }
+
+        showToast('Confirmá la firma en tu wallet (no cuesta gas)...', 'info');
+        const signature = await window.ethereum.request({
+            method: 'personal_sign',
+            params: [nonceData.message, address]
+        });
+
+        const linkRes = await fetch(`${backendUrl}/api/auth/wallet/link`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                Authorization: 'Bearer ' + session.access_token
+            },
+            body: JSON.stringify({ address, signature })
+        });
+        const linkData = await linkRes.json().catch(() => ({}));
+        if (!linkRes.ok || !linkData.ok) {
+            throw new Error(linkData.error || 'No se pudo vincular la wallet');
+        }
+
+        window.connectedAddress = address;
+        localStorage.setItem('mtr_wallet', address);
+        if (typeof window.renderWallet === 'function') window.renderWallet();
+
+        showToast('Wallet vinculada ✓', 'success');
+        return { ok: true, address };
+    } catch (error) {
+        console.error('[auth] Error vinculando wallet de retiro:', error);
+        const msg = String((error && (error.message || error.code)) || 'Error al vincular la wallet');
+        if (/user rejected|user denied|rejected the request/i.test(msg)) {
+            showToast('Firma cancelada', 'info');
+            return { ok: false, error: 'cancelled' };
+        }
+        showToast(msg, 'error');
+        return { ok: false, error: msg };
+    }
+}
+window.linkWalletForPayout = linkWalletForPayout;
+
 function parseOAuthErrorFromUrl() {
     const params = new URLSearchParams(window.location.search);
     const hashParams = new URLSearchParams(window.location.hash.replace('#', ''));

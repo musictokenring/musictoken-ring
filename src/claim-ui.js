@@ -129,6 +129,7 @@
                                     ${window.MTRIcons ? window.MTRIcons.svg('cash', {size:16}) : ''} Reclamar fondos
                                 </button>
                             </div>
+                            <p class="text-[11px] text-gray-500 mt-2">Si es tu primera vez, te va a pedir confirmar con una sola firma en tu wallet a dónde mandar el pago. No cuesta gas ni autoriza ningún movimiento de fondos.</p>
                         </div>
 
                         <!-- Opción 2: pesos colombianos vía Mercado Pago -->
@@ -237,11 +238,39 @@
 
                 const input = document.getElementById('claimCreditsAmount');
                 const credits = parseFloat(input?.value || 0);
-                const walletAddress = window.connectedAddress || localStorage.getItem('mtr_wallet');
+                let walletAddress = window.connectedAddress || localStorage.getItem('mtr_wallet');
+
+                // Antes esto exigía haber pasado por la conexión completa de
+                // WalletConnect (QR, pareo, a veces poco confiable en mobile
+                // -- ver memoria de sesión). Lo único que hace falta acá es
+                // SABER a qué dirección mandar el retiro, no una sesión de
+                // wallet persistente. Si ya hay login (isAuthenticated), se
+                // ofrece vincular con una sola firma (linkWalletForPayout,
+                // sin gas, sin QR) cuando hay window.ethereum disponible; si
+                // no, se cae al flujo de WalletConnect existente como
+                // respaldo -- no se saca esa opción, solo deja de ser la
+                // única.
+                if (!walletAddress && isAuthenticated) {
+                    if (window.ethereum && typeof window.linkWalletForPayout === 'function') {
+                        const linkResult = await window.linkWalletForPayout();
+                        if (linkResult.ok) {
+                            walletAddress = linkResult.address;
+                        } else if (linkResult.error === 'cancelled') {
+                            return;
+                        }
+                    }
+                    if (!walletAddress && typeof window.connectWallet === 'function') {
+                        if (typeof showToast === 'function') {
+                            showToast('Conectá tu wallet para indicar dónde recibir el retiro', 'info');
+                        }
+                        await window.connectWallet();
+                        walletAddress = window.connectedAddress || localStorage.getItem('mtr_wallet');
+                    }
+                }
 
                 if (!walletAddress) {
                     if (typeof showToast === 'function') {
-                        showToast('Conecta tu wallet primero', 'error');
+                        showToast('Necesitamos una wallet para saber dónde enviar tu retiro. Conectala o vinculala primero.', 'error');
                     }
                     return;
                 }

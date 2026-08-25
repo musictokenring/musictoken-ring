@@ -65,6 +65,26 @@ function buildSiweMessage(address, nonce, domain, origin) {
   );
 }
 
+// Verifica un nonce pendiente + firma para una address. Devuelve {ok:true}
+// o {ok:false, status, error} -- compartido entre /verify (login) y /link
+// (vincular wallet de retiro a una cuenta ya autenticada), para no repetir
+// la lógica de verificación en dos lugares.
+async function checkPendingSignature(address, signature) {
+  if (!WALLET_RE.test(address) || !signature) {
+    return { ok: false, status: 400, error: 'Datos incompletos' };
+  }
+  const pending = pendingNonces.get(address);
+  if (!pending || pending.expiresAt < Date.now()) {
+    return { ok: false, status: 400, error: 'El mensaje para firmar expiró. Volvé a intentar.' };
+  }
+  const isValid = await verifyMessage({ address, message: pending.message, signature });
+  if (!isValid) {
+    return { ok: false, status: 401, error: 'Firma inválida' };
+  }
+  pendingNonces.delete(address); // de un solo uso
+  return { ok: true };
+}
+
 function registerSiweRoutes(app, walletLinkService) {
   app.post('/api/auth/wallet/nonce', async (req, res) => {
     try {
@@ -92,24 +112,11 @@ function registerSiweRoutes(app, walletLinkService) {
     try {
       const address = String(req.body?.address || '').toLowerCase();
       const signature = req.body?.signature;
-      if (!WALLET_RE.test(address) || !signature) {
-        return res.status(400).json({ ok: false, error: 'Datos incompletos' });
-      }
 
-      const pending = pendingNonces.get(address);
-      if (!pending || pending.expiresAt < Date.now()) {
-        return res.status(400).json({ ok: false, error: 'El mensaje para firmar expiró. Volvé a intentar.' });
+      const check = await checkPendingSignature(address, signature);
+      if (!check.ok) {
+        return res.status(check.status).json({ ok: false, error: check.error });
       }
-
-      const isValid = await verifyMessage({
-        address,
-        message: pending.message,
-        signature
-      });
-      if (!isValid) {
-        return res.status(401).json({ ok: false, error: 'Firma inválida' });
-      }
-      pendingNonces.delete(address); // de un solo uso
 
       // ¿Esta wallet ya está vinculada a una cuenta autenticada existente?
       let authUserId = null;
@@ -180,6 +187,54 @@ function registerSiweRoutes(app, walletLinkService) {
       });
     } catch (error) {
       console.error('[siwe] Error verificando firma:', error);
+      res.status(500).json({ ok: false, error: error.message || 'Error interno' });
+    }
+  });
+
+  // Vincular una wallet de RETIRO a una cuenta ya autenticada (email/Google
+  // o wallet), sin crear ni reemplazar ninguna sesión. Pensado para
+  // reemplazar la conexión completa de WalletConnect cuando lo único que
+  // hace falta es confirmar a dónde mandar un pago -- una sola firma, sin
+  // gas, sin pareo QR. A diferencia de POST /api/user/link-wallet (que
+  // confía en cualquier address que mande el cliente), este endpoint exige
+  // la MISMA prueba criptográfica que el login por firma antes de guardar
+  // nada -- una sesión comprometida no puede redirigir un retiro a una
+  // wallet ajena sin también falsificar esta firma.
+  app.post('/api/auth/wallet/link', async (req, res) => {
+    try {
+      const authHeader = req.headers.authorization;
+      if (!authHeader || !authHeader.startsWith('Bearer ')) {
+        return res.status(401).json({ ok: false, error: 'Authentication required' });
+      }
+      const token = authHeader.replace('Bearer ', '');
+      const { data: { user: authUser }, error: authError } = await supabase.auth.getUser(token);
+      if (authError || !authUser) {
+        return res.status(401).json({ ok: false, error: 'Invalid or expired token' });
+      }
+
+      const address = String(req.body?.address || '').toLowerCase();
+      const signature = req.body?.signature;
+      const check = await checkPendingSignature(address, signature);
+      if (!check.ok) {
+        return res.status(check.status).json({ ok: false, error: check.error });
+      }
+
+      if (!walletLinkService) {
+        return res.status(503).json({ ok: false, error: 'Wallet link service not available' });
+      }
+      const result = await walletLinkService.linkWallet(authUser.id, address, {
+        ip: req.ip || req.headers['x-forwarded-for'] || 'unknown',
+        userAgent: req.headers['user-agent'] || 'unknown',
+        linkedVia: 'signature'
+      });
+      if (!result.success) {
+        return res.status(400).json({ ok: false, error: result.error || 'No se pudo vincular la wallet' });
+      }
+
+      console.log('[siwe] ✅ Wallet de retiro vinculada por firma:', address, 'userId:', authUser.id);
+      res.json({ ok: true, ...result });
+    } catch (error) {
+      console.error('[siwe] Error vinculando wallet de retiro:', error);
       res.status(500).json({ ok: false, error: error.message || 'Error interno' });
     }
   });
