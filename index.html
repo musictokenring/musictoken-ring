@@ -1016,21 +1016,24 @@
                     </div>
                 </div>
 
+                <p class="text-xs text-gray-400 mb-3">¿Primera vez? Elegí <strong class="text-white">Tarjeta</strong> o <strong class="text-white">Pesos (COP)</strong> — no necesitás tener criptomonedas ni wallet.</p>
                 <div class="grid gap-3 sm:grid-cols-3">
-                    <button type="button" onclick="openNowPaymentsModal('fiat')" class="deposit-flow-btn group relative overflow-hidden rounded-xl border border-fuchsia-500/35 bg-gradient-to-br from-fuchsia-950/50 to-gray-900/80 px-4 py-4 text-left transition hover:border-fuchsia-400/50 hover:shadow-lg hover:shadow-fuchsia-500/10">
+                    <button type="button" onclick="openNowPaymentsModal('fiat')" class="deposit-flow-btn group relative overflow-hidden rounded-xl border-2 border-fuchsia-400/60 bg-gradient-to-br from-fuchsia-950/50 to-gray-900/80 px-4 py-4 text-left transition hover:border-fuchsia-400/80 hover:shadow-lg hover:shadow-fuchsia-500/10">
+                        <span class="absolute top-2 right-2 text-[9px] font-bold uppercase tracking-wide text-fuchsia-300 bg-fuchsia-500/15 border border-fuchsia-500/30 rounded-full px-2 py-0.5">Recomendado</span>
                         <span class="block text-xs font-medium text-fuchsia-300/90 mb-1">Tarjeta / fiat</span>
-                        <span class="block text-base font-bold text-white">Comprar con Fiat</span>
-                        <span class="mt-2 block text-[11px] text-gray-500">On-ramp dentro del widget NOWPayments</span>
+                        <span class="block text-base font-bold text-white">Comprar con Tarjeta</span>
+                        <span class="mt-2 block text-[11px] text-gray-500">Pagás con tu tarjeta de crédito/débito. No necesitás wallet.</span>
                     </button>
-                    <button type="button" onclick="openNowPaymentsModal('crypto')" class="deposit-flow-btn group relative overflow-hidden rounded-xl border border-cyan-500/40 bg-gradient-to-br from-cyan-950/40 to-gray-900/80 px-4 py-4 text-left transition hover:border-cyan-400/55 hover:shadow-lg hover:shadow-cyan-500/10">
-                        <span class="block text-xs font-medium text-cyan-300/90 mb-1">Cripto</span>
-                        <span class="block text-base font-bold text-white">Depositar con Cripto</span>
-                        <span class="mt-2 block text-[11px] text-gray-500">Stablecoins y otras monedas admitidas</span>
-                    </button>
-                    <button type="button" onclick="openMercadoPagoModal()" class="deposit-flow-btn group relative overflow-hidden rounded-xl border border-yellow-500/40 bg-gradient-to-br from-yellow-950/40 to-gray-900/80 px-4 py-4 text-left transition hover:border-yellow-400/55 hover:shadow-lg hover:shadow-yellow-500/10">
+                    <button type="button" onclick="openMercadoPagoModal()" class="deposit-flow-btn group relative overflow-hidden rounded-xl border-2 border-yellow-400/60 bg-gradient-to-br from-yellow-950/40 to-gray-900/80 px-4 py-4 text-left transition hover:border-yellow-400/80 hover:shadow-lg hover:shadow-yellow-500/10">
+                        <span class="absolute top-2 right-2 text-[9px] font-bold uppercase tracking-wide text-yellow-300 bg-yellow-500/15 border border-yellow-500/30 rounded-full px-2 py-0.5">Recomendado</span>
                         <span class="block text-xs font-medium text-yellow-300/90 mb-1">🇨🇴 Colombia · Mercado Pago</span>
                         <span class="block text-base font-bold text-white">Pagar en pesos (COP)</span>
-                        <span class="mt-2 block text-[11px] text-gray-400">PSE · Nequi · Bancolombia · Visa · Mastercard</span>
+                        <span class="mt-2 block text-[11px] text-gray-400">PSE · Nequi · Bancolombia · Visa · Mastercard. No necesitás wallet.</span>
+                    </button>
+                    <button type="button" onclick="openNowPaymentsModal('crypto')" class="deposit-flow-btn group relative overflow-hidden rounded-xl border border-cyan-500/40 bg-gradient-to-br from-cyan-950/40 to-gray-900/80 px-4 py-4 text-left transition hover:border-cyan-400/55 hover:shadow-lg hover:shadow-cyan-500/10">
+                        <span class="block text-xs font-medium text-cyan-300/90 mb-1">Cripto (avanzado)</span>
+                        <span class="block text-base font-bold text-white">Pagar con Cripto</span>
+                        <span class="mt-2 block text-[11px] text-amber-300/80">Requiere ya tener USDT, BTC o ETH en tu propia wallet, y saber enviarlos. <strong>No es para enviar MTR.</strong></span>
                     </button>
                 </div>
 
@@ -1059,6 +1062,9 @@
                     </div>
                     <div class="relative flex-1 min-h-[400px] bg-gray-950">
                         <div id="npAmountStep" class="flex flex-col gap-4 p-5 sm:p-6">
+                            <div id="npCryptoWarning" class="hidden p-3 rounded-lg bg-amber-500/10 border border-amber-500/25">
+                                <p class="text-amber-200 text-xs leading-relaxed"><strong class="text-amber-300">Antes de continuar:</strong> necesitás ya tener una criptomoneda (USDT, BTC, ETH...) en tu propia wallet y saber enviarla. En la página de pago vas a elegir CON QUÉ moneda pagás y te va a dar una dirección/QR para enviarla desde tu wallet. <strong>No busques "MTR" en tu wallet</strong> — el MTR se acredita como saldo acá adentro después de que el pago se confirme, no es lo que envías. Si no estás seguro, cerrá esto y usá "Comprar con Tarjeta" o "Pagos en pesos" en su lugar.</p>
+                            </div>
                             <label class="text-xs text-gray-400" for="npUsdAmount">Importe a depositar (USD)</label>
                             <input id="npUsdAmount" type="number" min="12" step="0.01" value="12" placeholder="12" inputmode="decimal" class="w-full rounded-lg border border-white/15 bg-gray-900/80 px-3 py-2.5 text-white text-base focus:border-cyan-500/50 focus:outline-none" aria-describedby="npMinDepositHint npCheckoutErr" />
                             <p id="npMinDepositHint" class="text-[11px] text-gray-500">Debes tener sesión iniciada (misma cuenta que en MusicToken Ring). <strong class="text-cyan-400/90">Depósito mínimo: 12 USD</strong>. Se abrirá el checkout NOWPayments en una <strong class="text-gray-400">nueva pestaña</strong> (muchas veces el iframe queda vacío por seguridad del proveedor). El servidor puede ajustar unos céntimos el importe para el mínimo en cripto.</p>
@@ -1142,7 +1148,7 @@
                     adj.classList.add('hidden');
                 }
             }
-            window.openNowPaymentsModal = async function () {
+            window.openNowPaymentsModal = async function (mode) {
                 var modal = document.getElementById('nowpaymentsModal');
                 if (!modal) return;
                 resetNpModalUi();
@@ -1150,6 +1156,16 @@
                 if (inp) {
                     inp.value = String(MIN_NP_DEPOSIT_USD);
                     inp.min = String(MIN_NP_DEPOSIT_USD);
+                }
+                // Aviso previo específico para el modo cripto -- reportado en vivo
+                // (usuaria real probando la app): al llegar a la página de
+                // NOWPayments buscó "MTR" en su propia wallet para enviarlo,
+                // cuando en realidad hay que pagar con una moneda que ya se
+                // tenga (USDT/BTC/ETH) y el MTR se acredita después como saldo.
+                // Este aviso corta esa confusión ANTES de abrir NOWPayments.
+                var cryptoWarning = document.getElementById('npCryptoWarning');
+                if (cryptoWarning) {
+                    cryptoWarning.classList.toggle('hidden', mode !== 'crypto');
                 }
                 validateNpDepositAmount(false);
                 modal.classList.remove('hidden');
