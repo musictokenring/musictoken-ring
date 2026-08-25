@@ -102,35 +102,44 @@
             
             if (cashoutSection) {
                 cashoutSection.innerHTML = `
-                    <div class="max-w-2xl mx-auto p-6 sm:p-8 rounded-2xl border border-fuchsia-500/15 bg-gradient-to-br from-gray-900/80 to-purple-950/30 neon-border-magenta">
+                    <div class="max-w-2xl mx-auto p-6 sm:p-8 rounded-2xl border border-fuchsia-500/30 bg-gradient-to-br from-gray-900/80 to-purple-950/30 neon-border-magenta">
                         <h3 class="text-xl font-bold text-fuchsia-400 neon-text-magenta mb-2">💸 Reclamar Premios</h3>
-                        <p class="text-gray-400 text-sm mb-6">Convierte tus créditos ganados en fondos en tu wallet (USD / stablecoin según la pasarela).</p>
-                        
+                        <p class="text-gray-400 text-sm mb-6">Elegí cómo retirar tus créditos ganados: en dólares/cripto a tu wallet vía <strong class="text-gray-300">NOWPayments</strong>, o en pesos colombianos vía <strong class="text-gray-300">Mercado Pago</strong>.</p>
+
                         <div id="claimAuthWarning" class="hidden p-4 rounded-lg bg-yellow-500/10 border border-yellow-500/20 mb-4">
                             <div class="text-sm text-yellow-400">
                                 ⚠️ Debes iniciar sesión para reclamar créditos. <a href="#" onclick="window.location.reload()" class="underline">Iniciar sesión</a>
                             </div>
                         </div>
-                        
+
                         <div class="mb-4 p-4 rounded-lg bg-black/40 border border-white/10">
                             <div class="text-sm text-gray-400 mb-2">Créditos disponibles:</div>
                             <div id="availableCreditsDisplay" class="text-2xl font-bold text-fuchsia-400">0 créditos</div>
                             <div id="availableUsdcDisplay" class="text-sm text-gray-400 mt-1">≈ $0 USD nominal</div>
                         </div>
 
-                        <div class="flex flex-col sm:flex-row gap-3 mb-4">
-                            <input id="claimCreditsAmount" type="number" min="5" placeholder="Mínimo 5 créditos (~$5)"
-                                   class="flex-1 px-4 py-3 rounded-lg bg-black/40 border border-white/10 text-white placeholder-gray-500 text-sm focus:outline-none focus:border-fuchsia-500/50 focus:ring-1 focus:ring-fuchsia-500/20 transition">
-                            <button type="button" onclick="ClaimUI.processClaim()"
-                                    class="px-6 py-3 rounded-lg text-sm font-bold bg-gradient-to-r from-fuchsia-500 to-purple-600 text-white hover:opacity-90 transition-all shadow-lg shadow-fuchsia-500/20 cursor-pointer whitespace-nowrap">
-                                💸 Reclamar fondos
-                            </button>
+                        <!-- Opción 1: USD / cripto vía NOWPayments -->
+                        <div class="mb-4 p-4 rounded-xl border border-cyan-500/30 bg-cyan-500/5">
+                            <p class="text-xs font-bold uppercase tracking-wide text-cyan-300 mb-3">💵 Retirar en USD / cripto · NOWPayments</p>
+                            <div class="flex flex-col sm:flex-row gap-3">
+                                <input id="claimCreditsAmount" type="number" min="5" placeholder="Mínimo 5 créditos (~$5)"
+                                       class="flex-1 px-4 py-3 rounded-lg bg-black/40 border border-white/10 text-white placeholder-gray-500 text-sm focus:outline-none focus:border-cyan-500/50 focus:ring-1 focus:ring-cyan-500/20 transition">
+                                <button type="button" onclick="ClaimUI.processClaim()"
+                                        class="px-6 py-3 rounded-lg text-sm font-bold bg-gradient-to-r from-cyan-500 to-blue-600 text-white hover:opacity-90 transition-all shadow-lg shadow-cyan-500/30 cursor-pointer whitespace-nowrap">
+                                    💸 Reclamar fondos
+                                </button>
+                            </div>
                         </div>
 
-                        <button type="button" onclick="window.openWithdrawalCopModal && window.openWithdrawalCopModal()"
-                                class="w-full mb-4 px-4 py-2.5 rounded-lg text-sm font-semibold bg-yellow-500/10 border border-yellow-500/30 text-yellow-300 hover:bg-yellow-500/20 transition cursor-pointer">
-                            🇨🇴 Retirar en pesos (Nequi / Bancolombia / Bre-B)
-                        </button>
+                        <!-- Opción 2: pesos colombianos vía Mercado Pago -->
+                        <div class="mb-4 p-4 rounded-xl border border-yellow-500/40 bg-yellow-500/5">
+                            <p class="text-xs font-bold uppercase tracking-wide text-yellow-300 mb-3">🇨🇴 Retirar en pesos (COP) · Mercado Pago</p>
+                            <button type="button" onclick="window.openWithdrawalCopModal && window.openWithdrawalCopModal()"
+                                    class="w-full px-4 py-3.5 rounded-xl text-sm font-bold bg-gradient-to-r from-yellow-400 to-amber-500 text-gray-900 hover:opacity-90 transition-all shadow-lg shadow-yellow-500/30 cursor-pointer flex items-center justify-center gap-2">
+                                <span>Retirar en pesos</span>
+                                <span class="flex items-center gap-1 text-[10px] font-semibold normal-case bg-black/15 px-2 py-0.5 rounded-full">Nequi · Bancolombia · Bre-B</span>
+                            </button>
+                        </div>
 
                         <div id="claimStatus" class="hidden p-4 rounded-lg bg-green-500/10 border border-green-500/20 mb-4">
                             <div class="text-sm text-green-400" id="claimStatusText"></div>

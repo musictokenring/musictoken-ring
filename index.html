@@ -431,10 +431,21 @@
         body { background: linear-gradient(180deg, #030712 0%, #0f0d2e 35%, #0a0820 65%, #030712 100%); }
         .neon-text-cyan { text-shadow: 0 0 10px rgba(0,243,255,0.5), 0 0 40px rgba(0,243,255,0.2); }
         .neon-text-magenta { text-shadow: 0 0 10px rgba(236,72,153,0.5), 0 0 40px rgba(236,72,153,0.2); }
-        .neon-border-cyan { box-shadow: 0 0 15px rgba(0,243,255,0.15), inset 0 0 15px rgba(0,243,255,0.05); }
-        .neon-border-magenta { box-shadow: 0 0 15px rgba(236,72,153,0.15), inset 0 0 15px rgba(236,72,153,0.05); }
+        /* Bordes mas luminosos en reposo (pedido real: "uno se pierde en la
+           navegacion, no sabe donde empieza una cosa y donde termina la
+           otra") -- antes neon-border-* estaba bastante apagado (0.15/0.05)
+           y las tarjetas principales solo brillaban al pasar el mouse
+           (card-glow*:hover), asi que en reposo (la mayor parte del tiempo,
+           sobre todo en mobile donde no hay "hover" real) los bordes eran
+           casi invisibles contra el fondo oscuro. */
+        .neon-border-cyan { box-shadow: 0 0 18px rgba(0,243,255,0.25), inset 0 0 15px rgba(0,243,255,0.08); }
+        .neon-border-magenta { box-shadow: 0 0 18px rgba(236,72,153,0.25), inset 0 0 15px rgba(236,72,153,0.08); }
+        .neon-border-orange { box-shadow: 0 0 18px rgba(251,146,60,0.25), inset 0 0 15px rgba(251,146,60,0.08); }
+        .neon-border-purple { box-shadow: 0 0 18px rgba(168,85,247,0.25), inset 0 0 15px rgba(168,85,247,0.08); }
+        .neon-border-yellow { box-shadow: 0 0 18px rgba(234,179,8,0.25), inset 0 0 15px rgba(234,179,8,0.08); }
         .card-glow:hover { box-shadow: 0 0 30px rgba(0,243,255,0.2), 0 0 60px rgba(0,243,255,0.1); transform: translateY(-4px); }
         .card-glow-magenta:hover { box-shadow: 0 0 30px rgba(236,72,153,0.2), 0 0 60px rgba(236,72,153,0.1); transform: translateY(-4px); }
+        .card-glow-orange:hover { box-shadow: 0 0 30px rgba(251,146,60,0.2), 0 0 60px rgba(251,146,60,0.1); transform: translateY(-4px); }
         .card-glow-purple:hover { box-shadow: 0 0 30px rgba(168,85,247,0.2), 0 0 60px rgba(168,85,247,0.1); transform: translateY(-4px); }
 
         .toast { padding: 12px 20px; border-radius: 10px; color: #fff; font-size: 14px; font-weight: 500; opacity: 0; transform: translateX(100%); transition: all 0.3s ease; backdrop-filter: blur(10px); max-width: 380px; }
@@ -1693,7 +1704,7 @@
             </div>
             <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
 
-                <div class="group p-6 rounded-2xl border border-cyan-500/15 bg-gray-900/50 transition-all duration-300 card-glow cursor-pointer" onclick="selectMode('quick')">
+                <div class="group p-6 rounded-2xl border border-cyan-500/40 bg-gray-900/50 transition-all duration-300 card-glow neon-border-cyan cursor-pointer" onclick="selectMode('quick')">
                     <div class="text-4xl mb-4">⚔️</div>
                     <h3 class="text-lg font-bold text-white mb-2 group-hover:text-cyan-400 transition-colors">Modo Rápido</h3>
                     <p class="text-gray-400 text-sm mb-4">Matchmaking automático. Encuentra rival en segundos.</p>
@@ -1704,7 +1715,7 @@
                     <button type="button" class="w-full py-2.5 rounded-lg text-sm font-bold bg-cyan-500/15 border border-cyan-500/30 text-cyan-400 hover:bg-cyan-500/25 transition-all cursor-pointer" onclick="selectMode('quick')">Jugar Ahora</button>
                 </div>
 
-                <div class="group p-6 rounded-2xl border border-fuchsia-500/15 bg-gray-900/50 transition-all duration-300 card-glow-magenta cursor-pointer" onclick="selectMode('private')">
+                <div class="group p-6 rounded-2xl border border-fuchsia-500/40 bg-gray-900/50 transition-all duration-300 card-glow-magenta neon-border-magenta cursor-pointer" onclick="selectMode('private')">
                     <div class="text-4xl mb-4">🎵</div>
                     <h3 class="text-lg font-bold text-white mb-2 group-hover:text-fuchsia-400 transition-colors">Sala Privada</h3>
                     <p class="text-gray-400 text-sm mb-4">Invita a tus amigos. Personaliza reglas y apuestas.</p>
@@ -1715,7 +1726,7 @@
                     <button type="button" class="w-full py-2.5 rounded-lg text-sm font-bold bg-fuchsia-500/15 border border-fuchsia-500/30 text-fuchsia-400 hover:bg-fuchsia-500/25 transition-all cursor-pointer" onclick="selectMode('private')">Crear Sala</button>
                 </div>
 
-                <div class="group p-6 rounded-2xl border border-orange-500/15 bg-gray-900/50 transition-all duration-300 card-glow-orange cursor-pointer" onclick="selectMode('social')">
+                <div class="group p-6 rounded-2xl border border-orange-500/40 bg-gray-900/50 transition-all duration-300 card-glow-orange neon-border-orange cursor-pointer" onclick="selectMode('social')">
                     <div class="text-4xl mb-4">⚔️</div>
                     <h3 class="text-lg font-bold text-white mb-2 group-hover:text-orange-400 transition-colors">Desafío Social</h3>
                     <p class="text-gray-400 text-sm mb-4">Desafía a un amigo por redes sociales. Mínimo 1 crédito (~$1).</p>
@@ -1726,7 +1737,7 @@
                     <button type="button" class="w-full py-2.5 rounded-lg text-sm font-bold bg-orange-500/15 border border-orange-500/30 text-orange-400 hover:bg-orange-500/25 transition-all cursor-pointer" onclick="selectMode('social')">Desafiar</button>
                 </div>
 
-                <div class="group p-6 rounded-2xl border border-purple-500/15 bg-gray-900/50 transition-all duration-300 card-glow-purple cursor-pointer" onclick="selectMode('tournament')">
+                <div class="group p-6 rounded-2xl border border-purple-500/40 bg-gray-900/50 transition-all duration-300 card-glow-purple neon-border-purple cursor-pointer" onclick="selectMode('tournament')">
                     <div class="text-4xl mb-4">🏆</div>
                     <h3 class="text-lg font-bold text-white mb-2 group-hover:text-purple-400 transition-colors">Torneo</h3>
                     <p class="text-gray-400 text-sm mb-4">Express cada 10 min por género. Grand Prix semanal con premio gordo.</p>
@@ -1737,7 +1748,7 @@
                     <button type="button" class="w-full py-2.5 rounded-lg text-sm font-bold bg-purple-500/15 border border-purple-500/30 text-purple-400 hover:bg-purple-500/25 transition-all cursor-pointer" onclick="selectMode('tournament')">Unirse al Torneo</button>
                 </div>
 
-                <div class="group p-6 rounded-2xl border border-cyan-500/15 bg-gray-900/50 transition-all duration-300 card-glow cursor-pointer" onclick="selectMode('practice')">
+                <div class="group p-6 rounded-2xl border border-cyan-500/40 bg-gray-900/50 transition-all duration-300 card-glow neon-border-cyan cursor-pointer" onclick="selectMode('practice')">
                     <div class="text-4xl mb-4">🎯</div>
                     <h3 class="text-lg font-bold text-white mb-2 group-hover:text-cyan-400 transition-colors">Modo Práctica</h3>
                     <p class="text-gray-400 text-sm mb-4">Sin riesgo contra la CPU. Perfecto para empezar.</p>
@@ -1890,7 +1901,7 @@
 
         <!-- ROOM SCREEN -->
         <section id="roomScreen" class="hidden mb-16">
-            <div class="max-w-lg mx-auto p-8 rounded-2xl border border-fuchsia-500/15 bg-gray-900/50">
+            <div class="max-w-lg mx-auto p-8 rounded-2xl border border-fuchsia-500/40 bg-gray-900/50 neon-border-magenta">
                 <h2 class="text-2xl font-bold text-white mb-6 text-center">🎵 Sala Privada</h2>
                 <!-- El link es la forma principal de invitar: un clic y quien lo abre
                      entra directo a esta sala con el código ya cargado (ver ?room= en
@@ -1930,7 +1941,7 @@
              alcanza, se avisa acá con un link directo a recargar en vez de
              dejar el botón "Unirse" gris sin explicación (como pasaba antes). -->
         <section id="joinRoomPreview" class="hidden mb-16">
-            <div class="max-w-lg mx-auto p-8 rounded-2xl border border-fuchsia-500/15 bg-gray-900/50">
+            <div class="max-w-lg mx-auto p-8 rounded-2xl border border-fuchsia-500/40 bg-gray-900/50 neon-border-magenta">
                 <h2 class="text-2xl font-bold text-white mb-6 text-center">🎵 Sala Encontrada</h2>
                 <div class="flex items-center justify-center gap-6 mb-6">
                     <div class="text-center">
@@ -1961,7 +1972,7 @@
 
         <!-- CASHOUT CARD -->
         <section class="mb-16">
-            <div class="max-w-2xl mx-auto p-6 sm:p-8 rounded-2xl border border-fuchsia-500/15 bg-gradient-to-br from-gray-900/80 to-purple-950/30 neon-border-magenta">
+            <div class="max-w-2xl mx-auto p-6 sm:p-8 rounded-2xl border border-fuchsia-500/40 bg-gradient-to-br from-gray-900/80 to-purple-950/30 neon-border-magenta">
                 <h3 class="text-xl font-bold text-fuchsia-400 neon-text-magenta mb-2">Retirar Créditos</h3>
                 <p class="text-gray-400 text-sm mb-4">Retira tus créditos nominales y recibe fondos en tu wallet (USD / stablecoin según red y pasarela). Conversión 1:1 respaldada por vault.</p>
                 
@@ -1999,7 +2010,7 @@
 
         <!-- VAULT INFO SECTION -->
         <section id="vaultInfoSection" class="mb-16">
-            <div class="max-w-2xl mx-auto p-6 sm:p-8 rounded-2xl border border-cyan-500/15 bg-gray-900/50">
+            <div class="max-w-2xl mx-auto p-6 sm:p-8 rounded-2xl border border-cyan-500/40 bg-gray-900/50 neon-border-cyan">
                 <h3 class="text-xl font-bold text-white mb-4">💰 Vault de Liquidez</h3>
                 <p class="text-gray-400 text-sm mb-4">Transparencia total: Balance disponible para retiros</p>
                 
