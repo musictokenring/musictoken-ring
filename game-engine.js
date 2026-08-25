@@ -1774,7 +1774,12 @@ const GameEngine = {
                 // reembolso para no dejar crédito de más sin haber
                 // cancelado de verdad.
                 await this.updateBalance(-challenge.bet_amount, 'bet', null);
-                showToast('No se pudo cancelar el desafío. Intentá de nuevo.', 'error');
+                // Mostrar el detalle real del error (probable problema de
+                // permisos/RLS en la base, no del código) en vez de un
+                // mensaje genérico -- para poder diagnosticarlo con certeza
+                // si vuelve a pasar.
+                const detail = updateError?.message || (updateError?.code ? `código ${updateError.code}` : 'sin filas afectadas (probable permiso de la base)');
+                showToast('No se pudo cancelar el desafío: ' + detail, 'error', 12000);
                 return false;
             }
 
@@ -2146,7 +2151,8 @@ const GameEngine = {
             if (updateError || !updated) {
                 console.error('[leavePrivateRoom] No se pudo marcar la sala cancelada:', updateError);
                 await this.updateBalance(-refundAmount, 'bet', null);
-                showToast('No se pudo cerrar la sala. Intentá de nuevo.', 'error');
+                const detail = updateError?.message || (updateError?.code ? `código ${updateError.code}` : 'sin filas afectadas (probable permiso de la base)');
+                showToast('No se pudo cerrar la sala: ' + detail, 'error', 12000);
                 return;
             }
 
