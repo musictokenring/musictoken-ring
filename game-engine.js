@@ -4819,8 +4819,22 @@ const GameEngine = {
         try {
             el.src = url;
             el.loop = true;
-            el.muted = false;
-            el.volume = 0.002;
+            // CRÍTICO: bug real reportado en vivo -- "con un solo play suena
+            // doble". No era cuestión de bajar más el volumen: son dos
+            // copias de la MISMA canción sonando a la vez (esta pista de
+            // desbloqueo + la vista previa principal), y el oído detecta el
+            // eco/fase aunque una de las dos sea casi inaudible (0.002 de
+            // volumen igual se nota como "doble"). Antes se usaba
+            // muted=false + volumen casi nulo -- ahora directamente
+            // silenciada (muted=true, volumen 0). El desbloqueo de autoplay
+            // no depende de que se escuche nada, depende de que el navegador
+            // vea un play() real disparado por un gesto del usuario (el
+            // click en "Preview"), que sigue pasando igual -- por eso
+            // playUserSong() más abajo, cuando arranca la batalla de
+            // verdad, puede desmutear y subir el volumen sin pedir un nuevo
+            // gesto.
+            el.muted = true;
+            el.volume = 0;
             var p = el.play();
             if (p && typeof p.then === 'function') {
                 p.then(function () {
@@ -4837,6 +4851,11 @@ const GameEngine = {
 
     releaseBattleAudioSession() {
         if (!this._userAudioEl) return;
+        // Ahora que holdBattleAudioSession() silencia de verdad (muted=true)
+        // en vez de solo bajar el volumen, acá hay que desmutear también --
+        // si no, la batalla real arrancaría en silencio a pesar de subir el
+        // volumen a 1.
+        this._userAudioEl.muted = false;
         this._userAudioEl.volume = 1;
         this._audioSessionHeld = false;
     },
