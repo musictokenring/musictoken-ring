@@ -395,24 +395,24 @@
                     }
                 }
                 
-                // En móvil, hacer scroll automático al selector de canciones
-                if (typeof isMobileDevice === 'function' && isMobileDevice()) {
-                    setTimeout(function() {
-                        if (songSelection) {
-                            var headerEl = document.querySelector('header');
-                            var headerHeight = headerEl ? headerEl.offsetHeight : 64;
-                            var rect = songSelection.getBoundingClientRect();
-                            var scrollTop = window.pageYOffset || document.documentElement.scrollTop;
-                            var elementTop = rect.top + scrollTop;
-                            var offset = headerHeight + 20;
-                            var targetPosition = Math.max(0, elementTop - offset);
-                            window.scrollTo({
-                                top: targetPosition,
-                                behavior: 'smooth'
-                            });
-                        }
-                    }, 200);
-                }
+                // Scroll automático al selector de canciones (cualquier dispositivo).
+                // Este fallback corre antes de que app.js termine de cargar, así
+                // que no puede depender todavía de window.scrollToSection.
+                setTimeout(function() {
+                    if (songSelection) {
+                        var headerEl = document.querySelector('header');
+                        var headerHeight = headerEl ? headerEl.offsetHeight : 64;
+                        var rect = songSelection.getBoundingClientRect();
+                        var scrollTop = window.pageYOffset || document.documentElement.scrollTop;
+                        var elementTop = rect.top + scrollTop;
+                        var offset = headerHeight + 20;
+                        var targetPosition = Math.max(0, elementTop - offset);
+                        window.scrollTo({
+                            top: targetPosition,
+                            behavior: 'smooth'
+                        });
+                    }
+                }, 200);
             };
         }
         if (typeof window.backToModes !== 'function') {
@@ -3686,8 +3686,12 @@
                     // armando el DOM del modo elegido) y resaltar el campo de
                     // código un momento para que sea obvio que ya está listo.
                     setTimeout(function () {
-                        var songSelectionEl = document.getElementById('songSelection');
-                        if (songSelectionEl) songSelectionEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                        if (typeof window.scrollToSection === 'function') {
+                            window.scrollToSection('songSelection');
+                        } else {
+                            var songSelectionEl = document.getElementById('songSelection');
+                            if (songSelectionEl) songSelectionEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                        }
                         var codeFieldNow = document.getElementById('joinRoomCode');
                         if (codeFieldNow) {
                             codeFieldNow.classList.add('ring-2', 'ring-fuchsia-400');
@@ -4324,139 +4328,13 @@
                 }
             }
             
-            // En móvil, hacer scroll automático al INICIO EXACTO del selector de canciones
-            // ESPECIALMENTE IMPORTANTE PARA MODO PRÁCTICA - MÉTODO MEJORADO Y ROBUSTO
-            if (typeof isMobileDevice === 'function' && isMobileDevice()) {
-                console.log('[selectMode] 📱 Modo móvil detectado, preparando scroll PRECISO a selector de canciones...');
-                console.log('[selectMode] Modo seleccionado:', mode);
-                
-                // Delay inicial más largo para asegurar que el DOM esté completamente actualizado y renderizado
-                setTimeout(function() {
-                    var songSelectionEl = document.getElementById('songSelection');
-                    if (!songSelectionEl) {
-                        console.error('[selectMode] ❌ songSelection no encontrado');
-                        return;
-                    }
-                    
-                    console.log('[selectMode] ✅ songSelection encontrado');
-                    
-                    // CRÍTICO: Asegurar que el elemento esté completamente visible ANTES de calcular posición
-                    songSelectionEl.classList.remove('hidden');
-                    songSelectionEl.style.display = 'block';
-                    songSelectionEl.style.visibility = 'visible';
-                    
-                    // Forzar múltiples reflows para asegurar que el navegador haya renderizado
-                    songSelectionEl.offsetHeight;
-                    songSelectionEl.offsetHeight;
-                    
-                    // Esperar un frame adicional para asegurar renderizado completo
-                    requestAnimationFrame(function() {
-                        requestAnimationFrame(function() {
-                            // Obtener altura del header sticky ANTES de cualquier cálculo
-                            var headerEl = document.querySelector('header');
-                            var headerHeight = headerEl ? headerEl.offsetHeight : 64;
-                            
-                            console.log('[selectMode] Header height calculado:', headerHeight);
-                            
-                            // Obtener posición ABSOLUTA del elemento en el documento
-                            var rect = songSelectionEl.getBoundingClientRect();
-                            var currentScrollY = window.pageYOffset || document.documentElement.scrollTop || window.scrollY;
-                            var absoluteTop = rect.top + currentScrollY;
-                            
-                            // Calcular posición objetivo: posición absoluta menos header menos padding
-                            var paddingOffset = 12; // Padding un poco mayor para mejor visibilidad
-                            var targetScrollPosition = Math.max(0, absoluteTop - headerHeight - paddingOffset);
-                            
-                            console.log('[selectMode] 📱 Cálculo de scroll:', {
-                                mode: mode,
-                                rectTop: rect.top,
-                                currentScrollY: currentScrollY,
-                                absoluteTop: absoluteTop,
-                                headerHeight: headerHeight,
-                                paddingOffset: paddingOffset,
-                                targetScrollPosition: targetScrollPosition,
-                                windowHeight: window.innerHeight,
-                                elementHeight: rect.height
-                            });
-                            
-                            // Verificar que estamos scrollando al elemento correcto (no a otro)
-                            var elementId = songSelectionEl.id;
-                            var elementClasses = songSelectionEl.className;
-                            console.log('[selectMode] Verificando elemento:', {
-                                id: elementId,
-                                classes: elementClasses,
-                                isCorrectElement: elementId === 'songSelection'
-                            });
-                            
-                            if (elementId !== 'songSelection') {
-                                console.error('[selectMode] ❌ ERROR: Elemento incorrecto detectado!');
-                                return;
-                            }
-                            
-                            // Hacer scroll DIRECTO a la posición calculada (sin smooth primero para precisión)
-                            window.scrollTo({
-                                top: targetScrollPosition,
-                                behavior: 'auto' // Instantáneo primero para precisión
-                            });
-                            
-                            // Después de scroll instantáneo, verificar y hacer ajuste fino suave
-                            setTimeout(function() {
-                                var verifyRect = songSelectionEl.getBoundingClientRect();
-                                var verifyScroll = window.pageYOffset || document.documentElement.scrollTop || window.scrollY;
-                                var verifyTop = verifyRect.top;
-                                var expectedTop = headerHeight + paddingOffset;
-                                var difference = verifyTop - expectedTop;
-                                
-                                console.log('[selectMode] 📱 Verificación después de scroll instantáneo:', {
-                                    verifyTop: verifyTop,
-                                    expectedTop: expectedTop,
-                                    diferencia: difference,
-                                    verifyScroll: verifyScroll,
-                                    isInViewport: verifyTop >= headerHeight && verifyTop < window.innerHeight - 50
-                                });
-                                
-                                // Si hay diferencia, hacer ajuste fino suave
-                                if (Math.abs(difference) > 5) {
-                                    var adjustedPosition = verifyRect.top + verifyScroll - headerHeight - paddingOffset;
-                                    console.log('[selectMode] 📱 Aplicando ajuste fino a:', adjustedPosition);
-                                    
-                                    window.scrollTo({
-                                        top: Math.max(0, adjustedPosition),
-                                        behavior: 'smooth'
-                                    });
-                                    
-                                    // Verificación final después del ajuste
-                                    setTimeout(function() {
-                                        var finalRect = songSelectionEl.getBoundingClientRect();
-                                        var finalTop = finalRect.top;
-                                        var finalScroll = window.pageYOffset || document.documentElement.scrollTop || window.scrollY;
-                                        
-                                        console.log('[selectMode] 📱 Verificación FINAL:', {
-                                            finalTop: finalTop,
-                                            finalScroll: finalScroll,
-                                            headerHeight: headerHeight,
-                                            isCorrectlyPositioned: finalTop >= headerHeight && finalTop <= headerHeight + 30,
-                                            elementVisible: finalTop >= 0 && finalTop < window.innerHeight
-                                        });
-                                        
-                                        if (finalTop < headerHeight || finalTop > headerHeight + 50) {
-                                            console.warn('[selectMode] ⚠️ Posición aún no perfecta, último ajuste...');
-                                            var lastPosition = finalRect.top + finalScroll - headerHeight - paddingOffset;
-                                            window.scrollTo({
-                                                top: Math.max(0, lastPosition),
-                                                behavior: 'smooth'
-                                            });
-                                        } else {
-                                            console.log('[selectMode] ✅ Selector de canciones PERFECTAMENTE posicionado');
-                                        }
-                                    }, 600);
-                                } else {
-                                    console.log('[selectMode] ✅ Posición correcta desde el primer intento');
-                                }
-                            }, 100);
-                        });
-                    });
-                }, mode === 'practice' ? 500 : 400); // Delay más largo para práctica para asegurar renderizado completo
+            // Llevar la vista a la sección recién mostrada -- antes esto solo
+            // pasaba en mobile y con una cuenta manual larga y frágil; ahora
+            // usa el helper genérico de app.js (scrollToSection) en
+            // cualquier dispositivo, así en desktop tampoco se pierde la
+            // navegación al elegir un modo.
+            if (typeof window.scrollToSection === 'function') {
+                window.scrollToSection('songSelection', { delay: mode === 'practice' ? 250 : 150 });
             }
             }
 
@@ -4476,25 +4354,9 @@
             if (typeof window.GameEngine !== 'undefined' && typeof window.GameEngine.updatePracticeBetDisplay === 'function') window.GameEngine.updatePracticeBetDisplay();
             selectedSong = null;
             
-            // En móvil, hacer scroll al selector de modos cuando se vuelve atrás
-            if (typeof isMobileDevice === 'function' && isMobileDevice()) {
-                setTimeout(function() {
-                    var modeSelectorEl = document.getElementById('modeSelector');
-                    if (modeSelectorEl) {
-                        var headerEl = document.querySelector('header');
-                        var headerHeight = headerEl ? headerEl.offsetHeight : 64;
-                        var rect = modeSelectorEl.getBoundingClientRect();
-                        var scrollTop = window.pageYOffset || document.documentElement.scrollTop;
-                        var elementTop = rect.top + scrollTop;
-                        var offset = headerHeight + 20;
-                        var targetPosition = Math.max(0, elementTop - offset);
-                        window.scrollTo({
-                            top: targetPosition,
-                            behavior: 'smooth'
-                        });
-                        console.log('[mobile] 📱 Scroll automático al selector de modos');
-                    }
-                }, 200);
+            // Volver a centrar la vista en el selector de modos (cualquier dispositivo)
+            if (typeof window.scrollToSection === 'function') {
+                window.scrollToSection('modeSelector', { delay: 150 });
             }
         }
 
@@ -5519,12 +5381,18 @@
 
             document.getElementById('songSelection').classList.add('hidden');
             document.getElementById('joinRoomPreview').classList.remove('hidden');
+            if (typeof window.scrollToSection === 'function') {
+                window.scrollToSection('joinRoomPreview', { delay: 100 });
+            }
         }
 
         function cancelJoinRoomPreview() {
             window.__joinRoomPreview = null;
             document.getElementById('joinRoomPreview').classList.add('hidden');
             document.getElementById('songSelection').classList.remove('hidden');
+            if (typeof window.scrollToSection === 'function') {
+                window.scrollToSection('songSelection', { delay: 100 });
+            }
         }
         window.cancelJoinRoomPreview = cancelJoinRoomPreview;
 

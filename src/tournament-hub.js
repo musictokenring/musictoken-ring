@@ -867,6 +867,13 @@
     }
     var hub = document.getElementById('tournamentHub');
     if (hub) hub.classList.remove('hidden');
+    // Al abrir el hub la vista no scrolleaba a él -- quedaba a veces
+    // arriba del todo o abajo dependiendo de dónde estaba el usuario
+    // antes de tocar "Torneo". scrollToSection es el helper genérico
+    // de app.js (fix de navegación pedido en vivo).
+    if (typeof window.scrollToSection === 'function') {
+      window.scrollToSection('tournamentHub', { delay: 100 });
+    }
     showGenreList();
     zeroSinceLocal = null;
     applyHubData(buildFallbackHubData());

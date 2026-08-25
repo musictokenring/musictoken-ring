@@ -82,6 +82,53 @@ function showToast(message, type = 'info', duration = 3000) {
 }
 
 // =========================================
+// NAVEGACIÓN: scroll a la sección que el usuario acaba de pedir
+// =========================================
+
+// Reportado en vivo: al presionar un botón (elegir modo, abrir torneo,
+// crear/unirse a sala, etc.) la sección pedida aparecía "muy arriba o muy
+// abajo" -- el usuario tenía que scrollear a mano para encontrarla. Antes
+// de esto solo `selectMode()` intentaba corregirlo, con una cuenta manual
+// larga y encima solo en mobile (isMobileDevice()); el resto de botones no
+// scrolleaba nada. Este helper es la versión única y genérica: centra el
+// elemento en el espacio visible debajo del header sticky, en cualquier
+// dispositivo. Si el elemento es más alto que el viewport, lo alinea justo
+// debajo del header en vez de intentar centrarlo (no tiene sentido centrar
+// algo que no entra en pantalla).
+function scrollToSection(target, opts) {
+    const el = typeof target === 'string' ? document.getElementById(target) : target;
+    if (!el) return;
+    opts = opts || {};
+    const extraDelay = opts.delay || 0;
+
+    setTimeout(() => {
+        requestAnimationFrame(() => {
+            requestAnimationFrame(() => {
+                const headerEl = document.querySelector('header');
+                const headerHeight = headerEl ? headerEl.getBoundingClientRect().height : 0;
+                const rect = el.getBoundingClientRect();
+                const currentScroll = window.pageYOffset || document.documentElement.scrollTop || 0;
+                const absoluteTop = rect.top + currentScroll;
+                const visibleViewport = window.innerHeight - headerHeight;
+                const padding = 16;
+
+                let targetScroll;
+                if (rect.height <= visibleViewport) {
+                    // Entra completo: centrarlo en el espacio visible debajo del header
+                    targetScroll = absoluteTop - headerHeight - Math.max(padding, (visibleViewport - rect.height) / 2);
+                } else {
+                    // No entra completo: alinear su inicio justo debajo del header
+                    targetScroll = absoluteTop - headerHeight - padding;
+                }
+
+                window.scrollTo({ top: Math.max(0, targetScroll), behavior: 'smooth' });
+            });
+        });
+    }, extraDelay);
+}
+window.scrollToSection = scrollToSection;
+
+// =========================================
 // AUDIO PREVIEW MANAGEMENT
 // =========================================
 

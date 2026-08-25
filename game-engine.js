@@ -1324,6 +1324,9 @@ const GameEngine = {
         `;
 
         shareContainer.classList.remove('hidden');
+        if (typeof window.scrollToSection === 'function') {
+            window.scrollToSection('socialChallengeShare', { delay: 100 });
+        }
     },
     
     async acceptSocialChallenge(challengeId, song, betAmount) {
@@ -1792,6 +1795,9 @@ const GameEngine = {
             // Volver a selección de modos
             document.getElementById('socialChallengeShare')?.classList.add('hidden');
             document.getElementById('songSelection')?.classList.remove('hidden');
+            if (typeof window.scrollToSection === 'function') {
+                window.scrollToSection('songSelection', { delay: 100 });
+            }
             return true;
 
         } catch (error) {
@@ -1928,7 +1934,10 @@ const GameEngine = {
             if (linkEl) {
                 linkEl.value = `${window.location.origin}${window.location.pathname}?room=${roomCode}`;
             }
-            
+            if (typeof window.scrollToSection === 'function') {
+                window.scrollToSection('roomScreen', { delay: 100 });
+            }
+
             showToast(`Sala creada: ${roomCode}`, 'success');
             
             // Esperar a que alguien se una
