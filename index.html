@@ -217,7 +217,7 @@
 
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Space+Grotesk:wght@600;700&display=swap" rel="stylesheet">
     <link href="./styles/tournament-ui.css?v=v1.2-podium-anim" rel="stylesheet">
 
     <!-- Tailwind CSS: hasta hoy se cargaba vía el CDN JIT
@@ -2009,7 +2009,7 @@
         </section>
 
         <!-- CASHOUT CARD -->
-        <section class="mb-16">
+        <section id="cashoutSection" class="mb-16">
             <div class="max-w-2xl mx-auto p-6 sm:p-8 rounded-2xl border border-fuchsia-500/40 bg-gradient-to-br from-gray-900/80 to-purple-950/30 neon-border-magenta">
                 <h3 class="text-xl font-bold text-fuchsia-400 neon-text-magenta mb-2">Retirar Créditos</h3>
                 <p class="text-gray-400 text-sm mb-4">Retira tus créditos nominales y recibe fondos en tu wallet (USD / stablecoin según red y pasarela). Conversión 1:1 respaldada por vault.</p>
@@ -8839,6 +8839,566 @@
                     if (id) clearInterval(id);
                 });
                         }, 100);
+        })();
+    </script>
+
+    <!-- ====================================================================
+         REDISEÑO DE NAVEGACIÓN (mobile) -- V2 arcade/gaming
+         ====================================================================
+         Reemplaza el scroll infinito (landing + wallet + selector de modo +
+         vault + contacto todo en una sola página) por 4 secciones de primer
+         nivel navegables con una tab bar fija: Jugar / Torneos / Cartera /
+         Perfil. Basado en el prototipo aprobado (workshop V2, 30-ago):
+         https://claude.ai/code/artifact/3d3c878e-4264-405b-bd42-1c10148884fc
+
+         DECISIÓN DE ALCANCE: esto es una capa nueva, aditiva, que convive
+         con el layout viejo -- NO se borró ni reescribió ninguna sección
+         existente. Motivos:
+           1. Es una app con dinero real (depósitos/retiros en producción,
+              verificados con pagos reales) -- tocar el HTML/JS de esos
+              flujos a ciegas es el error más caro posible acá.
+           2. Varias pantallas (selección de canción, sala de espera, bracket
+              de torneo, batalla en vivo) son su propio proyecto de rediseño
+              -- intentarlas en la misma pasada que la navegación es
+              exactamente el tipo de scope creep que rompe cosas.
+         Por eso el shell nuevo SOLO cubre la navegación de nivel superior
+         (exactamente lo pedido); en cuanto el usuario entra a un modo en
+         curso (selectMode ya deja ver songSelection/waitingScreen/etc, o
+         TournamentHub abre tournamentArena), el shell se auto-oculta y
+         reaparece el layout viejo -- sigue intacto y funcional, solo sin el
+         estilo nuevo todavía. Ese es el siguiente paso, no este.
+
+         CÓMO REUTILIZA LO REAL (nada de esto duplica lógica ni datos):
+           - Jugar: los 4 modos llaman selectMode('quick'|'private'|'social'
+             |'practice') -- las MISMAS funciones que las tarjetas viejas.
+             Desafío Social se agregó acá (el mockup V2 solo traía 3 modos;
+             es funcionalidad real y activa, omitirla habría sido una
+             regresión).
+           - Wall Street of Beats: se REUBICA (no se clona) el #streamDashboard
+             real -- mismos datos en vivo, misma lógica de carrusel.
+           - Torneos: se REUBICAN los nodos reales de #tournamentHub (grid de
+             14 géneros, filtro, detalle) y se llama a TournamentHub.open()
+             -- el mismo hook que ya usaba selectMode('tournament'). El
+             mockup traía una tarjeta "Grand Prix Semanal" con un bote de
+             $2,400 inventado -- no existe ese torneo real, así que NO se
+             implementó (una app de dinero real no puede mostrar cifras de
+             premios ficticias).
+           - Cartera: los 3 métodos de depósito llaman a las mismas
+             openNowPaymentsModal()/openMercadoPagoModal() de siempre. El
+             panel de Retirar REUBICA la tarjeta de cashout real (misma
+             cotización/solicitud) + un botón a openWithdrawalCopModal().
+           - Perfil: refleja (no duplica) profileWins/profileLosses/
+             profileWinRate/profileDisplayName/profileEmail, que ya carga
+             loadPlayerProfile() en cada login. El mockup traía "Racha" y
+             "Nivel" -- no existen esos campos en el sistema real, se
+             reemplazaron por Derrotas y Win Rate (datos reales). "Historial
+             de batallas" abre el profileModal real (mismos datos); "Mis
+             retiros COP" abre el withdrawalCopModal real (mismo historial).
+
+         Solo mobile (<640px): en desktop el media query de abajo fuerza a
+         #mtr2Shell a quedar oculto pase lo que pase, y el layout viejo
+         sigue exactamente igual que hoy. -->
+    <style id="mtr2-styles">
+        #mtr2Shell { display:none; }
+        body.mtr2-active #mtr2Shell { display:block; }
+        body.mtr2-active > header,
+        body.mtr2-active > main,
+        body.mtr2-active > footer { display:none !important; }
+        @media (min-width:640px) {
+            #mtr2Shell { display:none !important; }
+            body.mtr2-active > header,
+            body.mtr2-active > main,
+            body.mtr2-active > footer { display:block !important; }
+        }
+
+        #mtr2Shell { position:fixed; inset:0; z-index:400; font-family:'Inter',system-ui,sans-serif; }
+        #mtr2Shell ::-webkit-scrollbar { display:none; }
+        #mtr2Shell * { scrollbar-width:none; }
+        .mtr2-h { font-family:'Space Grotesk','Inter',system-ui,sans-serif; }
+        .mtr2-view { position:absolute; inset:0; overflow-y:auto; background:#05060a; -webkit-overflow-scrolling:touch; }
+        .mtr2-view-hidden { display:none; }
+        .mtr2-topbar { display:flex; align-items:center; justify-content:space-between; gap:8px; padding:14px 16px 12px; position:sticky; top:0; z-index:2; background:linear-gradient(#05060a 60%, transparent); }
+        .mtr2-logo-dot { width:28px; height:28px; border-radius:8px; background:linear-gradient(135deg,#00f0ff,#0891b2); flex-shrink:0; box-shadow:0 0 14px rgba(0,240,255,0.5); }
+        .mtr2-content { padding:0 16px calc(92px + env(safe-area-inset-bottom, 0px)); }
+        .mtr2-mode { border-radius:20px; padding:18px; position:relative; overflow:hidden; }
+        .mtr2-chip { font-size:10.5px; font-weight:700; padding:4px 10px; border-radius:999px; display:inline-flex; align-items:center; gap:4px; }
+        .mtr2-cta { text-align:center; padding:11px; border-radius:12px; font-size:13.5px; font-weight:800; letter-spacing:0.01em; cursor:pointer; border:none; width:100%; }
+        .mtr2-card { border-radius:20px; box-sizing:border-box; }
+        .mtr2-method { border-radius:16px; padding:14px; display:flex; align-items:center; gap:12px; cursor:pointer; border:none; width:100%; text-align:left; font-family:inherit; }
+        .mtr2-row { display:flex; align-items:center; gap:12px; padding:14px 4px; width:100%; background:none; border:none; border-bottom:1px solid rgba(255,255,255,0.07); cursor:pointer; text-align:left; font-family:inherit; }
+        .mtr2-row:last-child { border-bottom:none; }
+        .mtr2-stat { flex:1; text-align:center; border-radius:14px; padding:12px 6px; }
+        @keyframes mtr2PulseDot { 0%,100%{opacity:1;} 50%{opacity:0.3;} }
+        @keyframes mtr2BorderPulse { 0%,100%{ box-shadow: 0 0 16px rgba(168,85,247,0.25), inset 0 0 12px rgba(168,85,247,0.08);} 50%{ box-shadow: 0 0 28px rgba(168,85,247,0.45), inset 0 0 18px rgba(168,85,247,0.14);} }
+        .mtr2-banner { animation: mtr2BorderPulse 2.6s ease-in-out infinite; }
+        .mtr2-dot { animation: mtr2PulseDot 1.2s ease-in-out infinite; }
+
+        /* Reubicación del #streamDashboard real dentro de Jugar: se achica
+           el título/subtítulo para que funcione como widget compacto en vez
+           de página completa, sin tocar su estructura ni su JS. */
+        #mtr2StreamSlot #streamDashboard { margin-bottom:0 !important; }
+        #mtr2StreamSlot #streamDashboard h2 { font-size:13px !important; margin:0 !important; }
+        #mtr2StreamSlot #streamDashboard h2 + p { display:none !important; }
+        #mtr2StreamSlot #streamDashboard .stream-region-tabs { transform:scale(0.85); transform-origin:right center; }
+        #mtr2StreamSlot #streamDashboard > div:first-child { margin-bottom:8px !important; }
+
+        /* Reubicación de la tarjeta de cashout real dentro de Cartera: se le
+           quita el marco/fondo propio (ya lo da mtr2-card por fuera). */
+        #mtr2CarteraWithdrawSlot #cashoutSection > div { border:none !important; box-shadow:none !important; background:none !important; padding:0 !important; }
+        #mtr2CarteraWithdrawSlot #cashoutSection h3 { display:none; }
+
+        .mtr2-navitem { display:flex; flex-direction:column; align-items:center; justify-content:center; gap:5px; flex:1; min-height:52px; cursor:pointer; padding-top:4px; background:none; border:none; font-family:inherit; }
+        .mtr2-navpill { width:44px; height:28px; border-radius:14px; display:flex; align-items:center; justify-content:center; }
+    </style>
+
+    <div id="mtr2Shell">
+
+        <!-- ============ JUGAR ============ -->
+        <div id="mtr2ViewJugar" class="mtr2-view" style="background:radial-gradient(560px circle at 10% -8%, rgba(0,240,255,0.20), transparent 60%), radial-gradient(480px circle at 105% 18%, rgba(255,0,190,0.16), transparent 55%), #05060a;">
+            <div class="mtr2-topbar">
+                <div style="display:flex; align-items:center; gap:8px;">
+                    <div class="mtr2-logo-dot"></div>
+                    <span class="mtr2-h" style="font-size:16px; font-weight:700; color:#00f0ff;">MusicToken Ring</span>
+                </div>
+                <div id="mtr2CreditsChipWrap" style="font-size:11px; font-weight:800; color:#ff2ec4; background:rgba(255,46,196,0.12); border:1px solid rgba(255,46,196,0.35); border-radius:8px; padding:5px 9px; white-space:nowrap;"><span id="mtr2CreditsChip">0</span> créditos</div>
+            </div>
+            <div class="mtr2-content">
+                <div id="mtr2StreamSlot" style="margin-bottom:16px;"></div>
+
+                <div class="mtr2-banner" onclick="mtr2ShowView('torneos')" style="border-radius:16px; padding:14px 16px; margin-bottom:20px; background:linear-gradient(120deg, rgba(168,85,247,0.18), rgba(0,240,255,0.12)); border:1px solid rgba(168,85,247,0.4); display:flex; align-items:center; gap:12px; cursor:pointer;">
+                    <span data-mtr-icon="trophy" data-mtr-plain data-mtr-size="22" style="color:#c084fc; flex-shrink:0;"></span>
+                    <div style="flex:1; min-width:0;">
+                        <div style="font-size:12.5px; font-weight:800; color:#e9d5ff;">Torneos Express · 14 géneros</div>
+                        <div style="font-size:11px; color:#d1d5db;">Cada 10 minutos · apuestas en créditos</div>
+                    </div>
+                    <span style="font-size:16px; color:#c084fc; flex-shrink:0;">›</span>
+                </div>
+
+                <div style="margin-bottom:10px;">
+                    <h1 class="mtr2-h" style="margin:0 0 2px; font-size:20px; font-weight:700; color:#fff;">Elige tu modo</h1>
+                    <p style="margin:0; font-size:12.5px; color:#9ca3af;">Batalla, apuesta y demuestra tu gusto musical</p>
+                </div>
+
+                <!-- Orden pedido por el dueño (30-ago): Práctica primero,
+                     Desafío Social segundo, Sala Privada tercero, Modo
+                     Rápido al final -- antes iba Rápido/Privada/Social/
+                     Práctica. Solo cambia el orden visual; cada tarjeta
+                     sigue llamando exactamente el mismo selectMode(...). -->
+                <div style="display:flex; flex-direction:column; gap:12px;">
+                    <div class="mtr2-mode" style="background:linear-gradient(135deg, rgba(52,211,153,0.18), rgba(8,15,26,0.95)); border:1.5px solid rgba(52,211,153,0.45); box-shadow:0 0 22px rgba(52,211,153,0.12);">
+                        <div style="display:flex; align-items:center; gap:12px; margin-bottom:10px;">
+                            <div style="width:44px; height:44px; border-radius:12px; background:linear-gradient(135deg,#34d399,#059669); display:flex; align-items:center; justify-content:center; flex-shrink:0; box-shadow:0 0 16px rgba(52,211,153,0.5);"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#05060a" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3.2"/></svg></div>
+                            <div style="flex:1; min-width:0;"><h3 class="mtr2-h" style="margin:0; font-size:16px; font-weight:700; color:#fff;">Modo Práctica</h3><p style="margin:0; font-size:12px; color:#9ca3af;">Sin riesgo contra la CPU. Perfecto para empezar.</p></div>
+                        </div>
+                        <div style="display:flex; gap:6px; margin-bottom:12px;">
+                            <span class="mtr2-chip" style="color:#34d399; background:rgba(52,211,153,0.12); border:1px solid rgba(52,211,153,0.3);">🛡 Sin riesgo</span>
+                            <span class="mtr2-chip" style="color:#34d399; background:rgba(52,211,153,0.12); border:1px solid rgba(52,211,153,0.3);">📖 Aprende</span>
+                        </div>
+                        <button type="button" class="mtr2-cta" style="color:#05060a; background:linear-gradient(90deg,#34d399,#6ee7b7);" onclick="selectMode('practice')">PRACTICAR</button>
+                    </div>
+
+                    <div class="mtr2-mode" style="background:linear-gradient(135deg, rgba(251,146,60,0.20), rgba(8,15,26,0.95)); border:1.5px solid rgba(251,146,60,0.5); box-shadow:0 0 22px rgba(251,146,60,0.15);">
+                        <div style="display:flex; align-items:center; gap:12px; margin-bottom:10px;">
+                            <div style="width:44px; height:44px; border-radius:12px; background:linear-gradient(135deg,#fb923c,#c2410c); display:flex; align-items:center; justify-content:center; flex-shrink:0; box-shadow:0 0 16px rgba(251,146,60,0.5);"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#05060a" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M21 3v5l-11 9l-4 4l-3 -3l4 -4l9 -11l5 0"/><path d="M5 13l6 6"/><path d="M14.32 17.32l3.68 3.68l3 -3l-3.365 -3.365"/><path d="M10 5.5l-2 -2.5h-5v5l3 2.5"/></svg></div>
+                            <div style="flex:1; min-width:0;"><h3 class="mtr2-h" style="margin:0; font-size:16px; font-weight:700; color:#fff;">Desafío Social</h3><p style="margin:0; font-size:12px; color:#9ca3af;">Desafía a un amigo por redes sociales. Mínimo 1 crédito.</p></div>
+                        </div>
+                        <div style="display:flex; gap:6px; margin-bottom:12px;">
+                            <span class="mtr2-chip" style="color:#fdba74; background:rgba(251,146,60,0.12); border:1px solid rgba(251,146,60,0.3);">📱 Redes</span>
+                            <span class="mtr2-chip" style="color:#fdba74; background:rgba(251,146,60,0.12); border:1px solid rgba(251,146,60,0.3);">100+</span>
+                        </div>
+                        <button type="button" class="mtr2-cta" style="color:#05060a; background:linear-gradient(90deg,#fb923c,#fdba74);" onclick="selectMode('social')">DESAFIAR</button>
+                    </div>
+
+                    <div class="mtr2-mode" style="background:linear-gradient(135deg, rgba(255,46,196,0.20), rgba(8,15,26,0.95)); border:1.5px solid rgba(255,46,196,0.5); box-shadow:0 0 22px rgba(255,46,196,0.15);">
+                        <div style="display:flex; align-items:center; gap:12px; margin-bottom:10px;">
+                            <div style="width:44px; height:44px; border-radius:12px; background:linear-gradient(135deg,#ff2ec4,#a21caf); display:flex; align-items:center; justify-content:center; flex-shrink:0; box-shadow:0 0 16px rgba(255,46,196,0.5);"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#05060a" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V7a4 4 0 018 0v4"/></svg></div>
+                            <div style="flex:1; min-width:0;"><h3 class="mtr2-h" style="margin:0; font-size:16px; font-weight:700; color:#fff;">Sala Privada</h3><p style="margin:0; font-size:12px; color:#9ca3af;">Invita a tus amigos. Personaliza reglas y apuestas.</p></div>
+                        </div>
+                        <div style="display:flex; gap:6px; margin-bottom:12px;">
+                            <span class="mtr2-chip" style="color:#ff6bd6; background:rgba(255,46,196,0.12); border:1px solid rgba(255,46,196,0.3);">👥 Amigos</span>
+                            <span class="mtr2-chip" style="color:#ff6bd6; background:rgba(255,46,196,0.12); border:1px solid rgba(255,46,196,0.3);">🔗 Código</span>
+                        </div>
+                        <button type="button" class="mtr2-cta" style="color:#05060a; background:linear-gradient(90deg,#ff2ec4,#e879f9);" onclick="selectMode('private')">CREAR SALA</button>
+                    </div>
+
+                    <div class="mtr2-mode" style="background:linear-gradient(135deg, rgba(0,240,255,0.22), rgba(8,15,26,0.95)); border:1.5px solid rgba(0,240,255,0.5); box-shadow:0 0 22px rgba(0,240,255,0.15); margin-bottom:4px;">
+                        <div style="display:flex; align-items:center; gap:12px; margin-bottom:10px;">
+                            <div style="width:44px; height:44px; border-radius:12px; background:linear-gradient(135deg,#00f0ff,#0891b2); display:flex; align-items:center; justify-content:center; flex-shrink:0; box-shadow:0 0 16px rgba(0,240,255,0.5);"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#05060a" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2 3 14h7l-1 8 10-12h-7l1-8z"/></svg></div>
+                            <div style="flex:1; min-width:0;"><h3 class="mtr2-h" style="margin:0; font-size:16px; font-weight:700; color:#fff;">Modo Rápido</h3><p style="margin:0; font-size:12px; color:#9ca3af;">Matchmaking automático. Encuentra rival en segundos.</p></div>
+                        </div>
+                        <div style="display:flex; gap:6px; margin-bottom:12px;">
+                            <span class="mtr2-chip" style="color:#00f0ff; background:rgba(0,240,255,0.12); border:1px solid rgba(0,240,255,0.3);">⚡ Auto-match</span>
+                            <span class="mtr2-chip" style="color:#00f0ff; background:rgba(0,240,255,0.12); border:1px solid rgba(0,240,255,0.3);">⏱ 1 min</span>
+                        </div>
+                        <button type="button" class="mtr2-cta" style="color:#05060a; background:linear-gradient(90deg,#00f0ff,#22d3ee);" onclick="selectMode('quick')">JUGAR AHORA</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ============ TORNEOS ============ -->
+        <div id="mtr2ViewTorneos" class="mtr2-view mtr2-view-hidden" style="background:radial-gradient(560px circle at 90% -8%, rgba(168,85,247,0.22), transparent 60%), radial-gradient(480px circle at 0% 20%, rgba(0,240,255,0.10), transparent 55%), #05060a;">
+            <div class="mtr2-topbar">
+                <div style="display:flex; align-items:center; gap:8px;">
+                    <div class="mtr2-logo-dot"></div>
+                    <span class="mtr2-h" style="font-size:16px; font-weight:700; color:#00f0ff;">MusicToken Ring</span>
+                </div>
+                <div style="font-size:11px; font-weight:800; color:#ff2ec4; background:rgba(255,46,196,0.12); border:1px solid rgba(255,46,196,0.35); border-radius:8px; padding:5px 9px; white-space:nowrap;"><span class="mtr2-credits-mirror">0</span> créditos</div>
+            </div>
+            <div class="mtr2-content">
+                <h1 class="mtr2-h" style="margin:0 0 2px; font-size:22px; font-weight:700; color:#fff;">Torneos</h1>
+                <p style="margin:0 0 16px; font-size:12.5px; color:#9ca3af;">14 géneros · Express cada 10 min · apuestas en créditos</p>
+                <div id="mtr2TorneosSlot"></div>
+            </div>
+        </div>
+
+        <!-- ============ CARTERA ============ -->
+        <div id="mtr2ViewCartera" class="mtr2-view mtr2-view-hidden" style="background:radial-gradient(560px circle at 100% -10%, rgba(255,46,196,0.18), transparent 60%), radial-gradient(480px circle at 0% 25%, rgba(0,240,255,0.14), transparent 55%), #05060a;">
+            <div class="mtr2-topbar">
+                <div style="display:flex; align-items:center; gap:8px;">
+                    <div class="mtr2-logo-dot"></div>
+                    <span class="mtr2-h" style="font-size:16px; font-weight:700; color:#00f0ff;">MusicToken Ring</span>
+                </div>
+            </div>
+            <div class="mtr2-content">
+                <h1 class="mtr2-h" style="margin:0 0 14px; font-size:22px; font-weight:700; color:#fff;">Cartera</h1>
+
+                <div class="mtr2-card" style="border:1.5px solid rgba(255,46,196,0.4); box-shadow:0 0 24px rgba(255,46,196,0.15); padding:20px; margin-bottom:16px; background:linear-gradient(135deg, rgba(255,46,196,0.14), rgba(8,15,26,0.95));">
+                    <div style="font-size:11.5px; font-weight:700; color:#ff9bde; letter-spacing:0.04em; margin-bottom:6px;">SALDO DISPONIBLE</div>
+                    <div class="mtr2-h" style="font-size:32px; font-weight:700; color:#fff; margin-bottom:4px; line-height:1;"><span class="mtr2-credits-mirror">0</span> <span style="font-size:16px; color:#ff6bd6;">créditos</span></div>
+                    <div style="font-size:12.5px; color:#9ca3af;">= $<span class="mtr2-usd-mirror">0</span> USD nominal <span style="color:#34d399;">· 1 crédito ≈ $1</span></div>
+                </div>
+
+                <div style="display:flex; background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.08); border-radius:14px; padding:4px; margin-bottom:16px;">
+                    <button type="button" id="mtr2TabDeposit" onclick="mtr2SetCarteraTab('deposit')" style="flex:1; text-align:center; padding:10px 0; border-radius:10px; font-size:13.5px; font-weight:800; cursor:pointer; border:none; font-family:inherit;">DEPOSITAR</button>
+                    <button type="button" id="mtr2TabWithdraw" onclick="mtr2SetCarteraTab('withdraw')" style="flex:1; text-align:center; padding:10px 0; border-radius:10px; font-size:13.5px; font-weight:800; cursor:pointer; border:none; font-family:inherit;">RETIRAR</button>
+                </div>
+
+                <div id="mtr2PanelDeposit" class="mtr2-card" style="border:1px solid rgba(255,255,255,0.08); padding:16px; background:rgba(255,255,255,0.02);">
+                    <div style="margin-bottom:12px;">
+                        <div style="font-size:14.5px; font-weight:700; color:#fff; margin-bottom:2px;">Añadir saldo (USD)</div>
+                        <div style="font-size:12px; color:#9ca3af; line-height:1.4;">Compra con tarjeta o paga en cripto. Se acredita al confirmarse el pago.</div>
+                    </div>
+                    <div style="display:flex; flex-direction:column; gap:10px;">
+                        <button type="button" class="mtr2-method" style="border:1.5px solid rgba(255,46,196,0.5); background:linear-gradient(135deg, rgba(255,46,196,0.18), rgba(15,23,42,0.9));" onclick="if(typeof openNowPaymentsModal==='function') openNowPaymentsModal('fiat')">
+                            <div style="width:38px; height:38px; border-radius:10px; background:linear-gradient(135deg,#ff2ec4,#a21caf); display:flex; align-items:center; justify-content:center; flex-shrink:0; box-shadow:0 0 12px rgba(255,46,196,0.5);"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#05060a" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20"/></svg></div>
+                            <div style="flex:1; min-width:0;"><span style="font-size:13px; font-weight:700; color:#fff;">Comprar con Tarjeta</span><div style="font-size:11.5px; color:#9ca3af;">No necesitás wallet.</div></div>
+                        </button>
+                        <button type="button" class="mtr2-method" style="border:1.5px solid rgba(0,240,255,0.45); background:linear-gradient(135deg, rgba(0,240,255,0.14), rgba(15,23,42,0.9));" onclick="if(typeof openMercadoPagoModal==='function') openMercadoPagoModal()">
+                            <div style="width:38px; height:38px; border-radius:10px; background:linear-gradient(135deg,#00f0ff,#0891b2); display:flex; align-items:center; justify-content:center; flex-shrink:0; box-shadow:0 0 12px rgba(0,240,255,0.5); font-size:16px;">🇨🇴</div>
+                            <div style="flex:1; min-width:0;"><span style="font-size:13px; font-weight:700; color:#fff;">Pagar en pesos (COP)</span><div style="font-size:11.5px; color:#9ca3af;">PSE · Nequi · Bancolombia.</div></div>
+                        </button>
+                        <button type="button" class="mtr2-method" style="border:1px solid rgba(255,255,255,0.1); background:rgba(255,255,255,0.03);" onclick="if(typeof openNowPaymentsModal==='function') openNowPaymentsModal('crypto')">
+                            <div style="width:38px; height:38px; border-radius:10px; background:rgba(255,255,255,0.06); display:flex; align-items:center; justify-content:center; flex-shrink:0;"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M8 12h8M12 8v8"/></svg></div>
+                            <div style="flex:1; min-width:0;"><div style="font-size:13px; font-weight:700; color:#fff;">Pagar con Cripto <span style="color:#9ca3af; font-weight:600; font-size:11px;">(avanzado)</span></div><div style="font-size:11.5px; color:#9ca3af;">Requiere USDT/BTC/ETH en tu wallet.</div></div>
+                        </button>
+                    </div>
+                    <div style="margin-top:14px; padding-top:12px; border-top:1px solid rgba(255,255,255,0.08); font-size:11px; color:#6b7280;">Fees: Depósito 5% · Apuesta 2% · Retiro 5%</div>
+                </div>
+
+                <div id="mtr2PanelWithdraw" class="mtr2-card" style="display:none; border:1px solid rgba(255,255,255,0.08); padding:16px; background:rgba(255,255,255,0.02);">
+                    <!-- Sin intro propia acá a propósito: la tarjeta real
+                         reubicada (#cashoutSection) ya trae su propio
+                         encabezado y explicación -- incluyendo, además del
+                         retiro en USD/cripto, su PROPIO botón de "Retirar en
+                         pesos" (Nequi/Bancolombia/Bre-B). Duplicarlo acá
+                         (como se hizo en un primer intento) dejaba dos
+                         botones para la misma acción -- se sacó. -->
+                    <div id="mtr2CarteraWithdrawSlot"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ============ PERFIL ============ -->
+        <div id="mtr2ViewPerfil" class="mtr2-view mtr2-view-hidden" style="background:radial-gradient(560px circle at 15% -10%, rgba(0,240,255,0.16), transparent 60%), radial-gradient(480px circle at 100% 20%, rgba(255,46,196,0.14), transparent 55%), #05060a;">
+            <div class="mtr2-topbar">
+                <div style="display:flex; align-items:center; gap:8px;">
+                    <div class="mtr2-logo-dot"></div>
+                    <span class="mtr2-h" style="font-size:16px; font-weight:700; color:#00f0ff;">MusicToken Ring</span>
+                </div>
+            </div>
+            <div class="mtr2-content">
+                <div style="display:flex; flex-direction:column; align-items:center; text-align:center; margin-bottom:18px; padding-top:6px;">
+                    <div id="mtr2ProfileAvatar" style="width:72px; height:72px; border-radius:50%; background:linear-gradient(135deg,#00f0ff,#0891b2); display:flex; align-items:center; justify-content:center; font-size:26px; font-weight:800; color:#05060a; box-shadow:0 0 24px rgba(0,240,255,0.45); border:3px solid rgba(0,240,255,0.3); margin-bottom:10px;">?</div>
+                    <div class="mtr2-h" id="mtr2ProfileName" style="font-size:17px; font-weight:700; color:#fff; margin-bottom:4px;">Jugador</div>
+                    <div id="mtr2ProfileWalletStatus" style="font-size:11px; font-weight:700; color:#9ca3af; background:rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.1); border-radius:999px; padding:4px 10px; cursor:pointer;">Wallet no conectada</div>
+                </div>
+
+                <div style="display:flex; gap:8px; margin-bottom:16px;">
+                    <div class="mtr2-stat" style="background:linear-gradient(135deg, rgba(250,204,21,0.16), rgba(15,23,42,0.9)); border:1px solid rgba(250,204,21,0.35);">
+                        <div class="mtr2-h" style="font-size:18px; font-weight:700; color:#fde047;" id="mtr2StatWins">0</div>
+                        <div style="font-size:10px; color:#9ca3af; font-weight:600;">Victorias</div>
+                    </div>
+                    <div class="mtr2-stat" style="background:linear-gradient(135deg, rgba(244,63,94,0.16), rgba(15,23,42,0.9)); border:1px solid rgba(244,63,94,0.35);">
+                        <div class="mtr2-h" style="font-size:18px; font-weight:700; color:#fb7185;" id="mtr2StatLosses">0</div>
+                        <div style="font-size:10px; color:#9ca3af; font-weight:600;">Derrotas</div>
+                    </div>
+                    <div class="mtr2-stat" style="background:linear-gradient(135deg, rgba(168,85,247,0.16), rgba(15,23,42,0.9)); border:1px solid rgba(168,85,247,0.35);">
+                        <div class="mtr2-h" style="font-size:18px; font-weight:700; color:#c084fc;" id="mtr2StatWinRate">0%</div>
+                        <div style="font-size:10px; color:#9ca3af; font-weight:600;">Win Rate</div>
+                    </div>
+                </div>
+
+                <div class="mtr2-card" style="border:1px solid rgba(255,46,196,0.3); padding:14px 16px; margin-bottom:18px; display:flex; align-items:center; justify-content:space-between; background:linear-gradient(135deg, rgba(255,46,196,0.1), rgba(15,23,42,0.6));">
+                    <div>
+                        <div style="font-size:11px; color:#9ca3af; margin-bottom:2px;">Saldo total</div>
+                        <div class="mtr2-h" style="font-size:18px; font-weight:700; color:#fff;"><span class="mtr2-credits-mirror">0</span> <span style="font-size:12px; font-weight:600; color:#ff6bd6;">créditos</span></div>
+                    </div>
+                    <div style="font-size:12px; color:#9ca3af;">$<span class="mtr2-usd-mirror">0</span> USD</div>
+                </div>
+
+                <div class="mtr2-card" style="border:1px solid rgba(255,255,255,0.08); padding:4px 14px; background:rgba(255,255,255,0.02);">
+                    <button type="button" class="mtr2-row" onclick="if(typeof openProfileModal==='function') openProfileModal()">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;"><path d="M3 3v18h18"/><path d="M7 14l4-4 3 3 5-6"/></svg>
+                        <span style="flex:1; font-size:13.5px; font-weight:600; color:#e5e7eb;">Historial de batallas</span>
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#4b5563" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg>
+                    </button>
+                    <button type="button" class="mtr2-row" onclick="mtr2WalletRowClick()">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;"><rect x="3" y="6" width="18" height="13" rx="2"/><path d="M3 10h18"/></svg>
+                        <span style="flex:1; font-size:13.5px; font-weight:600; color:#e5e7eb;" id="mtr2WalletRowLabel">Conectar wallet</span>
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#4b5563" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg>
+                    </button>
+                    <button type="button" class="mtr2-row" onclick="if(typeof window.openWithdrawalCopModal==='function') window.openWithdrawalCopModal()">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;"><path d="M12 2v14m0 0l-4-4m4 4l4-4M4 18h16"/></svg>
+                        <span style="flex:1; font-size:13.5px; font-weight:600; color:#e5e7eb;">Mis retiros en pesos (COP)</span>
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#4b5563" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg>
+                    </button>
+                </div>
+
+                <button type="button" onclick="if(typeof logout==='function') logout()" style="display:block; width:100%; margin-top:14px; text-align:center; font-size:13px; font-weight:700; color:#f87171; padding:10px; background:none; border:none; cursor:pointer; font-family:inherit;">Cerrar sesión</button>
+            </div>
+        </div>
+
+        <!-- ============ BOTTOM NAV ============ -->
+        <nav id="mtr2Nav" style="position:fixed; left:0; right:0; bottom:0; z-index:410; background:rgba(5,6,10,0.95); backdrop-filter:blur(18px); border-top:1px solid rgba(255,255,255,0.07); display:flex; align-items:stretch; justify-content:space-around; padding:6px 4px calc(env(safe-area-inset-bottom, 0px) + 12px); box-sizing:border-box;">
+            <button type="button" class="mtr2-navitem" data-mtr2-tab="jugar" onclick="mtr2ShowView('jugar')">
+                <div class="mtr2-navpill"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="8" width="20" height="10" rx="5"/><path d="M7 13h.01M9 11v4M15.5 11.5h.01M17.5 13.5h.01"/></svg></div>
+                <span style="font-size:10.5px;">Jugar</span>
+            </button>
+            <button type="button" class="mtr2-navitem" data-mtr2-tab="torneos" onclick="mtr2ShowView('torneos')">
+                <div class="mtr2-navpill"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 4h8v5a4 4 0 01-8 0V4z"/><path d="M8 6H5a2 2 0 002 4M16 6h3a2 2 0 01-2 4"/><path d="M12 13v3m-3 4h6m-6 0v-2a3 3 0 013-3 3 3 0 013 3v2"/></svg></div>
+                <span style="font-size:10.5px;">Torneos</span>
+            </button>
+            <button type="button" class="mtr2-navitem" data-mtr2-tab="cartera" onclick="mtr2ShowView('cartera')">
+                <div class="mtr2-navpill"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="6" width="18" height="13" rx="2"/><path d="M3 10h18"/><circle cx="16.5" cy="14" r="1.15" fill="currentColor" stroke="none"/></svg></div>
+                <span style="font-size:10.5px;">Cartera</span>
+            </button>
+            <button type="button" class="mtr2-navitem" data-mtr2-tab="perfil" onclick="mtr2ShowView('perfil')">
+                <div class="mtr2-navpill"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="3.5"/><path d="M5 20c0-3.6 3.1-6.5 7-6.5s7 2.9 7 6.5"/></svg></div>
+                <span style="font-size:10.5px;">Perfil</span>
+            </button>
+        </nav>
+    </div>
+
+    <script>
+        (function () {
+            'use strict';
+
+            var mtr2CurrentView = 'jugar';
+            var mtr2InShell = false;
+            var mtr2OriginalPlacement = {}; // id -> {parent, next} tal como estaba en el layout viejo
+            var mtr2MOVED_IDS = ['streamDashboard', 'tournamentRotationBanner', 'tournamentGenreListView', 'tournamentGenreDetail', 'cashoutSection'];
+            var mtr2ON = '#00f0ff', mtr2OFF = '#5b6472', mtr2ON_PILL = 'rgba(0,240,255,0.14)';
+
+            // Reubica (mueve, no clona) los nodos reales hacia los slots del
+            // shell nuevo -- y sabe devolverlos a su lugar original. Hace
+            // falta lo segundo: si esto fuera un movimiento de una sola vía,
+            // un usuario que activó el shell en mobile y después lo
+            // desactiva (pasa a desktop, o entra a una partida en curso, que
+            // hace que el shell ceda el paso al layout viejo) se encontraría
+            // el layout viejo con Wall Street of Beats / los géneros de
+            // torneo / el retiro de créditos directamente ausentes -- siguen
+            // viviendo dentro del shell nuevo, que en ese momento está
+            // oculto. Confirmado en vivo con el preview local antes de este
+            // fix.
+            function mtr2RecordOriginal(id) {
+                if (mtr2OriginalPlacement[id]) return;
+                var el = document.getElementById(id);
+                if (!el || !el.parentElement) return;
+                mtr2OriginalPlacement[id] = { parent: el.parentElement, next: el.nextSibling };
+            }
+
+            function mtr2MoveToShell() {
+                if (mtr2InShell) return;
+                var streamSlot = document.getElementById('mtr2StreamSlot');
+                var torneosSlot = document.getElementById('mtr2TorneosSlot');
+                var withdrawSlot = document.getElementById('mtr2CarteraWithdrawSlot');
+                var slotFor = {
+                    streamDashboard: streamSlot,
+                    tournamentRotationBanner: torneosSlot,
+                    tournamentGenreListView: torneosSlot,
+                    tournamentGenreDetail: torneosSlot,
+                    cashoutSection: withdrawSlot
+                };
+                mtr2MOVED_IDS.forEach(function (id) {
+                    var el = document.getElementById(id);
+                    var slot = slotFor[id];
+                    if (!el || !slot) return;
+                    mtr2RecordOriginal(id);
+                    slot.appendChild(el);
+                });
+                mtr2InShell = true;
+            }
+
+            function mtr2RestoreToMain() {
+                if (!mtr2InShell) return;
+                mtr2MOVED_IDS.forEach(function (id) {
+                    var el = document.getElementById(id);
+                    var orig = mtr2OriginalPlacement[id];
+                    if (!el || !orig || !orig.parent) return;
+                    if (orig.next && orig.next.parentElement === orig.parent) {
+                        orig.parent.insertBefore(el, orig.next);
+                    } else {
+                        orig.parent.appendChild(el);
+                    }
+                });
+                mtr2InShell = false;
+            }
+
+            window.mtr2SetCarteraTab = function (tab) {
+                var isDeposit = tab === 'deposit';
+                document.getElementById('mtr2PanelDeposit').style.display = isDeposit ? 'block' : 'none';
+                document.getElementById('mtr2PanelWithdraw').style.display = isDeposit ? 'none' : 'block';
+                var depBtn = document.getElementById('mtr2TabDeposit'), witBtn = document.getElementById('mtr2TabWithdraw');
+                depBtn.style.color = isDeposit ? '#05060a' : '#9ca3af';
+                depBtn.style.background = isDeposit ? '#00f0ff' : 'transparent';
+                witBtn.style.color = !isDeposit ? '#05060a' : '#9ca3af';
+                witBtn.style.background = !isDeposit ? '#00f0ff' : 'transparent';
+            };
+
+            window.mtr2WalletRowClick = function () {
+                var addr = document.getElementById('walletAddress');
+                var connected = addr && !addr.classList.contains('hidden') && addr.textContent.trim();
+                if (connected) return; // ya conectada, no hay nada más que hacer acá
+                var btn = document.getElementById('walletConnectBtn');
+                if (btn) btn.click();
+            };
+
+            window.mtr2ShowView = function (view) {
+                mtr2MoveToShell();
+                mtr2CurrentView = view;
+                ['jugar', 'torneos', 'cartera', 'perfil'].forEach(function (v) {
+                    var cap = v.charAt(0).toUpperCase() + v.slice(1);
+                    var el = document.getElementById('mtr2View' + cap);
+                    if (el) el.classList.toggle('mtr2-view-hidden', v !== view);
+                });
+                document.querySelectorAll('#mtr2Nav .mtr2-navitem').forEach(function (btn) {
+                    var active = btn.getAttribute('data-mtr2-tab') === view;
+                    var pill = btn.querySelector('.mtr2-navpill'), svg = btn.querySelector('svg'), label = btn.querySelector('span');
+                    pill.style.background = active ? mtr2ON_PILL : 'transparent';
+                    svg.style.color = active ? mtr2ON : mtr2OFF;
+                    label.style.color = active ? mtr2ON : mtr2OFF;
+                    label.style.fontWeight = active ? '800' : '600';
+                });
+                if (view === 'torneos' && window.TournamentHub && typeof window.TournamentHub.open === 'function') {
+                    window.TournamentHub.open();
+                }
+            };
+
+            // Refleja valores reales (créditos, stats de perfil, nombre,
+            // estado de wallet) en los elementos nuevos. Solo LEE de los ids
+            // que ya carga el sistema real -- no toca ninguna lógica de
+            // escritura/guardado.
+            function mtr2SyncMirrors() {
+                var creditsSrc = document.getElementById('creditsDisplayMobile');
+                if (creditsSrc) {
+                    var creditsTxt = creditsSrc.textContent.trim();
+                    document.querySelectorAll('.mtr2-credits-mirror, #mtr2CreditsChip').forEach(function (el) { el.textContent = creditsTxt; });
+                }
+                var usdSrc = document.getElementById('usdcValueDisplayMobile');
+                if (usdSrc) {
+                    var usdTxt = usdSrc.textContent.replace('$', '').trim();
+                    document.querySelectorAll('.mtr2-usd-mirror').forEach(function (el) { el.textContent = usdTxt; });
+                }
+
+                var name = document.getElementById('profileDisplayName');
+                if (name && name.textContent.trim()) {
+                    var nameTxt = name.textContent.trim();
+                    document.getElementById('mtr2ProfileName').textContent = nameTxt;
+                    document.getElementById('mtr2ProfileAvatar').textContent = nameTxt.charAt(0).toUpperCase();
+                }
+                var wins = document.getElementById('profileWins');
+                if (wins) document.getElementById('mtr2StatWins').textContent = wins.textContent.trim();
+                var losses = document.getElementById('profileLosses');
+                if (losses) document.getElementById('mtr2StatLosses').textContent = losses.textContent.trim();
+                var winRate = document.getElementById('profileWinRate');
+                if (winRate) document.getElementById('mtr2StatWinRate').textContent = winRate.textContent.trim();
+
+                var addr = document.getElementById('walletAddress');
+                var connected = addr && !addr.classList.contains('hidden') && addr.textContent.trim();
+                var statusEl = document.getElementById('mtr2ProfileWalletStatus');
+                var rowLabel = document.getElementById('mtr2WalletRowLabel');
+                if (statusEl) statusEl.textContent = connected ? ('Wallet: ' + addr.textContent.trim()) : 'Wallet no conectada';
+                if (rowLabel) rowLabel.textContent = connected ? 'Wallet conectada' : 'Conectar wallet';
+            }
+
+            // El shell solo se activa en mobile, con sesión iniciada, y
+            // cuando NO hay un modo/partida en curso -- ahí se cede el paso
+            // al layout viejo (intacto) hasta que ese flujo termine.
+            var MTR2_IN_PROGRESS_IDS = ['songSelection', 'waitingScreen', 'roomScreen', 'joinRoomPreview', 'tournamentArena'];
+            function mtr2ShouldBeActive() {
+                if (window.innerWidth >= 640) return false;
+                var loginWall = document.getElementById('loginWall');
+                if (!loginWall || !loginWall.classList.contains('hidden')) return false;
+                for (var i = 0; i < MTR2_IN_PROGRESS_IDS.length; i++) {
+                    var el = document.getElementById(MTR2_IN_PROGRESS_IDS[i]);
+                    if (el && !el.classList.contains('hidden')) return false;
+                }
+                return true;
+            }
+
+            // OJO: esto se llama seguido (interval de 1s + un MutationObserver
+            // por cada id vigilado) -- reejecutar mtr2ShowView() acá adentro
+            // en cada tick reinvoca efectos secundarios por-pestaña
+            // (TournamentHub.open() para Torneos) una y otra vez mientras el
+            // shell sigue activo, y open() arranca sus propios timers. Eso
+            // los va acumulando sin límite y termina congelando la pestaña
+            // (confirmado en vivo con el preview local). La vista SOLO debe
+            // (re)mostrarse en la transición inactivo -> activo, nunca en
+            // cada tick de por sí -- ya se re-muestra explícitamente cuando
+            // el usuario toca un tab, vía mtr2ShowView().
+            var mtr2WasActive = false;
+            function mtr2Sync() {
+                var active = mtr2ShouldBeActive();
+                document.body.classList.toggle('mtr2-active', active);
+                if (active) {
+                    mtr2MoveToShell();
+                    if (!mtr2WasActive) window.mtr2ShowView(mtr2CurrentView);
+                    mtr2SyncMirrors();
+                } else {
+                    // Desactivo (desktop, deslogueo, o un modo/partida en
+                    // curso que le cede el paso al layout viejo): el
+                    // contenido reubicado tiene que volver a su lugar
+                    // original en ese layout, o quedaría atrapado dentro del
+                    // shell oculto y desaparecería de la vista vieja.
+                    mtr2RestoreToMain();
+                }
+                mtr2WasActive = active;
+            }
+
+            function mtr2Init() {
+                mtr2Sync();
+                window.mtr2SetCarteraTab('deposit');
+                window.addEventListener('resize', mtr2Sync);
+                setInterval(function () {
+                    mtr2Sync();
+                    if (document.body.classList.contains('mtr2-active')) mtr2SyncMirrors();
+                }, 1000);
+
+                if (typeof MutationObserver !== 'undefined') {
+                    var watchIds = ['loginWall', 'modeSelector', 'songSelection', 'waitingScreen', 'roomScreen', 'joinRoomPreview', 'tournamentArena', 'tournamentHub'];
+                    watchIds.forEach(function (id) {
+                        var el = document.getElementById(id);
+                        if (el) new MutationObserver(mtr2Sync).observe(el, { attributes: true, attributeFilter: ['class'] });
+                    });
+                }
+            }
+
+            if (document.readyState === 'loading') {
+                document.addEventListener('DOMContentLoaded', mtr2Init);
+            } else {
+                mtr2Init();
+            }
         })();
     </script>
 </body>
