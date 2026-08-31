@@ -873,4 +873,79 @@ if (!window.MTR_INLINE_TOP_STREAMS_ACTIVE) {
     window.moveDashboardCarousel = moveDashboardCarousel;
 }
 
+// =========================================
+// SONIDO DE INTERACCIÓN (UI click)
+// Pedido en vivo: darle "adicción" táctil a la app -- un sonido corto de
+// selección en cada botón, como en un juego. Sintetizado con Web Audio
+// API (sin archivo de audio que cargar/alojar): un "blip" ascendente de
+// dos tonos, ~100ms, volumen bajo. Se crea/reanuda el AudioContext
+// siempre DENTRO del propio handler de click (un gesto real del
+// usuario), así nunca choca con las políticas de autoplay de móvil que
+// ya resuelve el sistema de audio de las batallas (ver game-engine.js,
+// ensureUserAudio/unlockAudioFromGesture) -- son sistemas totalmente
+// separados a propósito, este no reutiliza el <audio> de las canciones.
+(function () {
+    var ctx = null;
+    function getCtx() {
+        if (ctx) return ctx;
+        var AC = window.AudioContext || window.webkitAudioContext;
+        if (!AC) return null;
+        ctx = new AC();
+        return ctx;
+    }
+
+    function playUiClick() {
+        try {
+            var audioCtx = getCtx();
+            if (!audioCtx) return;
+            if (audioCtx.state === 'suspended') audioCtx.resume();
+            var t = audioCtx.currentTime;
+
+            // Tono principal: blip ascendente rápido.
+            var osc = audioCtx.createOscillator();
+            var gain = audioCtx.createGain();
+            osc.type = 'sine';
+            osc.frequency.setValueAtTime(720, t);
+            osc.frequency.exponentialRampToValueAtTime(1180, t + 0.045);
+            gain.gain.setValueAtTime(0.0001, t);
+            gain.gain.exponentialRampToValueAtTime(0.16, t + 0.008);
+            gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.09);
+            osc.connect(gain).connect(audioCtx.destination);
+            osc.start(t);
+            osc.stop(t + 0.1);
+
+            // Segundo tono, una quinta arriba y más suave: le da el
+            // "brillo" de campanita en vez de sonar como un simple beep.
+            var osc2 = audioCtx.createOscillator();
+            var gain2 = audioCtx.createGain();
+            osc2.type = 'triangle';
+            osc2.frequency.setValueAtTime(1080, t + 0.01);
+            osc2.frequency.exponentialRampToValueAtTime(1760, t + 0.05);
+            gain2.gain.setValueAtTime(0.0001, t + 0.01);
+            gain2.gain.exponentialRampToValueAtTime(0.07, t + 0.02);
+            gain2.gain.exponentialRampToValueAtTime(0.0001, t + 0.1);
+            osc2.connect(gain2).connect(audioCtx.destination);
+            osc2.start(t + 0.01);
+            osc2.stop(t + 0.12);
+        } catch (_e) { /* nunca debe romper un click real por esto */ }
+    }
+    window.playUiClick = playUiClick;
+
+    // Delegado en fase de CAPTURA (no burbuja): así suena SIEMPRE, incluso
+    // en botones que llaman e.stopPropagation()/stopImmediatePropagation()
+    // en su propio handler (ej. el botón de Desafío Social) -- captura
+    // corre antes de que esos handlers tengan oportunidad de cortar la
+    // propagación. Selector amplio a propósito: cubre los <button> de
+    // siempre y las tarjetas clickeables que son <div>/<article> con
+    // cursor-pointer (modo de juego, tarjetas de streams, etc.) sin tener
+    // que tocar cada una una por una.
+    document.addEventListener('click', function (ev) {
+        var el = ev.target && ev.target.closest
+            ? ev.target.closest('button, [role="button"], .cursor-pointer, .stream-card, .mtr2-navitem, .mtr2-mode, .mtr2-cta')
+            : null;
+        if (!el || el.disabled) return;
+        playUiClick();
+    }, true);
+})();
+
 })(typeof window !== 'undefined' ? window : (typeof globalThis !== 'undefined' ? globalThis : this));
