@@ -1456,7 +1456,18 @@
                         </div>
                         <button type="button" onclick="closeNowPaymentsModal()" class="rounded-lg px-2.5 py-1 text-gray-400 hover:text-white hover:bg-white/10 text-xl leading-none self-end" aria-label="Cerrar">&times;</button>
                     </div>
-                    <div class="relative flex-1 min-h-[400px] bg-gray-950">
+                    <!-- overflow-y-auto: bug real reportado en vivo -- al pagar con
+                         cripto, tras "Continuar al pago" este bloque pasa a mostrar
+                         el iframe (hasta 580px) + la nota de ajuste de importe + el
+                         enlace "Abrir checkout en una nueva pestaña" (el fallback
+                         que de verdad hace falta cuando el iframe de NOWPayments
+                         queda vacío por su propia seguridad, o el navegador bloqueó
+                         el popup de window.open). El contenedor padre
+                         (.nowpayments-modal-content) tiene overflow-hidden -- sin
+                         scroll acá, esos elementos podían quedar recortados fuera
+                         de la vista en mobile, sin forma de llegar a ellos: el pago
+                         quedaba atascado sin ningún botón alcanzable. -->
+                    <div class="relative flex-1 min-h-[400px] bg-gray-950 overflow-y-auto">
                         <div id="npAmountStep" class="flex flex-col gap-4 p-5 sm:p-6">
                             <div id="npCryptoWarning" class="hidden p-3 rounded-lg bg-amber-500/10 border border-amber-500/25">
                                 <p class="text-amber-200 text-xs leading-relaxed"><strong class="text-amber-300">Antes de continuar:</strong> necesitás ya tener una criptomoneda (USDT, BTC, ETH...) en tu propia wallet y saber enviarla. En la página de pago vas a elegir CON QUÉ moneda pagás y te va a dar una dirección/QR para enviarla desde tu wallet. <strong>No busques "MTR" en tu wallet</strong> — el MTR se acredita como saldo acá adentro después de que el pago se confirme, no es lo que envías. Si no estás seguro, cerrá esto y usá "Comprar con Tarjeta" o "Pagos en pesos" en su lugar.</p>
