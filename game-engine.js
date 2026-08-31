@@ -7,6 +7,13 @@
 const MIN_BET_AMOUNT = 1; // créditos (1 crédito ≈ 1 USD nominal)
 const MIN_BET_TORNEO = 1; // mismo mínimo para Torneo
 
+// Ícono SVG chico para insertar en HTML generado por este archivo (nunca en
+// toasts -- showToast() usa textContent a propósito por seguridad, así que
+// ahí se saca el emoji en vez de intentar meterle HTML).
+function svgIcon(name, size, extraClass) {
+    return window.MTRIcons ? window.MTRIcons.svg(name, { size: size || 14, className: 'inline-block align-[-2px] mr-1' + (extraClass ? ' ' + extraClass : '') }) : '';
+}
+
 // Acciones que requieren sesión (aceptar desafío, inscribirse a torneo, etc.)
 // mostraban un toast de error y no hacían nada más -- un callejón sin salida,
 // sobre todo adentro del navegador de una wallet, donde Google está bloqueado
@@ -97,7 +104,7 @@ async function triggerHostNarration(battleId, eventType, contextText) {
         const data = await resp.json();
         if (mySeq !== hostNarrationSeq) return; // re-chequear: pudo dispararse uno nuevo mientras esperábamos el JSON
         if (el && data && data.reply) {
-            el.textContent = '🎙️ ' + data.reply;
+            el.textContent = data.reply;
             el.classList.remove('hidden');
         }
     } catch (e) {
@@ -266,7 +273,7 @@ const GameEngine = {
             // Actualizar UI para modo práctica - FORZAR actualización
             // CRÍTICO: Hacer muy claro que es DEMO y NO es balance real
             if (labelEl) {
-                labelEl.textContent = '💰 Balance DEMO (práctica)';
+                labelEl.innerHTML = svgIcon('cash', 14) + 'Balance DEMO (práctica)';
                 labelEl.style.color = '#8b5cf6'; // Color púrpura para práctica
                 labelEl.style.fontWeight = 'bold';
             } else {
@@ -1346,10 +1353,32 @@ const GameEngine = {
                 .single();
             
             if (challengeError || !challenge) {
-                showToast('Desafío no encontrado o ya fue aceptado', 'error');
+                showToast('Desafío no encontrado o ya no está disponible', 'error');
                 return;
             }
-            
+
+            // Red de seguridad contra la carrera entre "abrir el link" y
+            // "terminar de elegir canción" -- loadChallengeInfo() ya validó
+            // que no estuviera vencido al ABRIR el link, pero puede haber
+            // pasado tiempo real de por medio (el usuario tardó en elegir).
+            // Revalidar acá, justo antes de descontar créditos y crear el
+            // match, con la misma fuente de verdad (el endpoint de backend
+            // que además auto-expira y reembolsa al creador si corresponde)
+            // en vez de solo confiar en que la fila siga en 'pending'.
+            if (challenge.expires_at && new Date(challenge.expires_at).getTime() < Date.now()) {
+                try {
+                    var statusResp = await fetch((typeof backendBase === 'function' ? backendBase() : '') + (typeof apiPath === 'function' ? apiPath('/api/challenges/' + encodeURIComponent(challengeId) + '/status') : '/api/challenges/' + encodeURIComponent(challengeId) + '/status'));
+                    var fresh = statusResp.ok ? await statusResp.json() : null;
+                    if (typeof applyChallengeStatus === 'function') {
+                        applyChallengeStatus((fresh && fresh.status) || 'expired', fresh);
+                    }
+                } catch (expireCheckError) {
+                    console.warn('[acceptSocialChallenge] No se pudo confirmar la expiración con el backend:', expireCheckError.message);
+                }
+                showToast('Este desafío venció mientras elegías tu canción. El creador ya fue reembolsado.', 'error', 8000);
+                return;
+            }
+
             // Verificar que no sea el mismo usuario
             if (challenge.challenger_id === session.user.id) {
                 showToast('No puedes aceptar tu propio desafío', 'error');
@@ -1373,7 +1402,7 @@ const GameEngine = {
                 accepterGenreCheck = await requestGenreCurationClient(song.artist, song.name, challenge.genre_label);
                 if (accepterGenreCheck.verdict === 'block') {
                     showToast(
-                        `🚫 "${song.name}" de ${song.artist} no encaja con el género "${challenge.genre_label}" ` +
+                        `"${song.name}" de ${song.artist} no encaja con el género "${challenge.genre_label}" ` +
                         `de este desafío (${accepterGenreCheck.confidence}% de coincidencia): ${accepterGenreCheck.reason} ` +
                         `— elegí otra canción.`,
                         'error',
@@ -1534,7 +1563,7 @@ const GameEngine = {
                             await window.CreditsSystem.loadBalance(walletAddress);
                             
                             showToast(
-                                `✅ Convertidos ${missingCredits.toFixed(2)} créditos desde tu MTR on-chain automáticamente.`,
+                                `Convertidos ${missingCredits.toFixed(2)} créditos desde tu MTR on-chain automáticamente.`,
                                 'success'
                             );
                         } else {
@@ -1829,7 +1858,47 @@ const GameEngine = {
                 console.warn('[loadMyPendingChallenges]', error.message);
                 return [];
             }
-            return data || [];
+
+            // Cualquiera de estos puede llevar semanas vencido sin que el
+            // creador haya vuelto a mirarlo -- nada lo revisaba antes. Los
+            // que ya vencieron se resuelven acá (auto-expira + reembolsa
+            // vía el mismo endpoint de backend que usa loadChallengeInfo) y
+            // se sacan de la lista que se muestra, en vez de seguir
+            // apareciendo como "pendientes" para siempre.
+            if (data && data.length) {
+                const now = Date.now();
+                const stale = data.filter(c => c.expires_at && new Date(c.expires_at).getTime() < now);
+                if (stale.length) {
+                    const base = typeof backendBase === 'function' ? backendBase() : '';
+                    const path = typeof apiPath === 'function' ? apiPath : (p => p);
+                    let expiredCount = 0;
+                    await Promise.all(stale.map(async (c) => {
+                        try {
+                            const resp = await fetch(base + path('/api/challenges/' + encodeURIComponent(c.challenge_id) + '/status'));
+                            const fresh = resp.ok ? await resp.json() : null;
+                            if (fresh && fresh.status !== 'pending') {
+                                c.__resolvedAway = true;
+                                if (fresh.status === 'expired') expiredCount++;
+                            }
+                        } catch (e) {
+                            console.warn('[loadMyPendingChallenges] No se pudo resolver expiración de', c.challenge_id, e.message);
+                        }
+                    }));
+                    if (expiredCount > 0) {
+                        if (typeof showToast === 'function') {
+                            const label = expiredCount === 1 ? 'desafío venció' : 'desafíos vencieron';
+                            showToast(`${expiredCount} ${label} sin respuesta. Tus créditos ya fueron reembolsados.`, 'info', 8000);
+                        }
+                        // El reembolso ya pasó del lado del backend -- el
+                        // saldo en pantalla queda desactualizado hasta el
+                        // próximo refresh si no se lo pedimos ahora.
+                        if (window.CreditsSystem && typeof window.CreditsSystem.loadBalance === 'function') {
+                            window.CreditsSystem.loadBalance().catch(() => {});
+                        }
+                    }
+                }
+            }
+            return (data || []).filter(c => !c.__resolvedAway);
         } catch (e) {
             console.warn('[loadMyPendingChallenges]', e && e.message);
             return [];
@@ -2511,10 +2580,10 @@ const GameEngine = {
 
             var diff = Math.abs(health1 - health2);
             if (statusEl) {
-                if (timeLeft <= 5) statusEl.innerHTML = '<span class="text-red-400 font-bold animate-pulse">⚡ FINAL ÉPICO</span>';
-                else if (diff < 5) statusEl.innerHTML = '<span class="text-yellow-400">🔥 Empate técnico</span>';
-                else if (health1 > health2) statusEl.innerHTML = '<span class="text-cyan-400">🎵 Tu canción domina</span>';
-                else statusEl.innerHTML = '<span class="text-fuchsia-400">🎵 CPU toma la delantera</span>';
+                if (timeLeft <= 5) statusEl.innerHTML = '<span class="text-red-400 font-bold animate-pulse">' + svgIcon('bolt', 14) + 'FINAL ÉPICO</span>';
+                else if (diff < 5) statusEl.innerHTML = '<span class="text-yellow-400">' + svgIcon('flame', 14) + 'Empate técnico</span>';
+                else if (health1 > health2) statusEl.innerHTML = '<span class="text-cyan-400">' + svgIcon('music', 14) + 'Tu canción domina</span>';
+                else statusEl.innerHTML = '<span class="text-fuchsia-400">' + svgIcon('music', 14) + 'CPU toma la delantera</span>';
             }
 
             var img1 = document.getElementById('fighter1Img');
@@ -2641,13 +2710,13 @@ const GameEngine = {
             var diff = Math.abs(health1 - health2);
             if (statusEl) {
                 if (timeLeft <= 5) {
-                    statusEl.innerHTML = '<span class="text-red-400 font-bold animate-pulse">⚡ FINAL EXPRESS</span>';
+                    statusEl.innerHTML = '<span class="text-red-400 font-bold animate-pulse">' + svgIcon('bolt', 14) + 'FINAL EXPRESS</span>';
                 } else if (diff < 5) {
-                    statusEl.innerHTML = '<span class="text-yellow-400">🔥 Empate técnico</span>';
+                    statusEl.innerHTML = '<span class="text-yellow-400">' + svgIcon('flame', 14) + 'Empate técnico</span>';
                 } else if (health1 > health2) {
-                    statusEl.innerHTML = '<span class="text-cyan-400">🎵 ' + (match.player1_label || 'Jugador 1') + ' domina</span>';
+                    statusEl.innerHTML = '<span class="text-cyan-400">' + svgIcon('music', 14) + (match.player1_label || 'Jugador 1') + ' domina</span>';
                 } else {
-                    statusEl.innerHTML = '<span class="text-fuchsia-400">🎵 ' + (match.player2_label || 'Jugador 2') + ' domina</span>';
+                    statusEl.innerHTML = '<span class="text-fuchsia-400">' + svgIcon('music', 14) + (match.player2_label || 'Jugador 2') + ' domina</span>';
                 }
             }
 
@@ -2671,13 +2740,13 @@ const GameEngine = {
                 }
                 if (statusEl) {
                     statusEl.innerHTML = winner === 1
-                        ? '<span class="text-cyan-300 font-bold">🏆 Gana ' + (match.player1_label || 'Lado 1') + '</span>'
-                        : '<span class="text-fuchsia-300 font-bold">🏆 Gana ' + (match.player2_label || 'Lado 2') + '</span>';
+                        ? '<span class="text-cyan-300 font-bold">' + svgIcon('trophy', 14) + 'Gana ' + (match.player1_label || 'Lado 1') + '</span>'
+                        : '<span class="text-fuchsia-300 font-bold">' + svgIcon('trophy', 14) + 'Gana ' + (match.player2_label || 'Lado 2') + '</span>';
                 }
                 var winnerArtist = winner === 1
                     ? (match.player1_song_artist || match.player1_label || 'Lado 1')
                     : (match.player2_song_artist || match.player2_label || 'Lado 2');
-                triggerHostNarration(match.id || match.match_id, 'result', '🏆 Ganó ' + winnerArtist + '. Batalla terminada.');
+                triggerHostNarration(match.id || match.match_id, 'result', 'Ganó ' + winnerArtist + '. Batalla terminada.');
                 setTimeout(function () {
                     self.stopUserSong();
                     if (typeof self.stopVictorySong === 'function') self.stopVictorySong();
@@ -2721,16 +2790,16 @@ const GameEngine = {
             
             statusEl.innerHTML = userWon
                 ? `<div class="inline-block ${paddingSize} rounded-2xl bg-gradient-to-r from-cyan-500/20 to-cyan-600/20 border-2 border-cyan-400/50 shadow-2xl animate-pulse">
-                    <span class="${textSize} text-cyan-300 font-black drop-shadow-lg" style="text-shadow: 0 0 20px rgba(0,243,255,0.8);">
-                        🏆 ¡VICTORIA! 🏆
+                    <span class="${textSize} text-cyan-300 font-black drop-shadow-lg inline-flex items-center gap-2" style="text-shadow: 0 0 20px rgba(0,243,255,0.8);">
+                        ${svgIcon('trophy', 24)} ¡VICTORIA!
                     </span>
                     <div class="mt-2 ${isMobile ? 'text-sm' : 'text-base'} text-cyan-200 font-bold">
                         Tu canción gana +50 MTR
                     </div>
                    </div>`
                 : `<div class="inline-block ${paddingSize} rounded-2xl bg-gradient-to-r from-red-500/20 to-red-600/20 border-2 border-red-400/50 shadow-2xl">
-                    <span class="${textSize} text-red-300 font-black drop-shadow-lg" style="text-shadow: 0 0 20px rgba(239,68,68,0.8);">
-                        😔 Derrota
+                    <span class="${textSize} text-red-300 font-black drop-shadow-lg inline-flex items-center gap-2" style="text-shadow: 0 0 20px rgba(239,68,68,0.8);">
+                        ${svgIcon('circleX', 22)} Derrota
                     </span>
                     <div class="mt-2 ${isMobile ? 'text-sm' : 'text-base'} text-red-200 font-bold">
                         CPU gana esta vez
@@ -2748,7 +2817,7 @@ const GameEngine = {
             var practiceWinnerArtist = winner === 1
                 ? (match.player1_song_artist || match.player1_label || 'Lado 1')
                 : (match.player2_song_artist || match.player2_label || 'Lado 2');
-            triggerHostNarration(match.id || match.match_id, 'result', (userWon ? '🏆 Ganaste vos' : '🏆 Ganó la CPU') + ' (' + practiceWinnerArtist + '). Batalla de práctica terminada.');
+            triggerHostNarration(match.id || match.match_id, 'result', (userWon ? 'Ganaste vos' : 'Ganó la CPU') + ' (' + practiceWinnerArtist + '). Batalla de práctica terminada.');
 
             // SCROLL AUTOMÁTICO AL MENSAJE DE RESULTADO
             setTimeout(() => {
@@ -2835,8 +2904,8 @@ const GameEngine = {
                 const paddingSize = isMobile ? 'py-3 px-3' : 'py-4 px-6';
                 
                 statusEl.innerHTML = `<div class="inline-block ${paddingSize} rounded-2xl bg-gradient-to-r from-cyan-500/20 to-cyan-600/20 border-2 border-cyan-400/50 shadow-2xl animate-pulse">
-                    <span class="${textSize} text-cyan-300 font-black drop-shadow-lg" style="text-shadow: 0 0 20px rgba(0,243,255,0.8);">
-                        🏆 ¡VICTORIA! 🏆
+                    <span class="${textSize} text-cyan-300 font-black drop-shadow-lg inline-flex items-center gap-2" style="text-shadow: 0 0 20px rgba(0,243,255,0.8);">
+                        ${svgIcon('trophy', 24)} ¡VICTORIA!
                     </span>
                     <div class="mt-2 ${isMobile ? 'text-sm' : 'text-base'} text-cyan-200 font-bold">
                         Tu canción gana +${winnings} MTR demo
@@ -3558,7 +3627,7 @@ const GameEngine = {
                     <span class="text-3xl font-black text-white tabular-nums" id="battleTimer">${this.battleDuration}</span>
                     <span class="text-xs text-gray-400">seg</span>
                 </div>
-                <div class="text-sm text-gray-500" title="Lo que arriesgan los dos jugadores entre si, no incluye lo que apuesten los fans">💰 Pozo de jugadores: ${pot} MTR</div>
+                <div class="text-sm text-gray-500" title="Lo que arriesgan los dos jugadores entre si, no incluye lo que apuesten los fans">${svgIcon('cash', 14)}Pozo de jugadores: ${pot} MTR</div>
             </div>
 
             <div class="relative rounded-2xl overflow-hidden border border-cyan-500/20 bg-black/60 mb-6 h-[300px] sm:h-[340px] md:h-[380px]" id="battleCanvasWrap">
@@ -3574,7 +3643,7 @@ const GameEngine = {
                             </div>
                             <h3 class="text-white font-bold text-xs sm:text-sm md:text-base mt-1 sm:mt-2 max-w-[90px] sm:max-w-[120px] md:max-w-[140px] truncate">${match.player1_song_name}</h3>
                             <p class="text-cyan-400 text-[10px] sm:text-xs">${match.player1_song_artist}</p>
-                            <p class="text-gray-400 text-[10px] sm:text-xs mt-0.5 sm:mt-1">🎧 <span id="plays1">0</span></p>
+                            <p class="text-gray-400 text-[10px] sm:text-xs mt-0.5 sm:mt-1">${svgIcon('headphones', 12)}<span id="plays1">0</span></p>
                         </div>
                         
                         <!-- Video central con VS -->
@@ -3607,7 +3676,7 @@ const GameEngine = {
                             </div>
                             <h3 class="text-white font-bold text-xs sm:text-sm md:text-base mt-1 sm:mt-2 max-w-[90px] sm:max-w-[120px] md:max-w-[140px] truncate">${match.player2_song_name}</h3>
                             <p class="text-fuchsia-400 text-[10px] sm:text-xs">${match.player2_song_artist}</p>
-                            <p class="text-gray-400 text-[10px] sm:text-xs mt-0.5 sm:mt-1">🎧 <span id="plays2">0</span></p>
+                            <p class="text-gray-400 text-[10px] sm:text-xs mt-0.5 sm:mt-1">${svgIcon('headphones', 12)}<span id="plays2">0</span></p>
                         </div>
                     </div>
                 </div>
@@ -3640,7 +3709,7 @@ const GameEngine = {
             ` : ''}
 
             <div id="fanBetPanel" class="max-w-3xl mx-auto rounded-2xl border border-white/10 bg-white/5 p-4 mb-4">
-                <p class="text-center text-xs text-gray-400 uppercase tracking-widest mb-1">🎤 Apostá por tu favorito</p>
+                <p class="text-center text-xs text-gray-400 uppercase tracking-widest mb-1">${svgIcon('mic', 12)}Apostá por tu favorito</p>
                 <p class="text-center text-[11px] text-gray-500 mb-3">Pozo aparte del de los jugadores · se reparte 80% entre los fans del lado ganador, 10% al artista, 10% a la plataforma</p>
                 <div class="flex items-center justify-center gap-2 mb-3">
                     <span class="text-gray-400 text-sm">Monto:</span>
@@ -3651,11 +3720,11 @@ const GameEngine = {
                 <div class="flex items-center justify-center gap-3">
                     <button id="fanBetPlayer1Btn" type="button"
                             class="flex-1 max-w-[180px] px-4 py-2 rounded-xl font-bold text-sm border border-cyan-400/40 bg-cyan-500/10 text-cyan-300 hover:bg-cyan-500/20 transition">
-                        🔷 ${match.player1_song_artist || 'Jugador 1'}
+                        ${svgIcon('diamond', 13)}${match.player1_song_artist || 'Jugador 1'}
                     </button>
                     <button id="fanBetPlayer2Btn" type="button"
                             class="flex-1 max-w-[180px] px-4 py-2 rounded-xl font-bold text-sm border border-fuchsia-400/40 bg-fuchsia-500/10 text-fuchsia-300 hover:bg-fuchsia-500/20 transition">
-                        🔶 ${match.player2_song_artist || 'Jugador 2'}
+                        ${svgIcon('diamond', 13)}${match.player2_song_artist || 'Jugador 2'}
                     </button>
                 </div>
                 <div id="fanBetStatus" class="text-center text-xs text-gray-400 mt-3"></div>
@@ -3680,7 +3749,7 @@ const GameEngine = {
             triggerHostNarration(
                 match.id || match.match_id,
                 'hype',
-                '🔷 ' + (match.player1_song_artist || match.player1_label || 'Jugador 1') + ' vs 🔶 ' +
+                (match.player1_song_artist || match.player1_label || 'Jugador 1') + ' vs ' +
                 (match.player2_song_artist || match.player2_label || 'Jugador 2') +
                 '. Arranca la batalla, pozo de ' + ((match.player1_bet || 0) + (match.player2_bet || 0)) + ' créditos.'
             );
@@ -4304,14 +4373,14 @@ const GameEngine = {
             rhythmEl.classList.add('winner-left', 'loser-right');
             rhythmEl.style.setProperty('--left-fade', '1');
             rhythmEl.style.setProperty('--right-fade', '0.3');
-            if (leftFace) leftFace.textContent = '😄';
-            if (rightFace) rightFace.textContent = '😞';
+            if (leftFace) leftFace.innerHTML = svgIcon('circleCheck', 18, 'text-cyan-300');
+            if (rightFace) rightFace.innerHTML = svgIcon('circleX', 18, 'text-gray-500');
         } else {
             rhythmEl.classList.add('winner-right', 'loser-left');
             rhythmEl.style.setProperty('--left-fade', '0.3');
             rhythmEl.style.setProperty('--right-fade', '1');
-            if (leftFace) leftFace.textContent = '😞';
-            if (rightFace) rightFace.textContent = '😄';
+            if (leftFace) leftFace.innerHTML = svgIcon('circleX', 18, 'text-gray-500');
+            if (rightFace) rightFace.innerHTML = svgIcon('circleCheck', 18, 'text-fuchsia-300');
         }
     },
 
@@ -4486,7 +4555,7 @@ const GameEngine = {
         container.innerHTML = '<section id="victorySection" class="max-w-3xl mx-auto py-12 px-4 text-center relative min-h-[500px]">' +
             '<canvas id="victoryCanvas" class="absolute inset-0 w-full h-full pointer-events-none rounded-2xl"></canvas>' +
             '<div class="relative z-10">' +
-            '<div class="text-7xl sm:text-8xl mb-4" style="animation:bounce 0.6s ease-out">' + (userWon ? '🏆' : '😔') + '</div>' +
+            '<div class="mb-4 flex justify-center ' + (userWon ? 'text-yellow-400' : 'text-red-400') + '" style="animation:bounce 0.6s ease-out">' + (window.MTRIcons ? window.MTRIcons.svg(userWon ? 'trophy' : 'circleX', { size: 88 }) : '') + '</div>' +
             '<h1 class="text-4xl sm:text-6xl font-black mb-3 ' + (userWon ? 'text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 via-white to-fuchsia-400' : 'text-red-400') + '" style="animation:fadeInUp 0.5s ease-out">' + (userWon ? '¡VICTORIA!' : 'Derrota') + '</h1>' +
             '<div class="flex items-center justify-center gap-4 mb-4">' +
             '<img src="' + winnerImg + '" class="w-16 h-16 rounded-full border-2 border-' + accentColor + '-400 ' + glowClass + '">' +
@@ -4496,7 +4565,7 @@ const GameEngine = {
             (!isPractice && payouts.platformFee ? '<div class="text-sm text-gray-500 mb-6 space-y-1"><p>Comisión: ' + payouts.platformFee + ' MTR</p><p>Pago ganador: ' + payouts.winnerPayout + ' MTR</p></div>' : '') +
             (this.lastPrizeTxHash ? '<p class="text-sm text-cyan-400 mb-4">Tx: <a href="https://basescan.org/tx/' + this.lastPrizeTxHash + '" target="_blank" class="underline">' + this.lastPrizeTxHash.slice(0, 14) + '...</a></p>' : '') +
             '<button onclick="' + (isPractice ? 'GameEngine.goToPracticeSelection()' : 'location.reload()') + '" class="px-8 py-3 rounded-xl text-lg font-bold bg-gradient-to-r from-cyan-500 to-fuchsia-500 text-white hover:opacity-90 transition-all shadow-lg shadow-cyan-500/25 cursor-pointer">' +
-            (isPractice ? '🎯 Continuar en práctica' : '🔄 Jugar de Nuevo') +
+            (isPractice ? svgIcon('target', 16) + 'Continuar en práctica' : svgIcon('refresh', 16) + 'Jugar de Nuevo') +
             '</button>' +
             '</div></section>';
 
@@ -4747,7 +4816,7 @@ const GameEngine = {
                 : (match.player2_song_artist || 'Jugador 2');
             showToast('¡Apuesta registrada! Fuiste con ' + sideLabel, 'success');
             if (statusEl) {
-                statusEl.textContent = '✅ Apostaste ' + amount + ' créditos a ' + sideLabel + '. ¡Suerte!';
+                statusEl.textContent = 'Apostaste ' + amount + ' créditos a ' + sideLabel + '. ¡Suerte!';
             }
             // El monto ya se descontó en el backend; refrescamos el balance visible.
             var walletAddress = window.connectedAddress || localStorage.getItem('mtr_wallet');
@@ -4805,7 +4874,7 @@ const GameEngine = {
             hint.className =
                 'text-center py-2 px-4 mb-2 rounded-xl border border-amber-400/40 ' +
                 'bg-amber-500/10 text-amber-200 text-sm font-bold animate-pulse cursor-pointer';
-            hint.textContent = '🔊 Toca la pantalla para activar el audio';
+            hint.innerHTML = svgIcon('volume', 14) + 'Toca la pantalla para activar el audio';
             var arena = document.getElementById('battleArena');
             if (arena) {
                 arena.insertBefore(hint, arena.firstChild);
@@ -6743,16 +6812,16 @@ if (typeof window !== 'undefined') {
         if (!buttonsDiv) return;
 
         if (mode === 'quick') {
-            buttonsDiv.innerHTML = '<button onclick="startQuickMatch()" class="btn-primary btn-large" id="startQuickBtn">⚔️ Buscar Rival</button>';
+            buttonsDiv.innerHTML = '<button onclick="startQuickMatch()" class="btn-primary btn-large" id="startQuickBtn">' + svgIcon('swords', 16) + 'Buscar Rival</button>';
         } else if (mode === 'private') {
-            buttonsDiv.innerHTML = '<button onclick="createRoom()" class="btn-primary" id="createRoomBtn">🎪 Crear Sala</button><div class="or-divider">o</div><div class="join-room-group"><input type="text" id="joinRoomCode" placeholder="Código" class="room-code-input" maxlength="6"><button onclick="joinRoom()" class="btn-secondary" id="joinRoomBtn">Unirse</button></div>';
+            buttonsDiv.innerHTML = '<button onclick="createRoom()" class="btn-primary" id="createRoomBtn">' + svgIcon('lock', 16) + 'Crear Sala</button><div class="or-divider">o</div><div class="join-room-group"><input type="text" id="joinRoomCode" placeholder="Código" class="room-code-input" maxlength="6"><button onclick="joinRoom()" class="btn-secondary" id="joinRoomBtn">Unirse</button></div>';
         } else if (mode === 'practice') {
-            buttonsDiv.innerHTML = '<button onclick="startPractice()" class="btn-primary btn-large" id="startPracticeBtn">🎯 Iniciar Práctica</button>';
+            buttonsDiv.innerHTML = '<button onclick="startPractice()" class="btn-primary btn-large" id="startPracticeBtn">' + svgIcon('target', 16) + 'Iniciar Práctica</button>';
         } else if (mode === 'tournament') {
             if (window.tournamentEnrollment) {
-                buttonsDiv.innerHTML = '<button onclick="joinTournamentMode()" class="btn-primary btn-large" id="joinTournamentBtn">🏆 Confirmar inscripción · ' + window.tournamentEnrollment.entryFee + ' MTR créditos</button>';
+                buttonsDiv.innerHTML = '<button onclick="joinTournamentMode()" class="btn-primary btn-large" id="joinTournamentBtn">' + svgIcon('trophy', 16) + 'Confirmar inscripción · ' + window.tournamentEnrollment.entryFee + ' MTR créditos</button>';
             } else {
-                buttonsDiv.innerHTML = '<button onclick="selectMode(\'tournament\')" class="btn-primary btn-large" id="openTournamentHubBtn">🏆 Abrir hub de torneos</button>';
+                buttonsDiv.innerHTML = '<button onclick="selectMode(\'tournament\')" class="btn-primary btn-large" id="openTournamentHubBtn">' + svgIcon('trophy', 16) + 'Abrir hub de torneos</button>';
             }
         }
     }

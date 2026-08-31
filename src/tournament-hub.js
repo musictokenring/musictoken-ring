@@ -8,6 +8,19 @@
   var countdownTimer = null;
   var enrollmentCountdownTimer = null;
   var hubData = null;
+  // Datos reales de torneos (refresh() / applyHubData) siguen mandando un
+  // campo "emoji" propio desde el backend -- no viene con el "icon" que
+  // FALLBACK_GENRES ya usa. En vez de mostrar el emoji crudo cuando hay
+  // datos reales (justo el caso más común en producción), se traduce acá
+  // con la misma equivalencia que se usó para el fallback.
+  var EMOJI_TO_ICON = {
+    '🎤': 'mic', '🎵': 'music', '💃': 'disc', '🎸': 'flame', '🪗': 'music',
+    '🎧': 'headphones', '🎹': 'music', '⭐': 'star', '⚡': 'bolt',
+    '❤️': 'heart', '🔥': 'flame', '🥁': 'disc', '🤠': 'world'
+  };
+  function genreIconName(g) {
+    return g.icon || EMOJI_TO_ICON[g.emoji] || 'music';
+  }
   var selectedGenreId = null;
   var serverSkewMs = 0;
   var fetchedAtLocal = 0;
@@ -31,20 +44,26 @@
   }
 
   var FALLBACK_GENRES = [
-    { id: 'reggaeton', label: 'Reggaeton', region: 'latino', emoji: '🎤', deezerQuery: 'reggaeton', deezerGenreId: 122 },
-    { id: 'pop_en', label: 'Pop en inglés', region: 'anglo', emoji: '🎵', deezerQuery: 'pop english' },
-    { id: 'salsa', label: 'Salsa', region: 'latino', emoji: '💃', deezerQuery: 'salsa', deezerGenreId: 67 },
-    { id: 'rock_en', label: 'Rock en inglés', region: 'anglo', emoji: '🎸', deezerQuery: 'rock english' },
-    { id: 'cumbia', label: 'Cumbia', region: 'latino', emoji: '🪗', deezerQuery: 'cumbia', deezerGenreId: 71 },
-    { id: 'hip_hop_en', label: 'Hip hop / R&B (EN)', region: 'anglo', emoji: '🎧', deezerQuery: 'hip hop english' },
-    { id: 'vallenato', label: 'Vallenato', region: 'latino', emoji: '🎹', deezerQuery: 'vallenato', deezerGenreId: 498 },
-    { id: 'pop_latino', label: 'Pop latino', region: 'latino', emoji: '⭐', deezerQuery: 'pop latino' },
-    { id: 'rock_es', label: 'Rock en español', region: 'latino', emoji: '🎸', deezerQuery: 'rock en español' },
-    { id: 'electronic_en', label: 'Electrónica / EDM (EN)', region: 'anglo', emoji: '⚡', deezerQuery: 'edm electronic english' },
-    { id: 'bachata', label: 'Bachata', region: 'latino', emoji: '❤️', deezerQuery: 'bachata' },
-    { id: 'trap_latino', label: 'Trap latino', region: 'latino', emoji: '🔥', deezerQuery: 'trap latino' },
-    { id: 'merengue', label: 'Merengue', region: 'latino', emoji: '🥁', deezerQuery: 'merengue' },
-    { id: 'regional', label: 'Regional / Corridos', region: 'latino', emoji: '🤠', deezerQuery: 'corridos regional mexican', deezerGenreId: 65 }
+    // "emoji" -> "icon" (30-ago): reemplazo de emojis por íconos SVG reales
+    // (MTRIcons, mismo set que el resto de la app) -- pedido explícito del
+    // usuario, "nada de íconos genéricos". Los valores son nombres de
+    // íconos en src/icons.js, no caracteres. Sin ícono exacto para
+    // guitarra/acordeón/tambor/piano en el set -- se reutiliza el más
+    // afín en vez de arriesgar un SVG mal armado.
+    { id: 'reggaeton', label: 'Reggaeton', region: 'latino', icon: 'mic', deezerQuery: 'reggaeton', deezerGenreId: 122 },
+    { id: 'pop_en', label: 'Pop en inglés', region: 'anglo', icon: 'music', deezerQuery: 'pop english' },
+    { id: 'salsa', label: 'Salsa', region: 'latino', icon: 'disc', deezerQuery: 'salsa', deezerGenreId: 67 },
+    { id: 'rock_en', label: 'Rock en inglés', region: 'anglo', icon: 'flame', deezerQuery: 'rock english' },
+    { id: 'cumbia', label: 'Cumbia', region: 'latino', icon: 'music', deezerQuery: 'cumbia', deezerGenreId: 71 },
+    { id: 'hip_hop_en', label: 'Hip hop / R&B (EN)', region: 'anglo', icon: 'headphones', deezerQuery: 'hip hop english' },
+    { id: 'vallenato', label: 'Vallenato', region: 'latino', icon: 'music', deezerQuery: 'vallenato', deezerGenreId: 498 },
+    { id: 'pop_latino', label: 'Pop latino', region: 'latino', icon: 'star', deezerQuery: 'pop latino' },
+    { id: 'rock_es', label: 'Rock en español', region: 'latino', icon: 'flame', deezerQuery: 'rock en español' },
+    { id: 'electronic_en', label: 'Electrónica / EDM (EN)', region: 'anglo', icon: 'bolt', deezerQuery: 'edm electronic english' },
+    { id: 'bachata', label: 'Bachata', region: 'latino', icon: 'heart', deezerQuery: 'bachata' },
+    { id: 'trap_latino', label: 'Trap latino', region: 'latino', icon: 'flame', deezerQuery: 'trap latino' },
+    { id: 'merengue', label: 'Merengue', region: 'latino', icon: 'disc', deezerQuery: 'merengue' },
+    { id: 'regional', label: 'Regional / Corridos', region: 'latino', icon: 'world', deezerQuery: 'corridos regional mexican', deezerGenreId: 65 }
   ];
 
   function buildFallbackHubData() {
@@ -64,7 +83,7 @@
           id: g.id,
           label: g.label,
           region: g.region,
-          emoji: g.emoji,
+          icon: g.icon,
           deezerQuery: g.deezerQuery,
           express: {
             id: null,
@@ -396,7 +415,7 @@
   async function handleExpressJoin(exp, genre, btn) {
     if (btn) {
       btn.disabled = true;
-      btn.textContent = '⏳ Abriendo Express…';
+      btn.textContent = 'Abriendo Express…';
     }
     try {
       var slot = exp;
@@ -452,34 +471,38 @@
     } else if (liveBattles > 0) {
       timerBlock =
         '<div class="text-[10px] uppercase tracking-wider text-gray-500 mb-1">Estado Express</div>' +
-        '<div class="text-2xl font-black text-purple-300 tabular-nums">⚔️ EN CURSO</div>' +
+        '<div class="text-2xl font-black text-purple-300 tabular-nums">' + svgIcon('swords', 20) + 'EN CURSO</div>' +
         '<div class="text-[11px] text-gray-500 mt-1">' + liveBattles + ' categoría(s) en batalla</div>';
     } else {
       timerBlock =
         '<div class="text-[10px] uppercase tracking-wider text-gray-500 mb-1">Próxima ronda</div>' +
-        '<div class="text-xl font-bold text-amber-300 animate-pulse">♻️ Abriendo…</div>' +
+        '<div class="text-xl font-bold text-amber-300 animate-pulse">' + svgIcon('refresh', 18) + 'Abriendo…</div>' +
         '<div class="text-[11px] text-gray-500 mt-1">Sincronizando cronómetro</div>';
     }
 
     el.innerHTML =
       '<div class="tournament-rotation-banner flex flex-wrap items-center justify-between gap-4 p-4">' +
       '<div class="flex-1 min-w-[200px]">' +
-      '<div class="text-purple-200 font-bold mb-1 tracking-wide">⚡ ' + active + '/' + total + ' Express activos</div>' +
+      '<div class="text-purple-200 font-bold mb-1 tracking-wide">' + (window.MTRIcons ? window.MTRIcons.svg('bolt', { size: 16, className: 'inline-block align-[-3px] mr-1' }) : '') + active + '/' + total + ' Express activos</div>' +
       '<div class="text-xs text-gray-400">Inscripción 5 min · apuesta en ' + CREDITS_LABEL + ' · batalla al cerrar cronómetro</div></div>' +
       '<div class="flex-shrink-0 text-center px-5 py-3 rounded-xl border border-cyan-500/30 bg-black/30">' +
       timerBlock +
       '</div></div>';
   }
 
+  function svgIcon(name, size) {
+    return window.MTRIcons ? window.MTRIcons.svg(name, { size: size || 14, className: 'inline-block align-[-2px] mr-1' }) : '';
+  }
+
   function expressStatusLine(exp) {
     if (!exp) return 'Iniciando…';
     if (exp.status === 'registration') {
       var sec = secondsToBattle(exp);
-      if (sec <= 0) return '♻️ Reiniciando ronda…';
-      return '⏱ ' + fmtClock(sec) + ' · Batalla';
+      if (sec <= 0) return svgIcon('refresh') + 'Reiniciando ronda…';
+      return svgIcon('clock') + fmtClock(sec) + ' · Batalla';
     }
-    if (exp.status === 'locked') return '🔒 Preparando batalla…';
-    if (exp.status === 'in_progress') return '⚔️ Batalla en curso';
+    if (exp.status === 'locked') return svgIcon('lock') + 'Preparando batalla…';
+    if (exp.status === 'in_progress') return svgIcon('swords') + 'Batalla en curso';
     return exp.status;
   }
 
@@ -507,11 +530,11 @@
       var liveBadge = exp && exp.status === 'registration'
         ? '<span class="tournament-badge tournament-badge--live">● Live</span>'
         : (exp && exp.status === 'in_progress'
-          ? '<span class="tournament-badge tournament-badge--playing">⚔ En juego</span>'
+          ? '<span class="tournament-badge tournament-badge--playing">' + svgIcon('swords', 12) + 'En juego</span>'
           : '');
       return (
         '<button type="button" data-genre="' + g.id + '" class="tournament-genre-card ' + regionClass + ' group text-left p-4">' +
-        '<div class="tournament-genre-emoji mb-2">' + g.emoji + '</div>' +
+        '<div class="tournament-genre-emoji mb-2">' + (window.MTRIcons ? window.MTRIcons.svg(genreIconName(g), { size: 28 }) : '') + '</div>' +
         '<div class="tournament-genre-title group-hover:text-purple-200">' + g.label + '</div>' +
         '<div class="tournament-genre-meta mt-2">Express · ' + expLine + '</div>' +
         '<div class="tournament-genre-meta">Grand Prix · ' + wkLine + '</div>' +
@@ -533,7 +556,10 @@
     var g = (hubData.genres || []).find(function (x) { return x.id === selectedGenreId; });
     if (!g) return;
 
-    document.getElementById('tournamentGenreTitle').textContent = (g.emoji || '') + ' ' + g.label;
+    var titleEl = document.getElementById('tournamentGenreTitle');
+    if (titleEl) {
+      titleEl.innerHTML = (window.MTRIcons ? window.MTRIcons.svg(genreIconName(g), { size: 20, className: 'inline-block align-[-4px] mr-1' }) : '') + g.label;
+    }
     var exp = g.express;
     var wk = g.weekly;
     var sec = exp ? secondsToBattle(exp) : 0;
@@ -542,13 +568,13 @@
 
     var expressHtml = exp
       ? '<div class="tournament-panel tournament-panel--express">' +
-        '<div class="tournament-panel-title tournament-panel-title--express mb-3">⚡ Express · ronda activa</div>' +
+        '<div class="tournament-panel-title tournament-panel-title--express mb-3">' + svgIcon('bolt', 16) + 'Express · ronda activa</div>' +
         (expressOpen
           ? '<div class="mb-4 p-4 rounded-xl border border-cyan-500/25 bg-black/30 text-center" id="genreExpressCountdown">' +
             countdownHtml(sec, 'text-4xl') +
             '<p class="text-xs text-cyan-200/80 mt-3">Elige tu canción e inscríbete antes del cierre</p></div>'
           : (exp.status === 'registration' && sec === 0
-            ? '<p class="text-sm text-amber-300 mb-3 animate-pulse">⏳ Actualizando slot Express…</p>'
+            ? '<p class="text-sm text-amber-300 mb-3 animate-pulse">' + svgIcon('clock', 14) + 'Actualizando slot Express…</p>'
             : '<p class="text-sm text-amber-300 mb-3">' + expressStatusLine(exp) + '</p>')) +
         '<div class="tournament-stat-row"><span>Apuesta de entrada</span><strong>' + fmtCredits(exp.entry_fee) + '</strong></div>' +
         '<div class="tournament-stat-row"><span>Jugadores humanos</span><strong>' +
@@ -559,26 +585,26 @@
         Math.min(100, (exp.current_participants / exp.max_participants) * 100) + '%"></span></div>' +
         (expressOpen
           ? '<button type="button" class="tournament-btn-primary" data-join-express="' + (exp.id || '') + '" data-genre-id="' + g.id + '">' +
-            (expressNeedsId ? '🎵 Abrir e inscribirme · ' : '🎵 Elegir canción e inscribirme · ') + fmtCredits(exp.entry_fee) + '</button>'
+            (expressNeedsId ? svgIcon('music', 14) + 'Abrir e inscribirme · ' : svgIcon('music', 14) + 'Elegir canción e inscribirme · ') + fmtCredits(exp.entry_fee) + '</button>'
           : (exp.status === 'in_progress' || exp.status === 'locked'
-            ? '<button type="button" class="tournament-btn-secondary" data-watch-express="' + exp.id + '" data-genre-id="' + g.id + '">👀 Ver batalla en curso</button>' +
-              '<button type="button" class="tournament-btn-primary" data-enroll-next-express data-genre-id="' + g.id + '">🎵 Inscribirme en la próxima ronda</button>'
-            : '<button type="button" class="tournament-btn-primary" data-enroll-next-express data-genre-id="' + g.id + '">🎵 Abrir inscripción y elegir canción</button>')) +
+            ? '<button type="button" class="tournament-btn-secondary" data-watch-express="' + exp.id + '" data-genre-id="' + g.id + '">' + svgIcon('eye', 14) + 'Ver batalla en curso</button>' +
+              '<button type="button" class="tournament-btn-primary" data-enroll-next-express data-genre-id="' + g.id + '">' + svgIcon('music', 14) + 'Inscribirme en la próxima ronda</button>'
+            : '<button type="button" class="tournament-btn-primary" data-enroll-next-express data-genre-id="' + g.id + '">' + svgIcon('music', 14) + 'Abrir inscripción y elegir canción</button>')) +
         '</div>'
       : '<p class="text-sm text-gray-500">Express cargando…</p>';
 
     var weeklyHtml = wk
       ? '<div class="tournament-panel tournament-panel--weekly">' +
-        '<div class="tournament-panel-title tournament-panel-title--weekly mb-3">🏆 Grand Prix Semanal</div>' +
+        '<div class="tournament-panel-title tournament-panel-title--weekly mb-3">' + svgIcon('trophy', 16) + 'Grand Prix Semanal</div>' +
         '<div class="tournament-stat-row"><span>Apuesta de entrada</span><strong>' + fmtCredits(wk.entry_fee) + '</strong></div>' +
         '<div class="tournament-stat-row"><span>Jugadores</span><strong>' + wk.current_participants + '/' + wk.max_participants + '</strong></div>' +
         '<div class="tournament-stat-row"><span>Pozo de premios</span><strong>' + fmtCredits(Number(wk.prize_pool || 0).toFixed(1)) + '</strong></div>' +
         '<div class="tournament-progress tournament-progress--weekly"><span style="width:' +
         Math.min(100, (wk.current_participants / wk.max_participants) * 100) + '%"></span></div>' +
         (wk.status === 'registration'
-          ? '<button type="button" class="tournament-btn-primary" data-join-weekly="' + wk.id + '">🎵 Elegir canción e inscribirme · ' + fmtCredits(wk.entry_fee) + '</button>'
+          ? '<button type="button" class="tournament-btn-primary" data-join-weekly="' + wk.id + '">' + svgIcon('music', 14) + 'Elegir canción e inscribirme · ' + fmtCredits(wk.entry_fee) + '</button>'
           : (wk.status === 'in_progress' || wk.status === 'locked'
-            ? '<button type="button" class="tournament-btn-secondary" data-watch-weekly="' + wk.id + '">👀 Ver competencia Grand Prix</button>'
+            ? '<button type="button" class="tournament-btn-secondary" data-watch-weekly="' + wk.id + '">' + svgIcon('eye', 14) + 'Ver competencia Grand Prix</button>'
             : '<p class="mt-3 text-xs text-amber-300">Inscripción cerrada</p>')) +
         '</div>'
       : '<p class="text-sm text-gray-500">Grand Prix no disponible.</p>';

@@ -146,6 +146,12 @@
     if (typeof showToast === 'function') showToast(msg, type || 'info');
   }
 
+  // Ícono SVG chico para HTML generado en este archivo -- nunca para toast(),
+  // que reenvía a showToast() (textContent por seguridad, no HTML).
+  function svgIcon(name, size, extraClass) {
+    return window.MTRIcons ? window.MTRIcons.svg(name, { size: size || 14, className: 'inline-block align-[-2px] mr-1' + (extraClass ? ' ' + extraClass : '') }) : '';
+  }
+
   function isPinnedWatch(id) {
     return !!(id && localStorage.getItem('mtr_joined_tournament') === id);
   }
@@ -193,7 +199,7 @@
     grid.className = 'grid ' + cols + ' gap-4 mb-6';
     grid.innerHTML =
       '<div class="col-span-full text-center mb-2">' +
-      '<h3 class="text-lg font-bold text-white">⚔️ Competidores del torneo</h3>' +
+      '<h3 class="text-lg font-bold text-white">' + svgIcon('swords', 18) + 'Competidores del torneo</h3>' +
       '<p class="text-xs text-gray-400">' + b.humanCount + ' humanos · ' + b.cpuCount + ' CPU</p></div>' +
       b.participants.map(function (p) {
         return (
@@ -202,7 +208,7 @@
           '<div class="flex flex-col items-center text-center gap-2">' +
           '<img src="' + (p.songImage || '') + '" alt="" class="w-24 h-24 sm:w-28 sm:h-28 rounded-xl object-cover shadow-lg bg-black/50" onerror="this.src=\'https://e-cdns-images.dzcdn.net/images/cover/2646329172/250x250-000000-80-0-0.jpg\'">' +
           '<div class="text-xs font-bold ' + (p.isCpu ? 'text-gray-400' : 'text-cyan-400') + '">' +
-          (p.isCpu ? '🤖 ' : '👤 ') + (p.displayName || 'Jugador') + '</div>' +
+          (p.isCpu ? svgIcon('robot', 13) : svgIcon('user', 13)) + (p.displayName || 'Jugador') + '</div>' +
           '<div class="text-sm font-bold text-white leading-tight">' + (p.songName || '—') + '</div>' +
           '<div class="text-[11px] text-gray-500">' + (p.songArtist || '') + '</div>' +
           '</div></div>'
@@ -310,7 +316,7 @@
       } else if (t.status === 'locked') {
         sub.textContent = typeLabel + ' · preparando batalla…';
       } else if (t.status === 'in_progress') {
-        sub.textContent = typeLabel + ' · ⚔️ batalla en curso';
+        sub.textContent = typeLabel + ' · batalla en curso';
       } else {
         sub.textContent = typeLabel;
       }
@@ -320,7 +326,7 @@
       if (arenaBlocked && lastLifecycleError) {
         status.innerHTML =
           '<div class="text-center p-4">' +
-          '<div class="text-sm text-red-300 font-bold mb-2">⚠️ Configuración de torneos incompleta</div>' +
+          '<div class="text-sm text-red-300 font-bold mb-2">' + svgIcon('warning', 14) + 'Configuración de torneos incompleta</div>' +
           '<p class="text-xs text-gray-300 mb-3">' + lastLifecycleError + '</p>' +
           '<p class="text-xs text-amber-200 mb-3">Aplica migraciones 016 y 017 en Supabase SQL Editor.</p>' +
           '<button type="button" id="tournamentForceHubBtn" class="px-4 py-2 rounded-lg bg-cyan-600 text-white text-sm">Volver al hub</button>' +
@@ -335,7 +341,7 @@
       } else if (battleKickInFlight || (lobbyStatus === 'registration' && sec === 0)) {
         status.innerHTML =
           '<div class="text-center p-4">' +
-          '<div class="text-sm text-amber-300 animate-pulse mb-2">⏳ Iniciando batalla (CPU + jugadores)…</div>' +
+          '<div class="text-sm text-amber-300 animate-pulse mb-2">' + svgIcon('clock', 14) + 'Iniciando batalla (CPU + jugadores)…</div>' +
           '<div class="text-4xl font-black tabular-nums text-cyan-400 mb-2">00:00</div>' +
           '<p class="text-xs text-gray-400">Intento ' + startBattleAttempts + '/' + MAX_KICK_ATTEMPTS +
           ' · el servidor espera confirmar inscripciones (~15 s)</p>' +
@@ -356,7 +362,7 @@
         if (!isEnrolledInCurrentWatch()) {
           enrollCta =
             '<button type="button" id="tournamentEnrollFromArenaBtn" class="tournament-btn-primary" style="max-width:280px;margin:1rem auto 0">' +
-            '🎵 Elegir canción e inscribirme</button>' +
+            svgIcon('music', 14) + 'Elegir canción e inscribirme</button>' +
             '<p class="tournament-lobby-hint">Debes elegir tu canción antes de participar</p>';
         }
         status.innerHTML = lobbyCountdownHtml(sec, 300) + enrollCta;
@@ -372,19 +378,19 @@
           '<div class="tournament-lobby-rings urgent"><div class="ring ring-1"></div><div class="ring ring-2"></div></div>' +
           '<div class="tournament-lobby-core">' +
           '<div class="tournament-lobby-label">Preparando arena</div>' +
-          '<div class="text-lg font-bold text-amber-300 animate-pulse">🔒 Generando bracket y rivales CPU…</div>' +
+          '<div class="text-lg font-bold text-amber-300 animate-pulse">' + svgIcon('lock', 16) + 'Generando bracket y rivales CPU…</div>' +
           '</div></div>';
       } else if (lobbyStatus === 'cancelled') {
         status.innerHTML =
           '<div class="text-center text-red-400">' +
-          '<p class="font-bold mb-2">❌ Torneo cancelado</p>' +
+          '<p class="font-bold mb-2">' + svgIcon('circleX', 15) + 'Torneo cancelado</p>' +
           '<p class="text-sm text-gray-400">' + (lastLifecycleError || 'Error al iniciar.') + '</p></div>';
       } else if (lobbyStatus === 'in_progress') {
         var duelTotal = (b && b.duels && b.duels.length) || 0;
         var duelIdx = (b && b.currentDuelIndex) || 0;
         status.innerHTML =
           '<div class="text-center p-4">' +
-          '<div class="text-sm text-cyan-300 font-bold animate-pulse mb-2">⚔️ Batalla automática en curso</div>' +
+          '<div class="text-sm text-cyan-300 font-bold animate-pulse mb-2">' + svgIcon('swords', 14) + 'Batalla automática en curso</div>' +
           '<p class="text-xs text-gray-400">Duelo ' + (duelIdx + 1) + ' de ' + duelTotal +
           ' · iniciando según el cronómetro del torneo</p></div>';
       } else if (lastLifecycleError) {
@@ -426,13 +432,13 @@
     showArena();
     renderResult(b);
     var title = document.getElementById('tournamentArenaTitle');
-    if (title) title.textContent = '🏆 Torneo finalizado';
+    if (title) title.textContent = 'Torneo finalizado';
     var sub = document.getElementById('tournamentArenaSubtitle');
     if (sub) sub.textContent = 'Resultados oficiales de la ronda';
     var status = document.getElementById('tournamentArenaStatus');
     if (status) {
       status.innerHTML =
-        '<div class="text-center text-purple-200 font-bold">✅ Competencia completada</div>';
+        '<div class="text-center text-purple-200 font-bold">' + svgIcon('circleCheck', 14) + 'Competencia completada</div>';
     }
     var panel = document.getElementById('tournamentResultPanel');
     if (panel) {
@@ -482,7 +488,8 @@
     if (!p) {
       return '<div class="mtr-podium-spot mtr-podium-spot--' + place + '"></div>';
     }
-    var medal = place === 'first' ? '🥇' : (place === 'second' ? '🥈' : '🥉');
+    var medalColor = place === 'first' ? '#fbbf24' : (place === 'second' ? '#cbd5e1' : '#d97706');
+    var medal = '<span style="color:' + medalColor + '">' + svgIcon('medal', 22) + '</span>';
     var num = place === 'first' ? '1' : (place === 'second' ? '2' : '3');
     var fallback = 'https://e-cdns-images.dzcdn.net/images/cover/2646329172/250x250-000000-80-0-0.jpg';
     return (
@@ -490,7 +497,7 @@
       '<div class="mtr-podium-medal">' + medal + '</div>' +
       '<img class="mtr-podium-avatar" src="' + escapeHtml(p.songImage || fallback) + '" ' +
       'onerror="this.src=\'' + fallback + '\'" alt="">' +
-      '<div class="mtr-podium-name">' + (p.isCpu ? '🤖 ' : '') + escapeHtml(p.displayName || 'Jugador') + '</div>' +
+      '<div class="mtr-podium-name">' + (p.isCpu ? svgIcon('robot', 12) : '') + escapeHtml(p.displayName || 'Jugador') + '</div>' +
       '<div class="mtr-podium-song">' + escapeHtml(p.songName || '') + '</div>' +
       '<div class="mtr-podium-base">' + num + '</div>' +
       '</div>'
@@ -549,12 +556,12 @@
           return (
             '<div class="mtr-standing-row' + (isChamp ? ' mtr-standing-row--champion' : '') +
             '" style="animation-delay:' + delay + 's">' +
-            '<span class="mtr-standing-rank">' + (isChamp ? '🏆' : '#' + (i + 1)) + '</span>' +
+            '<span class="mtr-standing-rank">' + (isChamp ? svgIcon('trophy', 16) : '#' + (i + 1)) + '</span>' +
             '<img class="mtr-standing-avatar" src="' + escapeHtml(p.songImage || fallback) + '" ' +
             'onerror="this.src=\'' + fallback + '\'" alt="">' +
             '<div class="mtr-standing-copy">' +
             '<div class="mtr-standing-name">' + escapeHtml(p.displayName || 'Jugador') + '</div>' +
-            '<div class="mtr-standing-song">🎵 ' + escapeHtml(p.songName || 'Sin título') + '</div>' +
+            '<div class="mtr-standing-song">' + svgIcon('music', 12) + escapeHtml(p.songName || 'Sin título') + '</div>' +
             '</div>' + tag +
             '</div>'
           );
@@ -563,7 +570,7 @@
     }
 
     var prizeHtml = b.prizeAwarded > 0
-      ? '<div class="mtr-prize-chip">💰 +' + Number(b.prizeAwarded).toFixed(1) + ' MTR créditos acreditados</div>'
+      ? '<div class="mtr-prize-chip">' + svgIcon('cash', 13) + '+' + Number(b.prizeAwarded).toFixed(1) + ' MTR créditos acreditados</div>'
       : '<div class="mtr-prize-chip mtr-prize-chip--empty">Sin premio acreditado en este slot</div>';
 
     panel.classList.remove('hidden');
@@ -571,16 +578,16 @@
       '<div class="mtr-result">' +
       confettiHtml() +
       '<div class="mtr-result-inner text-center">' +
-      '<div class="mtr-result-crown">👑</div>' +
+      '<div class="mtr-result-crown" style="color:#fbbf24">' + (window.MTRIcons ? window.MTRIcons.svg('crown', { size: 40 }) : '') + '</div>' +
       '<div class="mtr-result-title">Campeón del torneo</div>' +
       '<h3 class="mtr-champion-name mt-1">' + escapeHtml(b.championName || 'Campeón') + '</h3>' +
-      '<p class="mtr-champion-song">🎵 ' + escapeHtml(b.championSong || '') + '</p>' +
+      '<p class="mtr-champion-song">' + svgIcon('music', 13) + escapeHtml(b.championSong || '') + '</p>' +
       podiumHtml +
       '<p class="text-sm text-gray-300 mt-4 mb-1">' + escapeHtml(b.resultMessage || 'Torneo completado.') + '</p>' +
       prizeHtml +
       standingsHtml +
       '<div class="flex flex-wrap gap-2 justify-center mt-6">' +
-      '<button type="button" id="tournamentBackHubBtn" class="tournament-btn-primary" style="width:auto;padding:0.65rem 1.4rem">🏆 Hub de torneos</button>' +
+      '<button type="button" id="tournamentBackHubBtn" class="tournament-btn-primary" style="width:auto;padding:0.65rem 1.4rem">' + svgIcon('trophy', 15) + 'Hub de torneos</button>' +
       '<button type="button" id="tournamentBackModesBtn" class="tournament-btn-secondary" style="width:auto;margin-top:0;padding:0.65rem 1.4rem">Otros modos</button>' +
       '</div>' +
       '</div></div>';
@@ -848,7 +855,7 @@
           }
         }
         finishTournamentPresentation(data.bracket);
-        if (champPreview) toast('🏆 Campeón: ' + champPreview, 'success');
+        if (champPreview) toast('Campeón: ' + champPreview, 'success');
         // Mismo fix que en abandonTournament(): sin wallet conectada, esto
         // nunca refrescaba el saldo -- justo el caso que reportó el usuario
         // (tuvo que recargar la página a mano después de un torneo).
@@ -865,7 +872,7 @@
       if (progress) {
         progress.innerHTML =
           '<div class="text-center py-2">' +
-          '<div class="text-sm text-cyan-300 font-bold">⚔️ Duelo ' + (idx + 1) + ' / ' + duels.length + '</div>' +
+          '<div class="text-sm text-cyan-300 font-bold">' + svgIcon('swords', 14) + 'Duelo ' + (idx + 1) + ' / ' + duels.length + '</div>' +
           '<div class="text-xs text-gray-400">' + (duels[idx].label || '') + '</div></div>';
       }
 

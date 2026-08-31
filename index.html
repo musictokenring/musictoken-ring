@@ -775,7 +775,7 @@
                 function done() {
                     if (btn) {
                         var original = btn.textContent;
-                        btn.textContent = '✅ Copiado';
+                        btn.innerHTML = (window.MTRIcons ? window.MTRIcons.svg('circleCheck', { size: 14, className: 'inline-block align-[-2px] mr-1' }) : '') + 'Copiado';
                         setTimeout(function () { btn.textContent = original; }, 2000);
                     }
                 }
@@ -790,8 +790,8 @@
             banner.id = 'embeddedBrowserBanner';
             banner.style.cssText = 'position:sticky;top:0;z-index:200;background:#78350f;border-bottom:1px solid rgba(251,191,36,0.4);padding:10px 14px;font-size:13px;color:#fef3c7;display:flex;align-items:center;gap:10px;flex-wrap:wrap;';
             banner.innerHTML =
-                '<span style="flex:1;min-width:200px;">⚠️ Estás usando el navegador de ' + appName + '. El login con Google y algunas funciones no van a andar acá.</span>' +
-                '<button id="embeddedBannerCopyBtn" style="padding:6px 12px;border-radius:8px;background:#f59e0b;color:#000;font-weight:700;border:none;cursor:pointer;white-space:nowrap;">📋 Copiar enlace</button>' +
+                '<span style="flex:1;min-width:200px;">' + (window.MTRIcons ? window.MTRIcons.svg('warning', { size: 14, className: 'inline-block align-[-2px] mr-1' }) : '') + 'Estás usando el navegador de ' + appName + '. El login con Google y algunas funciones no van a andar acá.</span>' +
+                '<button id="embeddedBannerCopyBtn" style="padding:6px 12px;border-radius:8px;background:#f59e0b;color:#000;font-weight:700;border:none;cursor:pointer;white-space:nowrap;">' + (window.MTRIcons ? window.MTRIcons.svg('copy', { size: 14, className: 'inline-block align-[-2px] mr-1' }) : '') + 'Copiar enlace</button>' +
                 '<button id="embeddedBannerCloseBtn" style="background:none;border:none;color:#fef3c7;font-size:18px;cursor:pointer;padding:0 4px;line-height:1;">×</button>';
 
             document.body.insertBefore(banner, document.body.firstChild);
@@ -883,7 +883,7 @@
             </div>
         </div>
         <p id="walletNetworkWarning" class="hidden text-center text-yellow-400 text-sm py-2 bg-yellow-500/10 border-t border-yellow-500/20">
-            ⚠️ Red incorrecta. Cambia a Base (8453) para jugar y verificar depósitos.
+            <span data-mtr-icon="warning" data-mtr-color="yellow" data-mtr-inline data-mtr-size="14"></span>Red incorrecta. Cambia a Base (8453) para jugar y verificar depósitos.
         </p>
     </header>
 
@@ -905,7 +905,7 @@
         <section id="streamDashboard" class="mb-16">
             <div class="flex flex-col sm:flex-row sm:items-end justify-between gap-4 mb-6">
                 <div>
-                    <h2 class="text-2xl font-bold text-white">📈 Wall Street of Beats</h2>
+                    <h2 class="text-2xl font-bold text-white"><span data-mtr-icon="chart" data-mtr-color="green" data-mtr-inline data-mtr-size="14"></span>Wall Street of Beats</h2>
                     <p class="text-gray-400 text-sm mt-1">Top streams por región (últimos 5 min)</p>
                 </div>
                 <div class="stream-region-tabs flex gap-2">
@@ -995,7 +995,7 @@
 
                 <div id="depositAuthRequired" class="hidden mb-6 p-4 rounded-lg bg-yellow-500/10 border border-yellow-500/20">
                     <div class="flex items-center gap-2 mb-2">
-                        <span class="text-yellow-400 text-lg">⚠️</span>
+                        <span class="text-yellow-400 text-lg"><span data-mtr-icon="warning" data-mtr-plain data-mtr-size="18"></span></span>
                         <h4 class="text-yellow-400 font-bold">Autenticación Requerida</h4>
                     </div>
                     <p class="text-gray-300 text-sm mb-3">Para realizar depósitos, debes iniciar sesión o conectar tu wallet primero.</p>
@@ -1563,7 +1563,14 @@
         <script>
         (function () {
             var MIN_WC_COP = 10000;
-            var STATUS_LABEL = { pending: '⏳ Pendiente', paid: '✅ Pagado', rejected: '❌ Rechazado' };
+            function wcIcon(name) {
+                return window.MTRIcons ? window.MTRIcons.svg(name, { size: 12, className: 'inline-block align-[-2px] mr-1' }) : '';
+            }
+            var STATUS_LABEL = {
+                pending: wcIcon('clock') + 'Pendiente',
+                paid: wcIcon('circleCheck') + 'Pagado',
+                rejected: wcIcon('circleX') + 'Rechazado'
+            };
 
             function parseWcCopAmount(raw) {
                 return parseFloat(String(raw == null ? '' : raw).replace(/[.,\s]/g, ''), 10);
@@ -1748,7 +1755,7 @@
                     <p class="text-gray-400 text-sm mb-4">Matchmaking automático. Encuentra rival en segundos.</p>
                     <div class="flex flex-wrap gap-1.5 mb-5">
                         <span class="text-xs px-2 py-1 rounded-full bg-cyan-500/10 text-cyan-400 border border-cyan-500/20"><span data-mtr-icon="target" data-mtr-color="cyan" data-mtr-inline data-mtr-size="13" style="margin-right:4px"></span>Auto-match</span>
-                        <span class="text-xs px-2 py-1 rounded-full bg-cyan-500/10 text-cyan-400 border border-cyan-500/20">⏱️ 1 min</span>
+                        <span class="text-xs px-2 py-1 rounded-full bg-cyan-500/10 text-cyan-400 border border-cyan-500/20"><span data-mtr-icon="clock" data-mtr-color="cyan" data-mtr-inline data-mtr-size="14"></span>1 min</span>
                     </div>
                     <button type="button" class="w-full py-2.5 rounded-lg text-sm font-bold bg-cyan-500/15 border border-cyan-500/30 text-cyan-400 hover:bg-cyan-500/25 transition-all cursor-pointer" onclick="selectMode('quick')">Jugar Ahora</button>
                 </div>
@@ -1816,6 +1823,10 @@
                 <div class="flex flex-wrap gap-2 mb-4">
                     <label class="text-xs text-gray-500 sr-only" for="tournamentGenreFilter">Filtrar géneros</label>
                     <select id="tournamentGenreFilter" class="rounded-lg bg-gray-900 border border-white/10 text-sm text-white px-3 py-2">
+                        <!-- Un <option> nativo no puede contener HTML/SVG --
+                             el ícono queda solo en el texto del <select>
+                             cerrado (limitación real del elemento, no un
+                             emoji sin reemplazar) -- se deja como texto. -->
                         <option value="all">🌎 Todos los géneros</option>
                         <option value="latino">🇱🇷 Latino</option>
                         <option value="anglo">🇺🇸 Anglo</option>
@@ -1842,7 +1853,7 @@
                         <p class="text-gray-400 text-sm" id="tournamentArenaSubtitle"></p>
                     </div>
                 </div>
-                <button type="button" id="tournamentAbandonBtn" class="tournament-btn-danger hidden shrink-0">🚪 Abandonar partida</button>
+                <button type="button" id="tournamentAbandonBtn" class="tournament-btn-danger hidden shrink-0"><span data-mtr-icon="circleX" data-mtr-plain data-mtr-size="14" style="display:inline-block;vertical-align:-2px;margin-right:4px"></span>Abandonar partida</button>
             </div>
             <div id="tournamentArenaStatus" class="tournament-arena-status mb-4 text-sm text-cyan-200"></div>
             <div id="tournamentBracketGrid" class="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-6"></div>
@@ -1892,7 +1903,7 @@
                     <div class="flex gap-2 mb-6">
                         <input type="text" id="songSearch" placeholder="Nombre de canción o artista..."
                                class="flex-1 px-4 py-3 rounded-lg bg-black/40 border border-white/10 text-white placeholder-gray-500 text-sm focus:outline-none focus:border-cyan-500/50 focus:ring-1 focus:ring-cyan-500/20 transition">
-                        <button type="button" onclick="searchSong()" class="px-4 py-3 rounded-lg bg-cyan-500/15 border border-cyan-500/30 text-cyan-400 hover:bg-cyan-500/25 transition cursor-pointer">🔍</button>
+                        <button type="button" onclick="searchSong()" class="px-4 py-3 rounded-lg bg-cyan-500/15 border border-cyan-500/30 text-cyan-400 hover:bg-cyan-500/25 transition cursor-pointer"><span data-mtr-icon="search" data-mtr-plain data-mtr-size="18"></span></button>
                     </div>
                     <div id="searchResults" class="grid grid-cols-1 gap-2 max-h-96 overflow-y-auto neon-scrollbar pr-1"></div>
                 </div>
@@ -1900,7 +1911,7 @@
                 <div class="space-y-6">
                     <div id="selectedSongCard" class="p-6 rounded-2xl border border-white/5 bg-white/[0.02] min-h-[120px] flex items-center justify-center transition-all duration-500">
                         <div class="text-center text-gray-500">
-                            <div class="text-3xl mb-2">🎵</div>
+                            <div class="text-3xl mb-2 text-gray-500"><span data-mtr-icon="music" data-mtr-plain data-mtr-size="30"></span></div>
                             <p>Selecciona una canción</p>
                         </div>
                     </div>
@@ -1930,7 +1941,7 @@
         <!-- WAITING SCREEN -->
         <section id="waitingScreen" class="hidden mb-16">
             <div class="max-w-md mx-auto text-center py-20 px-8 rounded-2xl border border-cyan-500/15 bg-gray-900/50">
-                <div class="text-5xl mb-4 animate-pulse">⏳</div>
+                <div class="text-5xl mb-4 animate-pulse text-cyan-400"><span data-mtr-icon="clock" data-mtr-plain data-mtr-size="48"></span></div>
                 <h2 class="text-2xl font-bold text-white mb-2">Buscando Oponente...</h2>
                 <p class="text-gray-400 mb-6">Esto puede tomar unos segundos</p>
                 <button type="button" onclick="cancelSearch()" class="px-6 py-2.5 rounded-lg text-sm font-medium bg-white/5 border border-white/10 text-gray-300 hover:text-white hover:border-white/20 transition cursor-pointer">Cancelar Búsqueda</button>
@@ -1957,16 +1968,16 @@
                 <div class="flex items-center justify-center gap-2 mb-6 text-sm">
                     <span class="text-gray-500">o compartí el código:</span>
                     <strong id="roomCode" class="font-mono text-fuchsia-400">XXXXX</strong>
-                    <button type="button" onclick="copyRoomCode()" class="px-1.5 py-0.5 rounded bg-white/5 text-gray-500 hover:text-white transition cursor-pointer text-xs">📋</button>
+                    <button type="button" onclick="copyRoomCode()" class="px-1.5 py-0.5 rounded bg-white/5 text-gray-500 hover:text-white transition cursor-pointer"><span data-mtr-icon="copy" data-mtr-plain data-mtr-size="14"></span></button>
                 </div>
                 <div class="flex items-center justify-center gap-6 mb-6">
                     <div id="player1Card" class="text-center">
-                        <div class="text-3xl mb-1">👤</div>
+                        <div class="text-3xl mb-1 text-gray-400"><span data-mtr-icon="user" data-mtr-plain data-mtr-size="30"></span></div>
                         <span class="text-sm text-gray-400">Esperando...</span>
                     </div>
                     <div class="text-2xl font-bold text-fuchsia-400">VS</div>
                     <div id="player2Card" class="text-center">
-                        <div class="text-3xl mb-1">❓</div>
+                        <div class="text-3xl mb-1 text-gray-400"><span data-mtr-icon="help" data-mtr-plain data-mtr-size="30"></span></div>
                         <span class="text-sm text-gray-400">Esperando rival...</span>
                     </div>
                 </div>
@@ -1983,13 +1994,13 @@
                 <h2 class="text-2xl font-bold text-white mb-6 text-center flex items-center justify-center gap-2"><span data-mtr-icon="music" data-mtr-color="cyan" data-mtr-inline data-mtr-size="20" style="margin:0"></span>Sala Encontrada</h2>
                 <div class="flex items-center justify-center gap-6 mb-6">
                     <div class="text-center">
-                        <div class="text-3xl mb-1" id="joinPreviewOpponentAvatar">🎤</div>
+                        <div class="text-3xl mb-1 text-orange-400" id="joinPreviewOpponentAvatar"><span data-mtr-icon="mic" data-mtr-plain data-mtr-size="30"></span></div>
                         <span class="text-sm text-gray-300 font-medium" id="joinPreviewSongName">-</span>
                         <p class="text-xs text-gray-500" id="joinPreviewSongArtist">-</p>
                     </div>
                     <div class="text-2xl font-bold text-fuchsia-400">VS</div>
                     <div class="text-center">
-                        <div class="text-3xl mb-1" id="joinPreviewMyAvatar">👤</div>
+                        <div class="text-3xl mb-1 text-gray-400" id="joinPreviewMyAvatar"><span data-mtr-icon="user" data-mtr-plain data-mtr-size="30"></span></div>
                         <span class="text-sm text-gray-300 font-medium">Vos</span>
                     </div>
                 </div>
@@ -1999,7 +2010,7 @@
                 </p>
                 <div id="joinPreviewInsufficientBox" class="hidden mb-4 p-4 rounded-lg bg-red-500/10 border border-red-500/20 text-center">
                     <p class="text-red-300 text-sm mb-3" id="joinPreviewInsufficientText"></p>
-                    <button type="button" onclick="if (typeof window.openMercadoPagoModal === 'function') { window.openMercadoPagoModal(); } else { showToast('Buscá la sección de recarga (Mercado Pago) en la página principal.', 'info'); }" class="w-full py-2 rounded-lg text-sm font-bold bg-gradient-to-r from-cyan-500 to-fuchsia-500 text-white hover:opacity-90 transition cursor-pointer">💳 Recargar saldo</button>
+                    <button type="button" onclick="if (typeof window.openMercadoPagoModal === 'function') { window.openMercadoPagoModal(); } else { showToast('Buscá la sección de recarga (Mercado Pago) en la página principal.', 'info'); }" class="w-full py-2 rounded-lg text-sm font-bold bg-gradient-to-r from-cyan-500 to-fuchsia-500 text-white hover:opacity-90 transition cursor-pointer"><span data-mtr-icon="cash" data-mtr-plain data-mtr-size="14" style="display:inline-block;vertical-align:-2px;margin-right:4px"></span>Recargar saldo</button>
                 </div>
                 <div class="flex gap-3">
                     <button type="button" onclick="cancelJoinRoomPreview()" class="flex-1 py-2.5 rounded-lg text-sm font-medium bg-white/5 border border-white/10 text-gray-300 hover:text-white transition cursor-pointer">Cancelar</button>
@@ -2028,11 +2039,11 @@
                 <div class="flex flex-col sm:flex-row gap-3 mb-4">
                     <input id="cashoutAmount" type="number" min="1" placeholder="Créditos nominales a retirar"
                            class="flex-1 px-4 py-3 rounded-lg bg-black/40 border border-white/10 text-white placeholder-gray-500 text-sm focus:outline-none focus:border-fuchsia-500/50 focus:ring-1 focus:ring-fuchsia-500/20 transition">
-                    <button type="button" onclick="quoteCashout()" class="px-6 py-3 rounded-lg text-sm font-bold bg-fuchsia-500/15 border border-fuchsia-500/30 text-fuchsia-400 hover:bg-fuchsia-500/25 transition cursor-pointer whitespace-nowrap">📊 Cotizar retiro</button>
+                    <button type="button" onclick="quoteCashout()" class="px-6 py-3 rounded-lg text-sm font-bold bg-fuchsia-500/15 border border-fuchsia-500/30 text-fuchsia-400 hover:bg-fuchsia-500/25 transition cursor-pointer whitespace-nowrap"><span data-mtr-icon="chart" data-mtr-color="cyan" data-mtr-inline data-mtr-size="14"></span>Cotizar retiro</button>
                 </div>
                 <div class="mb-4 p-3 rounded-lg bg-blue-500/10 border border-blue-500/20">
                     <p class="text-blue-400 text-xs mb-2">
-                        <strong>💡 Conversión:</strong> Retiras créditos nominales → recibes fondos en stablecoin / USD según la pasarela
+                        <strong><span data-mtr-icon="bulb" data-mtr-color="yellow" data-mtr-inline data-mtr-size="14"></span>Conversión:</strong> Retiras créditos nominales → recibes fondos en stablecoin / USD según la pasarela
                     </p>
                     <p class="text-gray-300 text-xs">
                         <strong>Ejemplo:</strong> 100 créditos nominales → ~95 USD netos (5% fee)
@@ -2059,7 +2070,7 @@
                             <div id="publicVaultBalance" class="text-2xl font-bold text-cyan-400">Cargando...</div>
                             <div class="text-xs text-gray-500 mt-1">Liquidez en USDC real, verificable en Base</div>
                         </div>
-                        <div class="text-4xl">🏦</div>
+                        <div class="text-4xl text-cyan-400"><span data-mtr-icon="wallet" data-mtr-plain data-mtr-size="36"></span></div>
                     </div>
                 </div>
 
@@ -2167,7 +2178,7 @@
                      signInWithWallet() y backend/siwe-auth.js. Visibilidad la
                      controla openAuthModal(). -->
                 <button type="button" id="walletSignInBtn" onclick="signInWithWallet()" class="hidden w-full flex items-center justify-center gap-3 px-4 py-3 rounded-lg bg-gradient-to-r from-amber-500 to-orange-500 text-white font-semibold text-sm hover:opacity-90 transition mb-4 cursor-pointer">
-                    🔏 Firmar con tu wallet
+                    <span data-mtr-icon="lock" data-mtr-color="gray" data-mtr-inline data-mtr-size="14"></span>Firmar con tu wallet
                 </button>
                 <div class="flex items-center gap-3 my-4"><div class="flex-1 h-px bg-white/10"></div><span class="text-xs text-gray-500">o</span><div class="flex-1 h-px bg-white/10"></div></div>
                 <form onsubmit="handleLoginSubmit(event)" class="space-y-4">
@@ -2331,8 +2342,8 @@
         <div class="modal-overlay" onclick="closeChallengeModal()"></div>
         <div class="modal-box text-center max-w-md">
             <button type="button" onclick="closeChallengeModal()" class="absolute top-4 right-4 text-gray-400 hover:text-white text-2xl leading-none cursor-pointer">×</button>
-            <h2 class="text-2xl font-bold text-white mb-4 flex items-center gap-2"><span data-mtr-icon="swords" data-mtr-color="orange" data-mtr-inline data-mtr-size="20" style="margin:0"></span>Reto Social</h2>
-            
+            <h2 id="challengeModalTitle" class="text-2xl font-bold text-white mb-4 flex items-center justify-center gap-2"><span data-mtr-icon="swords" data-mtr-color="orange" data-mtr-inline data-mtr-size="20" style="margin:0"></span>Reto Social</h2>
+
             <!-- Información del reto con animación -->
             <div id="challengeSongInfo" class="mb-6 animate-pulse">
                 <div class="relative inline-block mb-4">
@@ -2342,12 +2353,23 @@
                 <h3 id="challengeSongName" class="text-xl font-bold text-white mb-1">-</h3>
                 <p id="challengeSongArtist" class="text-gray-400 text-sm mb-2">-</p>
                 <p id="challengeBetAmount" class="text-cyan-400 font-semibold">Apuesta: <span id="challengeBetValue">-</span> créditos</p>
+                <p id="challengeExpiryNote" class="text-gray-500 text-xs mt-2"></p>
             </div>
-            
+
+            <!-- Estado "no disponible" (vencido/cancelado/ya aceptado/no
+                 existe) -- reemplaza la info de arriba en vez de duplicar
+                 el modal entero. Ver loadChallengeInfo() y
+                 applyChallengeStatus() para cuándo se activa cada caso. -->
+            <div id="challengeUnavailable" class="hidden mb-6">
+                <div id="challengeUnavailableIcon" class="flex justify-center mb-3"></div>
+                <p id="challengeUnavailableMsg" class="text-white font-semibold mb-1">-</p>
+                <p id="challengeUnavailableSub" class="text-gray-400 text-sm">-</p>
+            </div>
+
             <p id="challengeDetails" class="text-gray-400 text-sm mb-6">Tienes un reto pendiente</p>
             <div class="flex gap-3">
-                <button type="button" onclick="acceptChallenge()" class="flex-1 py-3 rounded-lg text-sm font-bold bg-gradient-to-r from-cyan-500 to-fuchsia-500 text-white hover:opacity-90 transition cursor-pointer">Aceptar</button>
-                <button type="button" onclick="rejectChallenge()" class="flex-1 py-3 rounded-lg text-sm font-medium bg-white/5 border border-white/10 text-gray-300 hover:text-white transition cursor-pointer">Rechazar</button>
+                <button type="button" id="challengeAcceptBtn" onclick="acceptChallenge()" class="flex-1 py-3 rounded-lg text-sm font-bold bg-gradient-to-r from-cyan-500 to-fuchsia-500 text-white hover:opacity-90 transition cursor-pointer">Aceptar</button>
+                <button type="button" id="challengeRejectBtn" onclick="rejectChallenge()" class="flex-1 py-3 rounded-lg text-sm font-medium bg-white/5 border border-white/10 text-gray-300 hover:text-white transition cursor-pointer">Rechazar</button>
             </div>
         </div>
     </div>
@@ -2445,7 +2467,7 @@
                         console.error('[CACHE-BUST] ❌ Archivo con validaciones antiguas detectado');
                         var alertDiv = document.createElement('div');
                         alertDiv.style.cssText = 'position: fixed; top: 0; left: 0; right: 0; background: red; color: white; padding: 20px; z-index: 99999; text-align: center; font-weight: bold;';
-                        alertDiv.innerHTML = '⚠️ ERROR: Versión cacheada detectada. Recarga la página.';
+                        alertDiv.innerHTML = (window.MTRIcons ? window.MTRIcons.svg('warning', { size: 14, className: 'inline-block align-[-2px] mr-1' }) : '') + 'ERROR: Versión cacheada detectada. Recarga la página.';
                         document.body.appendChild(alertDiv);
                         setTimeout(function() { alertDiv.remove(); }, 5000);
                         return;
@@ -2715,7 +2737,7 @@
                                             await new Promise(resolve => setTimeout(resolve, 500));
                                             await window.CreditsSystem.loadBalance(walletAddress);
                                             if (typeof showToast === 'function') {
-                                                showToast(`✅ Convertidos ${missingCredits.toFixed(2)} créditos automáticamente para desafío`, 'success');
+                                                showToast(`Convertidos ${missingCredits.toFixed(2)} créditos automáticamente para desafío`, 'success');
                                             }
                                         } else {
                                             console.error('[selectSongForBattle] ❌ Error en conversión automática:', rpcError);
@@ -2941,7 +2963,7 @@
                                 
                                 // Estilos inline con !important para máxima prioridad
                                 banner.style.cssText = 'position: fixed !important; top: 100px !important; left: 50% !important; transform: translateX(-50%) !important; z-index: 999999 !important; background: linear-gradient(135deg, #10b981 0%, #059669 100%) !important; color: white !important; padding: 20px 40px !important; border-radius: 16px !important; box-shadow: 0 10px 40px rgba(16, 185, 129, 0.6) !important; font-weight: 800 !important; font-size: 18px !important; text-align: center !important; pointer-events: none !important; display: block !important; visibility: visible !important; opacity: 1 !important;';
-                                banner.innerHTML = '✅ <strong>Canción Seleccionada:</strong> ' + (song.name || 'Sin nombre') + ' - ' + (song.artist || 'Artista desconocido');
+                                banner.innerHTML = (window.MTRIcons ? window.MTRIcons.svg('circleCheck', { size: 14, className: 'inline-block align-[-2px] mr-1' }) : '') + '<strong>Canción Seleccionada:</strong> ' + (song.name || 'Sin nombre') + ' - ' + (song.artist || 'Artista desconocido');
                                 
                                 logFn('[showGreenBanner] Banner creado, agregando estilos de animación...');
                                 
@@ -3398,7 +3420,7 @@
                 modal.innerHTML = `
                     <div class="bg-gray-900 border border-yellow-500/30 rounded-xl p-6 max-w-sm w-full mx-4 shadow-2xl">
                         <div class="flex justify-between items-center mb-4">
-                            <h3 class="text-xl font-bold text-white">⚠️ Navegador de Wallet Detectado</h3>
+                            <h3 class="text-xl font-bold text-white">${window.MTRIcons ? window.MTRIcons.svg('warning', { size: 18, className: 'inline-block align-[-3px] mr-1' }) : ''}Navegador de Wallet Detectado</h3>
                             <button onclick="this.closest('.fixed').remove()" class="text-gray-400 hover:text-white text-2xl leading-none">&times;</button>
                         </div>
                         <div class="mb-4">
@@ -3411,14 +3433,14 @@
                         </div>
                         <div class="flex flex-col gap-3">
                             <button id="openInSystemBrowser" class="w-full px-4 py-3 bg-cyan-500 hover:bg-cyan-600 text-white font-semibold rounded-lg transition">
-                                🔗 Abrir en Navegador del Sistema
+                                ${window.MTRIcons ? window.MTRIcons.svg('link', { size: 16, className: 'inline-block align-[-3px] mr-1' }) : ''}Abrir en Navegador del Sistema
                             </button>
                             <button onclick="this.closest('.fixed').remove()" class="w-full px-4 py-3 bg-gray-700 hover:bg-gray-600 text-white font-semibold rounded-lg transition">
                                 Cancelar
                             </button>
                         </div>
                         <p class="text-gray-500 text-xs mt-4 text-center">
-                            💡 Alternativa: Usa email y contraseña para iniciar sesión aquí mismo
+                            ${window.MTRIcons ? window.MTRIcons.svg('bulb', { size: 12, className: 'inline-block align-[-2px] mr-1' }) : ''}Alternativa: Usa email y contraseña para iniciar sesión aquí mismo
                         </p>
                     </div>
                 `;
@@ -3554,7 +3576,7 @@
                             const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
                             if (isMobile && typeof showToast === 'function') {
                                 setTimeout(() => {
-                                    showToast('💡 En móvil, usa Email/Google para evitar problemas de conexión', 'info');
+                                    showToast('En móvil, usa Email/Google para evitar problemas de conexión', 'info');
                                 }, 2000);
                             }
                         }
@@ -3837,7 +3859,7 @@
                                 
                                 if (btn && window.pendingChallengeId && challengeBetAmount && btn.textContent.includes('Crear')) {
                                     console.warn('[INIT] ⚠️ Botón dice "Crear", forzando manualmente...');
-                                    btn.textContent = '✅ Aceptar e Iniciar Desafío';
+                                    btn.innerHTML = (window.MTRIcons ? window.MTRIcons.svg('circleCheck', { size: 14, className: 'inline-block align-[-2px] mr-1' }) : '') + 'Aceptar e Iniciar Desafío';
                                 }
                                 
                                 if (betButtons && window.pendingChallengeId && challengeBetAmount && betButtons.style.display !== 'none') {
@@ -4467,12 +4489,20 @@
                     ? '<span class="text-[11px] px-2 py-0.5 rounded-full bg-purple-500/15 border border-purple-500/30 text-purple-300">' + c.genre_label + '</span>'
                     : '';
                 var created = c.created_at ? new Date(c.created_at).toLocaleDateString('es-CO', { day: '2-digit', month: 'short' }) : '';
+                // Urgencia visual cuando queda menos de 24h -- color + ícono
+                // + texto juntos (no solo color), para que sea claro incluso
+                // en modo daltónico o para quien no distingue el naranja.
+                var hoursLeft = c.expires_at ? (new Date(c.expires_at).getTime() - Date.now()) / (60 * 60 * 1000) : null;
+                var expiryLabel = c.expires_at ? formatTimeRemaining(c.expires_at) : '';
+                var expiryBadge = expiryLabel
+                    ? '<span class="text-[11px] px-2 py-0.5 rounded-full ' + (hoursLeft !== null && hoursLeft < 24 ? 'bg-red-500/15 border border-red-500/30 text-red-300' : 'bg-white/5 border border-white/10 text-gray-400') + '">' + (window.MTRIcons ? window.MTRIcons.svg(hoursLeft !== null && hoursLeft < 24 ? 'warning' : 'clock', { size: 11, className: 'inline-block align-[-1px] mr-1' }) : '') + expiryLabel + '</span>'
+                    : '';
                 return '<div class="flex items-center gap-3 p-3 rounded-xl bg-black/30 border border-white/10">' +
                     '<img src="' + (c.challenger_song_image || '') + '" class="w-12 h-12 rounded-lg object-cover flex-shrink-0" alt="">' +
                     '<div class="flex-1 min-w-0">' +
                     '<p class="text-white text-sm font-semibold truncate">' + (c.challenger_song_name || 'Sin título') + '</p>' +
                     '<p class="text-gray-400 text-xs truncate">' + (c.challenger_song_artist || '') + ' · ' + Number(c.bet_amount) + ' créditos · ' + created + '</p>' +
-                    (genreBadge ? '<div class="mt-1">' + genreBadge + '</div>' : '') +
+                    '<div class="mt-1 flex flex-wrap gap-1.5">' + genreBadge + expiryBadge + '</div>' +
                     '</div>' +
                     '<div class="flex flex-col gap-1.5 flex-shrink-0">' +
                     '<button type="button" onclick="copyPendingChallengeLink(\'' + link + '\')" class="px-3 py-1.5 rounded-lg text-xs font-medium bg-cyan-500/15 border border-cyan-500/30 text-cyan-300 hover:bg-cyan-500/25 transition cursor-pointer flex items-center gap-1">' + (window.MTRIcons ? window.MTRIcons.svg('copy', {size:13}) : '') + ' Copiar link</button>' +
@@ -4482,7 +4512,7 @@
             }).join('');
 
             container.innerHTML = '<div class="p-4 rounded-2xl border border-orange-500/20 bg-orange-500/5">' +
-                '<h3 class="text-sm font-bold text-orange-300 mb-3">⏳ Tus desafíos esperando respuesta (' + challenges.length + ')</h3>' +
+                '<h3 class="text-sm font-bold text-orange-300 mb-3">' + (window.MTRIcons ? window.MTRIcons.svg('clock', { size: 14, className: 'inline-block align-[-2px] mr-1' }) : '') + 'Tus desafíos esperando respuesta (' + challenges.length + ')</h3>' +
                 '<div class="space-y-2">' + cardsHtml + '</div>' +
                 '</div>';
             container.classList.remove('hidden');
@@ -4521,7 +4551,7 @@
             var created = room.created_at ? new Date(room.created_at).toLocaleDateString('es-CO', { day: '2-digit', month: 'short' }) : '';
 
             container.innerHTML = '<div class="p-4 rounded-2xl border border-fuchsia-500/20 bg-fuchsia-500/5">' +
-                '<h3 class="text-sm font-bold text-fuchsia-300 mb-3">⏳ Tenés una sala abierta esperando rival</h3>' +
+                '<h3 class="text-sm font-bold text-fuchsia-300 mb-3">' + (window.MTRIcons ? window.MTRIcons.svg('clock', { size: 14, className: 'inline-block align-[-2px] mr-1' }) : '') + 'Tenés una sala abierta esperando rival</h3>' +
                 '<div class="flex items-center gap-3 p-3 rounded-xl bg-black/30 border border-white/10">' +
                 '<img src="' + (room.player1_song_image || '') + '" class="w-12 h-12 rounded-lg object-cover flex-shrink-0" alt="">' +
                 '<div class="flex-1 min-w-0">' +
@@ -4570,13 +4600,13 @@
             var btnSecondary = btnBase + ' bg-white/5 border border-white/10 text-gray-300 hover:text-white';
 
             if (mode === 'quick') {
-                buttonsDiv.innerHTML = '<button type="button" onclick="window.startQuickMatch()" class="' + btnPrimary + '" id="startQuickBtn" disabled>⚔️ Buscar Rival</button>';
+                buttonsDiv.innerHTML = '<button type="button" onclick="window.startQuickMatch()" class="' + btnPrimary + '" id="startQuickBtn" disabled>' + (window.MTRIcons ? window.MTRIcons.svg('swords', { size: 14, className: 'inline-block align-[-2px] mr-1' }) : '') + 'Buscar Rival</button>';
                 var sq = document.getElementById('startQuickBtn');
                 if (sq) sq.dataset.baseState = 'ready';
                 updateBetEligibility();
             } else if (mode === 'private') {
                 buttonsDiv.innerHTML = avatarPickerHtml() +
-                    '<button type="button" onclick="createRoom()" class="' + btnPrimary + '" id="createRoomBtn" disabled>🎵 Crear Sala</button>' +
+                    '<button type="button" onclick="createRoom()" class="' + btnPrimary + '" id="createRoomBtn" disabled>' + (window.MTRIcons ? window.MTRIcons.svg('lock', { size: 14, className: 'inline-block align-[-2px] mr-1' }) : '') + 'Crear Sala</button>' +
                     '<div class="flex items-center gap-3 my-3"><div class="flex-1 h-px bg-white/10"></div><span class="text-xs text-gray-500">o</span><div class="flex-1 h-px bg-white/10"></div></div>' +
                     '<div class="flex gap-2"><input type="text" id="joinRoomCode" placeholder="Código" class="flex-1 px-3 py-2.5 rounded-lg bg-black/40 border border-white/10 text-white text-sm" maxlength="6"' +
                     ' oninput="this.value=this.value.toUpperCase(); if(typeof window.updateBetEligibility===\'function\') window.updateBetEligibility();">' +
@@ -4584,7 +4614,7 @@
                 updateBetEligibility();
                 if (typeof renderMyOpenPrivateRoom === 'function') renderMyOpenPrivateRoom();
             } else if (mode === 'practice') {
-                buttonsDiv.innerHTML = '<button type="button" onclick="window.startPractice()" class="' + btnPrimary + '" id="startPracticeBtn" disabled>🎯 Iniciar Práctica</button>';
+                buttonsDiv.innerHTML = '<button type="button" onclick="window.startPractice()" class="' + btnPrimary + '" id="startPracticeBtn" disabled>' + (window.MTRIcons ? window.MTRIcons.svg('target', { size: 14, className: 'inline-block align-[-2px] mr-1' }) : '') + 'Iniciar Práctica</button>';
                 
                 // Asegurar que el campo de apuesta tenga un valor por defecto
                 var betAmountInput = document.getElementById('betAmount');
@@ -4623,9 +4653,9 @@
                 }, 300);
             } else if (mode === 'tournament') {
                 if (window.tournamentEnrollment) {
-                    buttonsDiv.innerHTML = '<button type="button" onclick="joinTournamentMode()" class="' + btnPrimary + ' btn-large w-full" id="joinTournamentBtn">🏆 Confirmar inscripción · ' + window.tournamentEnrollment.entryFee + ' MTR créditos</button>';
+                    buttonsDiv.innerHTML = '<button type="button" onclick="joinTournamentMode()" class="' + btnPrimary + ' btn-large w-full" id="joinTournamentBtn">' + (window.MTRIcons ? window.MTRIcons.svg('trophy', { size: 14, className: 'inline-block align-[-2px] mr-1' }) : '') + 'Confirmar inscripción · ' + window.tournamentEnrollment.entryFee + ' MTR créditos</button>';
                 } else {
-                    buttonsDiv.innerHTML = '<button type="button" onclick="selectMode(\'tournament\')" class="' + btnPrimary + '">🏆 Abrir hub de torneos</button>';
+                    buttonsDiv.innerHTML = '<button type="button" onclick="selectMode(\'tournament\')" class="' + btnPrimary + '">' + (window.MTRIcons ? window.MTRIcons.svg('trophy', { size: 14, className: 'inline-block align-[-2px] mr-1' }) : '') + 'Abrir hub de torneos</button>';
                 }
             } else if (mode === 'social') {
                 // REGLA: Modo social siempre muestra saldo REAL, nunca saldo demo
@@ -4799,10 +4829,10 @@
                 // Verificar también challengeInfo para asegurar que tenemos los datos
                 var finalIsAccepting = isAcceptingChallenge && (challengeBetAmount || (challengeInfo && challengeInfo.bet_amount));
                 if (finalIsAccepting) {
-                    btn.textContent = '✅ Aceptar e Iniciar Desafío';
+                    btn.innerHTML = (window.MTRIcons ? window.MTRIcons.svg('circleCheck', { size: 14, className: 'inline-block align-[-2px] mr-1' }) : '') + 'Aceptar e Iniciar Desafío';
                     console.log('[updateActionButtons] ✅ Botón configurado para ACEPTAR desafío');
                 } else {
-                btn.textContent = '⚔️ Crear Desafío';
+                btn.innerHTML = (window.MTRIcons ? window.MTRIcons.svg('swords', { size: 14, className: 'inline-block align-[-2px] mr-1' }) : '') + 'Crear Desafío';
                     console.log('[updateActionButtons] ✅ Botón configurado para CREAR desafío');
                 }
                 
@@ -5036,7 +5066,7 @@
             if (typeof requestGenreCurationClient !== 'function') return true;
 
             var checkingToast = typeof showToast === 'function'
-                ? showToast('🤖 Verificando que la canción encaje con el género...', 'info')
+                ? showToast('Verificando que la canción encaje con el género...', 'info')
                 : null;
 
             var result = await requestGenreCurationClient(song.artist, song.name, enrollment.genreLabel);
@@ -5047,7 +5077,7 @@
                 // razón completa del curador) se desvanecía en 3s, muy rápido
                 // para leerlo con calma.
                 showToast(
-                    `🚫 "${song.name}" de ${song.artist} no encaja con el género "${enrollment.genreLabel}" ` +
+                    `"${song.name}" de ${song.artist} no encaja con el género "${enrollment.genreLabel}" ` +
                     `(${result.confidence}% de coincidencia): ${result.reason} — elegí otra canción.`,
                     'error',
                     12000
@@ -5057,7 +5087,7 @@
 
             if (result.verdict === 'warn') {
                 var continuar = window.confirm(
-                    `⚠️ "${song.name}" de ${song.artist} tiene ${result.confidence}% de coincidencia con ` +
+                    `"${song.name}" de ${song.artist} tiene ${result.confidence}% de coincidencia con ` +
                     `el género "${enrollment.genreLabel}": ${result.reason}\n\n` +
                     `Podés seguir con esta canción, pero si ganás el torneo con ella la IA te descalifica ` +
                     `automáticamente y se les devuelve la apuesta a los demás jugadores.\n\n` +
@@ -5404,9 +5434,15 @@
             if (betEl) betEl.textContent = betRequired;
 
             var opponentAvatarEl = document.getElementById('joinPreviewOpponentAvatar');
-            if (opponentAvatarEl) opponentAvatarEl.textContent = preview.match.player1_avatar || '🎤';
+            if (opponentAvatarEl) {
+                if (preview.match.player1_avatar) opponentAvatarEl.textContent = preview.match.player1_avatar;
+                else opponentAvatarEl.innerHTML = window.MTRIcons ? window.MTRIcons.svg('mic', { size: 24 }) : '';
+            }
             var myAvatarEl = document.getElementById('joinPreviewMyAvatar');
-            if (myAvatarEl) myAvatarEl.textContent = window.__myAvatar || '👤';
+            if (myAvatarEl) {
+                if (window.__myAvatar) myAvatarEl.textContent = window.__myAvatar;
+                else myAvatarEl.innerHTML = window.MTRIcons ? window.MTRIcons.svg('user', { size: 24 }) : '';
+            }
             var avatarPickerEl = document.getElementById('joinPreviewAvatarPicker');
             if (avatarPickerEl) avatarPickerEl.innerHTML = avatarPickerHtml();
 
@@ -5445,7 +5481,7 @@
             if (typeof window.GameEngine === 'undefined') { showToast('GameEngine no está cargado', 'error'); return; }
 
             var confirmBtn = document.getElementById('confirmJoinRoomBtn');
-            if (confirmBtn) { confirmBtn.disabled = true; confirmBtn.textContent = '⏳ Uniendo...'; }
+            if (confirmBtn) { confirmBtn.disabled = true; confirmBtn.innerHTML = (window.MTRIcons ? window.MTRIcons.svg('clock', { size: 14, className: 'inline-block align-[-2px] mr-1' }) : '') + 'Uniendo...'; }
 
             var betRequired = Number(state.match.player1_bet) || 1;
             // joinPrivateRoom vuelve a revalidar todo desde cero (sala sigue
@@ -5510,7 +5546,7 @@
                 var btn = document.getElementById('startPracticeBtn');
                 if (btn) {
                     btn.disabled = true;
-                    btn.textContent = '🎯 Iniciando...';
+                    btn.innerHTML = (window.MTRIcons ? window.MTRIcons.svg('target', { size: 14, className: 'inline-block align-[-2px] mr-1' }) : '') + 'Iniciando...';
                     console.log('[startPractice] Botón deshabilitado');
                 }
                 
@@ -5526,7 +5562,7 @@
                 var btn = document.getElementById('startPracticeBtn');
                 if (btn) {
                     btn.disabled = false;
-                    btn.textContent = '🎯 Iniciar Práctica';
+                    btn.innerHTML = (window.MTRIcons ? window.MTRIcons.svg('target', { size: 14, className: 'inline-block align-[-2px] mr-1' }) : '') + 'Iniciar Práctica';
                 }
             }
         }
@@ -5638,11 +5674,11 @@
                 var genreMeta = MTR_SOCIAL_GENRES.find(function (g) { return g.id === socialGenreId; });
                 socialGenreLabel = genreMeta ? genreMeta.label : socialGenreId;
                 if (typeof requestGenreCurationClient === 'function' && song.artist && song.name) {
-                    showToast('🤖 Verificando que la canción encaje con el género...', 'info');
+                    showToast('Verificando que la canción encaje con el género...', 'info');
                     socialGenreCheck = await requestGenreCurationClient(song.artist, song.name, socialGenreLabel);
                     if (socialGenreCheck.verdict === 'block') {
                         showToast(
-                            `🚫 "${song.name}" de ${song.artist} no encaja con el género "${socialGenreLabel}" ` +
+                            `"${song.name}" de ${song.artist} no encaja con el género "${socialGenreLabel}" ` +
                             `(${socialGenreCheck.confidence}% de coincidencia): ${socialGenreCheck.reason} — elegí otra canción.`,
                             'error',
                             12000
@@ -5757,21 +5793,57 @@
                     }
                 }
                 
-                const { data: challenge, error } = await supabase
-                    .from('social_challenges')
-                    .select('*')
-                    .eq('challenge_id', challengeId)
-                    .eq('status', 'pending')
-                    .single();
-                
-                if (error || !challenge) {
-                    console.error('[loadChallengeInfo] ❌ Error cargando desafío:', error);
-                    if (typeof showToast === 'function') {
-                        showToast('Desafío no encontrado o ya fue aceptado', 'error');
+                // CRÍTICO: el estado real (pendiente / vencido / cancelado /
+                // ya aceptado / no existe) se resuelve vía el backend, no
+                // con un SELECT directo filtrado a status='pending' -- eso
+                // solo decía "no encontrado" para TODOS los casos por
+                // igual, sin distinguir por qué, y nunca revisaba
+                // expires_at (un desafío vencido de semanas se aceptaba
+                // igual que uno fresco). El endpoint además auto-expira y
+                // reembolsa al creador si corresponde -- ver
+                // /api/challenges/:id/status en server-auto.js.
+                var challenge = null;
+                var challengeStatus = null;
+                try {
+                    var statusResp = await fetch(backendBase() + apiPath('/api/challenges/' + encodeURIComponent(challengeId) + '/status'));
+                    if (statusResp.status === 404) {
+                        console.warn('[loadChallengeInfo] Desafío no existe:', challengeId);
+                        applyChallengeStatus('not_found', null);
+                        return false;
                     }
+                    if (!statusResp.ok) throw new Error('status HTTP ' + statusResp.status);
+                    challenge = await statusResp.json();
+                    challengeStatus = challenge.status;
+                } catch (statusError) {
+                    // El backend de estado no respondió (caída puntual,
+                    // offline) -- no dejar al usuario sin nada: caer al
+                    // chequeo directo contra Supabase. Menos preciso (no
+                    // distingue vencido/cancelado/aceptado, ni auto-expira),
+                    // pero el camino feliz de un desafío realmente
+                    // pendiente sigue funcionando.
+                    console.warn('[loadChallengeInfo] No se pudo consultar /api/challenges/status, usando fallback directo:', statusError.message);
+                    var fallback = await supabase
+                        .from('social_challenges')
+                        .select('*')
+                        .eq('challenge_id', challengeId)
+                        .eq('status', 'pending')
+                        .maybeSingle();
+                    if (fallback.error || !fallback.data) {
+                        if (typeof showToast === 'function') {
+                            showToast('Desafío no encontrado o ya no está disponible', 'error');
+                        }
+                        return false;
+                    }
+                    challenge = fallback.data;
+                    challengeStatus = 'pending';
+                }
+
+                if (challengeStatus !== 'pending') {
+                    console.warn('[loadChallengeInfo] Desafío no disponible, estado real:', challengeStatus);
+                    applyChallengeStatus(challengeStatus, challenge);
                     return false;
                 }
-                
+
                 // Guardar información del desafío
                 window.pendingChallengeBetAmount = challenge.bet_amount;
                 window.pendingChallengeInfo = challenge;
@@ -5784,6 +5856,11 @@
                     pendingChallengeBetAmount: window.pendingChallengeBetAmount,
                     pendingChallengeInfo: window.pendingChallengeInfo
                 });
+
+                // Restaurar el estado "disponible" del modal (por si una
+                // apertura anterior de este mismo modal quedó mostrando un
+                // estado "no disponible" de otro desafío).
+                applyChallengeStatus('pending', challenge);
 
                 // CRÍTICO: Actualizar modal del reto con información visual
                 updateChallengeModal(challenge);
@@ -5839,13 +5916,88 @@
                 if (betValueEl && challenge.bet_amount) {
                     betValueEl.textContent = challenge.bet_amount.toLocaleString('es-ES');
                 }
-                
+
+                var expiryEl = document.getElementById('challengeExpiryNote');
+                if (expiryEl) {
+                    expiryEl.textContent = challenge.expires_at ? formatTimeRemaining(challenge.expires_at) : '';
+                }
+
                 console.log('[updateChallengeModal] ✅ Modal actualizado con información del reto');
             } catch (error) {
                 console.error('[updateChallengeModal] ❌ Error actualizando modal:', error);
             }
         }
-        
+
+        // Cuánto falta para que un desafío pendiente venza, en texto
+        // legible. Reutilizado por el modal (info previa a aceptar) y por
+        // la lista de "mis desafíos pendientes" del creador.
+        function formatTimeRemaining(expiresAtIso) {
+            var msLeft = new Date(expiresAtIso).getTime() - Date.now();
+            if (msLeft <= 0) return 'Vence en cualquier momento';
+            var hours = Math.floor(msLeft / (60 * 60 * 1000));
+            if (hours < 1) {
+                var mins = Math.max(1, Math.floor(msLeft / (60 * 1000)));
+                return 'Vence en ' + mins + ' min';
+            }
+            if (hours < 24) return 'Vence en ' + hours + (hours === 1 ? ' hora' : ' horas');
+            var days = Math.floor(hours / 24);
+            return 'Vence en ' + days + (days === 1 ? ' día' : ' días');
+        }
+
+        // Copy + iconografía precisa por cada estado real de un desafío que
+        // NO está disponible para aceptar -- pedido explícito del usuario:
+        // "dale una lógica precisa a esto", nada de un mensaje genérico
+        // único para vencido/cancelado/ya-aceptado/inexistente.
+        var CHALLENGE_STATUS_COPY = {
+            not_found: { icon: 'help', color: 'gray', title: 'Desafío no encontrado', msg: 'Este link no corresponde a ningún desafío. Puede estar mal copiado o incompleto.' },
+            expired: { icon: 'clock', color: 'yellow', title: 'Este desafío venció', msg: 'Pasaron más de 7 días y nadie lo aceptó. El creador ya recibió su reembolso automáticamente -- no hay nada más que hacer acá.' },
+            cancelled: { icon: 'ban', color: 'red', title: 'Desafío cancelado', msg: 'La persona que te desafió lo canceló antes de que lo aceptaras.' },
+            accepted: { icon: 'swords', color: 'orange', title: 'Ya fue aceptado', msg: 'Este desafío ya está en curso o ya terminó -- probablemente alguien más (o vos mismo, desde otro dispositivo) ya lo aceptó.' },
+            completed: { icon: 'flag', color: 'green', title: 'Ya se jugó', msg: 'Esta batalla ya terminó.' }
+        };
+
+        // Alterna entre el estado "disponible" (info real + Aceptar/Rechazar)
+        // y el estado "no disponible" (icono + mensaje preciso + un único
+        // botón "Entendido") del modal de desafío -- ver loadChallengeInfo().
+        function applyChallengeStatus(status, challenge) {
+            var songInfo = document.getElementById('challengeSongInfo');
+            var unavailable = document.getElementById('challengeUnavailable');
+            var acceptBtn = document.getElementById('challengeAcceptBtn');
+            var rejectBtn = document.getElementById('challengeRejectBtn');
+            var details = document.getElementById('challengeDetails');
+            if (!songInfo || !unavailable || !acceptBtn || !rejectBtn) return;
+
+            if (status === 'pending') {
+                songInfo.classList.remove('hidden');
+                unavailable.classList.add('hidden');
+                if (details) details.classList.remove('hidden');
+                acceptBtn.classList.remove('hidden');
+                rejectBtn.textContent = 'Rechazar';
+                rejectBtn.onclick = rejectChallenge;
+                return;
+            }
+
+            var copy = CHALLENGE_STATUS_COPY[status] || CHALLENGE_STATUS_COPY.not_found;
+            songInfo.classList.add('hidden');
+            if (details) details.classList.add('hidden');
+            unavailable.classList.remove('hidden');
+            document.getElementById('challengeUnavailableIcon').innerHTML = window.MTRIcons ? window.MTRIcons.badge(copy.icon, { color: copy.color, badgeSize: 64 }) : '';
+            document.getElementById('challengeUnavailableMsg').textContent = copy.title;
+            document.getElementById('challengeUnavailableSub').textContent = copy.msg;
+            acceptBtn.classList.add('hidden');
+            rejectBtn.textContent = 'Entendido';
+            rejectBtn.onclick = function () {
+                closeChallengeModal();
+                window.pendingChallengeId = null;
+                window.pendingChallengeInfo = null;
+                window.pendingChallengeBetAmount = null;
+                if (typeof backToModes === 'function') backToModes();
+            };
+
+            var modal = document.getElementById('challengeModal');
+            if (modal) modal.classList.remove('hidden');
+        }
+
         // Activar efecto visual animado en el selector de canción cuando hay un reto pendiente
         function activateChallengeSongSelector() {
             try {
@@ -5864,7 +6016,7 @@
                     // Actualizar el texto para indicar que debe seleccionar una canción
                     const placeholderText = selectedSongCard.querySelector('p');
                     if (placeholderText) {
-                        placeholderText.textContent = '✨ Selecciona tu canción para competir ✨';
+                        placeholderText.innerHTML = (window.MTRIcons ? window.MTRIcons.svg('sparkles', { size: 14, className: 'inline-block align-[-2px] mr-1' }) : '') + 'Selecciona tu canción para competir';
                     }
                     
                     console.log('[activateChallengeSongSelector] ✅ Efecto visual activado en selector de canción');
@@ -6069,7 +6221,7 @@
             var joinBtn = document.getElementById('joinTournamentBtn');
             if (joinBtn) {
                 joinBtn.disabled = true;
-                joinBtn.textContent = '⏳ Inscribiendo…';
+                joinBtn.innerHTML = (window.MTRIcons ? window.MTRIcons.svg('clock', { size: 14, className: 'inline-block align-[-2px] mr-1' }) : '') + 'Inscribiendo…';
             }
             try {
                 if (typeof GameEngine !== 'undefined') {
@@ -6094,7 +6246,7 @@
                 if (joinBtn) {
                     joinBtn.disabled = false;
                     if (window.tournamentEnrollment) {
-                        joinBtn.textContent = '🏆 Confirmar inscripción · ' + window.tournamentEnrollment.entryFee + ' MTR créditos';
+                        joinBtn.innerHTML = (window.MTRIcons ? window.MTRIcons.svg('trophy', { size: 14, className: 'inline-block align-[-2px] mr-1' }) : '') + 'Confirmar inscripción · ' + window.tournamentEnrollment.entryFee + ' MTR créditos';
                     }
                 }
             }
@@ -6141,7 +6293,7 @@
                 
                 // Mostrar mensaje de que debe seleccionar canción
                 if (typeof showToast === 'function') {
-                    showToast('✨ Selecciona tu canción para aceptar el desafío ✨', 'info');
+                    showToast('Selecciona tu canción para aceptar el desafío', 'info');
                 }
                 
                 // La función handleSocialChallengeAccept se llamará cuando seleccione la canción
@@ -6722,7 +6874,7 @@
                                     
                                     if (typeof showToast === 'function') {
                                         showToast(
-                                            `⚠️ Error al convertir créditos: ${rpcError.message || 'Error desconocido'}`,
+                                            `Error al convertir créditos: ${rpcError.message || 'Error desconocido'}`,
                                             'error'
                                         );
                                     }
@@ -6885,7 +7037,7 @@
                                 // Mostrar notificación de éxito
                                 if (typeof showToast === 'function') {
                                     showToast(
-                                        `✅ Convertidos ${creditsToAdd.toFixed(2)} créditos desde tu MTR on-chain automáticamente.`,
+                                        `Convertidos ${creditsToAdd.toFixed(2)} créditos desde tu MTR on-chain automáticamente.`,
                                         'success'
                                     );
                                 }
@@ -7670,7 +7822,7 @@
             
             // Mostrar toast de éxito
             if (typeof showToast === 'function') {
-                showToast('✅ QR code generado correctamente', 'success');
+                showToast('QR code generado correctamente', 'success');
             }
             
             // Generar QR code
@@ -7895,9 +8047,9 @@
                         <p class="text-gray-400 text-sm mb-4 text-center">WalletConnect no está disponible</p>
 
                         <div class="mb-4 p-3 rounded-lg bg-amber-500/10 border border-amber-500/30">
-                            <p class="text-amber-300 text-xs font-semibold mb-2">⚠️ Causa más común: estás abriendo este enlace adentro de otra app (WhatsApp, Instagram, etc.), y ese navegador interno bloquea la conexión de wallets.</p>
+                            <p class="text-amber-300 text-xs font-semibold mb-2">${window.MTRIcons ? window.MTRIcons.svg('warning', { size: 13, className: 'inline-block align-[-2px] mr-1' }) : ''}Causa más común: estás abriendo este enlace adentro de otra app (WhatsApp, Instagram, etc.), y ese navegador interno bloquea la conexión de wallets.</p>
                             <button id="wcCopyLinkBtn" onclick="copyPageLinkForBrowser()" class="w-full px-4 py-2 bg-amber-500 hover:bg-amber-600 text-black font-semibold rounded-lg text-sm transition">
-                                📋 Copiar enlace para abrir en Chrome/Safari
+                                ${window.MTRIcons ? window.MTRIcons.svg('copy', { size: 14, className: 'inline-block align-[-2px] mr-1' }) : ''}Copiar enlace para abrir en Chrome/Safari
                             </button>
                             <p class="text-amber-200/70 text-[11px] mt-2 text-center">Pegalo en tu navegador normal (no en esta app) y volvé a intentar conectar</p>
                         </div>
@@ -7950,7 +8102,7 @@
                 }
                 if (btn) {
                     var original = btn.textContent;
-                    btn.textContent = '✅ Copiado';
+                    btn.innerHTML = (window.MTRIcons ? window.MTRIcons.svg('circleCheck', { size: 14, className: 'inline-block align-[-2px] mr-1' }) : '') + 'Copiado';
                     setTimeout(function() { btn.textContent = original; }, 2000);
                 }
             }
@@ -8991,8 +9143,8 @@
                             <div style="flex:1; min-width:0;"><h3 class="mtr2-h" style="margin:0; font-size:16px; font-weight:700; color:#fff;">Modo Práctica</h3><p style="margin:0; font-size:12px; color:#9ca3af;">Sin riesgo contra la CPU. Perfecto para empezar.</p></div>
                         </div>
                         <div style="display:flex; gap:6px; margin-bottom:12px;">
-                            <span class="mtr2-chip" style="color:#34d399; background:rgba(52,211,153,0.12); border:1px solid rgba(52,211,153,0.3);">🛡 Sin riesgo</span>
-                            <span class="mtr2-chip" style="color:#34d399; background:rgba(52,211,153,0.12); border:1px solid rgba(52,211,153,0.3);">📖 Aprende</span>
+                            <span class="mtr2-chip" style="color:#34d399; background:rgba(52,211,153,0.12); border:1px solid rgba(52,211,153,0.3);"><span data-mtr-icon="shieldCheck" data-mtr-color="green" data-mtr-inline data-mtr-size="14"></span>Sin riesgo</span>
+                            <span class="mtr2-chip" style="color:#34d399; background:rgba(52,211,153,0.12); border:1px solid rgba(52,211,153,0.3);"><span data-mtr-icon="book" data-mtr-color="cyan" data-mtr-inline data-mtr-size="14"></span>Aprende</span>
                         </div>
                         <button type="button" class="mtr2-cta" style="color:#05060a; background:linear-gradient(90deg,#34d399,#6ee7b7);" onclick="selectMode('practice')">PRACTICAR</button>
                     </div>
@@ -9003,7 +9155,7 @@
                             <div style="flex:1; min-width:0;"><h3 class="mtr2-h" style="margin:0; font-size:16px; font-weight:700; color:#fff;">Desafío Social</h3><p style="margin:0; font-size:12px; color:#9ca3af;">Desafía a un amigo por redes sociales. Mínimo 1 crédito.</p></div>
                         </div>
                         <div style="display:flex; gap:6px; margin-bottom:12px;">
-                            <span class="mtr2-chip" style="color:#fdba74; background:rgba(251,146,60,0.12); border:1px solid rgba(251,146,60,0.3);">📱 Redes</span>
+                            <span class="mtr2-chip" style="color:#fdba74; background:rgba(251,146,60,0.12); border:1px solid rgba(251,146,60,0.3);"><span data-mtr-icon="mobile" data-mtr-color="cyan" data-mtr-inline data-mtr-size="14"></span>Redes</span>
                             <span class="mtr2-chip" style="color:#fdba74; background:rgba(251,146,60,0.12); border:1px solid rgba(251,146,60,0.3);">100+</span>
                         </div>
                         <button type="button" class="mtr2-cta" style="color:#05060a; background:linear-gradient(90deg,#fb923c,#fdba74);" onclick="selectMode('social')">DESAFIAR</button>
@@ -9015,8 +9167,8 @@
                             <div style="flex:1; min-width:0;"><h3 class="mtr2-h" style="margin:0; font-size:16px; font-weight:700; color:#fff;">Sala Privada</h3><p style="margin:0; font-size:12px; color:#9ca3af;">Invita a tus amigos. Personaliza reglas y apuestas.</p></div>
                         </div>
                         <div style="display:flex; gap:6px; margin-bottom:12px;">
-                            <span class="mtr2-chip" style="color:#ff6bd6; background:rgba(255,46,196,0.12); border:1px solid rgba(255,46,196,0.3);">👥 Amigos</span>
-                            <span class="mtr2-chip" style="color:#ff6bd6; background:rgba(255,46,196,0.12); border:1px solid rgba(255,46,196,0.3);">🔗 Código</span>
+                            <span class="mtr2-chip" style="color:#ff6bd6; background:rgba(255,46,196,0.12); border:1px solid rgba(255,46,196,0.3);"><span data-mtr-icon="users" data-mtr-color="purple" data-mtr-inline data-mtr-size="14"></span>Amigos</span>
+                            <span class="mtr2-chip" style="color:#ff6bd6; background:rgba(255,46,196,0.12); border:1px solid rgba(255,46,196,0.3);"><span data-mtr-icon="link" data-mtr-color="cyan" data-mtr-inline data-mtr-size="14"></span>Código</span>
                         </div>
                         <button type="button" class="mtr2-cta" style="color:#05060a; background:linear-gradient(90deg,#ff2ec4,#e879f9);" onclick="selectMode('private')">CREAR SALA</button>
                     </div>
@@ -9027,8 +9179,8 @@
                             <div style="flex:1; min-width:0;"><h3 class="mtr2-h" style="margin:0; font-size:16px; font-weight:700; color:#fff;">Modo Rápido</h3><p style="margin:0; font-size:12px; color:#9ca3af;">Matchmaking automático. Encuentra rival en segundos.</p></div>
                         </div>
                         <div style="display:flex; gap:6px; margin-bottom:12px;">
-                            <span class="mtr2-chip" style="color:#00f0ff; background:rgba(0,240,255,0.12); border:1px solid rgba(0,240,255,0.3);">⚡ Auto-match</span>
-                            <span class="mtr2-chip" style="color:#00f0ff; background:rgba(0,240,255,0.12); border:1px solid rgba(0,240,255,0.3);">⏱ 1 min</span>
+                            <span class="mtr2-chip" style="color:#00f0ff; background:rgba(0,240,255,0.12); border:1px solid rgba(0,240,255,0.3);"><span data-mtr-icon="bolt" data-mtr-color="cyan" data-mtr-inline data-mtr-size="14"></span>Auto-match</span>
+                            <span class="mtr2-chip" style="color:#00f0ff; background:rgba(0,240,255,0.12); border:1px solid rgba(0,240,255,0.3);"><span data-mtr-icon="clock" data-mtr-color="cyan" data-mtr-inline data-mtr-size="14"></span>1 min</span>
                         </div>
                         <button type="button" class="mtr2-cta" style="color:#05060a; background:linear-gradient(90deg,#00f0ff,#22d3ee);" onclick="selectMode('quick')">JUGAR AHORA</button>
                     </div>

@@ -1810,6 +1810,129 @@ app.post('/api/user/add-credits', requireInternalSecret, async (req, res) => {
 });
 
 /**
+ * Estado real de un Desafío Social + auto-expiración con reembolso.
+ *
+ * Bug encontrado en vivo (30-ago): la tabla social_challenges ya definía
+ * expires_at (7 días) y hasta un status 'expired' permitido por su CHECK
+ * constraint, pero NADA en el código lo usaba -- ni el link que abre el
+ * desafiado, ni el que acepta, revisaban la fecha. Un desafío vencido de
+ * semanas seguía tratándose como válido, y si nadie lo aceptaba nunca, los
+ * créditos del que desafió quedaban descontados para siempre sin
+ * reembolso. Había incluso una función SQL cleanup_expired_challenges()
+ * ya escrita para esto, pero nunca conectada a nada, y que tampoco
+ * reembolsaba.
+ *
+ * Por qué es una ruta de backend y no un UPDATE directo desde el cliente:
+ * la política RLS de social_challenges solo deja actualizar filas propias
+ * ("auth.uid() = challenger_id AND status = 'pending'") -- pero quien abre
+ * el link casi siempre es la OTRA persona, no el creador. Necesita
+ * privilegios de service role para resolver el estado real sin importar
+ * quién esté mirando.
+ *
+ * GET (no requiere el secreto interno -- lo llama cualquier usuario que
+ * abre un link de desafío, o que revisa sus propios desafíos pendientes).
+ * Es seguro: la única mutación posible es transicionar ESTE MISMO desafío
+ * de 'pending' a 'expired' exactamente cuando su propio expires_at ya
+ * pasó, y reembolsar exactamente su propio bet_amount al challenger_id
+ * que ya tenía -- no hay forma de acreditarle nada a nadie más ni de
+ * elegir el monto.
+ */
+app.get('/api/challenges/:challengeId/status', async (req, res) => {
+    try {
+        const { challengeId } = req.params;
+        if (!challengeId) {
+            return res.status(400).json({ error: 'challengeId requerido' });
+        }
+
+        const { data: challenge, error: fetchError } = await supabase
+            .from('social_challenges')
+            .select('*')
+            .eq('challenge_id', challengeId)
+            .maybeSingle();
+
+        if (fetchError) {
+            console.error('[challenges/status] Error consultando:', fetchError.message);
+            return res.status(500).json({ error: 'No se pudo consultar el desafío.' });
+        }
+        if (!challenge) {
+            return res.status(404).json({ error: 'not_found' });
+        }
+
+        const isPastExpiry = challenge.status === 'pending'
+            && challenge.expires_at
+            && new Date(challenge.expires_at).getTime() < Date.now();
+
+        if (isPastExpiry) {
+            const betAmount = Number(challenge.bet_amount);
+
+            // Mismo orden seguro que cancelSocialChallenge() en el cliente:
+            // reembolsar primero, y solo si el UPDATE atómico condicionado
+            // a status='pending' efectivamente "gana la carrera" (nadie más
+            // lo aceptó/canceló/expiró mientras tanto) dar el reembolso por
+            // bueno. Si el UPDATE no afecta ninguna fila, revertir el
+            // reembolso para no acreditar doble.
+            const { error: creditError } = await supabase.rpc('increment_user_credits', {
+                user_id_param: challenge.challenger_id,
+                credits_to_add: betAmount
+            });
+
+            if (creditError) {
+                console.error('[challenges/status] Error reembolsando desafío vencido:', challengeId, creditError.message);
+                // No se pudo reembolsar -- no marcar como expirado todavía,
+                // mejor reintentar en la próxima consulta que devolver un
+                // desafío "vencido" sin haber devuelto el crédito.
+            } else {
+                const { data: updated, error: updateError } = await supabase
+                    .from('social_challenges')
+                    .update({ status: 'expired' })
+                    .eq('challenge_id', challengeId)
+                    .eq('status', 'pending')
+                    .select('*')
+                    .maybeSingle();
+
+                if (updateError) {
+                    console.error('[challenges/status] Error marcando expirado:', challengeId, updateError.message);
+                }
+
+                if (updated) {
+                    challenge.status = 'expired';
+                    console.log('[challenges] ⏰ Desafío expirado y reembolsado:', challengeId, '→', betAmount, 'créditos a', challenge.challenger_id);
+                } else {
+                    // Alguien ganó la carrera (o el UPDATE falló) -- revertir
+                    // el reembolso recién dado para no duplicar crédito, y
+                    // releer el estado real vigente.
+                    await supabase.rpc('decrement_user_credits', {
+                        user_id_param: challenge.challenger_id,
+                        credits_to_subtract: betAmount
+                    });
+                    const { data: fresh } = await supabase
+                        .from('social_challenges')
+                        .select('*')
+                        .eq('challenge_id', challengeId)
+                        .maybeSingle();
+                    if (fresh) Object.assign(challenge, fresh);
+                }
+            }
+        }
+
+        res.json({
+            challenge_id: challenge.challenge_id,
+            status: challenge.status,
+            created_at: challenge.created_at,
+            expires_at: challenge.expires_at,
+            bet_amount: challenge.bet_amount,
+            challenger_song_name: challenge.challenger_song_name,
+            challenger_song_artist: challenge.challenger_song_artist,
+            challenger_song_image: challenge.challenger_song_image,
+            genre_label: challenge.genre_label || null
+        });
+    } catch (error) {
+        console.error('[challenges/status] error:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+/**
  * Agent-native ops: internal payout trigger, called ONLY by the GCP CFO
  * agent (agents/cfo_agent.py) after it has already validated the payment,
  * the wallet-of-record, and per-tx/daily caps. This route re-validates the
