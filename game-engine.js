@@ -5067,13 +5067,38 @@ const GameEngine = {
     playVictorySong(url, maxDurationMs) {
         if (!url) return;
         this.stopVictorySong();
-        this.victoryAudio = new Audio(url);
         var self = this;
-        var playPromise = this.victoryAudio.play();
-        if (playPromise && typeof playPromise.catch === 'function') {
-            playPromise.catch(function (err) {
-                console.warn('[audio] victory:', err.message || err);
-            });
+        // BUG real reportado en vivo: la canción ganadora no sonaba al
+        // terminar la batalla (confirmado en una derrota). Causa: acá se
+        // creaba un `new Audio(url)` totalmente nuevo, que el navegador
+        // nunca considera "desbloqueado" para autoplay -- a diferencia del
+        // elemento compartido de ensureUserAudio() (#mtrBattleAudio), que sí
+        // se desbloqueó con el primer toque/click de la batalla (ver
+        // unlockAudioFromGesture/holdBattleAudioSession más abajo) y por eso
+        // la canción "líder" durante la pelea sonaba sin problema. Como esto
+        // se dispara desde un setTimeout/setInterval (sin gesto directo del
+        // usuario en ese instante), el .play() de un elemento nuevo queda
+        // bloqueado en mobile -- se veía solo como un warning silencioso en
+        // consola, nunca un error visible. Reusar el mismo elemento ya
+        // desbloqueado soluciona esto sin pedirle un segundo toque al
+        // usuario.
+        var el = this.ensureUserAudio();
+        this.victoryAudio = el;
+        try {
+            el.pause();
+            el.src = url;
+            el.loop = false;
+            el.muted = false;
+            el.volume = 1;
+            el.currentTime = 0;
+            var playPromise = el.play();
+            if (playPromise && typeof playPromise.catch === 'function') {
+                playPromise.catch(function (err) {
+                    console.warn('[audio] victory:', err.message || err);
+                });
+            }
+        } catch (err) {
+            console.warn('[audio] victory:', err.message || err);
         }
         var stopAfter = Number(maxDurationMs) > 0
             ? Number(maxDurationMs)
