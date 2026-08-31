@@ -823,6 +823,14 @@
     if (typeof updateActionButtons === 'function') updateActionButtons('tournament');
     startEnrollmentCountdown(genre.label, type, tournament);
     toast('Elige tu canción (' + genre.label + ') y confirma inscripción', 'info');
+
+    // Igual que el resto de los modos (Rápido, Privada, Social, Práctica):
+    // sin este scroll la pantalla de selección de canción quedaba mostrada
+    // "debajo" de donde el jugador ya estaba mirando (el hub de torneos),
+    // y la inscripción parecía no llevar a ningún lado.
+    if (typeof window.scrollToSection === 'function') {
+      window.scrollToSection('songSelection', { delay: 150 });
+    }
   }
 
   async function openGenreRoom(genreId) {
