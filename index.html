@@ -519,6 +519,22 @@
             .btn-logout { padding: 6px 10px; font-size: 11px; }
         }
 
+        /* BUG real reportado en vivo: "tengo que ajustar la pantalla con el
+           dedo para que quede centrada" -- no era un problema de layout/
+           centrado en sí, sino el auto-zoom de Safari iOS: cuando un
+           <input> tiene font-size menor a 16px, tocarlo hace que el
+           navegador AGRANDE toda la página automáticamente (para que el
+           texto sea legible), y ese zoom no siempre vuelve solo a 100% al
+           salir del campo -- queda "descentrado" hasta que el usuario
+           pellizca/arrastra para corregirlo a mano. #betAmount (usado en
+           TODOS los modos) y varios inputs de login/registro/contacto
+           usaban text-sm (14px) de Tailwind, por debajo del umbral seguro.
+           Se fuerza 16px en cualquier campo de texto en mobile para que
+           Safari nunca tenga motivo para hacer zoom. */
+        @media (max-width: 639px) {
+            input, select, textarea { font-size: 16px !important; }
+        }
+
         @keyframes fadeInUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
         @keyframes bounce { 0% { transform: scale(0.3); opacity: 0; } 50% { transform: scale(1.1); } 100% { transform: scale(1); opacity: 1; } }
         @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.7; } }
