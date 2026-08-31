@@ -2832,7 +2832,7 @@
                         cardDiv.innerHTML = '<img src="' + (song.image || '') + '" alt="' + (song.name || '') + '" class="w-16 h-16 rounded-lg object-cover">' +
                             '<div class="ml-4"><h4 class="text-white font-bold">' + (song.name || 'Sin nombre') + '</h4><p class="text-gray-400 text-sm">' + (song.artist || 'Artista desconocido') + '</p></div>';
                         cardDiv.className = 'p-6 rounded-2xl border border-cyan-500/20 bg-cyan-500/5 flex items-center';
-                        
+
                         // CRÍTICO: Si hay un reto pendiente, mantener el efecto visual activo
                         if (window.pendingChallengeId) {
                             cardDiv.classList.add('challenge-song-selector-active');
@@ -2840,7 +2840,18 @@
                             cardDiv.classList.remove('challenge-song-selector-active');
                         }
                     }
-                    
+
+                    // Pedido en vivo: al elegir la canción, la vista debía
+                    // saltar sola al siguiente paso (poner los créditos a
+                    // apostar) -- en mobile, con todo apilado en una sola
+                    // columna, quedaba fuera de pantalla y parecía que no
+                    // había pasado nada hasta que el usuario scrolleaba a
+                    // mano. No aplica a Desafío Social (el monto ya viene
+                    // fijo del desafío, no hay nada que "apostar" ahí).
+                    if (!window.pendingChallengeId && typeof window.scrollToSection === 'function') {
+                        window.scrollToSection('betAmount', { delay: 200 });
+                    }
+
                     // DETENER TODOS LOS PREVIEWS DE AUDIO - FORZADO Y MÚLTIPLES MÉTODOS
                     (function stopAllAudioPreviews() {
                         try {
@@ -3351,17 +3362,24 @@
                 cardDiv.innerHTML = '<img src="' + (song.image || '') + '" alt="' + (song.name || '') + '" class="w-16 h-16 rounded-lg object-cover">' +
                     '<div class="ml-4"><h4 class="text-white font-bold">' + (song.name || 'Sin nombre') + '</h4><p class="text-gray-400 text-sm">' + (song.artist || 'Artista desconocido') + '</p></div>';
                 cardDiv.className = 'p-6 rounded-2xl border border-cyan-500/20 bg-cyan-500/5 flex items-center';
-                
+
                 // CRÍTICO: Si hay un reto pendiente, mantener el efecto visual activo
                 if (window.pendingChallengeId) {
                     cardDiv.classList.add('challenge-song-selector-active');
                 } else {
                     cardDiv.classList.remove('challenge-song-selector-active');
                 }
+
+                // Ver comentario equivalente más arriba en este archivo:
+                // saltar sola al paso de apostar en vez de dejar al usuario
+                // scrolleando a mano para encontrarlo en mobile.
+                if (!window.pendingChallengeId && typeof window.scrollToSection === 'function') {
+                    window.scrollToSection('betAmount', { delay: 200 });
+                }
             } else {
                 console.warn('[selectSong] selectedSongCard no encontrado');
             }
-            
+
             // Actualizar estado de botones según el modo
             if (typeof updateBetEligibility === 'function') {
                 updateBetEligibility();
@@ -9487,7 +9505,19 @@
             // El shell solo se activa en mobile, con sesión iniciada, y
             // cuando NO hay un modo/partida en curso -- ahí se cede el paso
             // al layout viejo (intacto) hasta que ese flujo termine.
-            var MTR2_IN_PROGRESS_IDS = ['songSelection', 'waitingScreen', 'roomScreen', 'joinRoomPreview', 'tournamentArena'];
+            //
+            // BUG REAL reportado en vivo (celular, Modo Práctica): la
+            // batalla en sí nunca se veía. Causa: createBattleUI() (game-
+            // engine.js) OCULTA songSelection justo antes de crear
+            // #battleArena y agregarlo a <main> -- en ese instante ningún id
+            // vigilado seguía visible, así que el shell se reactivaba y
+            // volvía a ocultar TODO <main> (donde estaba la batalla recién
+            // creada) con su propio CSS. battleArena/victorySection nunca
+            // habían estado en esta lista porque no existen al cargar la
+            // página (se crean recién al empezar/terminar una batalla) --
+            // afecta a TODOS los modos (Rápido, Sala Privada, Torneo,
+            // Desafío Social), no solo Práctica.
+            var MTR2_IN_PROGRESS_IDS = ['songSelection', 'waitingScreen', 'roomScreen', 'joinRoomPreview', 'tournamentArena', 'battleArena', 'victorySection'];
             function mtr2ShouldBeActive() {
                 if (window.innerWidth >= 640) return false;
                 var loginWall = document.getElementById('loginWall');
@@ -9527,6 +9557,11 @@
                 }
                 mtr2WasActive = active;
             }
+            // Expuesto para que código fuera de este IIFE (createBattleUI en
+            // game-engine.js) pueda pedir una re-evaluación inmediata justo
+            // al crear/quitar #battleArena o #victorySection, en vez de
+            // esperar hasta 1s al próximo tick del interval de abajo.
+            window.mtr2Sync = mtr2Sync;
 
             function mtr2Init() {
                 mtr2Sync();

@@ -3735,6 +3735,11 @@ const GameEngine = {
         // Agregar la sección al contenedor
         container.appendChild(battleSection);
         console.log('[createBattleUI] ✅ battleSection agregado al DOM');
+        // Re-evaluar el shell de navegación mobile YA -- #battleArena recién
+        // se creó y ya está en la lista de "hay algo en curso" que vigila
+        // (ver index.html), pero sin este empujón podía tardar hasta 1s
+        // (el próximo tick del interval) en dejar de tapar la batalla.
+        if (typeof window.mtr2Sync === 'function') window.mtr2Sync();
         
         // Verificar que el elemento esté visible
         const addedArena = document.getElementById('battleArena');
@@ -4568,6 +4573,12 @@ const GameEngine = {
             (isPractice ? svgIcon('target', 16) + 'Continuar en práctica' : svgIcon('refresh', 16) + 'Jugar de Nuevo') +
             '</button>' +
             '</div></section>';
+
+        // Mismo motivo que en createBattleUI(): #victorySection acaba de
+        // reemplazar TODO el contenido de <main> (incluido #battleArena) --
+        // re-evaluar ya el shell de navegación mobile en vez de esperar al
+        // próximo tick del interval.
+        if (typeof window.mtr2Sync === 'function') window.mtr2Sync();
 
         this.initVictoryCanvas(userWon);
         
