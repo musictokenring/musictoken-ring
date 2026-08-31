@@ -1053,6 +1053,398 @@
             </div>
         </section>
 
+
+        <!-- GAME MODE SELECTOR (shown when logged in) -->
+        <section id="modeSelector" class="hidden mb-16">
+            <div class="text-center mb-10">
+                <h2 class="text-3xl font-extrabold text-white mb-2">Elige tu Modo de Juego</h2>
+                <p class="text-gray-400">Selecciona cómo quieres competir</p>
+            </div>
+            <!-- Orden visual vía CSS "order" (no se movió el HTML de lugar,
+                 para no arriesgar romper algo) -- mismo orden que las
+                 tarjetas nuevas del shell mobile, pedido por el dueño:
+                 Práctica, Desafío Social, Sala Privada, Modo Rápido, y
+                 Torneo al final (no participaba de ese pedido -- tiene su
+                 propia pestaña de primer nivel en el shell nuevo). -->
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+
+                <div class="group p-6 rounded-2xl border border-cyan-500/40 bg-gray-900/50 transition-all duration-300 card-glow neon-border-cyan cursor-pointer" style="order:4" onclick="selectMode('quick')">
+                    <div class="mb-4"><span data-mtr-icon="bolt" data-mtr-color="cyan"></span></div>
+                    <h3 class="text-lg font-bold text-white mb-2 group-hover:text-cyan-400 transition-colors">Modo Rápido</h3>
+                    <p class="text-gray-400 text-sm mb-4">Matchmaking automático. Encuentra rival en segundos.</p>
+                    <div class="flex flex-wrap gap-1.5 mb-5">
+                        <span class="text-xs px-2 py-1 rounded-full bg-cyan-500/10 text-cyan-400 border border-cyan-500/20"><span data-mtr-icon="target" data-mtr-color="cyan" data-mtr-inline data-mtr-size="13" style="margin-right:4px"></span>Auto-match</span>
+                        <span class="text-xs px-2 py-1 rounded-full bg-cyan-500/10 text-cyan-400 border border-cyan-500/20"><span data-mtr-icon="clock" data-mtr-color="cyan" data-mtr-inline data-mtr-size="14"></span>1 min</span>
+                    </div>
+                    <button type="button" class="w-full py-2.5 rounded-lg text-sm font-bold bg-cyan-500/15 border border-cyan-500/30 text-cyan-400 hover:bg-cyan-500/25 transition-all cursor-pointer" onclick="selectMode('quick')">Jugar Ahora</button>
+                </div>
+
+                <div class="group p-6 rounded-2xl border border-fuchsia-500/40 bg-gray-900/50 transition-all duration-300 card-glow-magenta neon-border-magenta cursor-pointer" style="order:3" onclick="selectMode('private')">
+                    <div class="mb-4"><span data-mtr-icon="lock" data-mtr-color="magenta"></span></div>
+                    <h3 class="text-lg font-bold text-white mb-2 group-hover:text-fuchsia-400 transition-colors">Sala Privada</h3>
+                    <p class="text-gray-400 text-sm mb-4">Invita a tus amigos. Personaliza reglas y apuestas.</p>
+                    <div class="flex flex-wrap gap-1.5 mb-5">
+                        <span class="text-xs px-2 py-1 rounded-full bg-fuchsia-500/10 text-fuchsia-400 border border-fuchsia-500/20"><span data-mtr-icon="users" data-mtr-color="magenta" data-mtr-inline data-mtr-size="13" style="margin-right:4px"></span>Amigos</span>
+                        <span class="text-xs px-2 py-1 rounded-full bg-fuchsia-500/10 text-fuchsia-400 border border-fuchsia-500/20"><span data-mtr-icon="link" data-mtr-color="magenta" data-mtr-inline data-mtr-size="13" style="margin-right:4px"></span>Código</span>
+                    </div>
+                    <button type="button" class="w-full py-2.5 rounded-lg text-sm font-bold bg-fuchsia-500/15 border border-fuchsia-500/30 text-fuchsia-400 hover:bg-fuchsia-500/25 transition-all cursor-pointer" onclick="selectMode('private')">Crear Sala</button>
+                </div>
+
+                <div class="group p-6 rounded-2xl border border-orange-500/40 bg-gray-900/50 transition-all duration-300 card-glow-orange neon-border-orange cursor-pointer" style="order:2" onclick="selectMode('social')">
+                    <div class="mb-4"><span data-mtr-icon="swords" data-mtr-color="orange"></span></div>
+                    <h3 class="text-lg font-bold text-white mb-2 group-hover:text-orange-400 transition-colors">Desafío Social</h3>
+                    <p class="text-gray-400 text-sm mb-4">Desafía a un amigo por redes sociales. Mínimo 1 crédito (~$1).</p>
+                    <div class="flex flex-wrap gap-1.5 mb-5">
+                        <span class="text-xs px-2 py-1 rounded-full bg-orange-500/10 text-orange-400 border border-orange-500/20"><span data-mtr-icon="mobile" data-mtr-color="orange" data-mtr-inline data-mtr-size="13" style="margin-right:4px"></span>Redes</span>
+                        <span class="text-xs px-2 py-1 rounded-full bg-orange-500/10 text-orange-400 border border-orange-500/20"><span data-mtr-icon="chart" data-mtr-color="orange" data-mtr-inline data-mtr-size="13" style="margin-right:4px"></span>100+</span>
+                    </div>
+                    <button type="button" class="w-full py-2.5 rounded-lg text-sm font-bold bg-orange-500/15 border border-orange-500/30 text-orange-400 hover:bg-orange-500/25 transition-all cursor-pointer" onclick="selectMode('social')">Desafiar</button>
+                </div>
+
+                <div class="group p-6 rounded-2xl border border-purple-500/40 bg-gray-900/50 transition-all duration-300 card-glow-purple neon-border-purple cursor-pointer" style="order:5" onclick="selectMode('tournament')">
+                    <div class="mb-4"><span data-mtr-icon="trophy" data-mtr-color="purple"></span></div>
+                    <h3 class="text-lg font-bold text-white mb-2 group-hover:text-purple-400 transition-colors">Torneo</h3>
+                    <p class="text-gray-400 text-sm mb-4">Express cada 10 min por género. Grand Prix semanal con premio gordo.</p>
+                    <div class="flex flex-wrap gap-1.5 mb-5">
+                        <span class="text-xs px-2 py-1 rounded-full bg-purple-500/10 text-purple-400 border border-purple-500/20"><span data-mtr-icon="diamond" data-mtr-color="purple" data-mtr-inline data-mtr-size="13" style="margin-right:4px"></span>Premios</span>
+                        <span class="text-xs px-2 py-1 rounded-full bg-purple-500/10 text-purple-400 border border-purple-500/20"><span data-mtr-icon="medal" data-mtr-color="purple" data-mtr-inline data-mtr-size="13" style="margin-right:4px"></span>Ranking</span>
+                    </div>
+                    <button type="button" class="w-full py-2.5 rounded-lg text-sm font-bold bg-purple-500/15 border border-purple-500/30 text-purple-400 hover:bg-purple-500/25 transition-all cursor-pointer" onclick="selectMode('tournament')">Unirse al Torneo</button>
+                </div>
+
+                <div class="group p-6 rounded-2xl border border-cyan-500/40 bg-gray-900/50 transition-all duration-300 card-glow neon-border-cyan cursor-pointer" style="order:1" onclick="selectMode('practice')">
+                    <div class="mb-4"><span data-mtr-icon="target" data-mtr-color="cyan"></span></div>
+                    <h3 class="text-lg font-bold text-white mb-2 group-hover:text-cyan-400 transition-colors">Modo Práctica</h3>
+                    <p class="text-gray-400 text-sm mb-4">Sin riesgo contra la CPU. Perfecto para empezar.</p>
+                    <div class="flex flex-wrap gap-1.5 mb-5">
+                        <span class="text-xs px-2 py-1 rounded-full bg-cyan-500/10 text-cyan-400 border border-cyan-500/20"><span data-mtr-icon="gamepad" data-mtr-color="cyan" data-mtr-inline data-mtr-size="13" style="margin-right:4px"></span>Sin riesgo</span>
+                        <span class="text-xs px-2 py-1 rounded-full bg-cyan-500/10 text-cyan-400 border border-cyan-500/20"><span data-mtr-icon="book" data-mtr-color="cyan" data-mtr-inline data-mtr-size="13" style="margin-right:4px"></span>Aprende</span>
+                    </div>
+                    <button type="button" class="w-full py-2.5 rounded-lg text-sm font-bold bg-cyan-500/15 border border-cyan-500/30 text-cyan-400 hover:bg-cyan-500/25 transition-all cursor-pointer" onclick="selectMode('practice')">Practicar</button>
+                </div>
+
+            </div>
+        </section>
+
+        <!-- TOURNAMENT HUB -->
+        <section id="tournamentHub" class="hidden mb-16">
+            <div class="tournament-hub-hero">
+                <div class="relative z-10 flex flex-wrap items-center gap-4">
+                    <button type="button" onclick="backToModes()" class="px-4 py-2 rounded-lg text-sm font-medium bg-white/5 border border-white/10 text-gray-300 hover:text-white hover:border-white/20 transition cursor-pointer flex items-center gap-1.5"><span data-mtr-icon="arrowLeft" data-mtr-plain data-mtr-size="16"></span>Volver</button>
+                    <div>
+                        <h2 class="text-2xl sm:text-3xl font-black text-white tracking-tight flex items-center gap-2"><span data-mtr-icon="trophy" data-mtr-color="purple" data-mtr-badge-size="36" data-mtr-size="18"></span>Arena de Torneos</h2>
+                        <p class="text-gray-300 text-sm mt-1">14 géneros · Express cada 10 min · apuestas en <strong class="text-fuchsia-300">MTR créditos</strong> (fichas estables ~$1)</p>
+                    </div>
+                </div>
+            </div>
+            <div id="tournamentRotationBanner" class="mb-6 text-sm"></div>
+            <div id="tournamentGenreListView">
+                <div class="flex flex-wrap gap-2 mb-4">
+                    <label class="text-xs text-gray-500 sr-only" for="tournamentGenreFilter">Filtrar géneros</label>
+                    <select id="tournamentGenreFilter" class="rounded-lg bg-gray-900 border border-white/10 text-sm text-white px-3 py-2">
+                        <!-- Un <option> nativo no puede contener HTML/SVG --
+                             el ícono queda solo en el texto del <select>
+                             cerrado (limitación real del elemento, no un
+                             emoji sin reemplazar) -- se deja como texto. -->
+                        <option value="all">🌎 Todos los géneros</option>
+                        <option value="latino">🇱🇷 Latino</option>
+                        <option value="anglo">🇺🇸 Anglo</option>
+                    </select>
+                </div>
+                <div id="tournamentGenreGrid" class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3"></div>
+            </div>
+            <div id="tournamentGenreDetail" class="hidden">
+                <button type="button" id="tournamentGenreBackBtn" class="mb-4 text-sm text-purple-400 hover:text-purple-300">← Todos los géneros</button>
+                <h3 id="tournamentGenreTitle" class="text-xl font-bold text-white mb-4"></h3>
+                <div id="tournamentGenrePanels"></div>
+            </div>
+        </section>
+
+        <audio id="mtrBattleAudio" loop playsinline webkit-playsinline preload="auto" style="display:none" aria-hidden="true"></audio>
+
+        <!-- TOURNAMENT ARENA (lobby + bracket + resultados) -->
+        <section id="tournamentArena" class="hidden mb-16">
+            <div class="tournament-arena-header mb-6">
+                <div class="flex items-center gap-4 flex-1 min-w-0">
+                    <button type="button" onclick="TournamentBracket.close(); selectMode('tournament')" class="px-4 py-2 rounded-lg text-sm font-medium bg-white/5 border border-white/10 text-gray-300 hover:text-white cursor-pointer shrink-0">← Hub</button>
+                    <div class="min-w-0">
+                        <h2 class="text-2xl font-bold text-white truncate" id="tournamentArenaTitle">Torneo Express</h2>
+                        <p class="text-gray-400 text-sm" id="tournamentArenaSubtitle"></p>
+                    </div>
+                </div>
+                <button type="button" id="tournamentAbandonBtn" class="tournament-btn-danger hidden shrink-0"><span data-mtr-icon="circleX" data-mtr-plain data-mtr-size="14" style="display:inline-block;vertical-align:-2px;margin-right:4px"></span>Abandonar partida</button>
+            </div>
+            <div id="tournamentArenaStatus" class="tournament-arena-status mb-4 text-sm text-cyan-200"></div>
+            <div id="tournamentBracketGrid" class="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-6"></div>
+            <div id="tournamentResultPanel" class="hidden"></div>
+        </section>
+
+        <!-- Modal confirmación abandono torneo -->
+        <div id="tournamentAbandonModal" class="hidden fixed inset-0 z-[110] flex items-center justify-center p-4">
+            <div class="absolute inset-0 bg-black/75 backdrop-blur-sm"></div>
+            <div class="relative max-w-md w-full rounded-2xl border border-red-500/30 bg-gray-950 p-6 shadow-2xl shadow-red-900/20">
+                <h3 class="text-xl font-bold text-white mb-2">¿Abandonar la partida?</h3>
+                <p class="text-gray-300 text-sm leading-relaxed mb-4">
+                    Si abandonas el torneo <strong class="text-red-300">quedarás descalificado</strong> y
+                    <strong class="text-red-300">perderás automáticamente tu apuesta</strong> por retiro voluntario
+                    antes de que termine el torneo. <span class="text-gray-400">No hay reembolso de MTR créditos.</span>
+                </p>
+                <div class="flex flex-col sm:flex-row gap-3">
+                    <button type="button" id="tournamentAbandonCancelBtn" class="flex-1 py-2.5 rounded-lg text-sm font-semibold bg-white/5 border border-white/10 text-gray-300 hover:text-white">Seguir en el torneo</button>
+                    <button type="button" id="tournamentAbandonConfirmBtn" class="flex-1 py-2.5 rounded-lg text-sm font-bold bg-red-600/90 text-white hover:bg-red-600">Sí, abandonar y perder apuesta</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- SONG SELECTION & BET -->
+        <section id="songSelection" class="hidden mb-16">
+            <div class="flex items-center gap-4 mb-8">
+                <button type="button" onclick="backToModes()" class="px-4 py-2 rounded-lg text-sm font-medium bg-white/5 border border-white/10 text-gray-300 hover:text-white hover:border-white/20 transition cursor-pointer">← Volver</button>
+                <div>
+                    <h2 class="text-2xl font-bold text-white" id="modeTitle">Modo Rápido</h2>
+                    <p class="text-gray-400 text-sm" id="socialChallengeSubtitle">Elige tu canción y realiza tu apuesta</p>
+                </div>
+            </div>
+            <!-- Desafíos sociales pendientes del usuario -- pedido explícito:
+                 si creás un desafío y salís de la app (se desloguea, pierde
+                 conexión, cierra sin querer), al volver antes se perdía todo
+                 rastro de que ese desafío existía. Ahora se re-lista solo al
+                 entrar a Desafío Social (ver loadMyPendingChallenges()). -->
+            <div id="myPendingChallenges" class="mb-6 hidden"></div>
+            <!-- Mismo criterio, para Sala Privada: si creaste una sala y
+                 salís de la app antes de que alguien se una, antes se perdía
+                 el código y el crédito quedaba descontado sin forma de
+                 recuperarlo (ver leavePrivateRoom(), ahora reembolsa). -->
+            <div id="myOpenPrivateRoom" class="mb-6 hidden"></div>
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                <div class="p-6 rounded-2xl border border-white/5 bg-white/[0.02]">
+                    <h3 class="text-lg font-bold text-white mb-4 flex items-center gap-2"><span data-mtr-icon="music" data-mtr-color="cyan" data-mtr-inline data-mtr-size="18" style="margin:0"></span>Busca tu Canción</h3>
+                    <div class="flex gap-2 mb-6">
+                        <input type="text" id="songSearch" placeholder="Nombre de canción o artista..."
+                               class="flex-1 px-4 py-3 rounded-lg bg-black/40 border border-white/10 text-white placeholder-gray-500 text-sm focus:outline-none focus:border-cyan-500/50 focus:ring-1 focus:ring-cyan-500/20 transition">
+                        <button type="button" onclick="searchSong()" class="px-4 py-3 rounded-lg bg-cyan-500/15 border border-cyan-500/30 text-cyan-400 hover:bg-cyan-500/25 transition cursor-pointer"><span data-mtr-icon="search" data-mtr-plain data-mtr-size="18"></span></button>
+                    </div>
+                    <div id="searchResults" class="grid grid-cols-1 gap-2 max-h-96 overflow-y-auto neon-scrollbar pr-1"></div>
+                </div>
+
+                <div class="space-y-6">
+                    <div id="selectedSongCard" class="p-6 rounded-2xl border border-white/5 bg-white/[0.02] min-h-[120px] flex items-center justify-center transition-all duration-500">
+                        <div class="text-center text-gray-500">
+                            <div class="text-3xl mb-2 text-gray-500"><span data-mtr-icon="music" data-mtr-plain data-mtr-size="30"></span></div>
+                            <p>Selecciona una canción</p>
+                        </div>
+                    </div>
+                    <div class="p-6 rounded-2xl border border-white/5 bg-white/[0.02]">
+                        <h3 class="text-lg font-bold text-white mb-4 flex items-center gap-2"><span data-mtr-icon="coin" data-mtr-color="yellow" data-mtr-inline data-mtr-size="18" style="margin:0"></span>Tu Apuesta</h3>
+                        <div class="grid grid-cols-2 gap-3 text-sm text-gray-400 mb-4">
+                            <span class="hidden"><span id="balanceLabel">Tu MTR (on-chain)</span>: <strong id="onchainMtrBalance" class="text-white">--</strong></span>
+                            <span><span id="playableLabel">Fichas jugables</span>: <strong id="userBalance" class="text-white">0</strong> <span id="balanceUnit">MTR créditos</span> <span class="text-xs text-green-400 cursor-help" title="Estas fichas valen siempre $1 cada una. No fluctúan como el token MTR nativo. 1 crédito jugable ≈ $1 USD nominal (1:1)">✓</span></span>
+                            <span>Mínimo: <strong id="minBet" class="text-white">1</strong> crédito</span>
+                        </div>
+                        <input type="number" id="betAmount" placeholder="1" min="1"
+                               class="w-full px-4 py-3 rounded-lg bg-black/40 border border-white/10 text-white placeholder-gray-500 text-sm focus:outline-none focus:border-cyan-500/50 focus:ring-1 focus:ring-cyan-500/20 transition mb-3"
+                               oninput="if(typeof window.updateBetEligibility === 'function') window.updateBetEligibility();"
+                               onchange="if(typeof window.updateBetEligibility === 'function') window.updateBetEligibility();">
+                        <div class="flex gap-2 mb-5" id="betAmountButtons">
+                            <button type="button" onclick="window.quickBet(5)" class="bet-amount-btn flex-1 py-2 rounded-lg text-xs font-bold bg-white/5 border border-white/10 text-gray-300 hover:text-white hover:border-cyan-500/30 transition cursor-pointer" data-amount="5">5</button>
+                            <button type="button" onclick="window.quickBet(50)" class="bet-amount-btn flex-1 py-2 rounded-lg text-xs font-bold bg-white/5 border border-white/10 text-gray-300 hover:text-white hover:border-cyan-500/30 transition cursor-pointer" data-amount="50">50</button>
+                            <button type="button" onclick="window.quickBet(500)" class="bet-amount-btn flex-1 py-2 rounded-lg text-xs font-bold bg-white/5 border border-white/10 text-gray-300 hover:text-white hover:border-cyan-500/30 transition cursor-pointer" data-amount="500">500</button>
+                            <button type="button" onclick="window.quickBet(5000)" class="bet-amount-btn flex-1 py-2 rounded-lg text-xs font-bold bg-white/5 border border-white/10 text-gray-300 hover:text-white hover:border-cyan-500/30 transition cursor-pointer" data-amount="5000">5K</button>
+                        </div>
+                        <div id="actionButtons"></div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- WAITING SCREEN -->
+        <section id="waitingScreen" class="hidden mb-16">
+            <div class="max-w-md mx-auto text-center py-20 px-8 rounded-2xl border border-cyan-500/15 bg-gray-900/50">
+                <div class="text-5xl mb-4 animate-pulse text-cyan-400"><span data-mtr-icon="clock" data-mtr-plain data-mtr-size="48"></span></div>
+                <h2 class="text-2xl font-bold text-white mb-2">Buscando Oponente...</h2>
+                <p class="text-gray-400 mb-6">Esto puede tomar unos segundos</p>
+                <button type="button" onclick="cancelSearch()" class="px-6 py-2.5 rounded-lg text-sm font-medium bg-white/5 border border-white/10 text-gray-300 hover:text-white hover:border-white/20 transition cursor-pointer">Cancelar Búsqueda</button>
+            </div>
+        </section>
+
+        <!-- ROOM SCREEN -->
+        <section id="roomScreen" class="hidden mb-16">
+            <div class="max-w-lg mx-auto p-8 rounded-2xl border border-fuchsia-500/40 bg-gray-900/50 neon-border-magenta">
+                <h2 class="text-2xl font-bold text-white mb-6 text-center flex items-center justify-center gap-2"><span data-mtr-icon="lock" data-mtr-color="magenta" data-mtr-inline data-mtr-size="20" style="margin:0"></span>Sala Privada</h2>
+                <!-- El link es la forma principal de invitar: un clic y quien lo abre
+                     entra directo a esta sala con el código ya cargado (ver ?room= en
+                     index.html). El código de abajo queda como respaldo para compartir
+                     hablado/por texto (WhatsApp de voz, decirlo en persona, etc.) -- no
+                     se elimina porque ese uso es real, pero deja de competir en
+                     protagonismo con el link. -->
+                <div class="mb-4">
+                    <label for="roomInviteLink" class="text-sm text-gray-400 mb-1 block">Compartí este link para invitar a alguien</label>
+                    <div class="flex gap-2">
+                        <input id="roomInviteLink" type="text" readonly class="flex-1 px-3 py-2 rounded-lg bg-black/40 border border-white/10 text-white text-sm">
+                        <button type="button" onclick="copyRoomLink()" class="px-4 py-2 rounded-lg text-sm font-bold bg-gradient-to-r from-cyan-500 to-fuchsia-500 text-white hover:opacity-90 shadow-lg shadow-cyan-500/20 transition cursor-pointer whitespace-nowrap"><span data-mtr-icon="copy" data-mtr-plain data-mtr-size="16" style="display:inline-flex;vertical-align:-3px;margin-right:4px"></span>Copiar y compartir</button>
+                    </div>
+                </div>
+                <div class="flex items-center justify-center gap-2 mb-6 text-sm">
+                    <span class="text-gray-500">o compartí el código:</span>
+                    <strong id="roomCode" class="font-mono text-fuchsia-400">XXXXX</strong>
+                    <button type="button" onclick="copyRoomCode()" class="px-1.5 py-0.5 rounded bg-white/5 text-gray-500 hover:text-white transition cursor-pointer"><span data-mtr-icon="copy" data-mtr-plain data-mtr-size="14"></span></button>
+                </div>
+                <div class="flex items-center justify-center gap-6 mb-6">
+                    <div id="player1Card" class="text-center">
+                        <div class="text-3xl mb-1 text-gray-400"><span data-mtr-icon="user" data-mtr-plain data-mtr-size="30"></span></div>
+                        <span class="text-sm text-gray-400">Esperando...</span>
+                    </div>
+                    <div class="text-2xl font-bold text-fuchsia-400">VS</div>
+                    <div id="player2Card" class="text-center">
+                        <div class="text-3xl mb-1 text-gray-400"><span data-mtr-icon="help" data-mtr-plain data-mtr-size="30"></span></div>
+                        <span class="text-sm text-gray-400">Esperando rival...</span>
+                    </div>
+                </div>
+                <button type="button" onclick="leaveRoom()" class="w-full py-2.5 rounded-lg text-sm font-medium bg-white/5 border border-white/10 text-gray-300 hover:text-white transition cursor-pointer">Salir de la Sala</button>
+            </div>
+        </section>
+
+        <!-- Vista previa de sala al "Unirse": muestra contra quién se compite y
+             cuánto pide de apuesta ANTES de cobrar nada. Si el saldo no
+             alcanza, se avisa acá con un link directo a recargar en vez de
+             dejar el botón "Unirse" gris sin explicación (como pasaba antes). -->
+        <section id="joinRoomPreview" class="hidden mb-16">
+            <div class="max-w-lg mx-auto p-8 rounded-2xl border border-fuchsia-500/40 bg-gray-900/50 neon-border-magenta">
+                <h2 class="text-2xl font-bold text-white mb-6 text-center flex items-center justify-center gap-2"><span data-mtr-icon="music" data-mtr-color="cyan" data-mtr-inline data-mtr-size="20" style="margin:0"></span>Sala Encontrada</h2>
+                <div class="flex items-center justify-center gap-6 mb-6">
+                    <div class="text-center">
+                        <div class="text-3xl mb-1 text-orange-400" id="joinPreviewOpponentAvatar"><span data-mtr-icon="mic" data-mtr-plain data-mtr-size="30"></span></div>
+                        <span class="text-sm text-gray-300 font-medium" id="joinPreviewSongName">-</span>
+                        <p class="text-xs text-gray-500" id="joinPreviewSongArtist">-</p>
+                    </div>
+                    <div class="text-2xl font-bold text-fuchsia-400">VS</div>
+                    <div class="text-center">
+                        <div class="text-3xl mb-1 text-gray-400" id="joinPreviewMyAvatar"><span data-mtr-icon="user" data-mtr-plain data-mtr-size="30"></span></div>
+                        <span class="text-sm text-gray-300 font-medium">Vos</span>
+                    </div>
+                </div>
+                <div id="joinPreviewAvatarPicker"></div>
+                <p class="text-center text-gray-400 text-sm mb-4">
+                    Apuesta pedida: <strong id="joinPreviewBet" class="text-fuchsia-400">-</strong> MTR créditos
+                </p>
+                <div id="joinPreviewInsufficientBox" class="hidden mb-4 p-4 rounded-lg bg-red-500/10 border border-red-500/20 text-center">
+                    <p class="text-red-300 text-sm mb-3" id="joinPreviewInsufficientText"></p>
+                    <button type="button" onclick="if (typeof window.openMercadoPagoModal === 'function') { window.openMercadoPagoModal(); } else { showToast('Buscá la sección de recarga (Mercado Pago) en la página principal.', 'info'); }" class="w-full py-2 rounded-lg text-sm font-bold bg-gradient-to-r from-cyan-500 to-fuchsia-500 text-white hover:opacity-90 transition cursor-pointer"><span data-mtr-icon="cash" data-mtr-plain data-mtr-size="14" style="display:inline-block;vertical-align:-2px;margin-right:4px"></span>Recargar saldo</button>
+                </div>
+                <div class="flex gap-3">
+                    <button type="button" onclick="cancelJoinRoomPreview()" class="flex-1 py-2.5 rounded-lg text-sm font-medium bg-white/5 border border-white/10 text-gray-300 hover:text-white transition cursor-pointer">Cancelar</button>
+                    <button type="button" onclick="confirmJoinRoom()" id="confirmJoinRoomBtn" class="flex-1 py-2.5 rounded-lg text-sm font-bold bg-gradient-to-r from-cyan-500 to-fuchsia-500 text-white hover:opacity-90 shadow-lg shadow-cyan-500/20 transition cursor-pointer"><span data-mtr-icon="swords" data-mtr-plain data-mtr-size="16" style="display:inline-flex;vertical-align:-3px;margin-right:4px"></span>Confirmar y Apostar</button>
+                </div>
+            </div>
+        </section>
+
+        <!-- CASHOUT CARD -->
+        <section id="cashoutSection" class="mb-16">
+            <div class="max-w-2xl mx-auto p-6 sm:p-8 rounded-2xl border border-fuchsia-500/40 bg-gradient-to-br from-gray-900/80 to-purple-950/30 neon-border-magenta">
+                <h3 class="text-xl font-bold text-fuchsia-400 neon-text-magenta mb-2">Retirar Créditos</h3>
+                <p class="text-gray-400 text-sm mb-4">Retira tus créditos nominales y recibe fondos en tu wallet (USD / stablecoin según red y pasarela). Conversión 1:1 respaldada por vault.</p>
+                
+                <!-- Explicación de Retiro -->
+                <div class="mb-6 p-4 rounded-lg bg-blue-500/10 border border-blue-500/20">
+                    <div class="flex items-start gap-2">
+                        <span data-mtr-icon="cash" data-mtr-color="cyan" data-mtr-inline data-mtr-size="18" style="margin:0"></span>
+                        <div class="flex-1">
+                            <p class="text-blue-400 text-sm font-semibold mb-1">Retiro a tu wallet</p>
+                            <p class="text-gray-300 text-xs">Tus créditos nominales se liquidan 1:1 en valor USD (menos fee). Fee de retiro: 5%.</p>
+                            <p class="text-gray-400 text-xs mt-1">Ejemplo: retiras 100 créditos → recibes ~95 USD netos</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="flex flex-col sm:flex-row gap-3 mb-4">
+                    <input id="cashoutAmount" type="number" min="1" placeholder="Créditos nominales a retirar"
+                           class="flex-1 px-4 py-3 rounded-lg bg-black/40 border border-white/10 text-white placeholder-gray-500 text-sm focus:outline-none focus:border-fuchsia-500/50 focus:ring-1 focus:ring-fuchsia-500/20 transition">
+                    <button type="button" onclick="quoteCashout()" class="px-6 py-3 rounded-lg text-sm font-bold bg-fuchsia-500/15 border border-fuchsia-500/30 text-fuchsia-400 hover:bg-fuchsia-500/25 transition cursor-pointer whitespace-nowrap"><span data-mtr-icon="chart" data-mtr-color="cyan" data-mtr-inline data-mtr-size="14"></span>Cotizar retiro</button>
+                </div>
+                <div class="mb-4 p-3 rounded-lg bg-blue-500/10 border border-blue-500/20">
+                    <p class="text-blue-400 text-xs mb-2">
+                        <strong><span data-mtr-icon="bulb" data-mtr-color="yellow" data-mtr-inline data-mtr-size="14"></span>Conversión:</strong> Retiras créditos nominales → recibes fondos en stablecoin / USD según la pasarela
+                    </p>
+                    <p class="text-gray-300 text-xs">
+                        <strong>Ejemplo:</strong> 100 créditos nominales → ~95 USD netos (5% fee)
+                    </p>
+                    <p class="text-gray-400 text-xs mt-1">
+                        Los créditos nominales están respaldados 1:1 por liquidez del vault (dólares).
+                    </p>
+                </div>
+                <p id="cashoutQuote" class="text-gray-400 text-sm mb-4">Sin cotización aún.</p>
+                <button type="button" onclick="requestCashout()" class="px-6 py-3 rounded-lg text-sm font-bold bg-gradient-to-r from-fuchsia-500 to-purple-600 text-white hover:opacity-90 transition-all shadow-lg shadow-fuchsia-500/20 cursor-pointer"><span data-mtr-icon="cash" data-mtr-plain data-mtr-size="16" style="display:inline-flex;vertical-align:-3px;margin-right:4px"></span>Solicitar retiro</button>
+            </div>
+        </section>
+
+        <!-- VAULT INFO SECTION -->
+        <section id="vaultInfoSection" class="mb-16">
+            <div class="max-w-2xl mx-auto p-6 sm:p-8 rounded-2xl border border-cyan-500/40 bg-gray-900/50 neon-border-cyan">
+                <h3 class="text-xl font-bold text-white mb-4 flex items-center gap-2"><span data-mtr-icon="wallet" data-mtr-color="cyan" data-mtr-inline data-mtr-size="20" style="margin:0"></span>Vault de Liquidez</h3>
+                <p class="text-gray-400 text-sm mb-4">Transparencia total: Balance disponible para retiros</p>
+                
+                <div class="p-4 rounded-lg bg-cyan-500/10 border border-cyan-500/20 mb-4">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <div class="text-sm text-gray-400 mb-1">Balance del Vault (cripto, on-chain):</div>
+                            <div id="publicVaultBalance" class="text-2xl font-bold text-cyan-400">Cargando...</div>
+                            <div class="text-xs text-gray-500 mt-1">Liquidez en USDC real, verificable en Base</div>
+                        </div>
+                        <div class="text-4xl text-cyan-400"><span data-mtr-icon="wallet" data-mtr-plain data-mtr-size="36"></span></div>
+                    </div>
+                </div>
+
+                <!-- Saldo ESTIMADO de la cuenta real de Mercado Pago (pesos colombianos).
+                     A propósito NO se llama "vault": toda la plata en pesos ya está
+                     junta en una única cuenta real, no hay una wallet separada que
+                     fondear como con cripto. Ver GET /api/vault/balance-cop-estimate
+                     en server-auto.js para la lógica completa y sus límites. -->
+                <div class="p-4 rounded-lg bg-yellow-500/10 border border-yellow-500/20 mb-4">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <div class="text-sm text-gray-400 mb-1">Saldo estimado en pesos (Mercado Pago):</div>
+                            <div id="publicVaultBalanceCop" class="text-2xl font-bold text-yellow-400">Cargando...</div>
+                            <div class="text-xs text-gray-500 mt-1">Estimado según nuestros registros — no verificable en vivo (Mercado Pago no ofrece saldo en tiempo real vía API)</div>
+                        </div>
+                        <div class="text-4xl">🇨🇴</div>
+                    </div>
+                </div>
+
+                <div class="text-xs text-gray-500 space-y-1">
+                    <div>✓ El vault cripto se alimenta con fees: 5% depósito, 2% apuesta, 5% retiro</div>
+                    <div>✓ Todos los retiros se pagan desde el vault/saldo que corresponda a su moneda</div>
+                    <div>✓ Balance del vault cripto verificado en tiempo real contra la blockchain</div>
+                    <a id="publicVaultLink" href="#" target="_blank" class="text-cyan-400 hover:text-cyan-300 underline inline-block mt-2">Ver vault en BaseScan</a>
+                </div>
+            </div>
+        </section>
+
+        <!-- CONTACT -->
+        <section id="contactSection" class="mb-16">
+            <div class="max-w-xl mx-auto p-6 sm:p-8 rounded-2xl border border-white/5 bg-white/[0.02]">
+                <h3 class="text-xl font-bold text-white mb-2">Contacto</h3>
+                <p class="text-gray-400 text-sm mb-6">¿Dudas? Escríbenos a <a href="mailto:support@musictokenring.xyz" class="text-cyan-400 hover:text-cyan-300">support@musictokenring.xyz</a></p>
+                <form class="space-y-4" onsubmit="submitContactForm(event)">
+                    <div>
+                        <label for="contactName" class="text-sm text-gray-400 mb-1 block">Nombre</label>
+                        <input type="text" id="contactName" placeholder="Tu nombre" required class="w-full px-4 py-3 rounded-lg bg-black/40 border border-white/10 text-white placeholder-gray-500 text-sm focus:outline-none focus:border-cyan-500/50 transition">
+                    </div>
+                    <div>
+                        <label for="contactEmail" class="text-sm text-gray-400 mb-1 block">Email</label>
+                        <input type="email" id="contactEmail" placeholder="tu@email.com" required class="w-full px-4 py-3 rounded-lg bg-black/40 border border-white/10 text-white placeholder-gray-500 text-sm focus:outline-none focus:border-cyan-500/50 transition">
+                    </div>
+                    <div>
+                        <label for="contactMessage" class="text-sm text-gray-400 mb-1 block">Mensaje</label>
+                        <textarea id="contactMessage" rows="3" placeholder="Cuéntanos en qué podemos ayudarte" required class="w-full px-4 py-3 rounded-lg bg-black/40 border border-white/10 text-white placeholder-gray-500 text-sm focus:outline-none focus:border-cyan-500/50 transition resize-none"></textarea>
+                    </div>
+                    <button type="submit" class="px-6 py-3 rounded-lg text-sm font-bold bg-cyan-500/15 border border-cyan-500/30 text-cyan-400 hover:bg-cyan-500/25 transition cursor-pointer">Enviar mensaje</button>
+                </form>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- Modales de deposito/retiro movidos fuera de <main> para que sigan
+         visibles cuando el shell movil (mtr2) oculta <main> por completo. -->
         <div id="nowpaymentsModal" class="fixed inset-0 z-[10000] hidden" aria-hidden="true">
             <div class="absolute inset-0 bg-black/75 backdrop-blur-sm" onclick="closeNowPaymentsModal()"></div>
             <div class="relative z-10 flex min-h-full items-center justify-center p-4 pointer-events-none">
@@ -1740,395 +2132,6 @@
             });
         })();
         </script>
-
-        <!-- GAME MODE SELECTOR (shown when logged in) -->
-        <section id="modeSelector" class="hidden mb-16">
-            <div class="text-center mb-10">
-                <h2 class="text-3xl font-extrabold text-white mb-2">Elige tu Modo de Juego</h2>
-                <p class="text-gray-400">Selecciona cómo quieres competir</p>
-            </div>
-            <!-- Orden visual vía CSS "order" (no se movió el HTML de lugar,
-                 para no arriesgar romper algo) -- mismo orden que las
-                 tarjetas nuevas del shell mobile, pedido por el dueño:
-                 Práctica, Desafío Social, Sala Privada, Modo Rápido, y
-                 Torneo al final (no participaba de ese pedido -- tiene su
-                 propia pestaña de primer nivel en el shell nuevo). -->
-            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-
-                <div class="group p-6 rounded-2xl border border-cyan-500/40 bg-gray-900/50 transition-all duration-300 card-glow neon-border-cyan cursor-pointer" style="order:4" onclick="selectMode('quick')">
-                    <div class="mb-4"><span data-mtr-icon="bolt" data-mtr-color="cyan"></span></div>
-                    <h3 class="text-lg font-bold text-white mb-2 group-hover:text-cyan-400 transition-colors">Modo Rápido</h3>
-                    <p class="text-gray-400 text-sm mb-4">Matchmaking automático. Encuentra rival en segundos.</p>
-                    <div class="flex flex-wrap gap-1.5 mb-5">
-                        <span class="text-xs px-2 py-1 rounded-full bg-cyan-500/10 text-cyan-400 border border-cyan-500/20"><span data-mtr-icon="target" data-mtr-color="cyan" data-mtr-inline data-mtr-size="13" style="margin-right:4px"></span>Auto-match</span>
-                        <span class="text-xs px-2 py-1 rounded-full bg-cyan-500/10 text-cyan-400 border border-cyan-500/20"><span data-mtr-icon="clock" data-mtr-color="cyan" data-mtr-inline data-mtr-size="14"></span>1 min</span>
-                    </div>
-                    <button type="button" class="w-full py-2.5 rounded-lg text-sm font-bold bg-cyan-500/15 border border-cyan-500/30 text-cyan-400 hover:bg-cyan-500/25 transition-all cursor-pointer" onclick="selectMode('quick')">Jugar Ahora</button>
-                </div>
-
-                <div class="group p-6 rounded-2xl border border-fuchsia-500/40 bg-gray-900/50 transition-all duration-300 card-glow-magenta neon-border-magenta cursor-pointer" style="order:3" onclick="selectMode('private')">
-                    <div class="mb-4"><span data-mtr-icon="lock" data-mtr-color="magenta"></span></div>
-                    <h3 class="text-lg font-bold text-white mb-2 group-hover:text-fuchsia-400 transition-colors">Sala Privada</h3>
-                    <p class="text-gray-400 text-sm mb-4">Invita a tus amigos. Personaliza reglas y apuestas.</p>
-                    <div class="flex flex-wrap gap-1.5 mb-5">
-                        <span class="text-xs px-2 py-1 rounded-full bg-fuchsia-500/10 text-fuchsia-400 border border-fuchsia-500/20"><span data-mtr-icon="users" data-mtr-color="magenta" data-mtr-inline data-mtr-size="13" style="margin-right:4px"></span>Amigos</span>
-                        <span class="text-xs px-2 py-1 rounded-full bg-fuchsia-500/10 text-fuchsia-400 border border-fuchsia-500/20"><span data-mtr-icon="link" data-mtr-color="magenta" data-mtr-inline data-mtr-size="13" style="margin-right:4px"></span>Código</span>
-                    </div>
-                    <button type="button" class="w-full py-2.5 rounded-lg text-sm font-bold bg-fuchsia-500/15 border border-fuchsia-500/30 text-fuchsia-400 hover:bg-fuchsia-500/25 transition-all cursor-pointer" onclick="selectMode('private')">Crear Sala</button>
-                </div>
-
-                <div class="group p-6 rounded-2xl border border-orange-500/40 bg-gray-900/50 transition-all duration-300 card-glow-orange neon-border-orange cursor-pointer" style="order:2" onclick="selectMode('social')">
-                    <div class="mb-4"><span data-mtr-icon="swords" data-mtr-color="orange"></span></div>
-                    <h3 class="text-lg font-bold text-white mb-2 group-hover:text-orange-400 transition-colors">Desafío Social</h3>
-                    <p class="text-gray-400 text-sm mb-4">Desafía a un amigo por redes sociales. Mínimo 1 crédito (~$1).</p>
-                    <div class="flex flex-wrap gap-1.5 mb-5">
-                        <span class="text-xs px-2 py-1 rounded-full bg-orange-500/10 text-orange-400 border border-orange-500/20"><span data-mtr-icon="mobile" data-mtr-color="orange" data-mtr-inline data-mtr-size="13" style="margin-right:4px"></span>Redes</span>
-                        <span class="text-xs px-2 py-1 rounded-full bg-orange-500/10 text-orange-400 border border-orange-500/20"><span data-mtr-icon="chart" data-mtr-color="orange" data-mtr-inline data-mtr-size="13" style="margin-right:4px"></span>100+</span>
-                    </div>
-                    <button type="button" class="w-full py-2.5 rounded-lg text-sm font-bold bg-orange-500/15 border border-orange-500/30 text-orange-400 hover:bg-orange-500/25 transition-all cursor-pointer" onclick="selectMode('social')">Desafiar</button>
-                </div>
-
-                <div class="group p-6 rounded-2xl border border-purple-500/40 bg-gray-900/50 transition-all duration-300 card-glow-purple neon-border-purple cursor-pointer" style="order:5" onclick="selectMode('tournament')">
-                    <div class="mb-4"><span data-mtr-icon="trophy" data-mtr-color="purple"></span></div>
-                    <h3 class="text-lg font-bold text-white mb-2 group-hover:text-purple-400 transition-colors">Torneo</h3>
-                    <p class="text-gray-400 text-sm mb-4">Express cada 10 min por género. Grand Prix semanal con premio gordo.</p>
-                    <div class="flex flex-wrap gap-1.5 mb-5">
-                        <span class="text-xs px-2 py-1 rounded-full bg-purple-500/10 text-purple-400 border border-purple-500/20"><span data-mtr-icon="diamond" data-mtr-color="purple" data-mtr-inline data-mtr-size="13" style="margin-right:4px"></span>Premios</span>
-                        <span class="text-xs px-2 py-1 rounded-full bg-purple-500/10 text-purple-400 border border-purple-500/20"><span data-mtr-icon="medal" data-mtr-color="purple" data-mtr-inline data-mtr-size="13" style="margin-right:4px"></span>Ranking</span>
-                    </div>
-                    <button type="button" class="w-full py-2.5 rounded-lg text-sm font-bold bg-purple-500/15 border border-purple-500/30 text-purple-400 hover:bg-purple-500/25 transition-all cursor-pointer" onclick="selectMode('tournament')">Unirse al Torneo</button>
-                </div>
-
-                <div class="group p-6 rounded-2xl border border-cyan-500/40 bg-gray-900/50 transition-all duration-300 card-glow neon-border-cyan cursor-pointer" style="order:1" onclick="selectMode('practice')">
-                    <div class="mb-4"><span data-mtr-icon="target" data-mtr-color="cyan"></span></div>
-                    <h3 class="text-lg font-bold text-white mb-2 group-hover:text-cyan-400 transition-colors">Modo Práctica</h3>
-                    <p class="text-gray-400 text-sm mb-4">Sin riesgo contra la CPU. Perfecto para empezar.</p>
-                    <div class="flex flex-wrap gap-1.5 mb-5">
-                        <span class="text-xs px-2 py-1 rounded-full bg-cyan-500/10 text-cyan-400 border border-cyan-500/20"><span data-mtr-icon="gamepad" data-mtr-color="cyan" data-mtr-inline data-mtr-size="13" style="margin-right:4px"></span>Sin riesgo</span>
-                        <span class="text-xs px-2 py-1 rounded-full bg-cyan-500/10 text-cyan-400 border border-cyan-500/20"><span data-mtr-icon="book" data-mtr-color="cyan" data-mtr-inline data-mtr-size="13" style="margin-right:4px"></span>Aprende</span>
-                    </div>
-                    <button type="button" class="w-full py-2.5 rounded-lg text-sm font-bold bg-cyan-500/15 border border-cyan-500/30 text-cyan-400 hover:bg-cyan-500/25 transition-all cursor-pointer" onclick="selectMode('practice')">Practicar</button>
-                </div>
-
-            </div>
-        </section>
-
-        <!-- TOURNAMENT HUB -->
-        <section id="tournamentHub" class="hidden mb-16">
-            <div class="tournament-hub-hero">
-                <div class="relative z-10 flex flex-wrap items-center gap-4">
-                    <button type="button" onclick="backToModes()" class="px-4 py-2 rounded-lg text-sm font-medium bg-white/5 border border-white/10 text-gray-300 hover:text-white hover:border-white/20 transition cursor-pointer flex items-center gap-1.5"><span data-mtr-icon="arrowLeft" data-mtr-plain data-mtr-size="16"></span>Volver</button>
-                    <div>
-                        <h2 class="text-2xl sm:text-3xl font-black text-white tracking-tight flex items-center gap-2"><span data-mtr-icon="trophy" data-mtr-color="purple" data-mtr-badge-size="36" data-mtr-size="18"></span>Arena de Torneos</h2>
-                        <p class="text-gray-300 text-sm mt-1">14 géneros · Express cada 10 min · apuestas en <strong class="text-fuchsia-300">MTR créditos</strong> (fichas estables ~$1)</p>
-                    </div>
-                </div>
-            </div>
-            <div id="tournamentRotationBanner" class="mb-6 text-sm"></div>
-            <div id="tournamentGenreListView">
-                <div class="flex flex-wrap gap-2 mb-4">
-                    <label class="text-xs text-gray-500 sr-only" for="tournamentGenreFilter">Filtrar géneros</label>
-                    <select id="tournamentGenreFilter" class="rounded-lg bg-gray-900 border border-white/10 text-sm text-white px-3 py-2">
-                        <!-- Un <option> nativo no puede contener HTML/SVG --
-                             el ícono queda solo en el texto del <select>
-                             cerrado (limitación real del elemento, no un
-                             emoji sin reemplazar) -- se deja como texto. -->
-                        <option value="all">🌎 Todos los géneros</option>
-                        <option value="latino">🇱🇷 Latino</option>
-                        <option value="anglo">🇺🇸 Anglo</option>
-                    </select>
-                </div>
-                <div id="tournamentGenreGrid" class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3"></div>
-            </div>
-            <div id="tournamentGenreDetail" class="hidden">
-                <button type="button" id="tournamentGenreBackBtn" class="mb-4 text-sm text-purple-400 hover:text-purple-300">← Todos los géneros</button>
-                <h3 id="tournamentGenreTitle" class="text-xl font-bold text-white mb-4"></h3>
-                <div id="tournamentGenrePanels"></div>
-            </div>
-        </section>
-
-        <audio id="mtrBattleAudio" loop playsinline webkit-playsinline preload="auto" style="display:none" aria-hidden="true"></audio>
-
-        <!-- TOURNAMENT ARENA (lobby + bracket + resultados) -->
-        <section id="tournamentArena" class="hidden mb-16">
-            <div class="tournament-arena-header mb-6">
-                <div class="flex items-center gap-4 flex-1 min-w-0">
-                    <button type="button" onclick="TournamentBracket.close(); selectMode('tournament')" class="px-4 py-2 rounded-lg text-sm font-medium bg-white/5 border border-white/10 text-gray-300 hover:text-white cursor-pointer shrink-0">← Hub</button>
-                    <div class="min-w-0">
-                        <h2 class="text-2xl font-bold text-white truncate" id="tournamentArenaTitle">Torneo Express</h2>
-                        <p class="text-gray-400 text-sm" id="tournamentArenaSubtitle"></p>
-                    </div>
-                </div>
-                <button type="button" id="tournamentAbandonBtn" class="tournament-btn-danger hidden shrink-0"><span data-mtr-icon="circleX" data-mtr-plain data-mtr-size="14" style="display:inline-block;vertical-align:-2px;margin-right:4px"></span>Abandonar partida</button>
-            </div>
-            <div id="tournamentArenaStatus" class="tournament-arena-status mb-4 text-sm text-cyan-200"></div>
-            <div id="tournamentBracketGrid" class="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-6"></div>
-            <div id="tournamentResultPanel" class="hidden"></div>
-        </section>
-
-        <!-- Modal confirmación abandono torneo -->
-        <div id="tournamentAbandonModal" class="hidden fixed inset-0 z-[110] flex items-center justify-center p-4">
-            <div class="absolute inset-0 bg-black/75 backdrop-blur-sm"></div>
-            <div class="relative max-w-md w-full rounded-2xl border border-red-500/30 bg-gray-950 p-6 shadow-2xl shadow-red-900/20">
-                <h3 class="text-xl font-bold text-white mb-2">¿Abandonar la partida?</h3>
-                <p class="text-gray-300 text-sm leading-relaxed mb-4">
-                    Si abandonas el torneo <strong class="text-red-300">quedarás descalificado</strong> y
-                    <strong class="text-red-300">perderás automáticamente tu apuesta</strong> por retiro voluntario
-                    antes de que termine el torneo. <span class="text-gray-400">No hay reembolso de MTR créditos.</span>
-                </p>
-                <div class="flex flex-col sm:flex-row gap-3">
-                    <button type="button" id="tournamentAbandonCancelBtn" class="flex-1 py-2.5 rounded-lg text-sm font-semibold bg-white/5 border border-white/10 text-gray-300 hover:text-white">Seguir en el torneo</button>
-                    <button type="button" id="tournamentAbandonConfirmBtn" class="flex-1 py-2.5 rounded-lg text-sm font-bold bg-red-600/90 text-white hover:bg-red-600">Sí, abandonar y perder apuesta</button>
-                </div>
-            </div>
-        </div>
-
-        <!-- SONG SELECTION & BET -->
-        <section id="songSelection" class="hidden mb-16">
-            <div class="flex items-center gap-4 mb-8">
-                <button type="button" onclick="backToModes()" class="px-4 py-2 rounded-lg text-sm font-medium bg-white/5 border border-white/10 text-gray-300 hover:text-white hover:border-white/20 transition cursor-pointer">← Volver</button>
-                <div>
-                    <h2 class="text-2xl font-bold text-white" id="modeTitle">Modo Rápido</h2>
-                    <p class="text-gray-400 text-sm" id="socialChallengeSubtitle">Elige tu canción y realiza tu apuesta</p>
-                </div>
-            </div>
-            <!-- Desafíos sociales pendientes del usuario -- pedido explícito:
-                 si creás un desafío y salís de la app (se desloguea, pierde
-                 conexión, cierra sin querer), al volver antes se perdía todo
-                 rastro de que ese desafío existía. Ahora se re-lista solo al
-                 entrar a Desafío Social (ver loadMyPendingChallenges()). -->
-            <div id="myPendingChallenges" class="mb-6 hidden"></div>
-            <!-- Mismo criterio, para Sala Privada: si creaste una sala y
-                 salís de la app antes de que alguien se una, antes se perdía
-                 el código y el crédito quedaba descontado sin forma de
-                 recuperarlo (ver leavePrivateRoom(), ahora reembolsa). -->
-            <div id="myOpenPrivateRoom" class="mb-6 hidden"></div>
-            <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                <div class="p-6 rounded-2xl border border-white/5 bg-white/[0.02]">
-                    <h3 class="text-lg font-bold text-white mb-4 flex items-center gap-2"><span data-mtr-icon="music" data-mtr-color="cyan" data-mtr-inline data-mtr-size="18" style="margin:0"></span>Busca tu Canción</h3>
-                    <div class="flex gap-2 mb-6">
-                        <input type="text" id="songSearch" placeholder="Nombre de canción o artista..."
-                               class="flex-1 px-4 py-3 rounded-lg bg-black/40 border border-white/10 text-white placeholder-gray-500 text-sm focus:outline-none focus:border-cyan-500/50 focus:ring-1 focus:ring-cyan-500/20 transition">
-                        <button type="button" onclick="searchSong()" class="px-4 py-3 rounded-lg bg-cyan-500/15 border border-cyan-500/30 text-cyan-400 hover:bg-cyan-500/25 transition cursor-pointer"><span data-mtr-icon="search" data-mtr-plain data-mtr-size="18"></span></button>
-                    </div>
-                    <div id="searchResults" class="grid grid-cols-1 gap-2 max-h-96 overflow-y-auto neon-scrollbar pr-1"></div>
-                </div>
-
-                <div class="space-y-6">
-                    <div id="selectedSongCard" class="p-6 rounded-2xl border border-white/5 bg-white/[0.02] min-h-[120px] flex items-center justify-center transition-all duration-500">
-                        <div class="text-center text-gray-500">
-                            <div class="text-3xl mb-2 text-gray-500"><span data-mtr-icon="music" data-mtr-plain data-mtr-size="30"></span></div>
-                            <p>Selecciona una canción</p>
-                        </div>
-                    </div>
-                    <div class="p-6 rounded-2xl border border-white/5 bg-white/[0.02]">
-                        <h3 class="text-lg font-bold text-white mb-4 flex items-center gap-2"><span data-mtr-icon="coin" data-mtr-color="yellow" data-mtr-inline data-mtr-size="18" style="margin:0"></span>Tu Apuesta</h3>
-                        <div class="grid grid-cols-2 gap-3 text-sm text-gray-400 mb-4">
-                            <span class="hidden"><span id="balanceLabel">Tu MTR (on-chain)</span>: <strong id="onchainMtrBalance" class="text-white">--</strong></span>
-                            <span><span id="playableLabel">Fichas jugables</span>: <strong id="userBalance" class="text-white">0</strong> <span id="balanceUnit">MTR créditos</span> <span class="text-xs text-green-400 cursor-help" title="Estas fichas valen siempre $1 cada una. No fluctúan como el token MTR nativo. 1 crédito jugable ≈ $1 USD nominal (1:1)">✓</span></span>
-                            <span>Mínimo: <strong id="minBet" class="text-white">1</strong> crédito</span>
-                        </div>
-                        <input type="number" id="betAmount" placeholder="1" min="1"
-                               class="w-full px-4 py-3 rounded-lg bg-black/40 border border-white/10 text-white placeholder-gray-500 text-sm focus:outline-none focus:border-cyan-500/50 focus:ring-1 focus:ring-cyan-500/20 transition mb-3"
-                               oninput="if(typeof window.updateBetEligibility === 'function') window.updateBetEligibility();"
-                               onchange="if(typeof window.updateBetEligibility === 'function') window.updateBetEligibility();">
-                        <div class="flex gap-2 mb-5" id="betAmountButtons">
-                            <button type="button" onclick="window.quickBet(5)" class="bet-amount-btn flex-1 py-2 rounded-lg text-xs font-bold bg-white/5 border border-white/10 text-gray-300 hover:text-white hover:border-cyan-500/30 transition cursor-pointer" data-amount="5">5</button>
-                            <button type="button" onclick="window.quickBet(50)" class="bet-amount-btn flex-1 py-2 rounded-lg text-xs font-bold bg-white/5 border border-white/10 text-gray-300 hover:text-white hover:border-cyan-500/30 transition cursor-pointer" data-amount="50">50</button>
-                            <button type="button" onclick="window.quickBet(500)" class="bet-amount-btn flex-1 py-2 rounded-lg text-xs font-bold bg-white/5 border border-white/10 text-gray-300 hover:text-white hover:border-cyan-500/30 transition cursor-pointer" data-amount="500">500</button>
-                            <button type="button" onclick="window.quickBet(5000)" class="bet-amount-btn flex-1 py-2 rounded-lg text-xs font-bold bg-white/5 border border-white/10 text-gray-300 hover:text-white hover:border-cyan-500/30 transition cursor-pointer" data-amount="5000">5K</button>
-                        </div>
-                        <div id="actionButtons"></div>
-                    </div>
-                </div>
-            </div>
-        </section>
-
-        <!-- WAITING SCREEN -->
-        <section id="waitingScreen" class="hidden mb-16">
-            <div class="max-w-md mx-auto text-center py-20 px-8 rounded-2xl border border-cyan-500/15 bg-gray-900/50">
-                <div class="text-5xl mb-4 animate-pulse text-cyan-400"><span data-mtr-icon="clock" data-mtr-plain data-mtr-size="48"></span></div>
-                <h2 class="text-2xl font-bold text-white mb-2">Buscando Oponente...</h2>
-                <p class="text-gray-400 mb-6">Esto puede tomar unos segundos</p>
-                <button type="button" onclick="cancelSearch()" class="px-6 py-2.5 rounded-lg text-sm font-medium bg-white/5 border border-white/10 text-gray-300 hover:text-white hover:border-white/20 transition cursor-pointer">Cancelar Búsqueda</button>
-            </div>
-        </section>
-
-        <!-- ROOM SCREEN -->
-        <section id="roomScreen" class="hidden mb-16">
-            <div class="max-w-lg mx-auto p-8 rounded-2xl border border-fuchsia-500/40 bg-gray-900/50 neon-border-magenta">
-                <h2 class="text-2xl font-bold text-white mb-6 text-center flex items-center justify-center gap-2"><span data-mtr-icon="lock" data-mtr-color="magenta" data-mtr-inline data-mtr-size="20" style="margin:0"></span>Sala Privada</h2>
-                <!-- El link es la forma principal de invitar: un clic y quien lo abre
-                     entra directo a esta sala con el código ya cargado (ver ?room= en
-                     index.html). El código de abajo queda como respaldo para compartir
-                     hablado/por texto (WhatsApp de voz, decirlo en persona, etc.) -- no
-                     se elimina porque ese uso es real, pero deja de competir en
-                     protagonismo con el link. -->
-                <div class="mb-4">
-                    <label for="roomInviteLink" class="text-sm text-gray-400 mb-1 block">Compartí este link para invitar a alguien</label>
-                    <div class="flex gap-2">
-                        <input id="roomInviteLink" type="text" readonly class="flex-1 px-3 py-2 rounded-lg bg-black/40 border border-white/10 text-white text-sm">
-                        <button type="button" onclick="copyRoomLink()" class="px-4 py-2 rounded-lg text-sm font-bold bg-gradient-to-r from-cyan-500 to-fuchsia-500 text-white hover:opacity-90 shadow-lg shadow-cyan-500/20 transition cursor-pointer whitespace-nowrap"><span data-mtr-icon="copy" data-mtr-plain data-mtr-size="16" style="display:inline-flex;vertical-align:-3px;margin-right:4px"></span>Copiar y compartir</button>
-                    </div>
-                </div>
-                <div class="flex items-center justify-center gap-2 mb-6 text-sm">
-                    <span class="text-gray-500">o compartí el código:</span>
-                    <strong id="roomCode" class="font-mono text-fuchsia-400">XXXXX</strong>
-                    <button type="button" onclick="copyRoomCode()" class="px-1.5 py-0.5 rounded bg-white/5 text-gray-500 hover:text-white transition cursor-pointer"><span data-mtr-icon="copy" data-mtr-plain data-mtr-size="14"></span></button>
-                </div>
-                <div class="flex items-center justify-center gap-6 mb-6">
-                    <div id="player1Card" class="text-center">
-                        <div class="text-3xl mb-1 text-gray-400"><span data-mtr-icon="user" data-mtr-plain data-mtr-size="30"></span></div>
-                        <span class="text-sm text-gray-400">Esperando...</span>
-                    </div>
-                    <div class="text-2xl font-bold text-fuchsia-400">VS</div>
-                    <div id="player2Card" class="text-center">
-                        <div class="text-3xl mb-1 text-gray-400"><span data-mtr-icon="help" data-mtr-plain data-mtr-size="30"></span></div>
-                        <span class="text-sm text-gray-400">Esperando rival...</span>
-                    </div>
-                </div>
-                <button type="button" onclick="leaveRoom()" class="w-full py-2.5 rounded-lg text-sm font-medium bg-white/5 border border-white/10 text-gray-300 hover:text-white transition cursor-pointer">Salir de la Sala</button>
-            </div>
-        </section>
-
-        <!-- Vista previa de sala al "Unirse": muestra contra quién se compite y
-             cuánto pide de apuesta ANTES de cobrar nada. Si el saldo no
-             alcanza, se avisa acá con un link directo a recargar en vez de
-             dejar el botón "Unirse" gris sin explicación (como pasaba antes). -->
-        <section id="joinRoomPreview" class="hidden mb-16">
-            <div class="max-w-lg mx-auto p-8 rounded-2xl border border-fuchsia-500/40 bg-gray-900/50 neon-border-magenta">
-                <h2 class="text-2xl font-bold text-white mb-6 text-center flex items-center justify-center gap-2"><span data-mtr-icon="music" data-mtr-color="cyan" data-mtr-inline data-mtr-size="20" style="margin:0"></span>Sala Encontrada</h2>
-                <div class="flex items-center justify-center gap-6 mb-6">
-                    <div class="text-center">
-                        <div class="text-3xl mb-1 text-orange-400" id="joinPreviewOpponentAvatar"><span data-mtr-icon="mic" data-mtr-plain data-mtr-size="30"></span></div>
-                        <span class="text-sm text-gray-300 font-medium" id="joinPreviewSongName">-</span>
-                        <p class="text-xs text-gray-500" id="joinPreviewSongArtist">-</p>
-                    </div>
-                    <div class="text-2xl font-bold text-fuchsia-400">VS</div>
-                    <div class="text-center">
-                        <div class="text-3xl mb-1 text-gray-400" id="joinPreviewMyAvatar"><span data-mtr-icon="user" data-mtr-plain data-mtr-size="30"></span></div>
-                        <span class="text-sm text-gray-300 font-medium">Vos</span>
-                    </div>
-                </div>
-                <div id="joinPreviewAvatarPicker"></div>
-                <p class="text-center text-gray-400 text-sm mb-4">
-                    Apuesta pedida: <strong id="joinPreviewBet" class="text-fuchsia-400">-</strong> MTR créditos
-                </p>
-                <div id="joinPreviewInsufficientBox" class="hidden mb-4 p-4 rounded-lg bg-red-500/10 border border-red-500/20 text-center">
-                    <p class="text-red-300 text-sm mb-3" id="joinPreviewInsufficientText"></p>
-                    <button type="button" onclick="if (typeof window.openMercadoPagoModal === 'function') { window.openMercadoPagoModal(); } else { showToast('Buscá la sección de recarga (Mercado Pago) en la página principal.', 'info'); }" class="w-full py-2 rounded-lg text-sm font-bold bg-gradient-to-r from-cyan-500 to-fuchsia-500 text-white hover:opacity-90 transition cursor-pointer"><span data-mtr-icon="cash" data-mtr-plain data-mtr-size="14" style="display:inline-block;vertical-align:-2px;margin-right:4px"></span>Recargar saldo</button>
-                </div>
-                <div class="flex gap-3">
-                    <button type="button" onclick="cancelJoinRoomPreview()" class="flex-1 py-2.5 rounded-lg text-sm font-medium bg-white/5 border border-white/10 text-gray-300 hover:text-white transition cursor-pointer">Cancelar</button>
-                    <button type="button" onclick="confirmJoinRoom()" id="confirmJoinRoomBtn" class="flex-1 py-2.5 rounded-lg text-sm font-bold bg-gradient-to-r from-cyan-500 to-fuchsia-500 text-white hover:opacity-90 shadow-lg shadow-cyan-500/20 transition cursor-pointer"><span data-mtr-icon="swords" data-mtr-plain data-mtr-size="16" style="display:inline-flex;vertical-align:-3px;margin-right:4px"></span>Confirmar y Apostar</button>
-                </div>
-            </div>
-        </section>
-
-        <!-- CASHOUT CARD -->
-        <section id="cashoutSection" class="mb-16">
-            <div class="max-w-2xl mx-auto p-6 sm:p-8 rounded-2xl border border-fuchsia-500/40 bg-gradient-to-br from-gray-900/80 to-purple-950/30 neon-border-magenta">
-                <h3 class="text-xl font-bold text-fuchsia-400 neon-text-magenta mb-2">Retirar Créditos</h3>
-                <p class="text-gray-400 text-sm mb-4">Retira tus créditos nominales y recibe fondos en tu wallet (USD / stablecoin según red y pasarela). Conversión 1:1 respaldada por vault.</p>
-                
-                <!-- Explicación de Retiro -->
-                <div class="mb-6 p-4 rounded-lg bg-blue-500/10 border border-blue-500/20">
-                    <div class="flex items-start gap-2">
-                        <span data-mtr-icon="cash" data-mtr-color="cyan" data-mtr-inline data-mtr-size="18" style="margin:0"></span>
-                        <div class="flex-1">
-                            <p class="text-blue-400 text-sm font-semibold mb-1">Retiro a tu wallet</p>
-                            <p class="text-gray-300 text-xs">Tus créditos nominales se liquidan 1:1 en valor USD (menos fee). Fee de retiro: 5%.</p>
-                            <p class="text-gray-400 text-xs mt-1">Ejemplo: retiras 100 créditos → recibes ~95 USD netos</p>
-                        </div>
-                    </div>
-                </div>
-                <div class="flex flex-col sm:flex-row gap-3 mb-4">
-                    <input id="cashoutAmount" type="number" min="1" placeholder="Créditos nominales a retirar"
-                           class="flex-1 px-4 py-3 rounded-lg bg-black/40 border border-white/10 text-white placeholder-gray-500 text-sm focus:outline-none focus:border-fuchsia-500/50 focus:ring-1 focus:ring-fuchsia-500/20 transition">
-                    <button type="button" onclick="quoteCashout()" class="px-6 py-3 rounded-lg text-sm font-bold bg-fuchsia-500/15 border border-fuchsia-500/30 text-fuchsia-400 hover:bg-fuchsia-500/25 transition cursor-pointer whitespace-nowrap"><span data-mtr-icon="chart" data-mtr-color="cyan" data-mtr-inline data-mtr-size="14"></span>Cotizar retiro</button>
-                </div>
-                <div class="mb-4 p-3 rounded-lg bg-blue-500/10 border border-blue-500/20">
-                    <p class="text-blue-400 text-xs mb-2">
-                        <strong><span data-mtr-icon="bulb" data-mtr-color="yellow" data-mtr-inline data-mtr-size="14"></span>Conversión:</strong> Retiras créditos nominales → recibes fondos en stablecoin / USD según la pasarela
-                    </p>
-                    <p class="text-gray-300 text-xs">
-                        <strong>Ejemplo:</strong> 100 créditos nominales → ~95 USD netos (5% fee)
-                    </p>
-                    <p class="text-gray-400 text-xs mt-1">
-                        Los créditos nominales están respaldados 1:1 por liquidez del vault (dólares).
-                    </p>
-                </div>
-                <p id="cashoutQuote" class="text-gray-400 text-sm mb-4">Sin cotización aún.</p>
-                <button type="button" onclick="requestCashout()" class="px-6 py-3 rounded-lg text-sm font-bold bg-gradient-to-r from-fuchsia-500 to-purple-600 text-white hover:opacity-90 transition-all shadow-lg shadow-fuchsia-500/20 cursor-pointer"><span data-mtr-icon="cash" data-mtr-plain data-mtr-size="16" style="display:inline-flex;vertical-align:-3px;margin-right:4px"></span>Solicitar retiro</button>
-            </div>
-        </section>
-
-        <!-- VAULT INFO SECTION -->
-        <section id="vaultInfoSection" class="mb-16">
-            <div class="max-w-2xl mx-auto p-6 sm:p-8 rounded-2xl border border-cyan-500/40 bg-gray-900/50 neon-border-cyan">
-                <h3 class="text-xl font-bold text-white mb-4 flex items-center gap-2"><span data-mtr-icon="wallet" data-mtr-color="cyan" data-mtr-inline data-mtr-size="20" style="margin:0"></span>Vault de Liquidez</h3>
-                <p class="text-gray-400 text-sm mb-4">Transparencia total: Balance disponible para retiros</p>
-                
-                <div class="p-4 rounded-lg bg-cyan-500/10 border border-cyan-500/20 mb-4">
-                    <div class="flex items-center justify-between">
-                        <div>
-                            <div class="text-sm text-gray-400 mb-1">Balance del Vault (cripto, on-chain):</div>
-                            <div id="publicVaultBalance" class="text-2xl font-bold text-cyan-400">Cargando...</div>
-                            <div class="text-xs text-gray-500 mt-1">Liquidez en USDC real, verificable en Base</div>
-                        </div>
-                        <div class="text-4xl text-cyan-400"><span data-mtr-icon="wallet" data-mtr-plain data-mtr-size="36"></span></div>
-                    </div>
-                </div>
-
-                <!-- Saldo ESTIMADO de la cuenta real de Mercado Pago (pesos colombianos).
-                     A propósito NO se llama "vault": toda la plata en pesos ya está
-                     junta en una única cuenta real, no hay una wallet separada que
-                     fondear como con cripto. Ver GET /api/vault/balance-cop-estimate
-                     en server-auto.js para la lógica completa y sus límites. -->
-                <div class="p-4 rounded-lg bg-yellow-500/10 border border-yellow-500/20 mb-4">
-                    <div class="flex items-center justify-between">
-                        <div>
-                            <div class="text-sm text-gray-400 mb-1">Saldo estimado en pesos (Mercado Pago):</div>
-                            <div id="publicVaultBalanceCop" class="text-2xl font-bold text-yellow-400">Cargando...</div>
-                            <div class="text-xs text-gray-500 mt-1">Estimado según nuestros registros — no verificable en vivo (Mercado Pago no ofrece saldo en tiempo real vía API)</div>
-                        </div>
-                        <div class="text-4xl">🇨🇴</div>
-                    </div>
-                </div>
-
-                <div class="text-xs text-gray-500 space-y-1">
-                    <div>✓ El vault cripto se alimenta con fees: 5% depósito, 2% apuesta, 5% retiro</div>
-                    <div>✓ Todos los retiros se pagan desde el vault/saldo que corresponda a su moneda</div>
-                    <div>✓ Balance del vault cripto verificado en tiempo real contra la blockchain</div>
-                    <a id="publicVaultLink" href="#" target="_blank" class="text-cyan-400 hover:text-cyan-300 underline inline-block mt-2">Ver vault en BaseScan</a>
-                </div>
-            </div>
-        </section>
-
-        <!-- CONTACT -->
-        <section id="contactSection" class="mb-16">
-            <div class="max-w-xl mx-auto p-6 sm:p-8 rounded-2xl border border-white/5 bg-white/[0.02]">
-                <h3 class="text-xl font-bold text-white mb-2">Contacto</h3>
-                <p class="text-gray-400 text-sm mb-6">¿Dudas? Escríbenos a <a href="mailto:support@musictokenring.xyz" class="text-cyan-400 hover:text-cyan-300">support@musictokenring.xyz</a></p>
-                <form class="space-y-4" onsubmit="submitContactForm(event)">
-                    <div>
-                        <label for="contactName" class="text-sm text-gray-400 mb-1 block">Nombre</label>
-                        <input type="text" id="contactName" placeholder="Tu nombre" required class="w-full px-4 py-3 rounded-lg bg-black/40 border border-white/10 text-white placeholder-gray-500 text-sm focus:outline-none focus:border-cyan-500/50 transition">
-                    </div>
-                    <div>
-                        <label for="contactEmail" class="text-sm text-gray-400 mb-1 block">Email</label>
-                        <input type="email" id="contactEmail" placeholder="tu@email.com" required class="w-full px-4 py-3 rounded-lg bg-black/40 border border-white/10 text-white placeholder-gray-500 text-sm focus:outline-none focus:border-cyan-500/50 transition">
-                    </div>
-                    <div>
-                        <label for="contactMessage" class="text-sm text-gray-400 mb-1 block">Mensaje</label>
-                        <textarea id="contactMessage" rows="3" placeholder="Cuéntanos en qué podemos ayudarte" required class="w-full px-4 py-3 rounded-lg bg-black/40 border border-white/10 text-white placeholder-gray-500 text-sm focus:outline-none focus:border-cyan-500/50 transition resize-none"></textarea>
-                    </div>
-                    <button type="submit" class="px-6 py-3 rounded-lg text-sm font-bold bg-cyan-500/15 border border-cyan-500/30 text-cyan-400 hover:bg-cyan-500/25 transition cursor-pointer">Enviar mensaje</button>
-                </form>
-            </div>
-        </section>
-
-    </main>
 
     <!-- ==================== FOOTER ==================== -->
     <footer class="border-t border-white/5 mt-8">
@@ -9090,12 +9093,33 @@
            (batalla en vivo, resultado, arena de torneo automática). */
         #mtr2Nav { display:none; }
         body.mtr2-nav-active #mtr2Nav { display:flex; }
+        /* En los momentos enfocados (batalla en vivo, resultado, arena de
+           torneo automática) el layout viejo vuelve a mostrar <main> completo
+           -- lo cual traía de vuelta el dashboard "Wall Street of Beats", el
+           bloque de depósito, retiro, bóveda y contacto encima/debajo de la
+           batalla (viven ahí todo el tiempo, no se ocultan solos). En mobile
+           eso hacía que la pantalla de batalla no se sintiera "sola" en su
+           propio viewport (pedido en vivo: se veía descentrada). Se ocultan
+           con esta clase mientras dura el momento enfocado; vuelven solos al
+           terminar (mismo botón "Jugar de nuevo"/back que ya restaura todo). */
+        body.mtr2-focus-active #streamDashboard,
+        body.mtr2-focus-active #depositSectionMain,
+        body.mtr2-focus-active #loginWall,
+        body.mtr2-focus-active #cashoutSection,
+        body.mtr2-focus-active #vaultInfoSection,
+        body.mtr2-focus-active #contactSection { display:none !important; }
         @media (min-width:640px) {
             #mtr2Shell { display:none !important; }
             #mtr2Nav { display:none !important; }
             body.mtr2-active > header,
             body.mtr2-active > main,
             body.mtr2-active > footer { display:block !important; }
+            body.mtr2-focus-active #streamDashboard,
+            body.mtr2-focus-active #depositSectionMain,
+            body.mtr2-focus-active #loginWall,
+            body.mtr2-focus-active #cashoutSection,
+            body.mtr2-focus-active #vaultInfoSection,
+            body.mtr2-focus-active #contactSection { display:block !important; }
         }
 
         #mtr2Shell { position:fixed; inset:0; z-index:400; font-family:'Inter',system-ui,sans-serif; }
@@ -9576,6 +9600,23 @@
                 return true;
             }
 
+            // Mismo criterio "momento enfocado" que arriba (batalla en vivo,
+            // resultado, arena de torneo), pero para decidir si además hay
+            // que ocultar el resto de <main> (dashboard, depósito, retiro,
+            // bóveda, contacto) -- ver comentario en mtr2-styles. A
+            // diferencia de mtr2ShouldNavBeVisible(), esta devuelve true
+            // (ocultar) precisamente cuando ESTAMOS en uno de esos momentos.
+            function mtr2ShouldFocusMain() {
+                if (window.innerWidth >= 640) return false;
+                var loginWall = document.getElementById('loginWall');
+                if (!loginWall || !loginWall.classList.contains('hidden')) return false;
+                for (var i = 0; i < MTR2_NAV_HIDDEN_IDS.length; i++) {
+                    var el = document.getElementById(MTR2_NAV_HIDDEN_IDS[i]);
+                    if (el && !el.classList.contains('hidden')) return true;
+                }
+                return false;
+            }
+
             // Salida segura de cualquier paso intermedio en curso, antes de
             // saltar a otra pestaña desde el menú de abajo -- reusa las
             // mismas funciones de "cancelar/salir" que ya tiene cada
@@ -9629,6 +9670,7 @@
                 var active = mtr2ShouldBeActive();
                 document.body.classList.toggle('mtr2-active', active);
                 document.body.classList.toggle('mtr2-nav-active', mtr2ShouldNavBeVisible());
+                document.body.classList.toggle('mtr2-focus-active', mtr2ShouldFocusMain());
                 if (active) {
                     mtr2MoveToShell();
                     if (!mtr2WasActive) window.mtr2ShowView(mtr2CurrentView);

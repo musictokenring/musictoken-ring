@@ -4100,6 +4100,22 @@ const GameEngine = {
             self.drawBattleFrame(canvas);
         }
         loop();
+        // La resolución interna del canvas se fija UNA sola vez arriba; si el
+        // viewport cambia después (rotar el teléfono, la barra de Safari
+        // colapsando/expandiéndose, apertura de teclado) el buffer queda
+        // desincronizado del tamaño visual real y lo dibujado (ondas,
+        // partículas) se ve corrido respecto al marco -- se re-mide mientras
+        // la batalla siga viva. Limpiado en destroyBattleCanvas().
+        this._battleCanvasResizeHandler = function () {
+            if (!canvas.isConnected) return;
+            var w = wrap.offsetWidth, h = wrap.offsetHeight;
+            if (w > 0 && h > 0 && (canvas.width !== w || canvas.height !== h)) {
+                canvas.width = w;
+                canvas.height = h;
+            }
+        };
+        window.addEventListener('resize', this._battleCanvasResizeHandler);
+        window.addEventListener('orientationchange', this._battleCanvasResizeHandler);
     },
 
     drawBattleFrame(canvas) {
@@ -4190,6 +4206,11 @@ const GameEngine = {
         this.battleAnimFrameId = null;
         this.battleAnimState = null;
         this.battleParticles = [];
+        if (this._battleCanvasResizeHandler) {
+            window.removeEventListener('resize', this._battleCanvasResizeHandler);
+            window.removeEventListener('orientationchange', this._battleCanvasResizeHandler);
+            this._battleCanvasResizeHandler = null;
+        }
     },
     
     async runBattle(match) {
