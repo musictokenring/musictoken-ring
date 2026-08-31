@@ -805,6 +805,9 @@ const GameEngine = {
     // ==========================================
     
     async joinQuickMatch(song, betAmount) {
+        // Recordado para el fallback a CPU si el matchmaking humano de más
+        // abajo se queda sin encontrar rival (ver startQuickCpuFallback).
+        this._pendingQuickSong = song;
         // Validate minimum bet (MIN_BET_AMOUNT créditos)
         const normalizedBet = Math.max(this.minBet, Math.round(betAmount || this.minBet));
         if (normalizedBet < this.minBet) {
@@ -978,7 +981,20 @@ const GameEngine = {
             
             if (attempts > maxAttempts) {
                 clearInterval(this.matchmakingInterval);
-                await this.cancelMatchmaking();
+                await this.leaveMatchmakingQueue();
+                document.getElementById('waitingScreen').classList.add('hidden');
+                const fallbackSong = this._pendingQuickSong;
+                this._pendingQuickSong = null;
+                if (fallbackSong) {
+                    await this.startQuickCpuFallback(fallbackSong);
+                } else {
+                    // No debería pasar (se guarda al entrar a joinQuickMatch),
+                    // pero sin la canción no hay con qué armar la batalla CPU
+                    // -- se cae al comportamiento anterior antes que dejar la
+                    // pantalla de espera colgada sin explicación.
+                    document.getElementById('songSelection').classList.remove('hidden');
+                    showToast('Búsqueda cancelada', 'info');
+                }
                 return;
             }
             
@@ -1000,21 +1016,111 @@ const GameEngine = {
         }, 1000);
     },
     
-    async cancelMatchmaking() {
+    // Saca al usuario de matchmaking_queue -- compartido entre el botón
+    // "Cancelar búsqueda" (cancelMatchmaking, abajo) y el timeout de 60s de
+    // startMatchmakingPolling (que en vez de cancelar sin más, sigue con
+    // startQuickCpuFallback). Nunca hay crédito que reembolsar acá: el
+    // crédito real recién se descuenta al formarse un match humano.
+    async leaveMatchmakingQueue() {
         clearInterval(this.matchmakingInterval);
-        
         const { data: { session } } = await supabaseClient.auth.getSession();
-        
-        // Remover de cola
+        if (!session) return;
         await supabaseClient
             .from('matchmaking_queue')
             .delete()
             .eq('user_id', session.user.id);
-        
+    },
+
+    async cancelMatchmaking() {
+        await this.leaveMatchmakingQueue();
+        this._pendingQuickSong = null;
+
         document.getElementById('waitingScreen').classList.add('hidden');
         document.getElementById('songSelection').classList.remove('hidden');
 
         showToast('Búsqueda cancelada', 'info');
+    },
+
+    // Pedido real del dueño: a diferencia de Práctica (siempre CPU), Modo
+    // Rápido intenta primero un rival HUMANO real (matchmaking_queue,
+    // arriba). Si nadie apareció dentro del tiempo de búsqueda, en vez de
+    // dejar al usuario con la búsqueda simplemente cancelada, entra la CPU
+    // a jugar una batalla amistosa -- Modo Rápido sigue prometiendo una
+    // batalla inmediata. CERO apuesta real de por medio: player1_bet y
+    // player2_bet quedan en 0 (hasSufficientCredits() de más arriba solo
+    // VERIFICA saldo, nunca lo descuenta -- el crédito real recién se
+    // resta al formarse un match humano de verdad en joinQuickMatch/
+    // createMatch, que acá nunca se llega a invocar). Se marca
+    // is_cpu_fallback para que endPracticeLocally/showVictoryScreen lo
+    // avisen con claridad en vez de mostrar el lenguaje de "saldo demo"
+    // de Práctica (esas dos son las únicas que tocan el balance, y solo
+    // lo hacen sobre this.practiceDemoBalance -- una variable aparte que
+    // nunca es el saldo real -- así que los créditos reales del jugador
+    // quedan intactos pase lo que pase acá).
+    async startQuickCpuFallback(userSong) {
+        showToast(
+            'No encontramos rival humano a tiempo. Jugás una batalla amistosa contra la CPU — no se descuenta tu apuesta.',
+            'info',
+            8000
+        );
+
+        let cpuSong;
+        try {
+            cpuSong = await Promise.race([
+                this.fetchCpuOpponentByElo(userSong),
+                new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout obteniendo canción CPU')), 20000))
+            ]);
+            if (!cpuSong || !cpuSong.id) throw new Error('CPU song fetch returned invalid result');
+        } catch (cpuError) {
+            console.warn('[startQuickCpuFallback] Error obteniendo canción CPU, usando fallback:', cpuError.message);
+            cpuSong = {
+                id: `cpu_fallback_${Date.now()}`,
+                name: 'Rival Generado',
+                artist: 'CPU Challenger',
+                image: userSong.image || 'https://via.placeholder.com/500x500.png?text=CPU+Rival',
+                preview: userSong.preview || ''
+            };
+        }
+
+        const { data: { session } } = await supabaseClient.auth.getSession().catch(() => ({ data: {} }));
+        const rowBase = {
+            match_type: 'quick',
+            player1_song_id: userSong.id,
+            player1_song_name: userSong.name,
+            player1_song_artist: userSong.artist,
+            player1_song_image: userSong.image,
+            player1_song_preview: userSong.preview,
+            player1_bet: 0,
+            player2_song_id: cpuSong.id,
+            player2_song_name: cpuSong.name,
+            player2_song_artist: cpuSong.artist,
+            player2_song_image: cpuSong.image,
+            player2_song_preview: cpuSong.preview,
+            player2_bet: 0,
+            total_pot: 0,
+            status: 'ready'
+        };
+
+        let match = null;
+        if (session) {
+            try {
+                const { data, error } = await supabaseClient
+                    .from('matches')
+                    .insert([{ ...rowBase, player1_id: session.user.id }])
+                    .select()
+                    .single();
+                if (error) throw error;
+                match = data;
+            } catch (dbError) {
+                console.warn('[startQuickCpuFallback] Supabase insert failed, using local mode:', dbError.message);
+            }
+        }
+        if (!match) {
+            match = { id: 'local_quick_cpu_' + Date.now(), player1_id: session?.user?.id || 'local_user', ...rowBase };
+        }
+        match.is_cpu_fallback = true;
+
+        await this.startLocalPractice(match);
     },
 
     // Fila propia en matchmaking_queue, si quedó alguna de una búsqueda que
@@ -2772,6 +2878,12 @@ const GameEngine = {
     async endPracticeLocally(match, plays1, plays2) {
         var winner = plays1 > plays2 ? 1 : 2;
         var userWon = winner === 1;
+        // Modo Rápido sin rival humano a tiempo (ver startQuickCpuFallback):
+        // esta misma función corre la batalla local contra CPU, pero acá NO
+        // es una práctica de verdad -- no hay que mostrar lenguaje de
+        // "saldo demo" ni tocar practiceDemoBalance, que es la variable de
+        // Práctica y no tiene nada que ver con esta batalla amistosa.
+        var isFriendlyFallback = match.is_cpu_fallback === true;
         this.stopUserSong();
 
         if (this.battleAnimState) {
@@ -2795,13 +2907,14 @@ const GameEngine = {
             const textSize = isMobile ? 'text-base sm:text-lg' : 'text-xl sm:text-2xl';
             const paddingSize = isMobile ? 'py-3 px-3' : 'py-4 px-6';
             
+            var friendlyNote = 'Batalla amistosa · sin apuesta — tus créditos no cambiaron';
             statusEl.innerHTML = userWon
                 ? `<div class="inline-block ${paddingSize} rounded-2xl bg-gradient-to-r from-cyan-500/20 to-cyan-600/20 border-2 border-cyan-400/50 shadow-2xl animate-pulse">
                     <span class="${textSize} text-cyan-300 font-black drop-shadow-lg inline-flex items-center gap-2" style="text-shadow: 0 0 20px rgba(0,243,255,0.8);">
                         ${svgIcon('trophy', 24)} ¡VICTORIA!
                     </span>
                     <div class="mt-2 ${isMobile ? 'text-sm' : 'text-base'} text-cyan-200 font-bold">
-                        Tu canción gana +50 MTR
+                        ${isFriendlyFallback ? friendlyNote : 'Tu canción gana +50 MTR'}
                     </div>
                    </div>`
                 : `<div class="inline-block ${paddingSize} rounded-2xl bg-gradient-to-r from-red-500/20 to-red-600/20 border-2 border-red-400/50 shadow-2xl">
@@ -2809,7 +2922,7 @@ const GameEngine = {
                         ${svgIcon('circleX', 22)} Derrota
                     </span>
                     <div class="mt-2 ${isMobile ? 'text-sm' : 'text-base'} text-red-200 font-bold">
-                        CPU gana esta vez
+                        ${isFriendlyFallback ? friendlyNote : 'CPU gana esta vez'}
                     </div>
                    </div>`;
 
@@ -2893,8 +3006,8 @@ const GameEngine = {
         // Calcular ganancias correctamente: pozo total - fee 2%
         const totalPot = match.total_pot || (match.player1_bet * 2);
         const payouts = this.calculateMatchPayouts(totalPot);
-        
-        if (userWon) {
+
+        if (userWon && !isFriendlyFallback) {
             // Agregar ganancias calculadas (pozo - fee) al balance de práctica
             const winnings = payouts.winnerPayout;
             this.setPracticeDemoBalance(this.practiceDemoBalance + winnings);
@@ -4581,6 +4694,12 @@ const GameEngine = {
         var winnerImg = winner === 1 ? match.player1_song_image : match.player2_song_image;
         var prize = userWon ? payouts.winnerPayout : 0;
         var isPractice = match.match_type === 'practice';
+        // Modo Rápido sin rival humano a tiempo (ver startQuickCpuFallback):
+        // pot=0 así que prize siempre da 0 acá, incluso ganando -- sin este
+        // aviso, una victoria mostraba "Mejor suerte la próxima vez" (el
+        // mensaje de DERROTA) por error. Se avisa claro que fue amistosa,
+        // en vez de mostrar +0 MTR o el mensaje de perder al ganar.
+        var isFriendlyFallback = match.is_cpu_fallback === true;
         var accentColor = userWon ? 'cyan' : 'fuchsia';
         var glowClass = userWon ? 'shadow-[0_0_40px_rgba(0,243,255,0.4)]' : 'shadow-[0_0_40px_rgba(239,68,68,0.3)]';
 
@@ -4594,8 +4713,10 @@ const GameEngine = {
             '<img src="' + winnerImg + '" class="w-16 h-16 rounded-full border-2 border-' + accentColor + '-400 ' + glowClass + '">' +
             '<h2 class="text-xl sm:text-2xl font-bold text-white">' + winnerName + '</h2>' +
             '</div>' +
-            (prize > 0 ? '<p class="text-3xl sm:text-4xl font-black text-cyan-400 mb-6" style="text-shadow:0 0 20px rgba(0,243,255,0.5);animation:pulse 1s ease-in-out infinite">+' + prize + ' MTR</p>' : '<p class="text-lg text-gray-400 mb-6">Mejor suerte la próxima vez</p>') +
-            (!isPractice && payouts.platformFee ? '<div class="text-sm text-gray-500 mb-6 space-y-1"><p>Comisión: ' + payouts.platformFee + ' MTR</p><p>Pago ganador: ' + payouts.winnerPayout + ' MTR</p></div>' : '') +
+            (isFriendlyFallback
+                ? '<p class="text-base text-gray-300 mb-6">Batalla amistosa contra la CPU · no encontramos rival humano a tiempo · tus créditos no cambiaron</p>'
+                : (prize > 0 ? '<p class="text-3xl sm:text-4xl font-black text-cyan-400 mb-6" style="text-shadow:0 0 20px rgba(0,243,255,0.5);animation:pulse 1s ease-in-out infinite">+' + prize + ' MTR</p>' : '<p class="text-lg text-gray-400 mb-6">Mejor suerte la próxima vez</p>')) +
+            (!isPractice && !isFriendlyFallback && payouts.platformFee ? '<div class="text-sm text-gray-500 mb-6 space-y-1"><p>Comisión: ' + payouts.platformFee + ' MTR</p><p>Pago ganador: ' + payouts.winnerPayout + ' MTR</p></div>' : '') +
             (this.lastPrizeTxHash ? '<p class="text-sm text-cyan-400 mb-4">Tx: <a href="https://basescan.org/tx/' + this.lastPrizeTxHash + '" target="_blank" class="underline">' + this.lastPrizeTxHash.slice(0, 14) + '...</a></p>' : '') +
             '<button onclick="' + (isPractice ? 'GameEngine.goToPracticeSelection()' : 'location.reload()') + '" class="px-8 py-3 rounded-xl text-lg font-bold bg-gradient-to-r from-cyan-500 to-fuchsia-500 text-white hover:opacity-90 transition-all shadow-lg shadow-cyan-500/25 cursor-pointer">' +
             (isPractice ? svgIcon('target', 16) + 'Continuar en práctica' : svgIcon('refresh', 16) + 'Jugar de Nuevo') +
