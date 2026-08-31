@@ -5102,6 +5102,55 @@
         // en tournament-service.js::joinTournament(). Devuelve true si debe
         // seguir con esta canción, false si el usuario prefiere buscar otra
         // (o si quedó bloqueada).
+        // Confirm nativo (window.confirm) reemplazado acá: BUG real -- varios
+        // navegadores in-app (WhatsApp, Instagram, algunas wallets móviles)
+        // no soportan diálogos nativos bloqueantes y devuelven false sin
+        // mostrar nada, o los renderizan rotos -- el usuario nunca ve la
+        // pregunta y la selección de canción queda "atascada" sin avisar por
+        // qué. Este modal propio (mismo z-index alto que el resto de
+        // modales de esta sesión, siempre por encima del shell mobile) sí
+        // funciona en cualquier navegador.
+        window.mtrConfirmDialog = function (message, opts) {
+            opts = opts || {};
+            return new Promise(function (resolve) {
+                var modal = document.getElementById('mtrConfirmModal');
+                if (!modal) {
+                    modal = document.createElement('div');
+                    modal.id = 'mtrConfirmModal';
+                    modal.className = 'fixed inset-0 z-[10000] hidden items-center justify-center p-4 bg-black/75 backdrop-blur-sm';
+                    modal.innerHTML =
+                        '<div class="w-full max-w-sm rounded-2xl border border-cyan-500/25 bg-gray-950 shadow-2xl p-5">' +
+                            '<p id="mtrConfirmMsg" class="text-sm text-gray-200 leading-relaxed whitespace-pre-line mb-5"></p>' +
+                            '<div class="flex gap-3">' +
+                                '<button type="button" id="mtrConfirmCancelBtn" class="flex-1 py-2.5 rounded-lg text-sm font-bold bg-white/5 border border-white/10 text-gray-300 hover:text-white transition cursor-pointer">Cancelar</button>' +
+                                '<button type="button" id="mtrConfirmOkBtn" class="flex-1 py-2.5 rounded-lg text-sm font-bold bg-gradient-to-r from-cyan-600 to-fuchsia-600 text-white hover:opacity-90 transition cursor-pointer">Continuar</button>' +
+                            '</div>' +
+                        '</div>';
+                    document.body.appendChild(modal);
+                }
+                var msgEl = document.getElementById('mtrConfirmMsg');
+                var okBtn = document.getElementById('mtrConfirmOkBtn');
+                var cancelBtn = document.getElementById('mtrConfirmCancelBtn');
+                msgEl.textContent = message;
+                okBtn.textContent = opts.okLabel || 'Continuar';
+                cancelBtn.textContent = opts.cancelLabel || 'Cancelar';
+
+                function cleanup(result) {
+                    modal.classList.add('hidden');
+                    modal.classList.remove('flex');
+                    okBtn.removeEventListener('click', onOk);
+                    cancelBtn.removeEventListener('click', onCancel);
+                    resolve(result);
+                }
+                function onOk() { cleanup(true); }
+                function onCancel() { cleanup(false); }
+                okBtn.addEventListener('click', onOk);
+                cancelBtn.addEventListener('click', onCancel);
+                modal.classList.remove('hidden');
+                modal.classList.add('flex');
+            });
+        };
+
         async function checkTournamentSongGenre(song) {
             var enrollment = window.tournamentEnrollment;
             if (!enrollment || !enrollment.genreLabel || !song || !song.artist || !song.name) {
@@ -5130,12 +5179,13 @@
             }
 
             if (result.verdict === 'warn') {
-                var continuar = window.confirm(
+                var continuar = await window.mtrConfirmDialog(
                     `"${song.name}" de ${song.artist} tiene ${result.confidence}% de coincidencia con ` +
                     `el género "${enrollment.genreLabel}": ${result.reason}\n\n` +
                     `Podés seguir con esta canción, pero si ganás el torneo con ella la IA te descalifica ` +
                     `automáticamente y se les devuelve la apuesta a los demás jugadores.\n\n` +
-                    `¿Continuar con esta canción de todos modos? (Cancelar para elegir otra)`
+                    `¿Continuar con esta canción de todos modos?`,
+                    { okLabel: 'Continuar de todos modos', cancelLabel: 'Elegir otra canción' }
                 );
                 if (!continuar) return false;
             }
