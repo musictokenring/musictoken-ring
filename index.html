@@ -2310,7 +2310,13 @@
         .profile-battle-row-meta { display: flex; flex-direction: column; align-items: flex-end; gap: 0.2rem; flex-shrink: 0; }
         #profileBattleHistory { max-height: 16rem; overflow-y: auto; display: flex; flex-direction: column; gap: 0.5rem; }
     </style>
-    <div id="profileModal" class="hidden fixed inset-0 z-[100] flex items-center justify-center p-4">
+    <!-- z-[10000], no z-[100]: alcanzable desde "Historial de batallas" en
+         la pestaña Perfil del shell mobile nuevo (mtr2), que vive en
+         #mtr2Shell con z-index:400 -- con z-100 este modal quedaba
+         renderizado DEBAJO del shell (invisible, aunque el JS sí lo abría
+         bien) -- mismo patrón de bug ya visto y arreglado en los modales de
+         depósito/retiro. -->
+    <div id="profileModal" class="hidden fixed inset-0 z-[10000] flex items-center justify-center p-4">
         <div class="modal-overlay" onclick="closeProfileModal()"></div>
         <div class="modal-box max-w-lg">
             <button type="button" onclick="closeProfileModal()" class="absolute top-4 right-4 text-gray-400 hover:text-white text-2xl leading-none cursor-pointer">×</button>
@@ -7357,7 +7363,12 @@
                 // Crear el modal si no existe
                 modal = document.createElement('div');
                 modal.id = 'mobileWalletModal';
-                modal.className = 'fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm';
+                // z-[10000], no z-50: alcanzable desde "Conectar wallet" en
+                // la pestaña Perfil del shell mobile nuevo (mtr2Shell,
+                // z-index:400) -- mismo bug que profileModal, ver comentario
+                // ahí. Con z-50 este modal quedaba invisible detrás del
+                // shell aunque sí se creaba y mostraba correctamente.
+                modal.className = 'fixed inset-0 z-[10000] flex items-center justify-center bg-black/80 backdrop-blur-sm';
                 modal.innerHTML = `
                     <div class="bg-gray-900 border border-cyan-500/30 rounded-xl p-6 max-w-sm w-full mx-4 shadow-2xl">
                         <div class="flex justify-between items-center mb-4">
@@ -9568,7 +9579,17 @@
             // página (se crean recién al empezar/terminar una batalla) --
             // afecta a TODOS los modos (Rápido, Sala Privada, Torneo,
             // Desafío Social), no solo Práctica.
-            var MTR2_IN_PROGRESS_IDS = ['songSelection', 'waitingScreen', 'roomScreen', 'joinRoomPreview', 'tournamentArena', 'battleArena', 'victorySection'];
+            // 'socialChallengeShare' se agregó acá por el mismo motivo que
+            // battleArena/victorySection arriba: BUG real reportado en vivo
+            // -- al crear un Desafío Social, la pantalla "Desafío Creado"
+            // (link + botones Copiar/WhatsApp/Twitter/Facebook/Telegram) se
+            // crea recién ahí (game-engine.js, showSocialChallengeShareUI) y
+            // oculta songSelection justo antes -- ningún id vigilado seguía
+            // visible, así que el shell se reactivaba y tapaba esa pantalla
+            // con <main> completo. Los botones "no hacían nada" porque en
+            // realidad SÍ funcionaban, pero la pantalla entera quedaba
+            // invisible detrás del shell.
+            var MTR2_IN_PROGRESS_IDS = ['songSelection', 'waitingScreen', 'roomScreen', 'joinRoomPreview', 'tournamentArena', 'battleArena', 'victorySection', 'socialChallengeShare'];
             function mtr2ShouldBeActive() {
                 if (window.innerWidth >= 640) return false;
                 var loginWall = document.getElementById('loginWall');

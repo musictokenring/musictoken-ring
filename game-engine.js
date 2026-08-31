@@ -1331,6 +1331,13 @@ const GameEngine = {
         `;
 
         shareContainer.classList.remove('hidden');
+        // Igual que battleArena/victorySection: este elemento no existe al
+        // cargar la página (se crea recién acá), así que el
+        // MutationObserver del shell mobile no lo detecta solo -- sin este
+        // empujón, songSelection ya se ocultó arriba y el shell podía tapar
+        // esta pantalla hasta 1s (próximo tick del interval) antes de que
+        // el usuario llegara siquiera a verla.
+        if (typeof window.mtr2Sync === 'function') window.mtr2Sync();
         if (typeof window.scrollToSection === 'function') {
             window.scrollToSection('socialChallengeShare', { delay: 100 });
         }
