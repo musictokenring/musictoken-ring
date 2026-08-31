@@ -9165,6 +9165,18 @@
            (batalla en vivo, resultado, arena de torneo automática). */
         #mtr2Nav { display:none; }
         body.mtr2-nav-active #mtr2Nav { display:flex; }
+        /* BUG real reportado en vivo (Modo Práctica, mobile): el botón
+           "Iniciar Práctica" (y los botones rápidos de apuesta justo arriba)
+           quedaban tapados DEBAJO del menú de abajo -- confirmado midiendo
+           en el navegador: el nav mide ~72px de alto (más el recorte del
+           notch en iPhone real, vía env(safe-area-inset-bottom)) y <main>
+           solo reservaba 80px fijos al final (pb-20), sin enterarse de que
+           el nav flota encima con position:fixed. songSelection es la única
+           sección visible de <main> mientras se elige modo/canción/apuesta
+           (las demás quedan display:none), así que este padding extra cae
+           justo después de su contenido real -- afecta a Práctica, Rápido,
+           Privada, Social y Torneo por igual, no solo a Práctica. */
+        body.mtr2-nav-active > main { padding-bottom: 200px !important; }
         /* En los momentos enfocados (batalla en vivo, resultado, arena de
            torneo automática) el layout viejo vuelve a mostrar <main> completo
            -- lo cual traía de vuelta el dashboard "Wall Street of Beats", el
