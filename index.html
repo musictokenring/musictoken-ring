@@ -1073,7 +1073,7 @@
         <!-- GAME MODE SELECTOR (shown when logged in) -->
         <section id="modeSelector" class="hidden mb-16">
             <div class="text-center mb-10">
-                <h2 class="text-3xl font-extrabold text-white mb-2">Elige tu Modo de Juego</h2>
+                <h2 class="mtr2-h text-3xl font-extrabold text-white mb-2">Elige tu Modo de Juego</h2>
                 <p class="text-gray-400">Selecciona cómo quieres competir</p>
             </div>
             <!-- Orden visual vía CSS "order" (no se movió el HTML de lugar,
@@ -1084,59 +1084,64 @@
                  propia pestaña de primer nivel en el shell nuevo). -->
             <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
 
-                <div class="group p-6 rounded-2xl border border-cyan-500/40 bg-gray-900/50 transition-all duration-300 card-glow neon-border-cyan cursor-pointer" style="order:4" onclick="selectMode('quick')">
-                    <div class="mb-4"><span data-mtr-icon="bolt" data-mtr-color="cyan"></span></div>
-                    <h3 class="text-lg font-bold text-white mb-2 group-hover:text-cyan-400 transition-colors">Modo Rápido</h3>
-                    <p class="text-gray-400 text-sm mb-4">Matchmaking automático. Encuentra rival en segundos.</p>
-                    <div class="flex flex-wrap gap-1.5 mb-5">
-                        <span class="text-xs px-2 py-1 rounded-full bg-cyan-500/10 text-cyan-400 border border-cyan-500/20"><span data-mtr-icon="target" data-mtr-color="cyan" data-mtr-inline data-mtr-size="13" style="margin-right:4px"></span>Auto-match</span>
-                        <span class="text-xs px-2 py-1 rounded-full bg-cyan-500/10 text-cyan-400 border border-cyan-500/20"><span data-mtr-icon="clock" data-mtr-color="cyan" data-mtr-inline data-mtr-size="14"></span>1 min</span>
+                <div class="mtr2-mode cursor-pointer transition-all duration-300" style="order:4; background:linear-gradient(135deg, rgba(0,240,255,0.22), rgba(8,15,26,0.95)); border:1.5px solid rgba(0,240,255,0.5); box-shadow:0 0 22px rgba(0,240,255,0.15);" onclick="selectMode('quick')">
+                    <div style="display:flex; align-items:center; gap:12px; margin-bottom:10px;">
+                        <div style="width:44px; height:44px; border-radius:12px; background:linear-gradient(135deg,#00f0ff,#0891b2); display:flex; align-items:center; justify-content:center; flex-shrink:0; box-shadow:0 0 16px rgba(0,240,255,0.5);"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#05060a" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2 3 14h7l-1 8 10-12h-7l1-8z"/></svg></div>
+                        <div style="flex:1; min-width:0;"><h3 class="mtr2-h" style="margin:0; font-size:17px; font-weight:700; color:#fff;">Modo Rápido</h3><p style="margin:0; font-size:12.5px; color:#9ca3af;">Matchmaking automático. Encuentra rival en segundos.</p></div>
                     </div>
-                    <button type="button" class="w-full py-2.5 rounded-lg text-sm font-bold bg-cyan-500/15 border border-cyan-500/30 text-cyan-400 hover:bg-cyan-500/25 transition-all cursor-pointer" onclick="selectMode('quick')">Jugar Ahora</button>
+                    <div style="display:flex; gap:6px; margin-bottom:12px; flex-wrap:wrap;">
+                        <span class="mtr2-chip" style="color:#00f0ff; background:rgba(0,240,255,0.12); border:1px solid rgba(0,240,255,0.3);"><span data-mtr-icon="bolt" data-mtr-color="cyan" data-mtr-inline data-mtr-size="14"></span>Auto-match</span>
+                        <span class="mtr2-chip" style="color:#00f0ff; background:rgba(0,240,255,0.12); border:1px solid rgba(0,240,255,0.3);"><span data-mtr-icon="clock" data-mtr-color="cyan" data-mtr-inline data-mtr-size="14"></span>1 min</span>
+                    </div>
+                    <button type="button" class="mtr2-cta" style="color:#05060a; background:linear-gradient(90deg,#00f0ff,#22d3ee);" onclick="selectMode('quick')">JUGAR AHORA</button>
                 </div>
 
-                <div class="group p-6 rounded-2xl border border-fuchsia-500/40 bg-gray-900/50 transition-all duration-300 card-glow-magenta neon-border-magenta cursor-pointer" style="order:3" onclick="selectMode('private')">
-                    <div class="mb-4"><span data-mtr-icon="lock" data-mtr-color="magenta"></span></div>
-                    <h3 class="text-lg font-bold text-white mb-2 group-hover:text-fuchsia-400 transition-colors">Sala Privada</h3>
-                    <p class="text-gray-400 text-sm mb-4">Invita a tus amigos. Personaliza reglas y apuestas.</p>
-                    <div class="flex flex-wrap gap-1.5 mb-5">
-                        <span class="text-xs px-2 py-1 rounded-full bg-fuchsia-500/10 text-fuchsia-400 border border-fuchsia-500/20"><span data-mtr-icon="users" data-mtr-color="magenta" data-mtr-inline data-mtr-size="13" style="margin-right:4px"></span>Amigos</span>
-                        <span class="text-xs px-2 py-1 rounded-full bg-fuchsia-500/10 text-fuchsia-400 border border-fuchsia-500/20"><span data-mtr-icon="link" data-mtr-color="magenta" data-mtr-inline data-mtr-size="13" style="margin-right:4px"></span>Código</span>
+                <div class="mtr2-mode cursor-pointer transition-all duration-300" style="order:3; background:linear-gradient(135deg, rgba(255,46,196,0.20), rgba(8,15,26,0.95)); border:1.5px solid rgba(255,46,196,0.5); box-shadow:0 0 22px rgba(255,46,196,0.15);" onclick="selectMode('private')">
+                    <div style="display:flex; align-items:center; gap:12px; margin-bottom:10px;">
+                        <div style="width:44px; height:44px; border-radius:12px; background:linear-gradient(135deg,#ff2ec4,#a21caf); display:flex; align-items:center; justify-content:center; flex-shrink:0; box-shadow:0 0 16px rgba(255,46,196,0.5);"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#05060a" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V7a4 4 0 018 0v4"/></svg></div>
+                        <div style="flex:1; min-width:0;"><h3 class="mtr2-h" style="margin:0; font-size:17px; font-weight:700; color:#fff;">Sala Privada</h3><p style="margin:0; font-size:12.5px; color:#9ca3af;">Invita a tus amigos. Personaliza reglas y apuestas.</p></div>
                     </div>
-                    <button type="button" class="w-full py-2.5 rounded-lg text-sm font-bold bg-fuchsia-500/15 border border-fuchsia-500/30 text-fuchsia-400 hover:bg-fuchsia-500/25 transition-all cursor-pointer" onclick="selectMode('private')">Crear Sala</button>
+                    <div style="display:flex; gap:6px; margin-bottom:12px; flex-wrap:wrap;">
+                        <span class="mtr2-chip" style="color:#ff6bd6; background:rgba(255,46,196,0.12); border:1px solid rgba(255,46,196,0.3);"><span data-mtr-icon="users" data-mtr-color="purple" data-mtr-inline data-mtr-size="14"></span>Amigos</span>
+                        <span class="mtr2-chip" style="color:#ff6bd6; background:rgba(255,46,196,0.12); border:1px solid rgba(255,46,196,0.3);"><span data-mtr-icon="link" data-mtr-color="cyan" data-mtr-inline data-mtr-size="14"></span>Código</span>
+                    </div>
+                    <button type="button" class="mtr2-cta" style="color:#05060a; background:linear-gradient(90deg,#ff2ec4,#e879f9);" onclick="selectMode('private')">CREAR SALA</button>
                 </div>
 
-                <div class="group p-6 rounded-2xl border border-orange-500/40 bg-gray-900/50 transition-all duration-300 card-glow-orange neon-border-orange cursor-pointer" style="order:2" onclick="selectMode('social')">
-                    <div class="mb-4"><span data-mtr-icon="swords" data-mtr-color="orange"></span></div>
-                    <h3 class="text-lg font-bold text-white mb-2 group-hover:text-orange-400 transition-colors">Desafío Social</h3>
-                    <p class="text-gray-400 text-sm mb-4">Desafía a un amigo por redes sociales. Mínimo 1 crédito (~$1).</p>
-                    <div class="flex flex-wrap gap-1.5 mb-5">
-                        <span class="text-xs px-2 py-1 rounded-full bg-orange-500/10 text-orange-400 border border-orange-500/20"><span data-mtr-icon="mobile" data-mtr-color="orange" data-mtr-inline data-mtr-size="13" style="margin-right:4px"></span>Redes</span>
-                        <span class="text-xs px-2 py-1 rounded-full bg-orange-500/10 text-orange-400 border border-orange-500/20"><span data-mtr-icon="chart" data-mtr-color="orange" data-mtr-inline data-mtr-size="13" style="margin-right:4px"></span>100+</span>
+                <div class="mtr2-mode cursor-pointer transition-all duration-300" style="order:2; background:linear-gradient(135deg, rgba(251,146,60,0.20), rgba(8,15,26,0.95)); border:1.5px solid rgba(251,146,60,0.5); box-shadow:0 0 22px rgba(251,146,60,0.15);" onclick="selectMode('social')">
+                    <div style="display:flex; align-items:center; gap:12px; margin-bottom:10px;">
+                        <div style="width:44px; height:44px; border-radius:12px; background:linear-gradient(135deg,#fb923c,#c2410c); display:flex; align-items:center; justify-content:center; flex-shrink:0; box-shadow:0 0 16px rgba(251,146,60,0.5);"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#05060a" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M21 3v5l-11 9l-4 4l-3 -3l4 -4l9 -11l5 0"/><path d="M5 13l6 6"/><path d="M14.32 17.32l3.68 3.68l3 -3l-3.365 -3.365"/><path d="M10 5.5l-2 -2.5h-5v5l3 2.5"/></svg></div>
+                        <div style="flex:1; min-width:0;"><h3 class="mtr2-h" style="margin:0; font-size:17px; font-weight:700; color:#fff;">Desafío Social</h3><p style="margin:0; font-size:12.5px; color:#9ca3af;">Desafía a un amigo por redes sociales. Mínimo 1 crédito (~$1).</p></div>
                     </div>
-                    <button type="button" class="w-full py-2.5 rounded-lg text-sm font-bold bg-orange-500/15 border border-orange-500/30 text-orange-400 hover:bg-orange-500/25 transition-all cursor-pointer" onclick="selectMode('social')">Desafiar</button>
+                    <div style="display:flex; gap:6px; margin-bottom:12px; flex-wrap:wrap;">
+                        <span class="mtr2-chip" style="color:#fdba74; background:rgba(251,146,60,0.12); border:1px solid rgba(251,146,60,0.3);"><span data-mtr-icon="mobile" data-mtr-color="cyan" data-mtr-inline data-mtr-size="14"></span>Redes</span>
+                        <span class="mtr2-chip" style="color:#fdba74; background:rgba(251,146,60,0.12); border:1px solid rgba(251,146,60,0.3);">100+</span>
+                    </div>
+                    <button type="button" class="mtr2-cta" style="color:#05060a; background:linear-gradient(90deg,#fb923c,#fdba74);" onclick="selectMode('social')">DESAFIAR</button>
                 </div>
 
-                <div class="group p-6 rounded-2xl border border-purple-500/40 bg-gray-900/50 transition-all duration-300 card-glow-purple neon-border-purple cursor-pointer" style="order:5" onclick="selectMode('tournament')">
-                    <div class="mb-4"><span data-mtr-icon="trophy" data-mtr-color="purple"></span></div>
-                    <h3 class="text-lg font-bold text-white mb-2 group-hover:text-purple-400 transition-colors">Torneo</h3>
-                    <p class="text-gray-400 text-sm mb-4">Express cada 10 min por género. Grand Prix semanal con premio gordo.</p>
-                    <div class="flex flex-wrap gap-1.5 mb-5">
-                        <span class="text-xs px-2 py-1 rounded-full bg-purple-500/10 text-purple-400 border border-purple-500/20"><span data-mtr-icon="diamond" data-mtr-color="purple" data-mtr-inline data-mtr-size="13" style="margin-right:4px"></span>Premios</span>
-                        <span class="text-xs px-2 py-1 rounded-full bg-purple-500/10 text-purple-400 border border-purple-500/20"><span data-mtr-icon="medal" data-mtr-color="purple" data-mtr-inline data-mtr-size="13" style="margin-right:4px"></span>Ranking</span>
+                <div class="mtr2-mode cursor-pointer transition-all duration-300" style="order:5; background:linear-gradient(135deg, rgba(168,85,247,0.20), rgba(8,15,26,0.95)); border:1.5px solid rgba(168,85,247,0.5); box-shadow:0 0 22px rgba(168,85,247,0.15);" onclick="selectMode('tournament')">
+                    <div style="display:flex; align-items:center; gap:12px; margin-bottom:10px;">
+                        <div style="width:44px; height:44px; border-radius:12px; background:linear-gradient(135deg,#c084fc,#7e22ce); display:flex; align-items:center; justify-content:center; flex-shrink:0; box-shadow:0 0 16px rgba(168,85,247,0.5);"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#05060a" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M8 21l8 0"/><path d="M12 17l0 4"/><path d="M7 4l10 0"/><path d="M17 4v8a5 5 0 0 1 -10 0v-8"/><path d="M3 9a2 2 0 1 0 4 0a2 2 0 1 0 -4 0"/><path d="M17 9a2 2 0 1 0 4 0a2 2 0 1 0 -4 0"/></svg></div>
+                        <div style="flex:1; min-width:0;"><h3 class="mtr2-h" style="margin:0; font-size:17px; font-weight:700; color:#fff;">Torneo</h3><p style="margin:0; font-size:12.5px; color:#9ca3af;">Express cada 10 min por género. Grand Prix semanal con premio gordo.</p></div>
                     </div>
-                    <button type="button" class="w-full py-2.5 rounded-lg text-sm font-bold bg-purple-500/15 border border-purple-500/30 text-purple-400 hover:bg-purple-500/25 transition-all cursor-pointer" onclick="selectMode('tournament')">Unirse al Torneo</button>
+                    <div style="display:flex; gap:6px; margin-bottom:12px; flex-wrap:wrap;">
+                        <span class="mtr2-chip" style="color:#d8b4fe; background:rgba(168,85,247,0.12); border:1px solid rgba(168,85,247,0.3);"><span data-mtr-icon="diamond" data-mtr-color="purple" data-mtr-inline data-mtr-size="14"></span>Premios</span>
+                        <span class="mtr2-chip" style="color:#d8b4fe; background:rgba(168,85,247,0.12); border:1px solid rgba(168,85,247,0.3);"><span data-mtr-icon="medal" data-mtr-color="purple" data-mtr-inline data-mtr-size="14"></span>Ranking</span>
+                    </div>
+                    <button type="button" class="mtr2-cta" style="color:#05060a; background:linear-gradient(90deg,#a855f7,#d8b4fe);" onclick="selectMode('tournament')">UNIRSE AL TORNEO</button>
                 </div>
 
-                <div class="group p-6 rounded-2xl border border-cyan-500/40 bg-gray-900/50 transition-all duration-300 card-glow neon-border-cyan cursor-pointer" style="order:1" onclick="selectMode('practice')">
-                    <div class="mb-4"><span data-mtr-icon="target" data-mtr-color="cyan"></span></div>
-                    <h3 class="text-lg font-bold text-white mb-2 group-hover:text-cyan-400 transition-colors">Modo Práctica</h3>
-                    <p class="text-gray-400 text-sm mb-4">Sin riesgo contra la CPU. Perfecto para empezar.</p>
-                    <div class="flex flex-wrap gap-1.5 mb-5">
-                        <span class="text-xs px-2 py-1 rounded-full bg-cyan-500/10 text-cyan-400 border border-cyan-500/20"><span data-mtr-icon="gamepad" data-mtr-color="cyan" data-mtr-inline data-mtr-size="13" style="margin-right:4px"></span>Sin riesgo</span>
-                        <span class="text-xs px-2 py-1 rounded-full bg-cyan-500/10 text-cyan-400 border border-cyan-500/20"><span data-mtr-icon="book" data-mtr-color="cyan" data-mtr-inline data-mtr-size="13" style="margin-right:4px"></span>Aprende</span>
+                <div class="mtr2-mode cursor-pointer transition-all duration-300" style="order:1; background:linear-gradient(135deg, rgba(52,211,153,0.18), rgba(8,15,26,0.95)); border:1.5px solid rgba(52,211,153,0.45); box-shadow:0 0 22px rgba(52,211,153,0.12);" onclick="selectMode('practice')">
+                    <div style="display:flex; align-items:center; gap:12px; margin-bottom:10px;">
+                        <div style="width:44px; height:44px; border-radius:12px; background:linear-gradient(135deg,#34d399,#059669); display:flex; align-items:center; justify-content:center; flex-shrink:0; box-shadow:0 0 16px rgba(52,211,153,0.5);"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#05060a" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3.2"/></svg></div>
+                        <div style="flex:1; min-width:0;"><h3 class="mtr2-h" style="margin:0; font-size:17px; font-weight:700; color:#fff;">Modo Práctica</h3><p style="margin:0; font-size:12.5px; color:#9ca3af;">Sin riesgo contra la CPU. Perfecto para empezar.</p></div>
                     </div>
-                    <button type="button" class="w-full py-2.5 rounded-lg text-sm font-bold bg-cyan-500/15 border border-cyan-500/30 text-cyan-400 hover:bg-cyan-500/25 transition-all cursor-pointer" onclick="selectMode('practice')">Practicar</button>
+                    <div style="display:flex; gap:6px; margin-bottom:12px; flex-wrap:wrap;">
+                        <span class="mtr2-chip" style="color:#34d399; background:rgba(52,211,153,0.12); border:1px solid rgba(52,211,153,0.3);"><span data-mtr-icon="shieldCheck" data-mtr-color="green" data-mtr-inline data-mtr-size="14"></span>Sin riesgo</span>
+                        <span class="mtr2-chip" style="color:#34d399; background:rgba(52,211,153,0.12); border:1px solid rgba(52,211,153,0.3);"><span data-mtr-icon="book" data-mtr-color="cyan" data-mtr-inline data-mtr-size="14"></span>Aprende</span>
+                    </div>
+                    <button type="button" class="mtr2-cta" style="color:#05060a; background:linear-gradient(90deg,#34d399,#6ee7b7);" onclick="selectMode('practice')">PRACTICAR</button>
                 </div>
 
             </div>
