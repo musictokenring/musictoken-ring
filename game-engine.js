@@ -2061,7 +2061,7 @@ const GameEngine = {
                     try {
                         const { data: matches } = await supabaseClient
                             .from('matches')
-                            .select('id, winner, player1_id, player2_id, player2_song_name, player2_song_artist, player1_final_health, player2_final_health, total_pot, created_at')
+                            .select('id, winner, player1_id, player2_id, player2_song_name, player2_song_artist, player2_song_image, player1_final_health, player2_final_health, total_pot, created_at')
                             .eq('match_type', 'social')
                             .eq('player1_id', c.challenger_id)
                             .eq('player2_id', c.accepter_id)
@@ -3754,6 +3754,73 @@ const GameEngine = {
         setTimeout(() => { bubble.remove(); }, 5000);
     },
 
+    // ==========================================
+    // ESPECTADOR EN VIVO (Desafío Social)
+    // ==========================================
+    // Transmite el progreso de una batalla real (health/plays/timer) por un
+    // canal Supabase Realtime propio por match -- mismo patrón ya probado
+    // que setupPrivateReactionsChannel()/sendPrivateReaction() de arriba,
+    // solo que acá NADIE necesita reaccionar del otro lado: el objetivo es
+    // que alguien que ni siquiera está jugando (quien creó un Desafío
+    // Social) pueda mirar en vivo. Puramente aditivo y de mejor esfuerzo --
+    // ningún error acá debe poder afectar la batalla real ni su resultado.
+    beginBattleBroadcast(match) {
+        this.endBattleBroadcast();
+        if (!match || !match.id) return;
+        try {
+            const channel = supabaseClient.channel('mtr-battle-' + match.id);
+            channel.subscribe();
+            this._battleBroadcastChannel = channel;
+            this._battleBroadcastMatchId = match.id;
+        } catch (e) {
+            console.warn('[beginBattleBroadcast] no se pudo abrir el canal:', e && e.message);
+        }
+    },
+
+    sendBattleBroadcastTick(matchId, state) {
+        if (!this._battleBroadcastChannel || this._battleBroadcastMatchId !== matchId) return;
+        try {
+            this._battleBroadcastChannel.send({ type: 'broadcast', event: 'tick', payload: state });
+        } catch (e) { /* mejor esfuerzo -- nunca debe romper el tick real */ }
+    },
+
+    endBattleBroadcast() {
+        if (this._battleBroadcastChannel) {
+            try { supabaseClient.removeChannel(this._battleBroadcastChannel); } catch (e) { /* noop */ }
+        }
+        this._battleBroadcastChannel = null;
+        this._battleBroadcastMatchId = null;
+    },
+
+    // Lado espectador: se suscribe al mismo canal de arriba y devuelve una
+    // función para dejar de escuchar. onTick recibe exactamente el mismo
+    // payload que envía sendBattleBroadcastTick -- {health1, health2,
+    // plays1, plays2, timeLeft, finished}.
+    watchBattleLive(matchId, onTick) {
+        this.stopWatchingBattleLive();
+        if (!matchId) return function () {};
+        try {
+            const channel = supabaseClient.channel('mtr-battle-' + matchId);
+            channel
+                .on('broadcast', { event: 'tick' }, function (payload) {
+                    if (typeof onTick === 'function') onTick(payload && payload.payload);
+                })
+                .subscribe();
+            this._watchBattleChannel = channel;
+        } catch (e) {
+            console.warn('[watchBattleLive] no se pudo suscribir:', e && e.message);
+        }
+        var self = this;
+        return function () { self.stopWatchingBattleLive(); };
+    },
+
+    stopWatchingBattleLive() {
+        if (this._watchBattleChannel) {
+            try { supabaseClient.removeChannel(this._watchBattleChannel); } catch (e) { /* noop */ }
+        }
+        this._watchBattleChannel = null;
+    },
+
     createBattleUI(match) {
         console.log('[createBattleUI] ✅ Creando UI de batalla');
         console.log('[createBattleUI] Match:', match);
@@ -4406,13 +4473,23 @@ const GameEngine = {
     async runBattle(match) {
         const { data: { session } } = await supabaseClient.auth.getSession();
         const isPlayer1 = session.user.id === match.player1_id;
-        
+
         // Reproducir SOLO la canción del usuario
         const userSong = isPlayer1 ? match.player1_song_preview : match.player2_song_preview;
         this.playUserSong(userSong);
-        
+
         // Initialize real-time streams tracking
         this.initializeStreamsTracking(match);
+
+        // Espectador en vivo (pedido explícito): transmite el progreso de
+        // ESTA batalla en un canal propio por match, para que quien creó un
+        // Desafío Social (que puede no estar jugando, solo mirando) vea la
+        // salud/timer moverse en tiempo real -- ver watchBattleLive() más
+        // abajo, y la campana de notificaciones en index.html. Puramente
+        // aditivo: si falla (sin red, canal caído), nunca debe afectar la
+        // batalla real ni su resultado -- por eso va envuelto en try/catch
+        // y nunca se espera (await) desde el tick.
+        this.beginBattleBroadcast(match);
         
         const oracleStats = await this.fetchOracleStats(match);
         const basePlays1 = oracleStats.player1Projected;
@@ -4480,6 +4557,8 @@ const GameEngine = {
             if (plays1El) plays1El.textContent = Math.round(plays1).toLocaleString('es-ES');
             if (plays2El) plays2El.textContent = Math.round(plays2).toLocaleString('es-ES');
 
+            this.sendBattleBroadcastTick(match.id, { health1, health2, plays1, plays2, timeLeft, finished: false });
+
             // Fin de batalla
             if (timeLeft <= 0) {
                 battleEnded = true;
@@ -4493,7 +4572,9 @@ const GameEngine = {
                     health1 = finalStreamData.percentage1;
                     health2 = finalStreamData.percentage2;
                 }
+                this.sendBattleBroadcastTick(match.id, { health1, health2, plays1, plays2, timeLeft: 0, finished: true });
                 this.endBattle(match, health1, health2, isPlayer1, plays1, plays2);
+                this.endBattleBroadcast();
             }
         };
 

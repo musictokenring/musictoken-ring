@@ -2448,6 +2448,52 @@
         </div>
     </div>
 
+    <!-- Espectador en vivo de una batalla de Desafío Social -- se suscribe
+         al canal Realtime que transmite GameEngine.beginBattleBroadcast()
+         (ver game-engine.js, runBattle). z-[10000] y fuera de <main>, mismo
+         motivo que el resto de los modales de esta sesión. -->
+    <div id="battleSpectatorModal" class="hidden fixed inset-0 z-[10000] items-center justify-center p-4">
+        <div class="absolute inset-0 bg-black/75 backdrop-blur-sm" onclick="window.closeBattleSpectator()"></div>
+        <div class="relative w-full max-w-md rounded-2xl border border-cyan-500/25 bg-gray-950 shadow-2xl shadow-black/50 overflow-hidden">
+            <div class="flex items-center justify-between px-5 py-4 border-b border-white/10 bg-gray-900/90">
+                <h3 class="text-base font-bold text-white flex items-center gap-2"><span data-mtr-icon="eye" data-mtr-plain data-mtr-color="cyan" data-mtr-size="18"></span>Batalla en vivo</h3>
+                <button type="button" onclick="window.closeBattleSpectator()" class="text-gray-400 hover:text-white text-xl leading-none cursor-pointer">&times;</button>
+            </div>
+            <div class="p-5">
+                <p id="specStatusLine" class="text-center text-xs uppercase tracking-widest text-gray-400 mb-4">Conectando...</p>
+
+                <div class="flex items-center justify-center gap-4 mb-5">
+                    <div class="text-center flex-1 min-w-0">
+                        <img id="specImg1" src="" alt="" class="w-14 h-14 rounded-full object-cover border-2 border-cyan-400 mx-auto mb-1" style="box-shadow:0 0 15px rgba(0,243,255,0.4)">
+                        <p id="specName1" class="text-white text-xs font-bold truncate">-</p>
+                    </div>
+                    <div class="text-gray-500 text-lg font-black flex-shrink-0">VS</div>
+                    <div class="text-center flex-1 min-w-0">
+                        <img id="specImg2" src="" alt="" class="w-14 h-14 rounded-full object-cover border-2 border-fuchsia-400 mx-auto mb-1" style="box-shadow:0 0 15px rgba(236,72,153,0.4)">
+                        <p id="specName2" class="text-white text-xs font-bold truncate">-</p>
+                    </div>
+                </div>
+
+                <div class="space-y-3 mb-2">
+                    <div class="flex items-center gap-3">
+                        <span class="text-cyan-400 font-bold text-sm w-12 text-right tabular-nums" id="specHealth1Text">50%</span>
+                        <div class="flex-1 h-4 bg-gray-800/80 rounded-full overflow-hidden">
+                            <div id="specHealth1Fill" class="h-full rounded-full transition-all duration-700 ease-out" style="width:50%;background:linear-gradient(90deg,#06b6d4,#22d3ee)"></div>
+                        </div>
+                    </div>
+                    <div class="flex items-center gap-3">
+                        <span class="text-fuchsia-400 font-bold text-sm w-12 text-right tabular-nums" id="specHealth2Text">50%</span>
+                        <div class="flex-1 h-4 bg-gray-800/80 rounded-full overflow-hidden">
+                            <div id="specHealth2Fill" class="h-full rounded-full transition-all duration-700 ease-out" style="width:50%;background:linear-gradient(90deg,#d946ef,#ec4899)"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <p id="specResultLine" class="hidden text-center text-sm font-bold mt-4"></p>
+            </div>
+        </div>
+    </div>
+
     <script>
     (function () {
         var SEEN_KEY = 'mtr_seen_challenge_states';
@@ -2551,7 +2597,9 @@
                         '<p class="text-gray-400 text-xs mt-0.5">' + sub + '</p>' +
                     '</div>' +
                     (!entry.finished && c.status === 'accepted'
-                        ? '<button type="button" class="flex-shrink-0 px-2.5 py-1.5 rounded-lg text-[11px] font-bold bg-orange-500/15 border border-orange-500/30 text-orange-300 hover:bg-orange-500/25 transition cursor-pointer" onclick="window.checkChallengeResultNow(\'' + c.challenge_id + '\', this)">Ver estado</button>'
+                        ? (m && m.id
+                            ? '<button type="button" class="flex-shrink-0 px-2.5 py-1.5 rounded-lg text-[11px] font-bold bg-orange-500/15 border border-orange-500/30 text-orange-300 hover:bg-orange-500/25 transition cursor-pointer" onclick="window.openBattleSpectator(\'' + c.challenge_id + '\')">' + (window.MTRIcons ? window.MTRIcons.svg('eye', { size: 12, className: 'inline-block align-[-1px] mr-1' }) : '') + 'Ver en vivo</button>'
+                            : '<button type="button" class="flex-shrink-0 px-2.5 py-1.5 rounded-lg text-[11px] font-bold bg-orange-500/15 border border-orange-500/30 text-orange-300 hover:bg-orange-500/25 transition cursor-pointer" onclick="window.checkChallengeResultNow(\'' + c.challenge_id + '\', this)">Ver estado</button>')
                         : '<span class="flex-shrink-0 text-[10px] text-gray-500">' + fmtWhen(c.created_at) + '</span>') +
                 '</div>';
             }).join('');
@@ -2575,6 +2623,83 @@
             if (stillGoing && typeof showToast === 'function') {
                 showToast('Todavía no hay resultado -- la batalla puede seguir en curso. Volvé a intentar en un momento.', 'info');
             }
+        };
+
+        // Espectador en vivo: se suscribe al canal Realtime que transmite
+        // GameEngine.beginBattleBroadcast() (ver runBattle en game-engine.js)
+        // y actualiza las barras de salud/temporizador en tiempo real. Si no
+        // llega ningún dato en 12s (la batalla puede no haber empezado
+        // todavía, o ya haber terminado antes de que se abriera esto), cae
+        // a mostrar el resultado ya conocido si lo hay, o un aviso claro en
+        // vez de quedar mostrando "Conectando..." para siempre.
+        var stopWatching = null;
+        var noTickTimeout = null;
+
+        window.openBattleSpectator = function (challengeId) {
+            var entry = lastEntries.find(function (e) { return e.challenge.challenge_id === challengeId; });
+            if (!entry || !entry.match || !entry.match.id) {
+                if (typeof showToast === 'function') showToast('Todavía no hay una batalla para mirar.', 'info');
+                return;
+            }
+            var c = entry.challenge, m = entry.match;
+            var modal = document.getElementById('battleSpectatorModal');
+            if (!modal || typeof window.GameEngine === 'undefined') return;
+
+            document.getElementById('specImg1').src = c.challenger_song_image || '';
+            document.getElementById('specName1').textContent = c.challenger_song_artist || c.challenger_song_name || 'Retador';
+            document.getElementById('specImg2').src = m.player2_song_image || '';
+            document.getElementById('specName2').textContent = m.player2_song_artist || m.player2_song_name || 'Rival';
+            document.getElementById('specHealth1Fill').style.width = '50%';
+            document.getElementById('specHealth2Fill').style.width = '50%';
+            document.getElementById('specHealth1Text').textContent = '50%';
+            document.getElementById('specHealth2Text').textContent = '50%';
+            document.getElementById('specStatusLine').textContent = 'Conectando...';
+            var resultLine = document.getElementById('specResultLine');
+            resultLine.classList.add('hidden');
+            resultLine.textContent = '';
+
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+            document.body.style.overflow = 'hidden';
+
+            if (stopWatching) { stopWatching(); stopWatching = null; }
+            if (noTickTimeout) { clearTimeout(noTickTimeout); noTickTimeout = null; }
+
+            function onNoTick() {
+                var statusLine = document.getElementById('specStatusLine');
+                if (statusLine) statusLine.textContent = 'Sin datos en vivo';
+                if (resultLine) {
+                    resultLine.classList.remove('hidden');
+                    resultLine.textContent = 'La batalla puede no haber empezado todavía, o ya haber terminado. Cerrá y volvé a abrir la campana en unos segundos para ver el resultado.';
+                }
+            }
+            noTickTimeout = setTimeout(onNoTick, 12000);
+
+            stopWatching = window.GameEngine.watchBattleLive(m.id, function (tick) {
+                if (!tick) return;
+                if (noTickTimeout) { clearTimeout(noTickTimeout); noTickTimeout = setTimeout(onNoTick, 12000); }
+                document.getElementById('specStatusLine').textContent = tick.finished ? 'Batalla terminada' : ('EN VIVO · ' + Math.max(0, tick.timeLeft) + 's');
+                document.getElementById('specHealth1Fill').style.width = Math.round(tick.health1) + '%';
+                document.getElementById('specHealth2Fill').style.width = Math.round(tick.health2) + '%';
+                document.getElementById('specHealth1Text').textContent = Math.round(tick.health1) + '%';
+                document.getElementById('specHealth2Text').textContent = Math.round(tick.health2) + '%';
+                if (tick.finished) {
+                    if (noTickTimeout) { clearTimeout(noTickTimeout); noTickTimeout = null; }
+                    var iWon = tick.health1 > tick.health2;
+                    resultLine.classList.remove('hidden');
+                    resultLine.className = 'text-center text-sm font-bold mt-4 ' + (iWon ? 'text-cyan-300' : 'text-fuchsia-300');
+                    resultLine.textContent = iWon ? '¡Ganó tu canción!' : 'Ganó la canción rival';
+                    refreshChallengeBell(); // actualiza el conteo de la campana en segundo plano
+                }
+            });
+        };
+
+        window.closeBattleSpectator = function () {
+            var modal = document.getElementById('battleSpectatorModal');
+            if (modal) { modal.classList.add('hidden'); modal.classList.remove('flex'); }
+            document.body.style.overflow = '';
+            if (stopWatching) { stopWatching(); stopWatching = null; }
+            if (noTickTimeout) { clearTimeout(noTickTimeout); noTickTimeout = null; }
         };
 
         window.toggleChallengeNotifications = function () {
