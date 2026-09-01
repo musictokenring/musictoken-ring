@@ -167,7 +167,14 @@ async function loginWithGoogle() {
             throw new Error('Supabase no está disponible. Recarga la página.');
         }
         
-        const redirectTo = `${window.location.origin}${window.location.pathname}`;
+        // Incluye el query string actual (ej. ?challenge=ID) a propósito --
+        // BUG real reportado en vivo: cortarlo acá hacía que un usuario
+        // nuevo que se registraba con Google desde un link de desafío
+        // social volviera a la home sin ningún rastro de a qué venía a
+        // entrar. localStorage (ver index.html) es la red de seguridad
+        // real por si el redirect URL configurado en Supabase igual lo
+        // recorta, pero esto ayuda a que ni haga falta esa red.
+        const redirectTo = `${window.location.origin}${window.location.pathname}${window.location.search}`;
         const { data, error } = await supabaseClient.auth.signInWithOAuth({
             provider: 'google',
             options: {
@@ -491,7 +498,12 @@ async function handleSignupSubmit(event) {
             options: {
                 data: {
                     display_name: name
-                }
+                },
+                // Mismo motivo que en loginWithGoogle: preservar ?challenge=
+                // en el link de confirmación por email, para que quien se
+                // registra desde una invitación a un desafío social vuelva
+                // exactamente ahí en vez de a la home vacía.
+                emailRedirectTo: `${window.location.origin}${window.location.pathname}${window.location.search}`
             }
         });
         

@@ -3832,6 +3832,29 @@
                     }, 300);
                 }
                 var challengeParam = urlParams.get('challenge');
+                // BUG real reportado en vivo, urgente: una usuaria nueva que
+                // recibía un link de desafío, entraba, tocaba "Aceptar" y se
+                // iba a registrar (Google o email) -- pero el login/registro
+                // navega FUERA de esta página (OAuth de Google, o el link de
+                // confirmación por email) y vuelve SIN el ?challenge= en la
+                // URL. Sin la URL, todo este bloque nunca corría, así que el
+                // desafío se perdía por completo: no había forma de volver a
+                // aceptarlo ni de que el que ganó se le acreditara nada. Se
+                // guarda el id en localStorage apenas se detecta (sobrevive
+                // cualquier navegación) y se recupera de ahí si la URL ya no
+                // lo trae -- el resto de este bloque (ya probado) sigue
+                // exactamente igual sin importar de dónde vino el id.
+                if (challengeParam) {
+                    try { localStorage.setItem('mtr_pending_challenge_id', challengeParam); } catch (_e) { /* ignore */ }
+                } else {
+                    try {
+                        var savedChallengeId = localStorage.getItem('mtr_pending_challenge_id');
+                        if (savedChallengeId) {
+                            challengeParam = savedChallengeId;
+                            console.log('[INIT] 🔄 Desafío recuperado de localStorage (se perdió de la URL tras login/registro):', challengeParam);
+                        }
+                    } catch (_e) { /* ignore */ }
+                }
                 if (challengeParam) {
                     console.log('[INIT] 🔍🔍🔍 DESAFÍO DETECTADO EN URL:', challengeParam);
                     console.log('[INIT] Sesión disponible:', !!session);
@@ -6092,6 +6115,12 @@
                 return;
             }
 
+            // El desafío ya no está pendiente (expiró/cancelado/no existe/
+            // aceptado) -- no tiene sentido seguir restaurándolo desde
+            // localStorage en la próxima visita (ver el guardado en el
+            // bloque de inicio, más arriba en este archivo).
+            try { localStorage.removeItem('mtr_pending_challenge_id'); } catch (_e) { /* ignore */ }
+
             var copy = CHALLENGE_STATUS_COPY[status] || CHALLENGE_STATUS_COPY.not_found;
             songInfo.classList.add('hidden');
             if (details) details.classList.add('hidden');
@@ -6304,6 +6333,7 @@
                     window.pendingChallengeBetAmount = null;
                     window.pendingChallengeInfo = null;
                     window.selectedSong = null; // Limpiar también la canción seleccionada
+                    try { localStorage.removeItem('mtr_pending_challenge_id'); } catch (_e) { /* ignore */ }
                 } else {
                     console.error('[handleSocialChallengeAccept] ❌ GameEngine o acceptSocialChallenge no disponible después de esperar');
                     if (typeof showToast === 'function') {
