@@ -2018,6 +2018,76 @@ const GameEngine = {
         }
     },
 
+    // BUG real reportado en vivo (grave, generó desconfianza real de un
+    // usuario): quien CREA un desafío social nunca se enteraba de nada más
+    // después de enviarlo -- ni de que alguien lo aceptó, ni de que la
+    // batalla terminó, ni del resultado. loadMyPendingChallenges() de
+    // arriba solo mira status='pending' (los que siguen esperando
+    // respuesta); esta función es su contraparte: busca los que YA
+    // cambiaron de estado (aceptados o vencidos sin respuesta) para
+    // alimentar la campana de notificaciones (ver renderChallengeBell en
+    // index.html).
+    async loadMyChallengeUpdates() {
+        try {
+            const { data: { session } } = await supabaseClient.auth.getSession();
+            if (!session) return [];
+
+            // Ventana de 14 días: evita que la lista crezca sin límite con
+            // desafíos viejos ya vistos hace mucho.
+            const cutoff = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString();
+            const { data, error } = await supabaseClient
+                .from('social_challenges')
+                .select('*')
+                .eq('challenger_id', session.user.id)
+                .in('status', ['accepted', 'expired'])
+                .gte('created_at', cutoff)
+                .order('created_at', { ascending: false })
+                .limit(20);
+
+            if (error) {
+                console.warn('[loadMyChallengeUpdates]', error.message);
+                return [];
+            }
+            if (!data || !data.length) return [];
+
+            // social_challenges no guarda el id del match real que se arma
+            // al aceptar (evita depender de una migración de columna nueva
+            // en la base) -- se busca por coincidencia challenger+accepter
+            // en vez de eso. Solo hace falta para los aceptados.
+            const accepted = data.filter(c => c.status === 'accepted' && c.accepter_id);
+            const matchByChallengeId = {};
+            if (accepted.length) {
+                await Promise.all(accepted.map(async (c) => {
+                    try {
+                        const { data: matches } = await supabaseClient
+                            .from('matches')
+                            .select('id, winner, player1_id, player2_id, player2_song_name, player2_song_artist, player1_final_health, player2_final_health, total_pot, created_at')
+                            .eq('match_type', 'social')
+                            .eq('player1_id', c.challenger_id)
+                            .eq('player2_id', c.accepter_id)
+                            .order('created_at', { ascending: false })
+                            .limit(1);
+                        if (matches && matches[0]) matchByChallengeId[c.id] = matches[0];
+                    } catch (e) {
+                        console.warn('[loadMyChallengeUpdates] No se pudo buscar el match de', c.challenge_id, e && e.message);
+                    }
+                }));
+            }
+
+            return data.map(function (c) {
+                const match = matchByChallengeId[c.id] || null;
+                return {
+                    challenge: c,
+                    match: match,
+                    finished: !!(match && match.winner != null)
+                };
+            });
+        } catch (e) {
+            console.warn('[loadMyChallengeUpdates]', e && e.message);
+            return [];
+        }
+    },
+
     // MODO SALA PRIVADA (Private Room)
     // ==========================================
     

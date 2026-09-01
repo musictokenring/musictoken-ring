@@ -885,6 +885,15 @@
                     </span>
                     <span id="appBalanceDisplay" class="hidden sm:inline px-2 py-1 rounded-md bg-fuchsia-500/10 text-fuchsia-400 text-xs font-semibold cursor-help" title="MTR créditos jugables disponibles para apostar. 1 ficha ≈ $1 USD nominal (1:1)">Fichas jugables: --</span>
                     <span id="walletAddress" class="hidden text-cyan-300 font-mono text-xs bg-cyan-500/10 px-2 py-1 rounded-md"></span>
+                    <!-- Campana de notificaciones: pedido en vivo, urgente --
+                         quien crea un desafío social nunca se enteraba de que
+                         lo aceptaron ni del resultado. Ver
+                         GameEngine.loadMyChallengeUpdates() y
+                         renderChallengeBell() más abajo en este archivo. -->
+                    <button type="button" id="challengeBellBtnHeader" onclick="if(typeof window.toggleChallengeNotifications==='function') window.toggleChallengeNotifications(this)" style="position:relative;" class="w-8 h-8 rounded-lg bg-white/5 border border-white/10 text-gray-300 hover:text-white hover:bg-white/10 transition-all duration-200 cursor-pointer flex-shrink-0 flex items-center justify-center" aria-label="Notificaciones de tus desafíos" title="Notificaciones de tus desafíos">
+                        <span data-mtr-icon="bell" data-mtr-plain data-mtr-size="15"></span>
+                        <span class="challenge-bell-badge hidden" style="position:absolute; top:-4px; right:-4px; min-width:16px; height:16px; padding:0 3px; border-radius:999px; background:#ff2ec4; color:#05060a; font-size:10px; font-weight:800; display:flex; align-items:center; justify-content:center; line-height:1;">0</span>
+                    </button>
                     <button type="button" id="walletConnectBtn" class="px-2 sm:px-2.5 sm:px-4 py-1.5 sm:py-2 rounded-lg text-[10px] sm:text-xs sm:text-sm font-semibold bg-cyan-500/10 border border-cyan-500/30 text-cyan-400 hover:bg-cyan-500/20 transition-all duration-200 cursor-pointer whitespace-nowrap flex-shrink-0">
                         <span class="hidden sm:inline">Conectar Wallet</span>
                         <span class="sm:hidden">Wallet</span>
@@ -2420,6 +2429,193 @@
             </div>
         </div>
     </div>
+
+    <!-- Campana de notificaciones de desafíos sociales -- z-[10000] y fuera
+         de <main> a propósito, mismo motivo que profileModal arriba: tiene
+         que abrirse tanto desde el header viejo como desde la pestaña Jugar
+         del shell mobile nuevo (z-index:400), y en cualquiera de los dos
+         casos debe quedar POR ENCIMA. -->
+    <div id="challengeBellModal" class="hidden fixed inset-0 z-[10000] items-center justify-center p-4">
+        <div class="absolute inset-0 bg-black/75 backdrop-blur-sm" onclick="window.closeChallengeNotifications()"></div>
+        <div class="relative w-full max-w-md max-h-[80vh] rounded-2xl border border-fuchsia-500/25 bg-gray-950 shadow-2xl shadow-black/50 overflow-hidden flex flex-col">
+            <div class="flex items-center justify-between px-5 py-4 border-b border-white/10 bg-gray-900/90 flex-shrink-0">
+                <h3 class="text-base font-bold text-white flex items-center gap-2"><span data-mtr-icon="bell" data-mtr-plain data-mtr-color="magenta" data-mtr-size="18"></span>Tus desafíos</h3>
+                <button type="button" onclick="window.closeChallengeNotifications()" class="text-gray-400 hover:text-white text-xl leading-none cursor-pointer">&times;</button>
+            </div>
+            <div id="challengeBellList" class="flex-1 overflow-y-auto p-4 space-y-3">
+                <p class="text-center text-gray-500 text-sm py-8">Cargando...</p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+    (function () {
+        var SEEN_KEY = 'mtr_seen_challenge_states';
+
+        function getSeenMap() {
+            try { return JSON.parse(localStorage.getItem(SEEN_KEY) || '{}'); } catch (e) { return {}; }
+        }
+        function setSeenMap(map) {
+            try { localStorage.setItem(SEEN_KEY, JSON.stringify(map)); } catch (e) { /* ignore */ }
+        }
+
+        // "Firma" del estado actual de un desafío -- cambia cuando hay algo
+        // nuevo que mostrar (aceptado -> en curso -> resultado, o vencido
+        // sin respuesta). Se compara contra lo último visto (localStorage)
+        // para decidir el conteo de "no leídos" en la campana.
+        function stateSignature(entry) {
+            if (entry.finished) return 'finished:' + (entry.match ? entry.match.winner : '?');
+            return entry.challenge.status;
+        }
+
+        var lastEntries = [];
+
+        async function refreshChallengeBell(opts) {
+            opts = opts || {};
+            if (typeof window.GameEngine === 'undefined' || typeof window.GameEngine.loadMyChallengeUpdates !== 'function') return;
+            var entries;
+            try {
+                entries = await window.GameEngine.loadMyChallengeUpdates();
+            } catch (e) {
+                console.warn('[challengeBell] refresh falló:', e && e.message);
+                return;
+            }
+            lastEntries = entries || [];
+
+            var seen = getSeenMap();
+            var unread = 0;
+            lastEntries.forEach(function (entry) {
+                if (seen[entry.challenge.challenge_id] !== stateSignature(entry)) unread++;
+            });
+
+            document.querySelectorAll('.challenge-bell-badge').forEach(function (badge) {
+                if (unread > 0) {
+                    badge.textContent = unread > 9 ? '9+' : String(unread);
+                    badge.classList.remove('hidden');
+                } else {
+                    badge.classList.add('hidden');
+                }
+            });
+
+            if (opts.renderList) renderChallengeBellList();
+        }
+
+        function fmtWhen(iso) {
+            try {
+                return new Date(iso).toLocaleDateString('es-CO', { day: '2-digit', month: 'short' });
+            } catch (e) { return ''; }
+        }
+
+        function renderChallengeBellList() {
+            var list = document.getElementById('challengeBellList');
+            if (!list) return;
+
+            if (!lastEntries.length) {
+                list.innerHTML = '<p class="text-center text-gray-500 text-sm py-8">Todavía no hay novedades. Acá vas a ver cuándo alguien acepte uno de tus desafíos, y el resultado de la batalla.</p>';
+                return;
+            }
+
+            list.innerHTML = lastEntries.map(function (entry) {
+                var c = entry.challenge;
+                var m = entry.match;
+                var iWon = entry.finished && m && m.winner === 1;
+                var opponentLabel = m ? (m.player2_song_artist || m.player2_song_name || 'tu rival') : 'tu rival';
+
+                var iconName, colorKey, title, sub;
+                if (entry.finished) {
+                    iconName = iWon ? 'trophy' : 'circleX';
+                    colorKey = iWon ? 'green' : 'red';
+                    title = iWon ? '¡Ganaste tu desafío!' : 'Perdiste tu desafío';
+                    var winnings = (window.GameEngine && typeof window.GameEngine.calculateMatchPayouts === 'function')
+                        ? Math.round(window.GameEngine.calculateMatchPayouts(m.total_pot || 0).winnerPayout)
+                        : 0;
+                    sub = 'vs ' + opponentLabel + (iWon ? (' · +' + winnings + ' créditos') : ' · sin cambios en tu saldo');
+                } else if (c.status === 'accepted') {
+                    iconName = 'swords';
+                    colorKey = 'orange';
+                    title = 'Aceptaron tu desafío';
+                    sub = 'vs ' + opponentLabel + ' · la batalla está en curso';
+                } else {
+                    iconName = 'clock';
+                    colorKey = 'gray';
+                    title = 'Nadie aceptó a tiempo';
+                    sub = 'Se venció sin respuesta · tus créditos ya fueron reembolsados';
+                }
+
+                var badgeHtml = window.MTRIcons ? window.MTRIcons.badge(iconName, { color: colorKey, badgeSize: 40, size: 20 }) : '';
+
+                return '<div class="rounded-xl border border-white/10 bg-white/[0.03] p-3 flex items-center gap-3">' +
+                    '<div class="flex-shrink-0">' + badgeHtml + '</div>' +
+                    '<div class="flex-1 min-w-0">' +
+                        '<p class="text-white text-sm font-bold">' + title + '</p>' +
+                        '<p class="text-gray-400 text-xs mt-0.5">' + sub + '</p>' +
+                    '</div>' +
+                    (!entry.finished && c.status === 'accepted'
+                        ? '<button type="button" class="flex-shrink-0 px-2.5 py-1.5 rounded-lg text-[11px] font-bold bg-orange-500/15 border border-orange-500/30 text-orange-300 hover:bg-orange-500/25 transition cursor-pointer" onclick="window.checkChallengeResultNow(\'' + c.challenge_id + '\', this)">Ver estado</button>'
+                        : '<span class="flex-shrink-0 text-[10px] text-gray-500">' + fmtWhen(c.created_at) + '</span>') +
+                '</div>';
+            }).join('');
+
+            // Todo lo que se acaba de mostrar cuenta como "visto" -- apaga
+            // el conteo de la campana hasta el próximo cambio real.
+            var seen = getSeenMap();
+            lastEntries.forEach(function (entry) { seen[entry.challenge.challenge_id] = stateSignature(entry); });
+            setSeenMap(seen);
+            document.querySelectorAll('.challenge-bell-badge').forEach(function (badge) { badge.classList.add('hidden'); });
+        }
+
+        // Botón "Ver estado" de un desafío aceptado-pero-sin-terminar:
+        // vuelve a consultar en el momento en vez de esperar al próximo
+        // ciclo de 25s -- así el usuario puede efectivamente "entrar a ver
+        // el desarrollo" de su reto, no solo esperar pasivamente.
+        window.checkChallengeResultNow = async function (challengeId, btnEl) {
+            if (btnEl) { btnEl.disabled = true; btnEl.textContent = 'Revisando...'; }
+            await refreshChallengeBell({ renderList: true });
+            var stillGoing = lastEntries.find(function (e) { return e.challenge.challenge_id === challengeId && !e.finished; });
+            if (stillGoing && typeof showToast === 'function') {
+                showToast('Todavía no hay resultado -- la batalla puede seguir en curso. Volvé a intentar en un momento.', 'info');
+            }
+        };
+
+        window.toggleChallengeNotifications = function () {
+            var modal = document.getElementById('challengeBellModal');
+            if (!modal) return;
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+            document.body.style.overflow = 'hidden';
+            renderChallengeBellList();
+            refreshChallengeBell({ renderList: true });
+        };
+        window.closeChallengeNotifications = function () {
+            var modal = document.getElementById('challengeBellModal');
+            if (!modal) return;
+            modal.classList.add('hidden');
+            modal.classList.remove('flex');
+            document.body.style.overflow = '';
+        };
+
+        // Se revisa al cargar y cada 25s de ahí en más -- mismo criterio de
+        // polling que ya usa el resto de la app (matchmaking, torneos) en
+        // vez de sumar una suscripción realtime nueva para algo que no
+        // necesita ser instantáneo. Arranca el intervalo sin condicionarlo
+        // a que ya haya sesión en este instante: loadMyChallengeUpdates()
+        // ya resuelve solo a lista vacía sin sesión (llamada barata, sin
+        // efecto) -- así, si el usuario inicia sesión después SIN recargar
+        // la página, el aviso empieza a funcionar solo en el próximo ciclo
+        // en vez de quedar apagado para siempre por haber arrancado sin
+        // sesión.
+        function initChallengeBell() {
+            refreshChallengeBell();
+            setInterval(function () { refreshChallengeBell(); }, 25000);
+        }
+
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', function () { setTimeout(initChallengeBell, 1500); });
+        } else {
+            setTimeout(initChallengeBell, 1500);
+        }
+    })();
+    </script>
 
     <!-- Toast Container -->
     <div id="toastContainer" class="fixed top-20 right-4 z-[200] flex flex-col gap-2"></div>
@@ -9306,7 +9502,13 @@
                     <div class="mtr2-logo-dot"></div>
                     <span class="mtr2-h" style="font-size:16px; font-weight:700; color:#00f0ff;">MusicToken Ring</span>
                 </div>
-                <div id="mtr2CreditsChipWrap" style="font-size:11px; font-weight:800; color:#ff2ec4; background:rgba(255,46,196,0.12); border:1px solid rgba(255,46,196,0.35); border-radius:8px; padding:5px 9px; white-space:nowrap;"><span id="mtr2CreditsChip">0</span> créditos</div>
+                <div style="display:flex; align-items:center; gap:8px;">
+                    <button type="button" onclick="if(typeof window.toggleChallengeNotifications==='function') window.toggleChallengeNotifications(this)" style="position:relative; width:32px; height:32px; border-radius:9px; background:rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.12); display:flex; align-items:center; justify-content:center; color:#e5e7eb; flex-shrink:0;" aria-label="Notificaciones de tus desafíos" title="Notificaciones de tus desafíos">
+                        <span data-mtr-icon="bell" data-mtr-plain data-mtr-size="16"></span>
+                        <span class="challenge-bell-badge hidden" style="position:absolute; top:-4px; right:-4px; min-width:16px; height:16px; padding:0 3px; border-radius:999px; background:#ff2ec4; color:#05060a; font-size:10px; font-weight:800; display:flex; align-items:center; justify-content:center; line-height:1;">0</span>
+                    </button>
+                    <div id="mtr2CreditsChipWrap" style="font-size:11px; font-weight:800; color:#ff2ec4; background:rgba(255,46,196,0.12); border:1px solid rgba(255,46,196,0.35); border-radius:8px; padding:5px 9px; white-space:nowrap;"><span id="mtr2CreditsChip">0</span> créditos</div>
+                </div>
             </div>
             <div class="mtr2-content">
                 <div id="mtr2StreamSlot" style="margin-bottom:16px;"></div>
