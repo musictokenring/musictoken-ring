@@ -4812,9 +4812,12 @@ const GameEngine = {
                 // Este dispositivo perdió la carrera pero su usuario es el
                 // ganador oficial -- el otro dispositivo ya pagó el premio,
                 // acá solo hace falta refrescar el saldo propio para verlo.
-                const walletAddress = this.connectedWallet || localStorage.getItem('mtr_wallet');
-                if (walletAddress && window.CreditsSystem) {
-                    setTimeout(() => { window.CreditsSystem.loadBalance(walletAddress); }, 1500);
+                // Sin exigir walletAddress (relacionado al fix de arriba en
+                // awardCredits): loadBalance ya resuelve por userId de
+                // sesión aunque no haya wallet conectada.
+                if (window.CreditsSystem) {
+                    const walletAddress = this.connectedWallet || localStorage.getItem('mtr_wallet');
+                    setTimeout(() => { window.CreditsSystem.loadBalance(walletAddress || null, session?.user?.id || null); }, 1500);
                 }
             }
         } else {
@@ -6137,31 +6140,66 @@ const GameEngine = {
                     credits: credits,
                     matchId: matchId
                 });
-                
-                // CRÍTICO: Verificar que el usuario esté autenticado antes de llamar a RPC
+
+                // CRÍTICO: Verificar que el usuario esté autenticado antes de llamar al backend
                 const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-                
+
                 if (sessionError || !session) {
                     console.error('[game-engine] ❌ Usuario no autenticado, no se pueden otorgar créditos');
                     showToast('Error al otorgar créditos. Por favor, inicia sesión.', 'error');
                     return;
                 }
-                
-                console.log('[game-engine] ✅ Usuario autenticado:', session.user.id);
-                
-                // Llamar directamente a la función RPC de Supabase
-                const { error: rpcError } = await supabase.rpc('increment_user_credits', {
-                    user_id_param: userId,
-                    credits_to_add: credits
-                });
 
-                if (rpcError) {
-                    console.error('[game-engine] ❌ Error agregando créditos vía RPC:', rpcError);
+                console.log('[game-engine] ✅ Usuario autenticado:', session.user.id);
+
+                // BUG real reportado en vivo ("problemas con el balance al
+                // ganar la batalla"): esto llamaba antes DIRECTO al RPC
+                // increment_user_credits contra userId tal cual venía (el id
+                // crudo guardado en matches.player1_id/player2_id) -- para
+                // una cuenta con wallet vinculada, el saldo real puede vivir
+                // bajo un id de fila `users` DISTINTO al de sesión (mismo
+                // motivo por el que apostar ya pasa por el backend con
+                // resolveCreditsUserId, ver updateBalance()/deduct-credits
+                // más abajo). El RPC de verdad sumaba créditos, pero a un id
+                // que el balance en pantalla nunca lee -- dinero acreditado
+                // pero invisible. Ahora pasa por el mismo backend, que
+                // relee el match real y resuelve el id correcto antes de
+                // acreditar, en vez de acreditar directo desde el cliente.
+                if (!matchId) {
+                    console.error('[awardCredits] ❌ Sin matchId no se puede pedir el pago al backend de forma segura');
                     showToast('Error al otorgar créditos. Contacta soporte.', 'error');
                     return;
                 }
-                
-                console.log('[game-engine] ✅ Créditos agregados vía Supabase RPC:', credits);
+                const backendUrl = window.CONFIG?.BACKEND_API || window.CreditsSystem?.backendUrl || 'https://musictoken-ring.onrender.com';
+                let awardResult = null;
+                try {
+                    const awardResp = await fetch(`${backendUrl}/api/matches/${encodeURIComponent(matchId)}/award-winner`, {
+                        method: 'POST',
+                        headers: await this.getBackendAuthHeaders(),
+                    });
+                    awardResult = await awardResp.json().catch(() => ({}));
+                    if (!awardResp.ok || !awardResult.ok) {
+                        throw new Error(awardResult.error || ('HTTP ' + awardResp.status));
+                    }
+                } catch (awardError) {
+                    console.error('[game-engine] ❌ Error acreditando premio vía backend:', awardError);
+                    showToast('Error al otorgar créditos. Contacta soporte.', 'error');
+                    return;
+                }
+                // El backend puede haber resuelto un id DISTINTO al userId
+                // crudo (cuenta con wallet vinculada) para el crédito real --
+                // se guarda aparte, sin pisar `userId`: match_wins/
+                // updateUserStats siguen usando el id crudo de siempre (no
+                // es lo que estaba roto, y cambiarlo arriesgaría desalinear
+                // las estadísticas del perfil, que sí leen por ese id). Solo
+                // hace falta el id resuelto para saber si el ganador es el
+                // usuario actual y así refrescarle el saldo/mostrarle el
+                // toast -- comparando contra CUALQUIERA de los dos ids, para
+                // no dejar de detectarlo justo en el caso (wallet vinculada)
+                // que este fix existe para arreglar.
+                const creditedUserId = awardResult.winnerUserId || userId;
+                credits = (typeof awardResult.credited === 'number') ? awardResult.credited : credits;
+                console.log('[game-engine] ✅ Créditos agregados vía backend (award-winner):', credits, 'a', creditedUserId);
 
                 // CRÍTICO: Registrar victoria usando el winnerUserId, no session.user.id
                 // Record win in database
@@ -6173,24 +6211,30 @@ const GameEngine = {
                         credits_won: credits,
                         created_at: new Date().toISOString()
                     }]);
-                
+
                 if (winError) {
                     console.error('[awardCredits] ❌ Error registrando victoria:', winError);
                 } else {
                     console.log('[awardCredits] ✅ Victoria registrada en match_wins para usuario:', userId);
                 }
-                
+
                 // CRÍTICO: Actualizar estadísticas del ganador (no del usuario actual)
                 await this.updateUserStats(userId, true, credits, matchId);
-                
+
                 // CRÍTICO: Recargar balance solo si el ganador es el usuario actual
-                if (session?.user?.id === userId) {
-                    const walletAddress = this.connectedWallet || localStorage.getItem('mtr_wallet');
-                    if (walletAddress && window.CreditsSystem) {
-                        // CRÍTICO: Esperar un momento antes de recargar para asegurar que Supabase se actualizó
+                if (session?.user?.id === userId || session?.user?.id === creditedUserId) {
+                    if (window.CreditsSystem) {
+                        const walletAddress = this.connectedWallet || localStorage.getItem('mtr_wallet');
+                        // BUG relacionado, encontrado de paso: esto exigía
+                        // walletAddress para refrescar -- un ganador SIN
+                        // wallet conectada (opcional en toda la app, ver
+                        // Wallet now optional everywhere) se quedaba sin
+                        // ver su saldo actualizado ni el toast, aunque el
+                        // crédito ya estuviera bien acreditado. loadBalance
+                        // ya resuelve por sesión/userId aunque no haya
+                        // wallet (mismo atajo que usa updateBalance()).
                         await new Promise(resolve => setTimeout(resolve, 500));
-                        // Recargar balance (ahora siempre consulta Supabase primero)
-                        await window.CreditsSystem.loadBalance(walletAddress);
+                        await window.CreditsSystem.loadBalance(walletAddress || null, session.user.id);
                         showToast(`¡Ganaste ${credits.toFixed(2)} créditos (estables)!`, 'success');
                     }
                 } else {

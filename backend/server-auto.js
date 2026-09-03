@@ -28,6 +28,7 @@ const {
     verifyUserCanMutateCredits,
     resolvePublicUserId,
     resolveCreditsUserId,
+    verifyUserInMatch,
     authorizeTournamentJoin
 } = require('./auth-middleware');
 const { startTournamentScheduler } = require('./tournament-scheduler');
@@ -655,6 +656,105 @@ app.post('/api/user/deduct-credits', requireCreditMutationAuth, async (req, res)
         });
     } catch (error) {
         console.error('[server] Error deducting credits:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+/**
+ * Acredita el premio de una batalla al ganador -- reemplaza el RPC
+ * increment_user_credits que game-engine.js llamaba DIRECTO desde el
+ * cliente contra el id crudo de matches.player1_id/player2_id.
+ *
+ * BUG real reportado en vivo ("problemas con el balance al ganar la
+ * batalla"): apostar SIEMPRE resta del id correcto -- /api/user/
+ * deduct-credits ya resuelve con resolveCreditsUserId() (una cuenta con
+ * wallet vinculada puede tener el saldo real bajo un id de fila `users`
+ * distinto del id de sesión). Pero el PREMIO se sumaba directo, desde el
+ * navegador, al id crudo guardado en el match -- para una cuenta así, el
+ * RPC de verdad corría y de verdad sumaba créditos, pero a un id que el
+ * balance en pantalla del usuario nunca lee. El dinero no desaparecía de
+ * la base, pero era invisible: exactamente lo reportado.
+ *
+ * Nunca confía en lo que mande el cliente para decidir CUÁNTO ni A QUIÉN
+ * acreditar -- relee el match real de la base y recalcula todo server-side,
+ * para que esto no pueda usarse para acreditarse a sí mismo ni a nadie
+ * créditos arbitrarios. Solo exige que quien llama sea uno de los dos
+ * jugadores de ESE match (igual que requireVaultFeeAuth ya hace para el
+ * fee de apuesta) -- cualquiera de los dos dispositivos puede ganar la
+ * "carrera de resolución" del lado del cliente (ver endBattle en
+ * game-engine.js) y terminar siendo quien llama acá.
+ */
+app.post('/api/matches/:matchId/award-winner', requireCreditMutationAuth, async (req, res) => {
+    try {
+        const { matchId } = req.params;
+        if (!matchId) return res.status(400).json({ error: 'matchId requerido' });
+        if (!req.authUser) return res.status(401).json({ error: 'Inicia sesión para procesar el premio.' });
+
+        const { data: match, error: matchError } = await supabase
+            .from('matches')
+            .select('id, status, winner, player1_id, player2_id, total_pot, match_type')
+            .eq('id', matchId)
+            .maybeSingle();
+
+        if (matchError || !match) {
+            return res.status(404).json({ error: 'Match no encontrado' });
+        }
+        if (match.status !== 'finished' || match.winner == null) {
+            return res.status(400).json({ error: 'El match todavía no tiene un ganador registrado' });
+        }
+
+        const inMatch = await verifyUserInMatch(supabase, req.authUser, matchId);
+        if (!inMatch) {
+            return res.status(403).json({ error: 'No participas en esta partida.' });
+        }
+
+        const winnerUserId = match.winner === 1 ? match.player1_id : match.player2_id;
+        if (!winnerUserId) {
+            return res.status(400).json({ error: 'Match sin ganador válido' });
+        }
+
+        const totalPot = parseFloat(match.total_pot || 0);
+        const BET_FEE_RATE = 0.02;
+        const platformFee = totalPot * BET_FEE_RATE;
+        const winnerPayout = totalPot - platformFee;
+
+        if (winnerPayout <= 0) {
+            // Pozo en 0 (ej. batalla amistosa CPU sin rival humano a tiempo,
+            // ver startQuickCpuFallback) -- nada que acreditar, no es un error.
+            return res.json({ ok: true, winnerUserId, credited: 0, platformFee: 0 });
+        }
+
+        const { data: winnerRow } = await supabase
+            .from('users')
+            .select('id, email, wallet_address')
+            .eq('id', winnerUserId)
+            .maybeSingle();
+
+        const resolved = await resolveCreditsUserId(
+            supabase,
+            {
+                getUserIdFromWallet: (addr) =>
+                    walletLinkService ? walletLinkService.getUserIdFromWallet(addr) : null
+            },
+            { id: winnerUserId, email: winnerRow?.email || null },
+            winnerRow?.wallet_address || null
+        );
+        const targetUserId = resolved.userId;
+
+        const { error: creditError } = await supabase.rpc('increment_user_credits', {
+            user_id_param: targetUserId,
+            credits_to_add: winnerPayout
+        });
+
+        if (creditError) {
+            console.error('[award-winner] increment_user_credits falló:', creditError);
+            return res.status(500).json({ error: 'No se pudo acreditar el premio' });
+        }
+
+        console.log(`[award-winner] match ${matchId}: acreditados ${winnerPayout} a ${targetUserId} (winnerUserId original: ${winnerUserId})`);
+        res.json({ ok: true, winnerUserId: targetUserId, credited: winnerPayout, platformFee });
+    } catch (error) {
+        console.error('[award-winner] Error:', error);
         res.status(500).json({ error: error.message });
     }
 });
