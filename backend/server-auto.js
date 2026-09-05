@@ -709,7 +709,7 @@ app.post('/api/matches/:matchId/award-winner', requireCreditMutationAuth, async 
 
         const { data: match, error: matchError } = await supabase
             .from('matches')
-            .select('id, status, winner, player1_id, player2_id, total_pot, match_type')
+            .select('id, status, winner, player1_id, player2_id, total_pot, match_type, stake_type')
             .eq('id', matchId)
             .maybeSingle();
 
@@ -739,6 +739,27 @@ app.post('/api/matches/:matchId/award-winner', requireCreditMutationAuth, async 
             // Pozo en 0 (ej. batalla amistosa CPU sin rival humano a tiempo,
             // ver startQuickCpuFallback) -- nada que acreditar, no es un error.
             return res.json({ ok: true, winnerUserId, credited: 0, platformFee: 0 });
+        }
+
+        // Partida de prueba (bono): el premio se paga en bonus_credits,
+        // JAMÁS en credits real -- por eso ni siquiera se resuelve con
+        // resolveCreditsUserId() (esa lógica es para cuentas reales con
+        // wallets vinculadas viejas; el sistema de bonos es nuevo, cada
+        // cuenta tiene un solo id). Vencimiento fresco de 3 días para que
+        // el ganador tenga tiempo de decidir si quiere recargar de verdad.
+        if (match.stake_type === 'bonus') {
+            const bonusExpiresAt = new Date(Date.now() + BONUS_INVITE_DEFAULT_EXPIRES_DAYS * 24 * 60 * 60 * 1000).toISOString();
+            const { error: bonusCreditError } = await supabase.rpc('increment_bonus_credits', {
+                user_id_param: winnerUserId,
+                credits_to_add: winnerPayout,
+                new_expires_at: bonusExpiresAt
+            });
+            if (bonusCreditError) {
+                console.error('[award-winner] increment_bonus_credits falló:', bonusCreditError);
+                return res.status(500).json({ error: 'No se pudo acreditar el premio de prueba' });
+            }
+            console.log(`[award-winner] match ${matchId} (bonus): acreditados ${winnerPayout} créditos de prueba a ${winnerUserId}`);
+            return res.json({ ok: true, winnerUserId, credited: winnerPayout, platformFee, stakeType: 'bonus' });
         }
 
         const { data: winnerRow } = await supabase
@@ -2053,6 +2074,11 @@ app.get('/api/challenges/:challengeId/status', async (req, res) => {
 
         if (isPastExpiry) {
             const betAmount = Number(challenge.bet_amount);
+            // Un desafío de prueba (bono) vencido se reembolsa en
+            // bonus_credits -- nunca en credits real, aunque la apuesta
+            // "parezca" un número de crédito normal.
+            const isBonusChallenge = challenge.stake_type === 'bonus';
+            const bonusRefundExpiresAt = new Date(Date.now() + BONUS_INVITE_DEFAULT_EXPIRES_DAYS * 24 * 60 * 60 * 1000).toISOString();
 
             // Mismo orden seguro que cancelSocialChallenge() en el cliente:
             // reembolsar primero, y solo si el UPDATE atómico condicionado
@@ -2060,10 +2086,16 @@ app.get('/api/challenges/:challengeId/status', async (req, res) => {
             // lo aceptó/canceló/expiró mientras tanto) dar el reembolso por
             // bueno. Si el UPDATE no afecta ninguna fila, revertir el
             // reembolso para no acreditar doble.
-            const { error: creditError } = await supabase.rpc('increment_user_credits', {
-                user_id_param: challenge.challenger_id,
-                credits_to_add: betAmount
-            });
+            const { error: creditError } = isBonusChallenge
+                ? await supabase.rpc('increment_bonus_credits', {
+                    user_id_param: challenge.challenger_id,
+                    credits_to_add: betAmount,
+                    new_expires_at: bonusRefundExpiresAt
+                })
+                : await supabase.rpc('increment_user_credits', {
+                    user_id_param: challenge.challenger_id,
+                    credits_to_add: betAmount
+                });
 
             if (creditError) {
                 console.error('[challenges/status] Error reembolsando desafío vencido:', challengeId, creditError.message);
@@ -2090,10 +2122,17 @@ app.get('/api/challenges/:challengeId/status', async (req, res) => {
                     // Alguien ganó la carrera (o el UPDATE falló) -- revertir
                     // el reembolso recién dado para no duplicar crédito, y
                     // releer el estado real vigente.
-                    await supabase.rpc('decrement_user_credits', {
-                        user_id_param: challenge.challenger_id,
-                        credits_to_subtract: betAmount
-                    });
+                    if (isBonusChallenge) {
+                        await supabase.rpc('decrement_bonus_credits', {
+                            user_id_param: challenge.challenger_id,
+                            credits_to_subtract: betAmount
+                        });
+                    } else {
+                        await supabase.rpc('decrement_user_credits', {
+                            user_id_param: challenge.challenger_id,
+                            credits_to_subtract: betAmount
+                        });
+                    }
                     const { data: fresh } = await supabase
                         .from('social_challenges')
                         .select('*')
@@ -2113,7 +2152,8 @@ app.get('/api/challenges/:challengeId/status', async (req, res) => {
             challenger_song_name: challenge.challenger_song_name,
             challenger_song_artist: challenge.challenger_song_artist,
             challenger_song_image: challenge.challenger_song_image,
-            genre_label: challenge.genre_label || null
+            genre_label: challenge.genre_label || null,
+            stake_type: challenge.stake_type || 'real'
         });
     } catch (error) {
         console.error('[challenges/status] error:', error);
@@ -3064,6 +3104,454 @@ app.post('/api/admin/withdrawals/cop/:id/reject', requireInternalSecret, async (
     } catch (e) {
         console.error('[admin-withdrawals-cop-reject]', e);
         res.status(400).json({ ok: false, error: e.message });
+    }
+});
+
+// ============================================================
+// SISTEMA DE CRÉDITOS DE PRUEBA (BONOS) -- ver bonus-credits-system.sql
+// Dos billeteras separadas por usuario: `credits` (real, de siempre,
+// retirable) y `bonus_credits` (de prueba, con vencimiento, NUNCA
+// retirable -- ni como saldo propio ni como premio ganado con ella).
+// Todo lo admin vive detrás de requireInternalSecret, mismo panel
+// que ya usás para los retiros COP.
+// ============================================================
+
+const BONUS_MIN_AMOUNT = 1;
+const BONUS_MAX_AMOUNT = 100000; // tope de sanidad del formulario, no un límite de negocio
+const BONUS_MAX_EXPIRES_DAYS = 90;
+const BONUS_INVITE_DEFAULT_EXPIRES_DAYS = 3;
+
+async function resolveUserIdForAdmin(identifier) {
+    if (!identifier) return null;
+    const raw = String(identifier).trim();
+    if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(raw)) {
+        const { data } = await supabase.from('users').select('id').eq('id', raw).maybeSingle();
+        if (data) return data.id;
+    }
+    if (raw.includes('@')) {
+        const { data } = await supabase.from('users').select('id').ilike('email', raw).maybeSingle();
+        if (data) return data.id;
+    }
+    const { data: byWallet } = await supabase.from('users').select('id').ilike('wallet_address', raw).maybeSingle();
+    if (byWallet) return byWallet.id;
+    return null;
+}
+
+/**
+ * Otorga un bono de prueba manual -- panel admin, pestaña "Bonos".
+ * Solo toca bonus_credits, jamás credits real.
+ */
+app.post('/api/admin/bonus/grant', requireInternalSecret, async (req, res) => {
+    try {
+        const { identifier, amount, expiresInDays, note, bonusType, adminLabel } = req.body;
+
+        const parsedAmount = Number(amount);
+        const parsedDays = Number(expiresInDays);
+        if (!identifier) return res.status(400).json({ ok: false, error: 'Falta identifier (email, wallet o user id)' });
+        if (!Number.isFinite(parsedAmount) || parsedAmount < BONUS_MIN_AMOUNT || parsedAmount > BONUS_MAX_AMOUNT) {
+            return res.status(400).json({ ok: false, error: `Monto inválido (entre ${BONUS_MIN_AMOUNT} y ${BONUS_MAX_AMOUNT})` });
+        }
+        if (!Number.isFinite(parsedDays) || parsedDays <= 0 || parsedDays > BONUS_MAX_EXPIRES_DAYS) {
+            return res.status(400).json({ ok: false, error: `Días de vencimiento inválidos (entre 1 y ${BONUS_MAX_EXPIRES_DAYS})` });
+        }
+        const type = bonusType === 'social_challenge_invite' ? 'social_challenge_invite' : 'platform_trial';
+
+        const userId = await resolveUserIdForAdmin(identifier);
+        if (!userId) return res.status(404).json({ ok: false, error: 'No se encontró ningún usuario con ese email/wallet/id' });
+
+        const expiresAt = new Date(Date.now() + parsedDays * 24 * 60 * 60 * 1000).toISOString();
+
+        const { error: rpcError } = await supabase.rpc('increment_bonus_credits', {
+            user_id_param: userId,
+            credits_to_add: parsedAmount,
+            new_expires_at: expiresAt
+        });
+        if (rpcError) {
+            console.error('[admin-bonus-grant] increment_bonus_credits falló:', rpcError);
+            return res.status(500).json({ ok: false, error: 'No se pudo otorgar el bono' });
+        }
+
+        const { error: logError } = await supabase.from('bonus_grants').insert([{
+            user_id: userId,
+            amount: parsedAmount,
+            bonus_type: type,
+            granted_by: adminLabel || 'admin',
+            note: note || null,
+            expires_at: expiresAt,
+            status: 'active'
+        }]);
+        if (logError) {
+            console.warn('[admin-bonus-grant] No se pudo registrar en bonus_grants (el bono ya se otorgó igual):', logError.message);
+        }
+
+        const { data: updated } = await supabase.from('user_credits').select('bonus_credits, bonus_expires_at').eq('user_id', userId).maybeSingle();
+
+        res.json({ ok: true, userId, granted: parsedAmount, expiresAt, currentBonusBalance: updated?.bonus_credits ?? null });
+    } catch (error) {
+        console.error('[admin-bonus-grant] Error:', error);
+        res.status(500).json({ ok: false, error: error.message });
+    }
+});
+
+/** Lista los bonos otorgados recientemente -- panel admin, pestaña "Bonos". */
+app.get('/api/admin/bonus/list', requireInternalSecret, async (req, res) => {
+    try {
+        const limit = Math.min(200, Math.max(1, Number(req.query.limit) || 50));
+        const { data: grants, error } = await supabase
+            .from('bonus_grants')
+            .select('id, user_id, amount, bonus_type, granted_by, note, expires_at, status, created_at')
+            .order('created_at', { ascending: false })
+            .limit(limit);
+        if (error) throw error;
+
+        const userIds = [...new Set((grants || []).map(g => g.user_id))];
+        let usersById = {};
+        if (userIds.length) {
+            const { data: users } = await supabase.from('users').select('id, email, wallet_address').in('id', userIds);
+            usersById = Object.fromEntries((users || []).map(u => [u.id, u]));
+        }
+
+        const rows = (grants || []).map(g => ({
+            ...g,
+            user_email: usersById[g.user_id]?.email || null,
+            user_wallet: usersById[g.user_id]?.wallet_address || null
+        }));
+
+        res.json({ ok: true, grants: rows });
+    } catch (error) {
+        console.error('[admin-bonus-list] Error:', error);
+        res.status(500).json({ ok: false, error: error.message });
+    }
+});
+
+/**
+ * Revoca el saldo de prueba activo de un usuario (ej. abuso detectado).
+ * No borra el historial, solo pone bonus_credits en 0 y marca sus
+ * bonus_grants activos como 'revoked'.
+ */
+app.post('/api/admin/bonus/revoke', requireInternalSecret, async (req, res) => {
+    try {
+        const { userId, identifier } = req.body;
+        const targetUserId = userId || await resolveUserIdForAdmin(identifier);
+        if (!targetUserId) return res.status(400).json({ ok: false, error: 'Falta userId o identifier' });
+
+        const { error: zeroError } = await supabase
+            .from('user_credits')
+            .update({ bonus_credits: 0, bonus_expires_at: null, updated_at: new Date().toISOString() })
+            .eq('user_id', targetUserId);
+        if (zeroError) throw zeroError;
+
+        await supabase.from('bonus_grants').update({ status: 'revoked' }).eq('user_id', targetUserId).eq('status', 'active');
+
+        res.json({ ok: true, userId: targetUserId });
+    } catch (error) {
+        console.error('[admin-bonus-revoke] Error:', error);
+        res.status(500).json({ ok: false, error: error.message });
+    }
+});
+
+/**
+ * Foto de contabilidad en vivo -- productiza la auditoría manual de hoy
+ * (AUDITORIA-CONCILIACION-2026-09.sql) como endpoint reusable. Todo de
+ * solo lectura, nada muta acá.
+ */
+app.get('/api/admin/accounting/overview', requireInternalSecret, async (req, res) => {
+    try {
+        const [
+            creditsAgg, fiatAgg, onchainAgg, depositsAllTime, deposits30d,
+            withdrawalsAgg, vaultRow, activeBonusCount, matchesFinished
+        ] = await Promise.all([
+            supabase.from('user_credits').select('credits, bonus_credits'),
+            supabase.from('users').select('saldo_fiat'),
+            supabase.from('users').select('saldo_onchain'),
+            supabase.from('deposits').select('amount, status'),
+            supabase.from('deposits').select('amount, status').gte('created_at', new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString()),
+            supabase.from('withdrawal_requests_cop').select('amount_cop, amount_usd_equivalent, status'),
+            supabase.from('vault_balance').select('*').limit(1).maybeSingle(),
+            supabase.from('bonus_grants').select('id', { count: 'exact', head: true }).eq('status', 'active'),
+            supabase.from('matches').select('id', { count: 'exact', head: true }).eq('status', 'finished')
+        ]);
+
+        const sum = (rows, field) => (rows || []).reduce((acc, r) => acc + (parseFloat(r[field]) || 0), 0);
+
+        const withdrawalsByStatus = {};
+        (withdrawalsAgg.data || []).forEach(w => {
+            const s = w.status || 'unknown';
+            withdrawalsByStatus[s] = withdrawalsByStatus[s] || { count: 0, cop: 0, usd: 0 };
+            withdrawalsByStatus[s].count += 1;
+            withdrawalsByStatus[s].cop += parseFloat(w.amount_cop) || 0;
+            withdrawalsByStatus[s].usd += parseFloat(w.amount_usd_equivalent) || 0;
+        });
+
+        res.json({
+            ok: true,
+            generatedAt: new Date().toISOString(),
+            realCreditsOutstanding: sum(creditsAgg.data, 'credits'),
+            bonusCreditsOutstanding: sum(creditsAgg.data, 'bonus_credits'),
+            saldoFiatTotal: sum(fiatAgg.data, 'saldo_fiat'),
+            saldoOnchainTotal: sum(onchainAgg.data, 'saldo_onchain'),
+            deposits: {
+                allTimeCount: (depositsAllTime.data || []).length,
+                allTimeUsd: sum((depositsAllTime.data || []).filter(d => d.status === 'processed'), 'amount'),
+                last30dCount: (deposits30d.data || []).length,
+                last30dUsd: sum((deposits30d.data || []).filter(d => d.status === 'processed'), 'amount')
+            },
+            withdrawalsByStatus,
+            vaultBalance: vaultRow.data || null,
+            activeBonusGrants: activeBonusCount.count || 0,
+            matchesFinished: matchesFinished.count || 0
+        });
+    } catch (error) {
+        console.error('[admin-accounting-overview] Error:', error);
+        res.status(500).json({ ok: false, error: error.message });
+    }
+});
+
+/** Descuenta bonus_credits del usuario autenticado (equivalente a deduct-credits, pero de prueba). */
+app.post('/api/user/deduct-bonus-credits', requireCreditMutationAuth, async (req, res) => {
+    try {
+        const { credits, walletAddress } = req.body;
+        if (!credits || credits <= 0) return res.status(400).json({ error: 'Invalid credits amount' });
+        if (!req.authUser) return res.status(401).json({ error: 'Inicia sesión primero.' });
+
+        const resolved = await resolveCreditsUserId(supabase, {
+            getUserIdFromWallet: (addr) => walletLinkService ? walletLinkService.getUserIdFromWallet(addr) : null
+        }, req.authUser, walletAddress || null);
+        const targetUserId = resolved.userId;
+
+        if (req.authMode === 'user') {
+            const allowed = await verifyUserCanMutateCredits(supabase, {
+                getUserIdFromWallet: (addr) => walletLinkService ? walletLinkService.getUserIdFromWallet(addr) : null
+            }, req.authUser, { userId: targetUserId, walletAddress });
+            if (!allowed) return res.status(403).json({ error: 'Forbidden' });
+        }
+
+        const { data: deductedOk, error: rpcError } = await supabase.rpc('decrement_bonus_credits', {
+            user_id_param: targetUserId,
+            credits_to_subtract: credits
+        });
+        if (rpcError) {
+            console.error('[deduct-bonus-credits] decrement_bonus_credits falló:', rpcError);
+            return res.status(500).json({ error: 'No se pudo descontar el bono' });
+        }
+        if (!deductedOk) {
+            return res.status(400).json({ error: 'Saldo de prueba insuficiente o vencido' });
+        }
+
+        res.json({ success: true, userId: targetUserId, creditsDeducted: credits });
+    } catch (error) {
+        console.error('[deduct-bonus-credits] Error:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+/** Reembolsa bonus_credits al usuario autenticado (ej. cancelar un reto de prueba). */
+app.post('/api/user/refund-bonus-credits', requireCreditMutationAuth, async (req, res) => {
+    try {
+        const { credits, walletAddress, expiresInDays } = req.body;
+        if (!credits || credits <= 0) return res.status(400).json({ error: 'Invalid credits amount' });
+        if (!req.authUser) return res.status(401).json({ error: 'Inicia sesión primero.' });
+
+        const resolved = await resolveCreditsUserId(supabase, {
+            getUserIdFromWallet: (addr) => walletLinkService ? walletLinkService.getUserIdFromWallet(addr) : null
+        }, req.authUser, walletAddress || null);
+        const targetUserId = resolved.userId;
+
+        if (req.authMode === 'user') {
+            const allowed = await verifyUserCanMutateCredits(supabase, {
+                getUserIdFromWallet: (addr) => walletLinkService ? walletLinkService.getUserIdFromWallet(addr) : null
+            }, req.authUser, { userId: targetUserId, walletAddress });
+            if (!allowed) return res.status(403).json({ error: 'Forbidden' });
+        }
+
+        const days = Number(expiresInDays) > 0 ? Number(expiresInDays) : BONUS_INVITE_DEFAULT_EXPIRES_DAYS;
+        const expiresAt = new Date(Date.now() + days * 24 * 60 * 60 * 1000).toISOString();
+        const { error: rpcError } = await supabase.rpc('increment_bonus_credits', {
+            user_id_param: targetUserId,
+            credits_to_add: credits,
+            new_expires_at: expiresAt
+        });
+        if (rpcError) {
+            console.error('[refund-bonus-credits] increment_bonus_credits falló:', rpcError);
+            return res.status(500).json({ error: 'No se pudo procesar el reembolso de prueba' });
+        }
+
+        res.json({ ok: true, userId: targetUserId, credited: credits });
+    } catch (error) {
+        console.error('[refund-bonus-credits] Error:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+/**
+ * Crea un Desafío Social financiado con bonus_credits. A diferencia del
+ * flujo normal (insert desde el cliente + deducción aparte), esto corre
+ * enteramente server-side: nunca confía en que el cliente ya insertó la
+ * fila ni en qué stake_type dice tener -- descuenta el bono ANTES de
+ * crear el desafío, así nunca queda un desafío "bonus" sin respaldo real.
+ */
+app.post('/api/social-challenges/bonus/create', requireCreditMutationAuth, async (req, res) => {
+    try {
+        if (!req.authUser) return res.status(401).json({ error: 'Inicia sesión primero.' });
+        const { song, betAmount, genreId, genreLabel, walletAddress } = req.body;
+        if (!song || !song.id || !song.name || !song.artist) {
+            return res.status(400).json({ error: 'Falta información de la canción' });
+        }
+        const normalizedBet = Math.max(1, Math.round(Number(betAmount) || 1));
+
+        const resolved = await resolveCreditsUserId(supabase, {
+            getUserIdFromWallet: (addr) => walletLinkService ? walletLinkService.getUserIdFromWallet(addr) : null
+        }, req.authUser, walletAddress || null);
+        const challengerId = resolved.userId;
+
+        const { data: deductedOk, error: deductError } = await supabase.rpc('decrement_bonus_credits', {
+            user_id_param: challengerId,
+            credits_to_subtract: normalizedBet
+        });
+        if (deductError) {
+            console.error('[social-bonus-create] decrement_bonus_credits falló:', deductError);
+            return res.status(500).json({ error: 'No se pudo descontar el bono de prueba' });
+        }
+        if (!deductedOk) {
+            return res.status(400).json({ error: 'No tenés saldo de prueba suficiente (o venció). Pedile a un admin que te otorgue uno nuevo.' });
+        }
+
+        const genChallengeId = () => {
+            const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+            let id = '';
+            for (let i = 0; i < 12; i++) id += chars.charAt(Math.floor(Math.random() * chars.length));
+            return id;
+        };
+
+        const challengeRow = {
+            challenge_id: genChallengeId(),
+            challenger_id: challengerId,
+            challenger_song_id: song.id,
+            challenger_song_name: song.name,
+            challenger_song_artist: song.artist,
+            challenger_song_image: song.image || null,
+            challenger_song_preview: song.preview || null,
+            bet_amount: normalizedBet,
+            status: 'pending',
+            stake_type: 'bonus',
+            expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString()
+        };
+        if (genreId) {
+            challengeRow.genre_id = genreId;
+            challengeRow.genre_label = genreLabel || genreId;
+        }
+
+        let { data: challenge, error: insertError } = await supabase
+            .from('social_challenges')
+            .insert([challengeRow])
+            .select()
+            .single();
+
+        // Igual que createSocialChallenge() en game-engine.js: si la
+        // migración de género todavía no corrió, reintentar sin esas
+        // columnas en vez de romper la creación por un dato opcional.
+        if (insertError && genreId && String(insertError.message || '').indexOf('genre') !== -1) {
+            delete challengeRow.genre_id;
+            delete challengeRow.genre_label;
+            ({ data: challenge, error: insertError } = await supabase
+                .from('social_challenges')
+                .insert([challengeRow])
+                .select()
+                .single());
+        }
+
+        if (insertError) {
+            // Ya se descontó el bono -- si falla crear el desafío, devolverlo.
+            await supabase.rpc('increment_bonus_credits', {
+                user_id_param: challengerId,
+                credits_to_add: normalizedBet,
+                new_expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString()
+            }).catch(() => {});
+            console.error('[social-bonus-create] Error creando el desafío:', insertError);
+            return res.status(500).json({ error: 'No se pudo crear el desafío de prueba' });
+        }
+
+        res.json({ ok: true, challenge });
+    } catch (error) {
+        console.error('[social-bonus-create] Error:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+/**
+ * Antes de aceptar un Desafío Social 'bonus', el invitado puede no tener
+ * (o no tener suficiente) saldo de prueba -- ni siquiera cuenta, si es la
+ * primera vez que entra. Este endpoint lo revisa y, si hace falta, le
+ * otorga automáticamente un bono exacto para poder aceptar (registrado en
+ * bonus_grants con granted_by='system_auto', para que quede auditado
+ * igual que uno manual). No acepta el desafío por sí solo -- el cliente
+ * sigue llamando después al flujo normal de aceptar, ya con saldo.
+ */
+app.post('/api/social-challenges/:challengeId/ensure-bonus-balance', requireCreditMutationAuth, async (req, res) => {
+    try {
+        if (!req.authUser) return res.status(401).json({ error: 'Inicia sesión primero.' });
+        const { challengeId } = req.params;
+        const { walletAddress } = req.body;
+
+        const { data: challenge, error: challengeError } = await supabase
+            .from('social_challenges')
+            .select('id, challenge_id, status, bet_amount, stake_type')
+            .eq('challenge_id', challengeId)
+            .maybeSingle();
+        if (challengeError || !challenge) return res.status(404).json({ error: 'Desafío no encontrado' });
+        if (challenge.stake_type !== 'bonus') {
+            return res.json({ ok: true, toppedUp: false, reason: 'not_a_bonus_challenge' });
+        }
+        if (challenge.status !== 'pending') {
+            return res.status(400).json({ error: 'Este desafío ya no está pendiente' });
+        }
+
+        const resolved = await resolveCreditsUserId(supabase, {
+            getUserIdFromWallet: (addr) => walletLinkService ? walletLinkService.getUserIdFromWallet(addr) : null
+        }, req.authUser, walletAddress || null);
+        const accepterId = resolved.userId;
+
+        const { data: creditsRow } = await supabase
+            .from('user_credits')
+            .select('bonus_credits, bonus_expires_at')
+            .eq('user_id', accepterId)
+            .maybeSingle();
+
+        const currentBonus = parseFloat(creditsRow?.bonus_credits || 0);
+        const expired = creditsRow?.bonus_expires_at && new Date(creditsRow.bonus_expires_at) < new Date();
+        const needed = parseFloat(challenge.bet_amount);
+
+        if (!expired && currentBonus >= needed) {
+            return res.json({ ok: true, toppedUp: false });
+        }
+
+        const topUpAmount = expired ? needed : (needed - currentBonus);
+        const expiresAt = new Date(Date.now() + BONUS_INVITE_DEFAULT_EXPIRES_DAYS * 24 * 60 * 60 * 1000).toISOString();
+
+        const { error: rpcError } = await supabase.rpc('increment_bonus_credits', {
+            user_id_param: accepterId,
+            credits_to_add: topUpAmount,
+            new_expires_at: expiresAt
+        });
+        if (rpcError) {
+            console.error('[ensure-bonus-balance] increment_bonus_credits falló:', rpcError);
+            return res.status(500).json({ error: 'No se pudo preparar tu saldo de prueba' });
+        }
+
+        await supabase.from('bonus_grants').insert([{
+            user_id: accepterId,
+            amount: topUpAmount,
+            bonus_type: 'social_challenge_invite',
+            granted_by: 'system_auto',
+            note: `Auto-otorgado al abrir el desafío de prueba ${challengeId}`,
+            expires_at: expiresAt,
+            status: 'active'
+        }]);
+
+        res.json({ ok: true, toppedUp: true, amount: topUpAmount, expiresAt });
+    } catch (error) {
+        console.error('[ensure-bonus-balance] Error:', error);
+        res.status(500).json({ error: error.message });
     }
 });
 

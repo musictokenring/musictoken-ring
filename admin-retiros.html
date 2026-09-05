@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex, nofollow">
-<title>Admin · Retiros COP</title>
+<title>Admin · MusicToken Ring</title>
 <style>
     :root { color-scheme: dark; }
     body {
@@ -15,10 +15,16 @@
         padding: 1.5rem;
     }
     h1 { font-size: 1.1rem; color: #fbbf24; margin: 0 0 1rem; }
+    h2 { font-size: 0.95rem; color: #eee; margin: 1.4rem 0 0.6rem; }
     .secret-box { display: flex; gap: 0.5rem; margin-bottom: 1.5rem; }
     .secret-box input {
         flex: 1; padding: 0.6rem 0.8rem; border-radius: 8px;
         border: 1px solid #333; background: #16161f; color: #eee; font-size: 0.85rem;
+    }
+    input, select, textarea {
+        padding: 0.55rem 0.7rem; border-radius: 8px;
+        border: 1px solid #333; background: #16161f; color: #eee; font-size: 0.85rem;
+        font-family: inherit;
     }
     button {
         padding: 0.6rem 1rem; border-radius: 8px; border: 1px solid #444;
@@ -38,9 +44,6 @@
     .req-meta { font-size: 0.75rem; color: #888; }
     .req-details { font-size: 0.82rem; color: #ccc; margin: 0.6rem 0; }
     .empty { color: #666; font-size: 0.85rem; }
-    /* Filas de datos de pago copiables -- pensadas para que el operador nunca
-       tenga que digitar a mano el monto/telefono/cuenta al pagar (riesgo real
-       de error de digitación con plata real). */
     .copy-row {
         display: flex; align-items: center; gap: 0.5rem;
         padding: 0.35rem 0.5rem; border-radius: 6px; background: #16161f;
@@ -56,16 +59,105 @@
     .copy-btn:hover { background: #26262f; border-color: #eab308; }
     .copy-btn.copied { border-color: #14532d; background: #0f2718; }
     .req-actions { display: flex; gap: 0.5rem; margin-top: 0.6rem; }
+
+    /* Pestañas */
+    .tabs { display: flex; gap: 0.4rem; margin-bottom: 1.2rem; border-bottom: 1px solid #262633; }
+    .tab-btn {
+        border: none; background: none; color: #888; padding: 0.6rem 0.9rem;
+        font-size: 0.85rem; cursor: pointer; border-bottom: 2px solid transparent;
+    }
+    .tab-btn:hover { color: #eee; background: none; }
+    .tab-btn.active { color: #fbbf24; border-bottom-color: #fbbf24; font-weight: 700; }
+    .tab-panel { display: none; }
+    .tab-panel.active { display: block; }
+
+    /* Contabilidad */
+    .cards-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 0.7rem; margin-bottom: 1rem; }
+    .stat-card { border: 1px solid #262633; border-radius: 12px; padding: 0.9rem; background: #111118; }
+    .stat-label { font-size: 0.72rem; color: #888; margin-bottom: 0.3rem; }
+    .stat-value { font-size: 1.25rem; font-weight: 700; color: #eee; }
+    .stat-value.real { color: #86efac; }
+    .stat-value.bonus { color: #fdba74; }
+    .stat-sub { font-size: 0.72rem; color: #666; margin-top: 0.2rem; }
+    table.acc-table { width: 100%; border-collapse: collapse; font-size: 0.8rem; margin-bottom: 1rem; }
+    table.acc-table th, table.acc-table td { text-align: left; padding: 0.4rem 0.5rem; border-bottom: 1px solid #262633; }
+    table.acc-table th { color: #888; font-weight: 600; }
+
+    /* Bonos */
+    .bonus-form { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 0.6rem; margin-bottom: 0.8rem; }
+    .bonus-form label { display: flex; flex-direction: column; gap: 0.3rem; font-size: 0.75rem; color: #888; }
+    .grant-table { width: 100%; border-collapse: collapse; font-size: 0.78rem; }
+    .grant-table th, .grant-table td { text-align: left; padding: 0.45rem 0.5rem; border-bottom: 1px solid #262633; }
+    .grant-table th { color: #888; font-weight: 600; }
+    .pill { display: inline-block; padding: 0.12rem 0.5rem; border-radius: 999px; font-size: 0.7rem; font-weight: 700; }
+    .pill.active { background: rgba(134,239,172,0.12); color: #86efac; }
+    .pill.expired { background: rgba(156,163,175,0.15); color: #9ca3af; }
+    .pill.revoked { background: rgba(252,165,165,0.12); color: #fca5a5; }
 </style>
 </head>
 <body>
-    <h1>🧾 Retiros pendientes (COP)</h1>
+    <h1>🧾 Panel Admin · MusicToken Ring</h1>
     <div class="secret-box">
         <input id="secretInput" type="password" placeholder="BACKEND_INTERNAL_SECRET">
         <button class="primary" onclick="saveSecretAndLoad()">Entrar</button>
     </div>
     <div id="status"></div>
-    <div id="list"></div>
+
+    <div class="tabs">
+        <button type="button" class="tab-btn active" data-tab="retiros" onclick="switchTab('retiros')">Retiros</button>
+        <button type="button" class="tab-btn" data-tab="contabilidad" onclick="switchTab('contabilidad')">Contabilidad</button>
+        <button type="button" class="tab-btn" data-tab="bonos" onclick="switchTab('bonos')">Bonos</button>
+    </div>
+
+    <!-- ============ RETIROS ============ -->
+    <div id="tab-retiros" class="tab-panel active">
+        <div id="list"></div>
+    </div>
+
+    <!-- ============ CONTABILIDAD ============ -->
+    <div id="tab-contabilidad" class="tab-panel">
+        <button type="button" onclick="loadAccounting()">🔄 Actualizar</button>
+        <div id="accStatus" class="empty" style="margin: 0.6rem 0;"></div>
+        <div id="accCards" class="cards-grid"></div>
+        <h2>Retiros COP por estado</h2>
+        <table class="acc-table" id="accWithdrawalsTable"><tbody></tbody></table>
+        <h2>Depósitos</h2>
+        <table class="acc-table" id="accDepositsTable"><tbody></tbody></table>
+    </div>
+
+    <!-- ============ BONOS ============ -->
+    <div id="tab-bonos" class="tab-panel">
+        <h2>Otorgar bono de prueba</h2>
+        <p class="empty" style="margin: 0 0 0.8rem;">
+            Créditos de prueba: no retirables, solo para que el usuario pruebe la plataforma por tiempo limitado.
+        </p>
+        <div class="bonus-form">
+            <label>Usuario (email, wallet o ID)
+                <input id="bonusIdentifier" type="text" placeholder="persona@ejemplo.com">
+            </label>
+            <label>Monto
+                <input id="bonusAmount" type="number" min="1" value="50">
+            </label>
+            <label>Vence en (días)
+                <input id="bonusDays" type="number" min="1" value="7">
+            </label>
+            <label>Tipo
+                <select id="bonusType">
+                    <option value="platform_trial">Prueba general de la plataforma</option>
+                    <option value="social_challenge_invite">Para un Reto Social de prueba</option>
+                </select>
+            </label>
+            <label>Nota (opcional)
+                <input id="bonusNote" type="text" placeholder="ej. amigo del dueño probando">
+            </label>
+        </div>
+        <button class="primary" onclick="grantBonus()">🎁 Otorgar bono</button>
+        <div id="bonusFormStatus" class="empty" style="margin: 0.6rem 0;"></div>
+
+        <h2>Bonos otorgados recientemente</h2>
+        <button type="button" onclick="loadBonusList()">🔄 Actualizar</button>
+        <table class="grant-table" id="bonusTable" style="margin-top: 0.6rem;"><tbody></tbody></table>
+    </div>
 
 <script>
     var BACKEND_API = 'https://musictoken-ring.onrender.com';
@@ -75,18 +167,27 @@
 
     function setStatus(msg) { document.getElementById('status').textContent = msg || ''; }
 
-    var TIPO_LLAVE_LABEL = { celular: 'Celular', cedula: 'Cédula', correo: 'Correo', alfanumerica: 'Llave alfanumérica' };
-
     function escapeHtml(s) {
-        return String(s)
+        return String(s === undefined || s === null ? '' : s)
             .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
             .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
     }
 
-    // Fila de dato copiable: monto/teléfono/cuenta/llave, todo lo que el
-    // operador tendría que teclear a mano al pagar. El botón 📋 copia el
-    // valor tal cual (sin formatear), para evitar errores de digitación
-    // con plata real.
+    function fmtMoney(n) {
+        return Number(n || 0).toLocaleString('es-CO', { maximumFractionDigits: 2 });
+    }
+
+    // ============ PESTAÑAS ============
+    function switchTab(name) {
+        document.querySelectorAll('.tab-btn').forEach(function (b) { b.classList.toggle('active', b.getAttribute('data-tab') === name); });
+        document.querySelectorAll('.tab-panel').forEach(function (p) { p.classList.toggle('active', p.id === 'tab-' + name); });
+        if (name === 'contabilidad' && getSecret()) loadAccounting();
+        if (name === 'bonos' && getSecret()) loadBonusList();
+    }
+
+    // ============ RETIROS (ya existente) ============
+    var TIPO_LLAVE_LABEL = { celular: 'Celular', cedula: 'Cédula', correo: 'Correo', alfanumerica: 'Llave alfanumérica' };
+
     function copyRow(label, rawValue) {
         if (rawValue === undefined || rawValue === null || rawValue === '') return '';
         return '' +
@@ -200,6 +301,8 @@
         if (!v) return;
         setSecret(v);
         loadRequests();
+        var activeTab = document.querySelector('.tab-btn.active');
+        if (activeTab && activeTab.getAttribute('data-tab') !== 'retiros') switchTab(activeTab.getAttribute('data-tab'));
     }
 
     async function markPaid(id) {
@@ -236,6 +339,145 @@
             loadRequests();
         } catch (e) {
             setStatus('Error de red: ' + e.message);
+        }
+    }
+
+    // ============ CONTABILIDAD ============
+    function accStatusMsg(msg) { document.getElementById('accStatus').textContent = msg || ''; }
+
+    async function loadAccounting() {
+        var secret = getSecret();
+        if (!secret) { accStatusMsg('Ingresá la clave primero.'); return; }
+        accStatusMsg('Cargando...');
+        try {
+            var r = await fetch(BACKEND_API + '/api/admin/accounting/overview', {
+                headers: { 'x-internal-secret': secret }
+            });
+            var j = await r.json().catch(function () { return {}; });
+            if (!r.ok || !j.ok) { accStatusMsg('Error: ' + (j.error || r.status)); return; }
+            renderAccounting(j);
+            accStatusMsg('Actualizado: ' + new Date(j.generatedAt).toLocaleString('es-CO'));
+        } catch (e) {
+            accStatusMsg('Error de red: ' + e.message);
+        }
+    }
+
+    function renderAccounting(j) {
+        var cards = [
+            { label: 'Créditos reales en circulación', value: fmtMoney(j.realCreditsOutstanding), cls: 'real', sub: 'Retirables' },
+            { label: 'Créditos de prueba en circulación', value: fmtMoney(j.bonusCreditsOutstanding), cls: 'bonus', sub: 'NO retirables' },
+            { label: 'Saldo fiat total', value: '$' + fmtMoney(j.saldoFiatTotal), sub: 'users.saldo_fiat' },
+            { label: 'Saldo on-chain total', value: fmtMoney(j.saldoOnchainTotal) + ' MTR', sub: 'users.saldo_onchain' },
+            { label: 'Depósitos (30 días)', value: j.deposits.last30dCount, sub: '$' + fmtMoney(j.deposits.last30dUsd) + ' procesado' },
+            { label: 'Depósitos (histórico)', value: j.deposits.allTimeCount, sub: '$' + fmtMoney(j.deposits.allTimeUsd) + ' procesado' },
+            { label: 'Bonos activos', value: j.activeBonusGrants, sub: 'ver pestaña Bonos' },
+            { label: 'Batallas terminadas', value: fmtMoney(j.matchesFinished), sub: 'histórico' }
+        ];
+        document.getElementById('accCards').innerHTML = cards.map(function (c) {
+            return '<div class="stat-card">' +
+                '<div class="stat-label">' + escapeHtml(c.label) + '</div>' +
+                '<div class="stat-value ' + (c.cls || '') + '">' + escapeHtml(c.value) + '</div>' +
+                (c.sub ? '<div class="stat-sub">' + escapeHtml(c.sub) + '</div>' : '') +
+            '</div>';
+        }).join('');
+
+        var wRows = Object.keys(j.withdrawalsByStatus || {}).map(function (status) {
+            var w = j.withdrawalsByStatus[status];
+            return '<tr><td>' + escapeHtml(status) + '</td><td>' + w.count + '</td><td>' + fmtMoney(w.cop) + ' COP</td><td>$' + fmtMoney(w.usd) + '</td></tr>';
+        }).join('');
+        document.getElementById('accWithdrawalsTable').innerHTML =
+            '<thead><tr><th>Estado</th><th>Cantidad</th><th>COP</th><th>USD</th></tr></thead><tbody>' +
+            (wRows || '<tr><td colspan="4" class="empty">Sin datos</td></tr>') + '</tbody>';
+
+        document.getElementById('accDepositsTable').innerHTML =
+            '<thead><tr><th></th><th>Cantidad</th><th>USD procesado</th></tr></thead><tbody>' +
+            '<tr><td>Últimos 30 días</td><td>' + j.deposits.last30dCount + '</td><td>$' + fmtMoney(j.deposits.last30dUsd) + '</td></tr>' +
+            '<tr><td>Histórico</td><td>' + j.deposits.allTimeCount + '</td><td>$' + fmtMoney(j.deposits.allTimeUsd) + '</td></tr>' +
+            '</tbody>';
+    }
+
+    // ============ BONOS ============
+    async function grantBonus() {
+        var secret = getSecret();
+        if (!secret) { document.getElementById('bonusFormStatus').textContent = 'Ingresá la clave primero.'; return; }
+        var identifier = document.getElementById('bonusIdentifier').value.trim();
+        var amount = document.getElementById('bonusAmount').value;
+        var expiresInDays = document.getElementById('bonusDays').value;
+        var bonusType = document.getElementById('bonusType').value;
+        var note = document.getElementById('bonusNote').value.trim();
+        if (!identifier) { document.getElementById('bonusFormStatus').textContent = 'Falta el usuario (email, wallet o ID).'; return; }
+
+        document.getElementById('bonusFormStatus').textContent = 'Otorgando...';
+        try {
+            var r = await fetch(BACKEND_API + '/api/admin/bonus/grant', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'x-internal-secret': secret },
+                body: JSON.stringify({ identifier: identifier, amount: amount, expiresInDays: expiresInDays, bonusType: bonusType, note: note, adminLabel: 'admin-panel' })
+            });
+            var j = await r.json().catch(function () { return {}; });
+            if (!r.ok || !j.ok) { document.getElementById('bonusFormStatus').textContent = 'Error: ' + (j.error || r.status); return; }
+            document.getElementById('bonusFormStatus').textContent = '✅ Otorgado. Saldo de prueba actual: ' + fmtMoney(j.currentBonusBalance) + ' (vence ' + new Date(j.expiresAt).toLocaleDateString('es-CO') + ')';
+            document.getElementById('bonusIdentifier').value = '';
+            document.getElementById('bonusNote').value = '';
+            loadBonusList();
+        } catch (e) {
+            document.getElementById('bonusFormStatus').textContent = 'Error de red: ' + e.message;
+        }
+    }
+
+    async function loadBonusList() {
+        var secret = getSecret();
+        if (!secret) return;
+        try {
+            var r = await fetch(BACKEND_API + '/api/admin/bonus/list?limit=100', {
+                headers: { 'x-internal-secret': secret }
+            });
+            var j = await r.json().catch(function () { return {}; });
+            if (!r.ok || !j.ok) { document.getElementById('bonusTable').innerHTML = '<tbody><tr><td class="empty">Error: ' + escapeHtml(j.error || r.status) + '</td></tr></tbody>'; return; }
+            renderBonusList(j.grants);
+        } catch (e) {
+            document.getElementById('bonusTable').innerHTML = '<tbody><tr><td class="empty">Error de red: ' + escapeHtml(e.message) + '</td></tr></tbody>';
+        }
+    }
+
+    function renderBonusList(grants) {
+        if (!grants || !grants.length) {
+            document.getElementById('bonusTable').innerHTML = '<tbody><tr><td class="empty">Todavía no se otorgó ningún bono.</td></tr></tbody>';
+            return;
+        }
+        var rows = grants.map(function (g) {
+            var who = g.user_email || g.user_wallet || g.user_id;
+            var isActive = g.status === 'active';
+            var isExpired = isActive && new Date(g.expires_at) < new Date();
+            var statusLabel = isExpired ? 'expired' : g.status;
+            return '<tr>' +
+                '<td>' + escapeHtml(who) + '</td>' +
+                '<td>' + fmtMoney(g.amount) + '</td>' +
+                '<td>' + (g.bonus_type === 'social_challenge_invite' ? 'Invitado a reto' : 'Prueba general') + '</td>' +
+                '<td><span class="pill ' + statusLabel + '">' + statusLabel + '</span></td>' +
+                '<td>' + new Date(g.expires_at).toLocaleDateString('es-CO') + '</td>' +
+                '<td>' + escapeHtml(g.granted_by || '') + '</td>' +
+                '<td>' + (isActive ? '<button class="reject" onclick="revokeBonus(\'' + g.user_id + '\')">Revocar</button>' : '') + '</td>' +
+            '</tr>';
+        }).join('');
+        document.getElementById('bonusTable').innerHTML =
+            '<thead><tr><th>Usuario</th><th>Monto</th><th>Tipo</th><th>Estado</th><th>Vence</th><th>Otorgado por</th><th></th></tr></thead><tbody>' + rows + '</tbody>';
+    }
+
+    async function revokeBonus(userId) {
+        if (!window.confirm('¿Revocar todo el saldo de prueba activo de este usuario?')) return;
+        var secret = getSecret();
+        try {
+            var r = await fetch(BACKEND_API + '/api/admin/bonus/revoke', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'x-internal-secret': secret },
+                body: JSON.stringify({ userId: userId })
+            });
+            var j = await r.json().catch(function () { return {}; });
+            if (!r.ok || !j.ok) { window.alert('Error: ' + (j.error || r.status)); return; }
+            loadBonusList();
+        } catch (e) {
+            window.alert('Error de red: ' + e.message);
         }
     }
 

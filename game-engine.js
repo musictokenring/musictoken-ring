@@ -1156,22 +1156,54 @@ const GameEngine = {
     // MODO DESAFÍO SOCIAL (Social Challenge)
     // ==========================================
     
-    async createSocialChallenge(song, betAmount, genreId, genreLabel, genreCheck) {
+    async createSocialChallenge(song, betAmount, genreId, genreLabel, genreCheck, stakeType) {
         // Mínimo 1 crédito para todos los modos (incluyendo desafíos sociales)
         const SOCIAL_CHALLENGE_MIN_BET = 1;
-        
+
         console.log('[createSocialChallenge] Validando apuesta - betAmount recibido:', betAmount, 'mínimo requerido:', SOCIAL_CHALLENGE_MIN_BET);
-        
+
         const normalizedBet = Math.max(SOCIAL_CHALLENGE_MIN_BET, Math.round(betAmount || SOCIAL_CHALLENGE_MIN_BET));
-        
+
         if (normalizedBet < SOCIAL_CHALLENGE_MIN_BET) {
             console.error('[createSocialChallenge] ❌ Apuesta rechazada - normalizedBet:', normalizedBet, '< mínimo:', SOCIAL_CHALLENGE_MIN_BET);
             showToast(`La apuesta mínima es ${SOCIAL_CHALLENGE_MIN_BET} crédito`, 'error');
             return;
         }
-        
+
         console.log('[createSocialChallenge] ✅ Apuesta validada - normalizedBet:', normalizedBet);
-        
+
+        // Reto de prueba (bono): corre entero en el backend -- descuenta
+        // bonus_credits y crea el desafío de forma atómica, ver
+        // /api/social-challenges/bonus/create. Nunca toca credits real.
+        if (stakeType === 'bonus') {
+            try {
+                const backendUrl = window.CONFIG?.BACKEND_API || window.CreditsSystem?.backendUrl || 'https://musictoken-ring.onrender.com';
+                const resp = await fetch(`${backendUrl}/api/social-challenges/bonus/create`, {
+                    method: 'POST',
+                    headers: await this.getBackendAuthHeaders(),
+                    body: JSON.stringify({
+                        song: { id: song.id, name: song.name, artist: song.artist, image: song.image, preview: song.preview },
+                        betAmount: normalizedBet,
+                        genreId, genreLabel,
+                        walletAddress: this.connectedWallet || localStorage.getItem('mtr_wallet') || null
+                    })
+                });
+                const result = await resp.json().catch(() => ({}));
+                if (!resp.ok || !result.ok) {
+                    showToast('No se pudo crear el desafío de prueba: ' + (result.error || ('HTTP ' + resp.status)), 'error');
+                    return;
+                }
+                const challenge = result.challenge;
+                const challengeLink = `${window.location.origin}${window.location.pathname}?challenge=${challenge.challenge_id}`;
+                this.showSocialChallengeShareUI(challenge, challengeLink, song, normalizedBet);
+                showToast('🎁 Desafío de PRUEBA creado. Compartí el link -- tu amigo podrá probarlo gratis.', 'success');
+            } catch (error) {
+                console.error('[createSocialChallenge] Error creando desafío de prueba:', error);
+                showToast('Error al crear desafío de prueba: ' + (error?.message || 'error desconocido'), 'error');
+            }
+            return;
+        }
+
         // Verificar créditos suficientes ANTES de crear el desafío
         // CRÍTICO: Recargar balance primero para asegurar sincronización con backend
         const walletAddress = window.connectedAddress || localStorage.getItem('mtr_wallet');
@@ -1562,7 +1594,41 @@ const GameEngine = {
             } else {
                 console.warn('[acceptSocialChallenge] ⚠️ No se pudo vincular wallet (puede estar ya vinculada)');
             }
-            
+
+            // Reto de prueba (bono): nada de conversión MTR ni de verificar
+            // créditos reales -- solo asegurar (y, si hace falta, auto-otorgar)
+            // saldo de prueba exacto para poder aceptar. Ver
+            // /api/social-challenges/:id/ensure-bonus-balance.
+            const isBonusChallenge = challenge.stake_type === 'bonus';
+            if (isBonusChallenge) {
+                try {
+                    const bonusBackendUrl = window.CONFIG?.BACKEND_API || window.CreditsSystem?.backendUrl || 'https://musictoken-ring.onrender.com';
+                    const ensureResp = await fetch(`${bonusBackendUrl}/api/social-challenges/${encodeURIComponent(challengeId)}/ensure-bonus-balance`, {
+                        method: 'POST',
+                        headers: await this.getBackendAuthHeaders(),
+                        body: JSON.stringify({ walletAddress: walletAddress || null })
+                    });
+                    const ensureResult = await ensureResp.json().catch(() => ({}));
+                    if (!ensureResp.ok || !ensureResult.ok) {
+                        showToast('No se pudo preparar tu saldo de prueba: ' + (ensureResult.error || ('HTTP ' + ensureResp.status)), 'error');
+                        return;
+                    }
+                    if (ensureResult.toppedUp) {
+                        showToast(`🎁 Te regalamos ${ensureResult.amount} créditos de prueba para que puedas jugar gratis. No son retirables, son solo para probar la plataforma.`, 'success', 9000);
+                    }
+                } catch (ensureError) {
+                    console.error('[acceptSocialChallenge] Error preparando saldo de prueba:', ensureError);
+                    showToast('No se pudo preparar tu saldo de prueba. Intentá de nuevo.', 'error');
+                    return;
+                }
+            }
+
+            // Todo este bloque (conversión MTR y verificación de créditos
+            // REALES) se salta enteramente para un reto de prueba -- ya se
+            // aseguró el saldo de bonus_credits arriba, con
+            // ensure-bonus-balance.
+            if (!isBonusChallenge) {
+
             // CRÍTICO: Actualizar balance on-chain ANTES de recargar créditos
             if (typeof window.refreshMtrBalance === 'function') {
                 console.log('[acceptSocialChallenge] 🔄 Actualizando balance on-chain antes de verificar créditos...');
@@ -1766,7 +1832,9 @@ const GameEngine = {
                     console.log('[acceptSocialChallenge] ✅ Créditos suficientes después de verificación final');
                 }
             }
-            
+
+            } // fin if (!isBonusChallenge) -- conversión MTR / créditos reales
+
             // Verificar ELO si está habilitado
             const eloGate = await this.canMatchByElo(song.id, challenge.challenger_song_id);
             if (!eloGate.allowed) {
@@ -1794,9 +1862,10 @@ const GameEngine = {
                     song_preview: song.preview
                 },
                 challenge.bet_amount,
-                normalizedBet
+                normalizedBet,
+                isBonusChallenge ? 'bonus' : 'real'
             );
-            
+
             // Actualizar estado del desafío
             const acceptUpdate = {
                 status: 'accepted',
@@ -1905,8 +1974,13 @@ const GameEngine = {
                 return false;
             }
 
-            // Reembolsar créditos ANTES de marcarlo cancelado
-            const refunded = await this.updateBalance(challenge.bet_amount, 'refund', null);
+            // Reembolsar créditos ANTES de marcarlo cancelado -- si es un
+            // desafío de prueba, el reembolso va a bonus_credits, nunca a
+            // credits real.
+            const isBonusChallenge = challenge.stake_type === 'bonus';
+            const refunded = isBonusChallenge
+                ? await this.refundBonusCredits(challenge.bet_amount)
+                : await this.updateBalance(challenge.bet_amount, 'refund', null);
             if (!refunded) {
                 showToast('No se pudo reembolsar el crédito. Intentá de nuevo.', 'error');
                 return false;
@@ -1935,7 +2009,11 @@ const GameEngine = {
                 // No se pudo confirmar la cancelación -- revertir el
                 // reembolso para no dejar crédito de más sin haber
                 // cancelado de verdad.
-                await this.updateBalance(-challenge.bet_amount, 'bet', null);
+                if (isBonusChallenge) {
+                    await this.deductBonusCredits(challenge.bet_amount);
+                } else {
+                    await this.updateBalance(-challenge.bet_amount, 'bet', null);
+                }
                 // Mostrar el detalle real del error (probable problema de
                 // permisos/RLS en la base, no del código) en vez de un
                 // mensaje genérico -- para poder diagnosticarlo con certeza
@@ -3447,8 +3525,22 @@ const GameEngine = {
     // CREAR Y EMPEZAR PARTIDA
     // ==========================================
     
-    async createMatch(type, player1Id, player2Id, song1, song2Data, bet1, bet2) {
+    async createMatch(type, player1Id, player2Id, song1, song2Data, bet1, bet2, stakeType = 'real') {
         try {
+            let deductionSuccess;
+
+            if (stakeType === 'bonus') {
+                // Reto de prueba: nada de conversión MTR ni fallback RPC --
+                // el saldo de bonus_credits ya se validó/topó antes de
+                // llegar acá (ver ensure-bonus-balance en
+                // acceptSocialChallenge). Solo se descuenta la parte de
+                // quien llama a createMatch (quien acepta el desafío).
+                deductionSuccess = await this.deductBonusCredits(bet1);
+                if (!deductionSuccess) {
+                    showToast('No se pudo descontar tu saldo de prueba (puede haber vencido). Volvé a intentar.', 'error');
+                    return;
+                }
+            } else {
             // CRÍTICO: Verificar créditos antes de descontar
             // Si el usuario no tiene créditos suficientes, mostrar mensaje claro pero permitir crear el match
             const walletAddress = this.connectedWallet || localStorage.getItem('mtr_wallet');
@@ -3473,7 +3565,7 @@ const GameEngine = {
             
             // CRÍTICO: Descontar créditos ANTES de crear el match
             // Si falla la deducción, intentar convertir MTR a créditos si es necesario
-            let deductionSuccess = await this.updateBalance(-bet1, 'bet', null);
+            deductionSuccess = await this.updateBalance(-bet1, 'bet', null);
             
             // Si falla la deducción y el usuario tiene MTR on-chain, intentar convertir automáticamente
             if (!deductionSuccess && walletAddress && window.CreditsSystem) {
@@ -3552,14 +3644,17 @@ const GameEngine = {
                     return;
                 }
             }
-            
+
+            } // fin else (stakeType !== 'bonus')
+
             // CRÍTICO: Verificar sesión antes de crear match
             const { data: { session: matchSession }, error: sessionError } = await supabaseClient.auth.getSession();
             if (sessionError || !matchSession) {
                 console.error('[createMatch] ❌ No hay sesión de usuario para crear match:', sessionError);
                 if (deductionSuccess) {
                     console.warn('[createMatch] ⚠️ Reembolsando créditos porque no hay sesión');
-                    await this.updateBalance(bet1, 'refund', null);
+                    if (stakeType === 'bonus') { await this.refundBonusCredits(bet1); }
+                    else { await this.updateBalance(bet1, 'refund', null); }
                 }
                 promptLoginRequired('Error: Debes iniciar sesión para crear una partida.');
                 return;
@@ -3578,7 +3673,10 @@ const GameEngine = {
                     // increment_user_credits ya no es invocable directo desde el
                     // navegador (auditoría de hoy) -- usa el mismo reembolso vía
                     // backend que ya usa el rollback de más arriba en esta función.
-                    try { await this.updateBalance(bet1, 'refund', null); } catch (e) {}
+                    try {
+                        if (stakeType === 'bonus') { await this.refundBonusCredits(bet1); }
+                        else { await this.updateBalance(bet1, 'refund', null); }
+                    } catch (e) {}
                 }
                 showToast('Error: Tipo de partida inválido. Por favor, recarga la página.', 'error');
                 return;
@@ -3603,7 +3701,8 @@ const GameEngine = {
                     player2_song_preview: song2Data.song_preview,
                     player2_bet: bet2,
                     total_pot: bet1 + bet2,
-                    status: 'ready'
+                    status: 'ready',
+                    stake_type: stakeType
                 }])
                 .select()
                 .single();
@@ -3623,7 +3722,9 @@ const GameEngine = {
                     // navegador (auditoría de hoy) -- mismo reembolso vía backend
                     // que ya usa el rollback de más arriba en esta función.
                     try {
-                        const refunded = await this.updateBalance(bet1, 'refund', null);
+                        const refunded = stakeType === 'bonus'
+                            ? await this.refundBonusCredits(bet1)
+                            : await this.updateBalance(bet1, 'refund', null);
                         if (!refunded) {
                             console.error('[createMatch] ❌ Error reembolsando créditos vía backend');
                         } else {
@@ -7161,7 +7262,56 @@ const GameEngine = {
             return false;
         }
     },
-    
+
+    // ==========================================
+    // CRÉDITOS DE PRUEBA (BONOS) -- ver bonus-credits-system.sql
+    // Billetera separada de `credits`, nunca retirable. Usados por
+    // createSocialChallenge/acceptSocialChallenge/cancelSocialChallenge
+    // cuando el desafío es stake_type === 'bonus'.
+    // ==========================================
+
+    async deductBonusCredits(amount) {
+        try {
+            const walletAddress = this.connectedWallet || localStorage.getItem('mtr_wallet');
+            const backendUrl = window.CONFIG?.BACKEND_API || window.CreditsSystem?.backendUrl || 'https://musictoken-ring.onrender.com';
+            const resp = await fetch(`${backendUrl}/api/user/deduct-bonus-credits`, {
+                method: 'POST',
+                headers: await this.getBackendAuthHeaders(),
+                body: JSON.stringify({ credits: Math.abs(Number(amount) || 0), walletAddress: walletAddress || null })
+            });
+            const result = await resp.json().catch(() => ({}));
+            if (!resp.ok || !result.success) {
+                console.error('[deductBonusCredits] ❌', result);
+                return false;
+            }
+            return true;
+        } catch (error) {
+            console.error('[deductBonusCredits] Excepción:', error);
+            return false;
+        }
+    },
+
+    async refundBonusCredits(amount) {
+        try {
+            const walletAddress = this.connectedWallet || localStorage.getItem('mtr_wallet');
+            const backendUrl = window.CONFIG?.BACKEND_API || window.CreditsSystem?.backendUrl || 'https://musictoken-ring.onrender.com';
+            const resp = await fetch(`${backendUrl}/api/user/refund-bonus-credits`, {
+                method: 'POST',
+                headers: await this.getBackendAuthHeaders(),
+                body: JSON.stringify({ credits: Math.abs(Number(amount) || 0), walletAddress: walletAddress || null })
+            });
+            const result = await resp.json().catch(() => ({}));
+            if (!resp.ok || !result.ok) {
+                console.error('[refundBonusCredits] ❌', result);
+                return false;
+            }
+            return true;
+        } catch (error) {
+            console.error('[refundBonusCredits] Excepción:', error);
+            return false;
+        }
+    },
+
     // ==========================================
     // REALTIME
     // ==========================================
