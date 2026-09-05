@@ -193,9 +193,14 @@ class MoonPayService {
             }
 
             // Award credits to user
+            // Mismo bug de parámetro que nowpayments-service.js (amount_param
+            // no existe, el real es credits_to_add) -- MoonPay está retirado
+            // (ver /webhook/moonpay en server-auto.js, responde 410), así que
+            // esto no se ejecuta hoy, pero se corrige igual por si se
+            // reactiva alguna vez.
             const { error: creditError } = await supabase.rpc('increment_user_credits', {
                 user_id_param: userId,
-                amount_param: creditsAwarded
+                credits_to_add: creditsAwarded
             });
 
             if (creditError) {

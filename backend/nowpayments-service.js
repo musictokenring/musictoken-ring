@@ -803,9 +803,22 @@ class NOWPaymentsService {
             }
 
             // Award credits to user
+            // BUG CRÍTICO real y confirmado en vivo (contra el proyecto de
+            // producción, con una llamada de prueba inofensiva): el parámetro
+            // real de esta función es `credits_to_add`, no `amount_param`
+            // (ver supabase/migrations/001_credits_system.sql). PostgREST
+            // rechaza cualquier llamada con un parámetro que no existe --
+            // esto fallaba SIEMPRE, en TODOS los depósitos de NOWPayments, y
+            // el webhook de abajo (server-auto.js) atrapa el error y de
+            // todos modos responde 200 OK a NOWPayments (para evitar
+            // reintentos), así que el fallo era 100% silencioso: el cliente
+            // pagaba de verdad, y nunca se le acreditaba nada. Revisar el
+            // historial de pagos de NOWPayments contra la tabla `deposits`
+            // para encontrar e indemnizar manualmente a quien haya pagado
+            // mientras este bug estuvo activo.
             const { error: creditError } = await supabase.rpc('increment_user_credits', {
                 user_id_param: userId,
-                amount_param: creditsAwarded
+                credits_to_add: creditsAwarded
             });
 
             if (creditError) {
@@ -988,9 +1001,14 @@ class NOWPaymentsService {
             console.log('[nowpayments] Payout created:', payoutId);
 
             // Deduct credits from user
+            // Mismo bug de parámetro que en processDeposit() de más arriba
+            // (amount_param no existe, el real es credits_to_add) -- código
+            // no alcanzado hoy desde ninguna ruta activa (createWithdrawal
+            // no se llama desde server-auto.js), pero se corrige igual para
+            // no dejar la trampa lista si algo lo vuelve a conectar.
             const { error: deductError } = await supabase.rpc('increment_user_credits', {
                 user_id_param: userId,
-                amount_param: -creditsAmount // Negative to deduct
+                credits_to_add: -creditsAmount // Negative to deduct
             });
 
             if (deductError) {
@@ -1195,10 +1213,19 @@ class NOWPaymentsService {
 
                 if (status === 'failed' || status === 'error') {
                     // Refund credits
-                    await supabase.rpc('increment_user_credits', {
+                    // Mismo bug de parámetro (amount_param no existe) -- este
+                    // sí es alcanzable en vivo (createCustodyPayout <-
+                    // prize-service.js <- ruta /api/agent-payout), y el
+                    // resultado no se revisaba (ni siquiera se leía `error`):
+                    // un pago que falla acá se quedaba sin reembolsar el
+                    // crédito, en silencio total.
+                    const { error: refundError } = await supabase.rpc('increment_user_credits', {
                         user_id_param: userId,
-                        amount_param: payoutData.amount || 0
+                        credits_to_add: payoutData.amount || 0
                     });
+                    if (refundError) {
+                        console.error('[nowpayments] ❌ Falló el reembolso tras payout fallido:', payoutId, refundError.message);
+                    }
 
                     await supabase
                         .from('claims')
