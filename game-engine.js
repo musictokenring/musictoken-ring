@@ -7102,20 +7102,46 @@ const GameEngine = {
                 return true;
             }
 
-            // Legacy balance system (for practice mode and compatibility)
-            const { data } = await supabaseClient
-                .rpc('update_user_balance', {
-                    p_user_id: session.user.id,
-                    p_amount: amount,
-                    p_type: type,
-                    p_match_id: matchId
+            // Legacy balance system (for practice mode and compatibility).
+            // Antes llamaba directo a update_user_balance -- RPC con dos
+            // firmas ambiguas cargadas en la base, Postgres nunca podía
+            // elegir cuál usar y fallaba el 100% de las veces incluso antes
+            // de que hoy además se le cerrara el acceso público (encontramos
+            // que cualquiera podía llamarla con cualquier user_id, y una de
+            // sus variantes hasta soporta "type: set" para reemplazar el
+            // saldo completo -- ver auditoría de seguridad de hoy). En la
+            // práctica ningún caller real llega hasta acá (todos usan type
+            // 'bet' o 'refund', ya manejados arriba), pero se deja resuelto
+            // con el mismo patrón seguro que el resto de updateBalance().
+            const legacyWallet = this.connectedWallet || localStorage.getItem('mtr_wallet');
+            const legacyBackendUrl = window.CONFIG?.BACKEND_API || window.CreditsSystem?.backendUrl || 'https://musictoken-ring.onrender.com';
+            const legacyCredits = Math.abs(Number(amount) || 0);
+            if (legacyCredits <= 0) {
+                return false;
+            }
+            try {
+                const legacyEndpoint = amount >= 0 ? 'refund-credits' : 'deduct-credits';
+                const legacyResp = await fetch(`${legacyBackendUrl}/api/user/${legacyEndpoint}`, {
+                    method: 'POST',
+                    headers: await this.getBackendAuthHeaders(),
+                    body: JSON.stringify({
+                        credits: legacyCredits,
+                        walletAddress: legacyWallet || null,
+                        reason: type || 'legacy',
+                        matchId
+                    })
                 });
-            
-            if (data) {
+                const legacyResult = await legacyResp.json().catch(() => ({}));
+                if (!legacyResp.ok || (!legacyResult.ok && !legacyResult.success)) {
+                    console.error('[updateBalance] ❌ Error en fallback legacy vía backend:', legacyResult);
+                    return false;
+                }
                 await this.loadUserBalance();
                 return true;
+            } catch (legacyError) {
+                console.error('[updateBalance] ❌ Excepción en fallback legacy vía backend:', legacyError);
+                return false;
             }
-            return false;
             
         } catch (error) {
             console.error('Error updating balance:', error);

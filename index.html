@@ -7320,16 +7320,35 @@
                                     mtrAmount: numericBalance
                                 });
                                 
-                                console.log('[refreshMtrBalance] 🔄 Llamando a increment_user_credits RPC con publicUserId:', publicUserId);
-                                
-                                // CRÍTICO: Usar publicUserId (de public.users) no authUserId (de auth.users)
-                                const { error: rpcError } = await supabase.rpc('increment_user_credits', {
-                                    user_id_param: publicUserId,
-                                    credits_to_add: creditsToAdd
-                                });
-                                
+                                console.log('[refreshMtrBalance] 🔄 Acreditando vía backend (refund-credits) para publicUserId:', publicUserId);
+
+                                // CRÍTICO: increment_user_credits ya no es invocable directo desde el
+                                // navegador (auditoría de seguridad de hoy: era llamable por CUALQUIERA
+                                // con la llave pública, sin sesión -- así fue como una cuenta de prueba
+                                // se acreditó 1000 créditos de la nada). Pasa por el mismo endpoint
+                                // seguro que ya usan awardCredits()/updateBalance() en game-engine.js,
+                                // que resuelve el id correcto server-side con resolveCreditsUserId()
+                                // en vez de confiar en el publicUserId que calculó el cliente.
+                                let rpcError = null;
+                                try {
+                                    const conversionResp = await fetch(`${(window.CONFIG?.BACKEND_API) || 'https://musictoken-ring.onrender.com'}/api/user/refund-credits`, {
+                                        method: 'POST',
+                                        headers: {
+                                            'Content-Type': 'application/json',
+                                            Authorization: 'Bearer ' + session.access_token
+                                        },
+                                        body: JSON.stringify({ credits: creditsToAdd, walletAddress: conversionWalletAddress || null })
+                                    });
+                                    const conversionResult = await conversionResp.json().catch(() => ({}));
+                                    if (!conversionResp.ok || !conversionResult.ok) {
+                                        rpcError = { message: conversionResult.error || ('HTTP ' + conversionResp.status) };
+                                    }
+                                } catch (fetchErr) {
+                                    rpcError = { message: fetchErr.message };
+                                }
+
                                 if (rpcError) {
-                                    console.error('[refreshMtrBalance] ❌❌❌ Error al agregar créditos vía RPC:', {
+                                    console.error('[refreshMtrBalance] ❌❌❌ Error al agregar créditos vía backend:', {
                                         error: rpcError,
                                         publicUserId: publicUserId,
                                         creditsToAdd: creditsToAdd
@@ -7376,13 +7395,34 @@
                                                 ratio: directCredits / numericBalance
                                             });
                                             
-                                            // Establecer créditos al valor correcto (1:1 con balance on-chain)
-                                            const { error: fixError } = await supabase.rpc('update_user_balance', {
-                                                p_user_id: publicUserId,
-                                                p_amount: numericBalance,
-                                                p_type: 'set'
-                                            });
-                                            
+                                            // Establecer créditos al valor correcto (1:1 con balance on-chain).
+                                            // update_user_balance (p_type 'set') ya no es invocable desde el
+                                            // navegador -- misma auditoría de seguridad de hoy: además de
+                                            // estar abierta al público, esa función puede REEMPLAZAR el saldo
+                                            // completo de cualquier usuario por cualquier valor, la más
+                                            // peligrosa de las que encontramos. En vez de "set", se logra el
+                                            // mismo resultado restando la diferencia exacta vía el backend
+                                            // (deduct-credits), que sí valida que solo se pueda descontar la
+                                            // propia cuenta.
+                                            let fixError = null;
+                                            try {
+                                                const deltaToRemove = directCredits - numericBalance;
+                                                const fixResp = await fetch(`${(window.CONFIG?.BACKEND_API) || 'https://musictoken-ring.onrender.com'}/api/user/deduct-credits`, {
+                                                    method: 'POST',
+                                                    headers: {
+                                                        'Content-Type': 'application/json',
+                                                        Authorization: 'Bearer ' + session.access_token
+                                                    },
+                                                    body: JSON.stringify({ credits: deltaToRemove, walletAddress: conversionWalletAddress || null, reason: 'fix_duplicate_credits' })
+                                                });
+                                                const fixResult = await fixResp.json().catch(() => ({}));
+                                                if (!fixResp.ok || !fixResult.success) {
+                                                    fixError = { message: fixResult.error || ('HTTP ' + fixResp.status) };
+                                                }
+                                            } catch (fixFetchErr) {
+                                                fixError = { message: fixFetchErr.message };
+                                            }
+
                                             if (!fixError) {
                                                 console.log('[refreshMtrBalance] ✅ Créditos corregidos a:', numericBalance);
                                                 // Actualizar con el valor corregido
