@@ -872,6 +872,9 @@
                      que la fila pase a una segunda línea en vez de scrollear
                      evita el problema de raíz en cualquier navegador. -->
                 <div class="flex items-center justify-end flex-wrap gap-1 sm:gap-1.5 sm:gap-2 lg:gap-4 text-sm flex-shrink-0" style="max-width: 100%;">
+                    <!-- Créditos de prueba (bono) -- ver bonus-credits-system.sql. Nunca retirables,
+                         solo aparece si el usuario tiene saldo de prueba activo (CreditsSystem.updateBonusDisplay). -->
+                    <span class="mtr-bonus-badge hidden px-1.5 py-0.5 rounded text-[10px] bg-orange-500/15 text-orange-300 font-semibold whitespace-nowrap cursor-help" title="Créditos de prueba: no son dinero real, son solo para probar la plataforma por tiempo limitado"></span>
                     <!-- Saldos en móvil (compacto) -->
                     <span id="creditsCombinedDisplayMobile" class="sm:hidden px-1.5 py-0.5 rounded text-[10px] bg-fuchsia-500/10 text-fuchsia-400 font-semibold whitespace-nowrap cursor-help" title="MTR créditos jugables: fichas estables 1:1 USD nominal">
                         <span id="creditsDisplayMobile">0</span> <span id="usdcValueDisplayMobile" class="text-gray-400">$0</span>
@@ -1275,6 +1278,15 @@
                                class="w-full px-4 py-3 rounded-lg bg-black/40 border border-white/10 text-white placeholder-gray-500 text-sm focus:outline-none focus:border-cyan-500/50 focus:ring-1 focus:ring-cyan-500/20 transition mb-3"
                                oninput="if(typeof window.updateBetEligibility === 'function') window.updateBetEligibility();"
                                onchange="if(typeof window.updateBetEligibility === 'function') window.updateBetEligibility();">
+                        <!-- Reto de prueba (bono): solo visible en Desafío Social, y solo si el
+                             usuario tiene saldo de prueba activo -- ver
+                             CreditsSystem.updateSocialBonusToggleVisibility(). Al tildarlo, la
+                             apuesta sale de bonus_credits, nunca de créditos reales, y el invitado
+                             que acepte también juega gratis. -->
+                        <label id="socialBonusToggleWrap" class="hidden items-center gap-2 mb-3 px-3 py-2 rounded-lg bg-orange-500/10 border border-orange-500/30 text-orange-300 text-xs cursor-pointer">
+                            <input type="checkbox" id="socialBonusToggle" style="accent-color:#fb923c;">
+                            <span>🎁 Crear con créditos de prueba (no retirable, tu invitado también juega gratis)</span>
+                        </label>
                         <div class="flex gap-2 mb-5" id="betAmountButtons">
                             <button type="button" onclick="window.quickBet(5)" class="bet-amount-btn flex-1 py-2 rounded-lg text-xs font-bold bg-white/5 border border-white/10 text-gray-300 hover:text-white hover:border-cyan-500/30 transition cursor-pointer" data-amount="5">5</button>
                             <button type="button" onclick="window.quickBet(50)" class="bet-amount-btn flex-1 py-2 rounded-lg text-xs font-bold bg-white/5 border border-white/10 text-gray-300 hover:text-white hover:border-cyan-500/30 transition cursor-pointer" data-amount="50">50</button>
@@ -2399,6 +2411,15 @@
         <div class="modal-box text-center max-w-md">
             <button type="button" onclick="closeChallengeModal()" class="absolute top-4 right-4 text-gray-400 hover:text-white text-2xl leading-none cursor-pointer">×</button>
             <h2 id="challengeModalTitle" class="text-2xl font-bold text-white mb-4 flex items-center justify-center gap-2"><span data-mtr-icon="swords" data-mtr-color="orange" data-mtr-inline data-mtr-size="20" style="margin:0"></span>Reto Social</h2>
+
+            <!-- Reto de prueba (bono): lo primero que ve el invitado, ANTES
+                 de elegir canción -- ver updateChallengeModal(). Nunca es
+                 dinero real, y se lo decimos acá mismo, no después de que
+                 ya jugó. -->
+            <div id="challengeBonusBanner" class="hidden mb-4 px-4 py-3 rounded-xl bg-orange-500/10 border border-orange-500/30 text-left">
+                <p class="text-orange-300 text-sm font-bold mb-1">🎁 Fuiste invitado GRATIS a probar MusicToken Ring</p>
+                <p class="text-orange-200/80 text-xs">Esta partida es solo de práctica -- no representa dinero real, ni podés retirar lo que ganes acá. Si te gustó y querés jugar por premios de verdad, <a href="#" onclick="closeChallengeModal(); if(typeof window.openMercadoPagoModal === 'function') window.openMercadoPagoModal(); return false;" class="underline font-semibold">recargá saldo</a>.</p>
+            </div>
 
             <!-- Información del reto con animación -->
             <div id="challengeSongInfo" class="mb-6 animate-pulse">
@@ -5012,7 +5033,27 @@
         }
         window.selectAvatar = selectAvatar;
 
+        // Solo tiene sentido en Desafío Social CREANDO uno propio (no
+        // aceptando uno ajeno -- eso lo decide quien lo creó), y solo si
+        // hay saldo de prueba real para gastar. Se llama tanto al entrar a
+        // este modo como cada vez que se refresca el saldo de bono (ver
+        // CreditsSystem.updateBonusDisplay en src/credits-system.js).
+        window.updateSocialBonusToggleVisibility = function () {
+            var wrap = document.getElementById('socialBonusToggleWrap');
+            if (!wrap) return;
+            var isAccepting = !!window.pendingChallengeId;
+            var hasBonus = window.CreditsSystem && window.CreditsSystem.currentBonusCredits > 0;
+            var shouldShow = window.currentMode === 'social' && !isAccepting && hasBonus;
+            wrap.classList.toggle('hidden', !shouldShow);
+            wrap.classList.toggle('flex', shouldShow);
+            if (!shouldShow) {
+                var toggle = document.getElementById('socialBonusToggle');
+                if (toggle) toggle.checked = false;
+            }
+        };
+
         function updateActionButtons(mode) {
+            if (typeof window.updateSocialBonusToggleVisibility === 'function') window.updateSocialBonusToggleVisibility();
             var buttonsDiv = document.getElementById('actionButtons');
             var btnBase = 'w-full py-3 rounded-lg text-sm font-bold transition-all cursor-pointer';
             var btnPrimary = btnBase + ' bg-gradient-to-r from-cyan-500 to-fuchsia-500 text-white hover:opacity-90 shadow-lg shadow-cyan-500/20';
@@ -6079,22 +6120,36 @@
                 return;
             }
             
-            // ESPECIFICACIÓN REFINADA: Solo verificar créditos estables (MTR nativo se convierte automáticamente en backend)
-            var credits = window.CreditsSystem ? (window.CreditsSystem.currentCredits || 0) : 0;
-            var canCover = credits >= bet;
-            
-            console.log('[createSocialChallenge] Verificación de saldo:', {
-                bet: bet,
-                credits: credits,
-                canCover: canCover
-            });
-            
-            if (!canCover) {
-                var errorMsg = `MTR créditos jugables insuficientes para apostar ${bet}. `;
-                errorMsg += `Tienes ${credits.toFixed(2)} MTR créditos pero necesitas ${bet}. `;
-                errorMsg += `Añade saldo (depósito) para obtener más MTR créditos jugables (1 crédito ≈ $1 USD nominal).`;
-                showToast(errorMsg, 'error');
-                return;
+            // Reto de prueba (bono): checkbox solo visible con saldo de
+            // prueba disponible -- ver updateSocialBonusToggleVisibility().
+            // La apuesta sale de bonus_credits, nunca de créditos reales.
+            var bonusToggle = document.getElementById('socialBonusToggle');
+            var useBonus = !!(bonusToggle && bonusToggle.checked && !bonusToggle.closest('#socialBonusToggleWrap').classList.contains('hidden'));
+
+            if (useBonus) {
+                var bonusBalance = window.CreditsSystem ? (window.CreditsSystem.currentBonusCredits || 0) : 0;
+                if (bonusBalance < bet) {
+                    showToast(`Tu saldo de prueba (${bonusBalance.toFixed(0)}) no alcanza para apostar ${bet}. Bajá el monto o pedile a un admin que te otorgue más.`, 'error');
+                    return;
+                }
+            } else {
+                // ESPECIFICACIÓN REFINADA: Solo verificar créditos estables (MTR nativo se convierte automáticamente en backend)
+                var credits = window.CreditsSystem ? (window.CreditsSystem.currentCredits || 0) : 0;
+                var canCover = credits >= bet;
+
+                console.log('[createSocialChallenge] Verificación de saldo:', {
+                    bet: bet,
+                    credits: credits,
+                    canCover: canCover
+                });
+
+                if (!canCover) {
+                    var errorMsg = `MTR créditos jugables insuficientes para apostar ${bet}. `;
+                    errorMsg += `Tienes ${credits.toFixed(2)} MTR créditos pero necesitas ${bet}. `;
+                    errorMsg += `Añade saldo (depósito) para obtener más MTR créditos jugables (1 crédito ≈ $1 USD nominal).`;
+                    showToast(errorMsg, 'error');
+                    return;
+                }
             }
             
             if (typeof GameEngine === 'undefined') {
@@ -6159,7 +6214,7 @@
 
             try {
                 logFn('[createSocialChallenge] ✅ Ejecutando GameEngine.createSocialChallenge...');
-                var result = await GameEngine.createSocialChallenge(song, bet, socialGenreId || null, socialGenreLabel || null, socialGenreCheck);
+                var result = await GameEngine.createSocialChallenge(song, bet, socialGenreId || null, socialGenreLabel || null, socialGenreCheck, useBonus ? 'bonus' : 'real');
                 logFn('[createSocialChallenge] ✅✅✅ GameEngine.createSocialChallenge ejecutado exitosamente');
                 logFn('[createSocialChallenge] Resultado:', result);
             } catch(error) {
@@ -6389,6 +6444,11 @@
                 var expiryEl = document.getElementById('challengeExpiryNote');
                 if (expiryEl) {
                     expiryEl.textContent = challenge.expires_at ? formatTimeRemaining(challenge.expires_at) : '';
+                }
+
+                var bonusBanner = document.getElementById('challengeBonusBanner');
+                if (bonusBanner) {
+                    bonusBanner.classList.toggle('hidden', challenge.stake_type !== 'bonus');
                 }
 
                 console.log('[updateChallengeModal] ✅ Modal actualizado con información del reto');
@@ -9678,6 +9738,7 @@
                     <span class="mtr2-h" style="font-size:16px; font-weight:700; color:#00f0ff;">MusicToken Ring</span>
                 </div>
                 <div style="display:flex; align-items:center; gap:8px;">
+                    <span class="mtr-bonus-badge hidden" style="font-size:10px; font-weight:800; color:#fdba74; background:rgba(251,146,60,0.14); border:1px solid rgba(251,146,60,0.4); border-radius:8px; padding:5px 8px; white-space:nowrap;"></span>
                     <div id="mtr2CreditsChipWrap" style="font-size:11px; font-weight:800; color:#ff2ec4; background:rgba(255,46,196,0.12); border:1px solid rgba(255,46,196,0.35); border-radius:8px; padding:5px 9px; white-space:nowrap;"><span id="mtr2CreditsChip">0</span> créditos</div>
                     <!-- Campana al final del todo, pegada al borde derecho --
                          es donde suele ir en cualquier app (mismo pedido que

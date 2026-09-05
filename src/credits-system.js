@@ -28,6 +28,8 @@
         backendUrl: window.CONFIG?.BACKEND_API || 'https://musictoken-ring.onrender.com',
         currentCredits: 0,
         currentUsdcValue: 0,
+        currentBonusCredits: 0, // créditos de prueba -- ver bonus-credits-system.sql, NUNCA retirables
+        currentBonusExpiresAt: null,
         currentRate: 778,
         currentMtrPrice: 0,
         updateInterval: 30000, // 30 seconds (balance entre rendimiento y actualización)
@@ -58,10 +60,11 @@
             
             // Load initial balance
             await this.loadBalance(walletAddress);
-            
+            this.refreshBonusBalance();
+
             // OPTIMIZACIÓN: Eliminado re-carga adicional en wallet browser (redundante)
             // El polling periódico ya maneja las actualizaciones
-            
+
             // Start periodic updates
             this.startPeriodicUpdates(walletAddress);
         },
@@ -692,6 +695,7 @@
 
             this.updateTimer = setInterval(() => {
                 this.loadBalance(walletAddress);
+                this.refreshBonusBalance();
             }, this.updateInterval);
             
             // CRÍTICO: También iniciar actualización periódica del perfil del usuario actual
@@ -1114,11 +1118,82 @@
                 console.error('[credits-system] linkWalletToUser: Exception:', error);
                 return false;
             }
+        },
+
+        /**
+         * Créditos de prueba (bonus_credits) -- billetera separada de la
+         * real, ver bonus-credits-system.sql. Independiente de loadBalance()
+         * a propósito: esa función tiene demasiados caminos tempranos
+         * (return anticipado) como para garantizar que esto se ejecute
+         * siempre si se metiera adentro. Solo lectura de la fila propia --
+         * la política RLS de user_credits ya lo restringe a auth.uid() =
+         * user_id, así que esto nunca puede ver el saldo de otro usuario.
+         */
+        async refreshBonusBalance() {
+            try {
+                const supabase = window.supabaseClient || (typeof supabaseClient !== 'undefined' ? supabaseClient : null);
+                if (!supabase) return;
+                const { data: { session } } = await supabase.auth.getSession();
+                if (!session) {
+                    this.currentBonusCredits = 0;
+                    this.currentBonusExpiresAt = null;
+                    this.updateBonusDisplay();
+                    return;
+                }
+                const { data, error } = await supabase
+                    .from('user_credits')
+                    .select('bonus_credits, bonus_expires_at')
+                    .eq('user_id', session.user.id)
+                    .maybeSingle();
+                if (error) {
+                    console.warn('[credits-system] refreshBonusBalance:', error.message);
+                    return;
+                }
+                const expired = data?.bonus_expires_at && new Date(data.bonus_expires_at) < new Date();
+                this.currentBonusCredits = expired ? 0 : Number(data?.bonus_credits || 0);
+                this.currentBonusExpiresAt = expired ? null : (data?.bonus_expires_at || null);
+                this.updateBonusDisplay();
+            } catch (e) {
+                console.warn('[credits-system] refreshBonusBalance excepción:', e.message);
+            }
+        },
+
+        /** Muestra/oculta las insignias "X créditos de prueba" del header viejo y de la topbar mtr2. */
+        updateBonusDisplay() {
+            const hasBonus = this.currentBonusCredits > 0;
+            const daysLeft = this.currentBonusExpiresAt
+                ? Math.max(1, Math.ceil((new Date(this.currentBonusExpiresAt).getTime() - Date.now()) / (24 * 60 * 60 * 1000)))
+                : null;
+            const text = hasBonus
+                ? `🎁 ${this.currentBonusCredits.toFixed(0)} de prueba${daysLeft ? ' · ' + daysLeft + (daysLeft === 1 ? ' día' : ' días') : ''}`
+                : '';
+            document.querySelectorAll('.mtr-bonus-badge').forEach((el) => {
+                el.textContent = text;
+                el.classList.toggle('hidden', !hasBonus);
+            });
+            if (typeof window.updateSocialBonusToggleVisibility === 'function') {
+                window.updateSocialBonusToggleVisibility();
+            }
         }
     };
 
     // Export to window
     window.CreditsSystem = CreditsSystem;
+
+    // El saldo de prueba tiene que revisarse para CUALQUIER usuario con
+    // sesión, tenga wallet conectada o no -- CreditsSystem.init() (arriba)
+    // solo se llama cuando hay wallet, así que un usuario de solo
+    // email/Google nunca vería su bono si esto dependiera de eso. Mismo
+    // patrón de auto-arranque que initChallengeBell() en index.html.
+    function bootBonusBalancePolling() {
+        CreditsSystem.refreshBonusBalance();
+        setInterval(() => CreditsSystem.refreshBonusBalance(), 30000);
+    }
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', () => setTimeout(bootBonusBalancePolling, 1500));
+    } else {
+        setTimeout(bootBonusBalancePolling, 1500);
+    }
 
     console.log('[credits-system] Module loaded');
 })();
