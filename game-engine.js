@@ -1649,14 +1649,27 @@ const GameEngine = {
                             }
                             
                             console.log('[acceptSocialChallenge] ✅ Usuario autenticado:', session.user.id);
-                            console.log('[acceptSocialChallenge] 🔄 Convirtiendo MTR a créditos usando Supabase RPC...');
-                            
-                            // Llamar directamente a la función RPC de Supabase
-                            const { error: rpcError } = await supabase.rpc('increment_user_credits', {
-                                user_id_param: userIdForConversion,
-                                credits_to_add: missingCredits
-                            });
-                            
+                            console.log('[acceptSocialChallenge] 🔄 Convirtiendo MTR a créditos vía backend...');
+
+                            // increment_user_credits ya no es invocable directo desde el
+                            // navegador (auditoría de seguridad de hoy) -- mismo fix que
+                            // refreshMtrBalance() en index.html, usa el endpoint que ya
+                            // resuelve el id correcto server-side.
+                            let rpcError = null;
+                            try {
+                                const conversionResp = await fetch(`${(window.CONFIG?.BACKEND_API || window.CreditsSystem?.backendUrl || 'https://musictoken-ring.onrender.com')}/api/user/refund-credits`, {
+                                    method: 'POST',
+                                    headers: await this.getBackendAuthHeaders(),
+                                    body: JSON.stringify({ credits: missingCredits, walletAddress: walletAddress || null })
+                                });
+                                const conversionResult = await conversionResp.json().catch(() => ({}));
+                                if (!conversionResp.ok || !conversionResult.ok) {
+                                    rpcError = { message: conversionResult.error || ('HTTP ' + conversionResp.status) };
+                                }
+                            } catch (fetchErr) {
+                                rpcError = { message: fetchErr.message };
+                            }
+
                             if (rpcError) {
                                 console.error('[acceptSocialChallenge] ❌ Error al convertir MTR a créditos vía RPC:', rpcError);
                                 showToast(
@@ -3562,17 +3575,10 @@ const GameEngine = {
                 console.error('[createMatch] ❌ Tipo de match inválido:', type);
                 console.error('[createMatch] ❌ Tipos válidos:', validMatchTypes);
                 if (deductionSuccess) {
-                    // Reembolsar créditos
-                    const userId = await window.CreditsSystem.getUserId(walletAddress);
-                    if (userId && window.supabaseClient) {
-                        try {
-                            await window.supabaseClient.rpc('increment_user_credits', {
-                                user_id_param: userId,
-                                credits_to_add: bet1
-                            });
-                            await window.CreditsSystem.loadBalance(walletAddress);
-                        } catch (e) {}
-                    }
+                    // increment_user_credits ya no es invocable directo desde el
+                    // navegador (auditoría de hoy) -- usa el mismo reembolso vía
+                    // backend que ya usa el rollback de más arriba en esta función.
+                    try { await this.updateBalance(bet1, 'refund', null); } catch (e) {}
                 }
                 showToast('Error: Tipo de partida inválido. Por favor, recarga la página.', 'error');
                 return;
@@ -3613,23 +3619,18 @@ const GameEngine = {
                 // Si la deducción fue exitosa pero falló crear el match, reembolsar créditos
                 if (deductionSuccess) {
                     console.warn('[createMatch] ⚠️ Reembolsando créditos porque falló crear el match');
-                    // Intentar reembolsar usando RPC si el backend falla
-                    const userId = await window.CreditsSystem.getUserId(walletAddress);
-                    if (userId && window.supabaseClient) {
-                        try {
-                            const { error: refundError } = await window.supabaseClient.rpc('increment_user_credits', {
-                                user_id_param: userId,
-                                credits_to_add: bet1
-                            });
-                            if (refundError) {
-                                console.error('[createMatch] ❌ Error reembolsando créditos:', refundError);
-                            } else {
-                                console.log('[createMatch] ✅ Créditos reembolsados vía RPC');
-                                await window.CreditsSystem.loadBalance(walletAddress);
-                            }
-                        } catch (refundErr) {
-                            console.error('[createMatch] ❌ Error en reembolso:', refundErr);
+                    // increment_user_credits ya no es invocable directo desde el
+                    // navegador (auditoría de hoy) -- mismo reembolso vía backend
+                    // que ya usa el rollback de más arriba en esta función.
+                    try {
+                        const refunded = await this.updateBalance(bet1, 'refund', null);
+                        if (!refunded) {
+                            console.error('[createMatch] ❌ Error reembolsando créditos vía backend');
+                        } else {
+                            console.log('[createMatch] ✅ Créditos reembolsados vía backend');
                         }
+                    } catch (refundErr) {
+                        console.error('[createMatch] ❌ Error en reembolso:', refundErr);
                     }
                 }
                 
@@ -6942,20 +6943,32 @@ const GameEngine = {
                                         }
                                         
                                         console.log('[updateBalance] ✅ Usuario autenticado:', session.user.id);
-                                        console.log('[updateBalance] 🔄 Convirtiendo MTR a créditos usando Supabase RPC...');
-                                        
-                                        // Llamar directamente a la función RPC de Supabase
-                                        const { error: rpcError } = await supabase.rpc('increment_user_credits', {
-                                            user_id_param: userId,
-                                            credits_to_add: creditsNeeded
-                                        });
-                                        
+                                        console.log('[updateBalance] 🔄 Convirtiendo MTR a créditos vía backend...');
+
+                                        // increment_user_credits ya no es invocable directo desde el
+                                        // navegador (auditoría de seguridad de hoy) -- mismo fix que el
+                                        // resto de conversiones MTR→créditos de este archivo.
+                                        let rpcError = null;
+                                        try {
+                                            const conversionResp = await fetch(`${backendUrl}/api/user/refund-credits`, {
+                                                method: 'POST',
+                                                headers: await this.getBackendAuthHeaders(),
+                                                body: JSON.stringify({ credits: creditsNeeded, walletAddress: walletAddress || null })
+                                            });
+                                            const conversionResult = await conversionResp.json().catch(() => ({}));
+                                            if (!conversionResp.ok || !conversionResult.ok) {
+                                                rpcError = { message: conversionResult.error || ('HTTP ' + conversionResp.status) };
+                                            }
+                                        } catch (fetchErr) {
+                                            rpcError = { message: fetchErr.message };
+                                        }
+
                                         if (rpcError) {
-                                            console.error('[updateBalance] ❌ Error al agregar créditos vía RPC:', rpcError);
+                                            console.error('[updateBalance] ❌ Error al agregar créditos vía backend:', rpcError);
                                             return false;
                                         }
-                                        
-                                        console.log('[updateBalance] ✅ Créditos agregados automáticamente desde MTR vía Supabase RPC');
+
+                                        console.log('[updateBalance] ✅ Créditos agregados automáticamente desde MTR vía backend');
                                         
                                         // Esperar un momento para que la base de datos se actualice
                                         await new Promise(resolve => setTimeout(resolve, 500));
