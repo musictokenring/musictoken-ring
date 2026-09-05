@@ -760,6 +760,78 @@ app.post('/api/matches/:matchId/award-winner', requireCreditMutationAuth, async 
 });
 
 /**
+ * Reembolsa créditos al propio usuario que llama (cancelar un Desafío
+ * Social, salir de una Sala Privada antes de que alguien se una, o
+ * revertir una apuesta que no llegó a completarse). Reemplaza el RPC
+ * increment_user_credits que game-engine.js llamaba DIRECTO desde el
+ * cliente con el userId resuelto por CreditsSystem.getUserId() -- esa
+ * función prioriza session.user.id sin comparar si otro id (una wallet
+ * vinculada con historial propio) tiene más saldo real. Mismo patrón de
+ * bug que award-winner arriba, versión "reembolsarme a mí mismo" en vez
+ * de "pagarle a otro jugador" -- mismo fix: resolver con
+ * resolveCreditsUserId() antes de acreditar, igual que ya hace
+ * /api/user/deduct-credits para la resta simétrica de este mismo monto.
+ *
+ * verifyUserCanMutateCredits() (misma que ya usa deduct-credits) evita
+ * que el walletAddress que mande el cliente pueda dirigir el reembolso a
+ * una cuenta ajena -- el id resuelto tiene que ser el propio del que
+ * llama, o una wallet de verdad vinculada a esa cuenta.
+ */
+app.post('/api/user/refund-credits', requireCreditMutationAuth, async (req, res) => {
+    try {
+        const { credits, walletAddress } = req.body;
+
+        if (!credits || credits <= 0) {
+            return res.status(400).json({ error: 'Invalid credits amount' });
+        }
+        if (!req.authUser) {
+            return res.status(401).json({ error: 'Inicia sesión para procesar el reembolso.' });
+        }
+
+        const resolved = await resolveCreditsUserId(
+            supabase,
+            {
+                getUserIdFromWallet: (addr) =>
+                    walletLinkService ? walletLinkService.getUserIdFromWallet(addr) : null
+            },
+            req.authUser,
+            walletAddress || null
+        );
+        const targetUserId = resolved.userId;
+
+        if (req.authMode === 'user') {
+            const allowed = await verifyUserCanMutateCredits(
+                supabase,
+                {
+                    getUserIdFromWallet: (addr) =>
+                        walletLinkService ? walletLinkService.getUserIdFromWallet(addr) : null
+                },
+                req.authUser,
+                { userId: targetUserId, walletAddress }
+            );
+            if (!allowed) {
+                return res.status(403).json({ error: 'Forbidden' });
+            }
+        }
+
+        const { error: creditError } = await supabase.rpc('increment_user_credits', {
+            user_id_param: targetUserId,
+            credits_to_add: credits
+        });
+
+        if (creditError) {
+            console.error('[refund-credits] increment_user_credits falló:', creditError);
+            return res.status(500).json({ error: 'No se pudo procesar el reembolso' });
+        }
+
+        res.json({ ok: true, userId: targetUserId, credited: credits });
+    } catch (error) {
+        console.error('[refund-credits] Error:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+/**
  * Claim credits (liquidación a wallet según claim-service)
  */
 // 🔒 SEGURIDAD: Aplicar rate limiting al endpoint de claims

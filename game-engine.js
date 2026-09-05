@@ -7069,29 +7069,35 @@ const GameEngine = {
             // devoluciones -- increment_user_credits -- en vez del legacy.
             if (type === 'refund') {
                 const walletAddress = this.connectedWallet || localStorage.getItem('mtr_wallet');
-                let userId = session?.user?.id || null;
-                if (!userId && walletAddress && window.CreditsSystem) {
-                    userId = await window.CreditsSystem.getUserId(walletAddress);
-                }
-                if (!userId) {
-                    console.error('[updateBalance] ❌ No se pudo resolver userId para reembolsar');
-                    return false;
-                }
-
                 const refundCredits = Math.abs(Number(amount) || 0);
-                const { error: refundError } = await supabaseClient.rpc('increment_user_credits', {
-                    user_id_param: userId,
-                    credits_to_add: refundCredits
-                });
 
-                if (refundError) {
-                    console.error('[updateBalance] ❌ Error al reembolsar vía increment_user_credits:', refundError);
+                // BUG relacionado, mismo patrón que el de awardCredits() ya
+                // arreglado: esto acreditaba directo, desde el cliente, al id
+                // que devuelve CreditsSystem.getUserId() -- esa función
+                // prioriza session.user.id sin comparar si otro id (una
+                // wallet vinculada con saldo propio real) tiene más saldo.
+                // Ahora pasa por el mismo backend que ya usa deduct-credits
+                // para la resta simétrica de este mismo monto, que resuelve
+                // con resolveCreditsUserId() antes de acreditar.
+                let refundResult = null;
+                try {
+                    const refundResp = await fetch(`${(window.CONFIG?.BACKEND_API || window.CreditsSystem?.backendUrl || 'https://musictoken-ring.onrender.com')}/api/user/refund-credits`, {
+                        method: 'POST',
+                        headers: await this.getBackendAuthHeaders(),
+                        body: JSON.stringify({ credits: refundCredits, walletAddress: walletAddress || null })
+                    });
+                    refundResult = await refundResp.json().catch(() => ({}));
+                    if (!refundResp.ok || !refundResult.ok) {
+                        throw new Error(refundResult.error || ('HTTP ' + refundResp.status));
+                    }
+                } catch (refundError) {
+                    console.error('[updateBalance] ❌ Error al reembolsar vía backend:', refundError);
                     return false;
                 }
 
-                console.log('[updateBalance] ✅ Reembolso aplicado vía increment_user_credits:', refundCredits);
+                console.log('[updateBalance] ✅ Reembolso aplicado vía backend (refund-credits):', refundCredits, 'a', refundResult.userId);
                 if (window.CreditsSystem) {
-                    await window.CreditsSystem.loadBalance(walletAddress || null, userId);
+                    await window.CreditsSystem.loadBalance(walletAddress || null, refundResult.userId || session?.user?.id || null);
                 }
                 return true;
             }
