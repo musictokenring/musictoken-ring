@@ -74,17 +74,34 @@ const depositRateLimiter = rateLimit({
 });
 
 // Middleware - CORS configuration
+// BUG real reportado en vivo: el dueño no podía entrar a admin-retiros.html
+// (panel para gestionar retiros COP a mano) desde
+// https://musictoken-ring.vercel.app -- ese dominio faltaba en la lista de
+// abajo, así que el navegador bloqueaba la respuesta antes de que el JS
+// del panel la viera ("Failed to fetch"). Se agrega el dominio de Vercel
+// explícito, y de paso se permite cualquier subdominio *.vercel.app (los
+// previews de cada deploy/rama de Vercel usan una URL nueva cada vez --
+// sin esto, cada preview nuevo repetiría el mismo problema).
+const ALLOWED_CORS_ORIGINS = [
+    'https://www.musictokenring.xyz',
+    'https://musictokenring.xyz',
+    'https://musictoken-ring.vercel.app',
+    'http://localhost:3000',
+    'http://localhost:8080',
+    'http://127.0.0.1:5500',
+    'http://127.0.0.1:3000',
+    'http://localhost:8000',
+    'http://127.0.0.1:8000'
+];
 const corsOptions = {
-    origin: [
-        'https://www.musictokenring.xyz',
-        'https://musictokenring.xyz',
-        'http://localhost:3000',
-        'http://localhost:8080',
-        'http://127.0.0.1:5500',
-        'http://127.0.0.1:3000',
-        'http://localhost:8000',
-        'http://127.0.0.1:8000'
-    ],
+    origin: function (origin, callback) {
+        // Sin header Origin (ej. curl, Postman, server-to-server) -- permitir.
+        if (!origin) return callback(null, true);
+        if (ALLOWED_CORS_ORIGINS.includes(origin)) return callback(null, true);
+        if (/^https:\/\/[a-z0-9-]+\.vercel\.app$/i.test(origin)) return callback(null, true);
+        console.warn('[cors] Origen rechazado:', origin);
+        return callback(new Error('Not allowed by CORS'));
+    },
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'X-Wallet-Address', 'X-Internal-Secret']
