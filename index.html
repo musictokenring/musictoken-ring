@@ -2494,6 +2494,16 @@
         </div>
     </div>
 
+    <style>
+        /* Bug real encontrado al verificar en vivo: el badge de la campana
+           trae "display:flex" puesto directo en el style="" del <span> para
+           centrar el número -- un estilo en línea siempre le gana a la clase
+           "hidden" (display:none) que le agrega/saca refreshChallengeBell(),
+           así que el círculo con el contador nunca desaparecía aunque no
+           hubiera nada nuevo. Sin tocar la utilidad "hidden" global. */
+        .challenge-bell-badge.hidden { display: none !important; }
+    </style>
+
     <script>
     (function () {
         var SEEN_KEY = 'mtr_seen_challenge_states';
@@ -9668,11 +9678,15 @@
                     <span class="mtr2-h" style="font-size:16px; font-weight:700; color:#00f0ff;">MusicToken Ring</span>
                 </div>
                 <div style="display:flex; align-items:center; gap:8px;">
+                    <div id="mtr2CreditsChipWrap" style="font-size:11px; font-weight:800; color:#ff2ec4; background:rgba(255,46,196,0.12); border:1px solid rgba(255,46,196,0.35); border-radius:8px; padding:5px 9px; white-space:nowrap;"><span id="mtr2CreditsChip">0</span> créditos</div>
+                    <!-- Campana al final del todo, pegada al borde derecho --
+                         es donde suele ir en cualquier app (mismo pedido que
+                         ya se hizo para el header viejo de escritorio). Antes
+                         quedaba ANTES del chip de créditos, no en el extremo. -->
                     <button type="button" onclick="if(typeof window.toggleChallengeNotifications==='function') window.toggleChallengeNotifications(this)" style="position:relative; width:32px; height:32px; border-radius:9px; background:rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.12); display:flex; align-items:center; justify-content:center; color:#e5e7eb; flex-shrink:0;" aria-label="Notificaciones de tus desafíos" title="Notificaciones de tus desafíos">
                         <span data-mtr-icon="bell" data-mtr-plain data-mtr-size="16"></span>
                         <span class="challenge-bell-badge hidden" style="position:absolute; top:-4px; right:-4px; min-width:16px; height:16px; padding:0 3px; border-radius:999px; background:#ff2ec4; color:#05060a; font-size:10px; font-weight:800; display:flex; align-items:center; justify-content:center; line-height:1;">0</span>
                     </button>
-                    <div id="mtr2CreditsChipWrap" style="font-size:11px; font-weight:800; color:#ff2ec4; background:rgba(255,46,196,0.12); border:1px solid rgba(255,46,196,0.35); border-radius:8px; padding:5px 9px; white-space:nowrap;"><span id="mtr2CreditsChip">0</span> créditos</div>
                 </div>
             </div>
             <div class="mtr2-content">
