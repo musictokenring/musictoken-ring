@@ -1009,21 +1009,40 @@
                 <p class="text-gray-500 text-xs mt-8">
                     Puedes empezar sin wallet. Conecta tu wallet después para depósitos y retiros (saldo en USD vía pasarela).
                 </p>
-
-                <!-- Entrada para ARTISTAS (no fans) -- sin esto, ningún músico
-                     real se entera de que este programa existe. Deliberadamente
-                     con la paleta dorada de artistas.html, distinta del resto
-                     de esta pantalla, para que se note que es "otra cosa". -->
-                <a href="./artistas.html" class="mt-8 flex items-center gap-4 p-4 sm:p-5 rounded-xl border text-left transition hover:opacity-90"
-                   style="background:linear-gradient(120deg, rgba(224,185,115,0.10), rgba(8,15,26,0.4)); border-color:rgba(224,185,115,0.3);">
-                    <span data-mtr-icon="mic" data-mtr-color="yellow" data-mtr-badge-size="46" data-mtr-size="22"></span>
-                    <span class="flex-1 min-w-0">
-                        <span class="block text-sm font-bold" style="color:#f6e2b8;">¿Sos artista? Sumate al programa de regalías</span>
-                        <span class="block text-xs text-gray-400 mt-0.5">Reclamá tus canciones y ganá una parte del pozo cada vez que ganen una batalla real.</span>
-                    </span>
-                    <span class="text-lg flex-shrink-0" style="color:#e0b973;">›</span>
-                </a>
             </div>
+        </section>
+
+        <!-- Entrada para ARTISTAS -- módulo propio, fuera de la caja del
+             loginWall a propósito, para que tenga presencia real y no quede
+             como una nota al pie subordinada a "elegí tu modo". Pedido
+             explícito del usuario: "hazlo especial con lujo de visibilidad". -->
+        <style>
+            @keyframes mtrArtistGlow {
+                0%, 100% { box-shadow: 0 0 0px rgba(224,185,115,0); }
+                50% { box-shadow: 0 0 46px rgba(224,185,115,0.28); }
+            }
+            #artistPromoBanner { animation: mtrArtistGlow 3.2s ease-in-out infinite; }
+            @media (prefers-reduced-motion: reduce) { #artistPromoBanner { animation: none; } }
+        </style>
+        <section class="mb-16">
+            <a href="./artistas.html" id="artistPromoBanner"
+               class="block max-w-3xl mx-auto rounded-2xl p-6 sm:p-8 text-left transition hover:scale-[1.01]"
+               style="background:radial-gradient(600px circle at 15% -20%, rgba(246,226,184,0.14), transparent 60%), linear-gradient(135deg, rgba(224,185,115,0.10), rgba(8,8,12,0.6)); border:1px solid rgba(224,185,115,0.4);">
+                <div class="flex items-center gap-5">
+                    <span data-mtr-icon="crown" data-mtr-color="yellow" data-mtr-badge-size="64" data-mtr-size="32" style="flex-shrink:0;"></span>
+                    <div class="flex-1 min-w-0">
+                        <div class="flex items-center gap-2 flex-wrap mb-1">
+                            <span class="text-[10px] font-extrabold uppercase tracking-widest px-2 py-0.5 rounded-full" style="color:#1a1508; background:linear-gradient(90deg,#f6e2b8,#e0b973);">Nuevo</span>
+                            <span class="text-[11px] font-bold uppercase tracking-widest" style="color:#e0b973;">Programa de Artistas</span>
+                        </div>
+                        <h2 class="text-xl sm:text-2xl font-extrabold text-white mb-1">¿Sos artista? Ganá regalías con cada batalla</h2>
+                        <p class="text-sm text-gray-300 max-w-xl">Reclamá tus canciones y llevate una parte real del pozo cada vez que ganen una batalla -- de forma inmediata, sin esperar meses de regalías tradicionales.</p>
+                    </div>
+                    <span class="hidden sm:flex flex-shrink-0 items-center gap-1.5 px-5 py-3 rounded-xl font-bold text-sm" style="color:#1a1508; background:linear-gradient(135deg,#f6e2b8,#e0b973);">
+                        Sumarme <span data-mtr-icon="arrowRight" data-mtr-plain data-mtr-size="16"></span>
+                    </span>
+                </div>
+            </a>
         </section>
 
         <!-- Depósitos: solo NOWPayments (widget + IPN en servidor) -->
@@ -9722,6 +9741,8 @@
         @keyframes mtr2PulseDot { 0%,100%{opacity:1;} 50%{opacity:0.3;} }
         @keyframes mtr2BorderPulse { 0%,100%{ box-shadow: 0 0 16px rgba(168,85,247,0.25), inset 0 0 12px rgba(168,85,247,0.08);} 50%{ box-shadow: 0 0 28px rgba(168,85,247,0.45), inset 0 0 18px rgba(168,85,247,0.14);} }
         .mtr2-banner { animation: mtr2BorderPulse 2.6s ease-in-out infinite; }
+        @keyframes mtr2GoldPulse { 0%,100%{ box-shadow: 0 0 16px rgba(224,185,115,0.28), inset 0 0 12px rgba(224,185,115,0.1);} 50%{ box-shadow: 0 0 32px rgba(224,185,115,0.5), inset 0 0 20px rgba(224,185,115,0.16);} }
+        .mtr2-banner-gold { animation: mtr2GoldPulse 2.6s ease-in-out infinite; }
         .mtr2-dot { animation: mtr2PulseDot 1.2s ease-in-out infinite; }
 
         /* Reubicación del #streamDashboard real dentro de Jugar: se achica
@@ -9781,13 +9802,16 @@
                      usuario normal tampoco se entera de que puede reclamar
                      sus canciones. Paleta dorada de artistas.html, deliberadamente
                      distinta al resto de esta vista. -->
-                <a href="./artistas.html" style="border-radius:16px; padding:14px 16px; margin-bottom:20px; background:linear-gradient(120deg, rgba(224,185,115,0.16), rgba(8,15,26,0.4)); border:1px solid rgba(224,185,115,0.35); display:flex; align-items:center; gap:12px; cursor:pointer; text-decoration:none;">
-                    <span data-mtr-icon="mic" data-mtr-plain data-mtr-size="22" style="color:#e0b973; flex-shrink:0;"></span>
+                <a href="./artistas.html" class="mtr2-banner-gold" style="border-radius:16px; padding:16px; margin-bottom:20px; background:radial-gradient(280px circle at 12% -30%, rgba(246,226,184,0.18), transparent 60%), linear-gradient(120deg, rgba(224,185,115,0.18), rgba(8,15,26,0.45)); border:1.5px solid rgba(224,185,115,0.5); display:flex; align-items:center; gap:13px; cursor:pointer; text-decoration:none;">
+                    <span data-mtr-icon="crown" data-mtr-color="yellow" data-mtr-badge-size="42" data-mtr-size="21" style="flex-shrink:0;"></span>
                     <div style="flex:1; min-width:0;">
-                        <div style="font-size:12.5px; font-weight:800; color:#f6e2b8;">¿Sos artista? Reclamá tus regalías</div>
-                        <div style="font-size:11px; color:#d1d5db;">Ganá un % del pozo cada vez que tu canción gane una batalla</div>
+                        <div style="display:flex; align-items:center; gap:6px; margin-bottom:2px;">
+                            <span style="font-size:8.5px; font-weight:800; text-transform:uppercase; letter-spacing:0.06em; color:#1a1508; background:linear-gradient(90deg,#f6e2b8,#e0b973); padding:1.5px 6px; border-radius:999px;">Nuevo</span>
+                            <span style="font-size:13px; font-weight:800; color:#f6e2b8;">Programa de Artistas</span>
+                        </div>
+                        <div style="font-size:11px; color:#d1d5db;">Reclamá tus canciones y ganá un % del pozo cada vez que ganen una batalla</div>
                     </div>
-                    <span style="font-size:16px; color:#e0b973; flex-shrink:0;">›</span>
+                    <span style="font-size:18px; color:#e0b973; flex-shrink:0;">›</span>
                 </a>
 
                 <div style="margin-bottom:10px;">
