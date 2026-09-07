@@ -1009,6 +1009,20 @@
                 <p class="text-gray-500 text-xs mt-8">
                     Puedes empezar sin wallet. Conecta tu wallet después para depósitos y retiros (saldo en USD vía pasarela).
                 </p>
+
+                <!-- Entrada para ARTISTAS (no fans) -- sin esto, ningún músico
+                     real se entera de que este programa existe. Deliberadamente
+                     con la paleta dorada de artistas.html, distinta del resto
+                     de esta pantalla, para que se note que es "otra cosa". -->
+                <a href="./artistas.html" class="mt-8 flex items-center gap-4 p-4 sm:p-5 rounded-xl border text-left transition hover:opacity-90"
+                   style="background:linear-gradient(120deg, rgba(224,185,115,0.10), rgba(8,15,26,0.4)); border-color:rgba(224,185,115,0.3);">
+                    <span data-mtr-icon="mic" data-mtr-color="yellow" data-mtr-badge-size="46" data-mtr-size="22"></span>
+                    <span class="flex-1 min-w-0">
+                        <span class="block text-sm font-bold" style="color:#f6e2b8;">¿Sos artista? Sumate al programa de regalías</span>
+                        <span class="block text-xs text-gray-400 mt-0.5">Reclamá tus canciones y ganá una parte del pozo cada vez que ganen una batalla real.</span>
+                    </span>
+                    <span class="text-lg flex-shrink-0" style="color:#e0b973;">›</span>
+                </a>
             </div>
         </section>
 
@@ -9761,6 +9775,20 @@
                     </div>
                     <span style="font-size:16px; color:#c084fc; flex-shrink:0;">›</span>
                 </div>
+
+                <!-- Entrada para ARTISTAS -- mismo motivo que el banner del
+                     loginWall (pre-login): sin esto, un artista logueado como
+                     usuario normal tampoco se entera de que puede reclamar
+                     sus canciones. Paleta dorada de artistas.html, deliberadamente
+                     distinta al resto de esta vista. -->
+                <a href="./artistas.html" style="border-radius:16px; padding:14px 16px; margin-bottom:20px; background:linear-gradient(120deg, rgba(224,185,115,0.16), rgba(8,15,26,0.4)); border:1px solid rgba(224,185,115,0.35); display:flex; align-items:center; gap:12px; cursor:pointer; text-decoration:none;">
+                    <span data-mtr-icon="mic" data-mtr-plain data-mtr-size="22" style="color:#e0b973; flex-shrink:0;"></span>
+                    <div style="flex:1; min-width:0;">
+                        <div style="font-size:12.5px; font-weight:800; color:#f6e2b8;">¿Sos artista? Reclamá tus regalías</div>
+                        <div style="font-size:11px; color:#d1d5db;">Ganá un % del pozo cada vez que tu canción gane una batalla</div>
+                    </div>
+                    <span style="font-size:16px; color:#e0b973; flex-shrink:0;">›</span>
+                </a>
 
                 <div style="margin-bottom:10px;">
                     <h1 class="mtr2-h" style="margin:0 0 2px; font-size:20px; font-weight:700; color:#fff;">Elige tu modo</h1>
