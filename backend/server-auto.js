@@ -3264,8 +3264,8 @@ app.get('/api/admin/accounting/overview', requireInternalSecret, async (req, res
             supabase.from('user_credits').select('credits, bonus_credits'),
             supabase.from('users').select('saldo_fiat'),
             supabase.from('users').select('saldo_onchain'),
-            supabase.from('deposits').select('amount, status'),
-            supabase.from('deposits').select('amount, status').gte('created_at', new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString()),
+            supabase.from('deposits').select('amount, credits_awarded, token, status'),
+            supabase.from('deposits').select('amount, credits_awarded, token, status').gte('created_at', new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString()),
             supabase.from('withdrawal_requests_cop').select('amount_cop, amount_usd_equivalent, status'),
             supabase.from('vault_balance').select('*').limit(1).maybeSingle(),
             supabase.from('bonus_grants').select('id', { count: 'exact', head: true }).eq('status', 'active'),
@@ -3290,11 +3290,19 @@ app.get('/api/admin/accounting/overview', requireInternalSecret, async (req, res
             bonusCreditsOutstanding: sum(creditsAgg.data, 'bonus_credits'),
             saldoFiatTotal: sum(fiatAgg.data, 'saldo_fiat'),
             saldoOnchainTotal: sum(onchainAgg.data, 'saldo_onchain'),
+            // CRÍTICO: deposits.amount está en la moneda ORIGINAL de cada
+            // pasarela -- COP crudo para Mercado Pago, USD para
+            // NOWPayments/cripto -- misma columna, dos monedas distintas sin
+            // convertir (confirmado en mercadopago-service.js/
+            // nowpayments-service.js). Sumarla directo mezclaba pesos con
+            // dólares y mostraba un total sin sentido. credits_awarded sí
+            // está en USD nominal siempre (1 crédito = $1), para cualquier
+            // pasarela -- es la columna correcta para un total en dólares.
             deposits: {
                 allTimeCount: (depositsAllTime.data || []).length,
-                allTimeUsd: sum((depositsAllTime.data || []).filter(d => d.status === 'processed'), 'amount'),
+                allTimeUsd: sum((depositsAllTime.data || []).filter(d => d.status === 'processed'), 'credits_awarded'),
                 last30dCount: (deposits30d.data || []).length,
-                last30dUsd: sum((deposits30d.data || []).filter(d => d.status === 'processed'), 'amount')
+                last30dUsd: sum((deposits30d.data || []).filter(d => d.status === 'processed'), 'credits_awarded')
             },
             withdrawalsByStatus,
             vaultBalance: vaultRow.data || null,

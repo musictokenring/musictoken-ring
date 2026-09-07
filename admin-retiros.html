@@ -122,6 +122,10 @@
         <h2>Retiros COP por estado</h2>
         <table class="acc-table" id="accWithdrawalsTable"><tbody></tbody></table>
         <h2>Depósitos</h2>
+        <p class="empty" style="margin: 0 0 0.6rem;">
+            En USD nominal (1 crédito = $1), ya neto de la comisión de la plataforma -- no el monto bruto
+            que pagó cada quien en su moneda original (Mercado Pago cobra en COP, NOWPayments en USD/cripto).
+        </p>
         <table class="acc-table" id="accDepositsTable"><tbody></tbody></table>
     </div>
 
@@ -368,8 +372,8 @@
             { label: 'Créditos de prueba en circulación', value: fmtMoney(j.bonusCreditsOutstanding), cls: 'bonus', sub: 'NO retirables' },
             { label: 'Saldo fiat total', value: '$' + fmtMoney(j.saldoFiatTotal), sub: 'users.saldo_fiat' },
             { label: 'Saldo on-chain total', value: fmtMoney(j.saldoOnchainTotal) + ' MTR', sub: 'users.saldo_onchain' },
-            { label: 'Depósitos (30 días)', value: j.deposits.last30dCount, sub: '$' + fmtMoney(j.deposits.last30dUsd) + ' procesado' },
-            { label: 'Depósitos (histórico)', value: j.deposits.allTimeCount, sub: '$' + fmtMoney(j.deposits.allTimeUsd) + ' procesado' },
+            { label: 'Depósitos (30 días)', value: j.deposits.last30dCount, sub: '$' + fmtMoney(j.deposits.last30dUsd) + ' USD acreditado' },
+            { label: 'Depósitos (histórico)', value: j.deposits.allTimeCount, sub: '$' + fmtMoney(j.deposits.allTimeUsd) + ' USD acreditado' },
             { label: 'Bonos activos', value: j.activeBonusGrants, sub: 'ver pestaña Bonos' },
             { label: 'Batallas terminadas', value: fmtMoney(j.matchesFinished), sub: 'histórico' }
         ];
@@ -390,7 +394,7 @@
             (wRows || '<tr><td colspan="4" class="empty">Sin datos</td></tr>') + '</tbody>';
 
         document.getElementById('accDepositsTable').innerHTML =
-            '<thead><tr><th></th><th>Cantidad</th><th>USD procesado</th></tr></thead><tbody>' +
+            '<thead><tr><th></th><th>Cantidad</th><th>USD acreditado</th></tr></thead><tbody>' +
             '<tr><td>Últimos 30 días</td><td>' + j.deposits.last30dCount + '</td><td>$' + fmtMoney(j.deposits.last30dUsd) + '</td></tr>' +
             '<tr><td>Histórico</td><td>' + j.deposits.allTimeCount + '</td><td>$' + fmtMoney(j.deposits.allTimeUsd) + '</td></tr>' +
             '</tbody>';
