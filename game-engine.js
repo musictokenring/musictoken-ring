@@ -863,49 +863,44 @@ const GameEngine = {
                     const opponent = eligibleOpponents[0];
                     await this.createMatch('quick', session.user.id, opponent.user_id, song, opponent, betAmount, opponent.bet_amount);
 
-                    await supabaseClient
-                        .from('matchmaking_queue')
-                        .delete()
-                        .eq('id', opponent.id);
+                    // El cliente no puede borrar la fila de OTRO usuario (RLS
+                    // de matchmaking_queue lo restringe a auth.uid()=user_id,
+                    // correctamente) -- este endpoint la borra server-side,
+                    // sin reembolsar (esa apuesta ya se usó de verdad en el
+                    // match que se acaba de formar). Ver
+                    // /api/matchmaking/clear-matched.
+                    if (this.currentMatch && this.currentMatch.id) {
+                        try {
+                            const backendUrl = window.CONFIG?.BACKEND_API || window.CreditsSystem?.backendUrl || 'https://musictoken-ring.onrender.com';
+                            await fetch(`${backendUrl}/api/matchmaking/clear-matched`, {
+                                method: 'POST',
+                                headers: await this.getBackendAuthHeaders(),
+                                body: JSON.stringify({ queueRowId: opponent.id, matchId: this.currentMatch.id })
+                            });
+                        } catch (clearError) {
+                            console.warn('[joinQuickMatch] No se pudo limpiar la fila del rival en la cola:', clearError);
+                        }
+                    }
 
                     showToast('¡Oponente encontrado!', 'success');
                 } else {
                     showToast('Sin rival en rango ELO (<300). Te agregamos a la cola.', 'info');
-                    await supabaseClient
-                        .from('matchmaking_queue')
-                        .insert([{
-                            user_id: session.user.id,
-                            song_id: song.id,
-                            song_name: song.name,
-                            song_artist: song.artist,
-                            song_image: song.image,
-                            song_preview: song.preview,
-                            bet_amount: betAmount
-                        }]);
+                    const joined = await this.joinMatchmakingQueueSecure(song, normalizedBet);
+                    if (!joined) return;
 
                     document.getElementById('songSelection').classList.add('hidden');
                     document.getElementById('waitingScreen').classList.remove('hidden');
                     this.startMatchmakingPolling();
                 }
             } else {
-                // Agregar a cola
-                const { error } = await supabaseClient
-                    .from('matchmaking_queue')
-                    .insert([{
-                        user_id: session.user.id,
-                        song_id: song.id,
-                        song_name: song.name,
-                        song_artist: song.artist,
-                        song_image: song.image,
-                        song_preview: song.preview,
-                        bet_amount: betAmount
-                    }]);
-                
-                if (error) throw error;
-                
+                // Agregar a cola -- descuento y anotación en la cola, un solo
+                // paso atómico del backend (ver joinMatchmakingQueueSecure).
+                const joined = await this.joinMatchmakingQueueSecure(song, normalizedBet);
+                if (!joined) return;
+
                 document.getElementById('songSelection').classList.add('hidden');
                 document.getElementById('waitingScreen').classList.remove('hidden');
-                
+
                 // Polling para esperar oponente
                 this.startMatchmakingPolling();
             }
@@ -1016,19 +1011,64 @@ const GameEngine = {
         }, 1000);
     },
     
+    // Entra a matchmaking_queue con la apuesta ya descontada de verdad --
+    // auditoría de seguridad de hoy: antes esto insertaba la fila con
+    // bet_amount SIN descontar nada en ese momento (el crédito real "recién
+    // se descontaba al formarse un match humano" -- pero eso solo pasaba
+    // del lado de quien ENCUENTRA rival, nunca del lado de quien ya estaba
+    // esperando). Ahora es un solo paso atómico del backend, igual que
+    // /api/social-challenges/create.
+    async joinMatchmakingQueueSecure(song, normalizedBet) {
+        try {
+            const backendUrl = window.CONFIG?.BACKEND_API || window.CreditsSystem?.backendUrl || 'https://musictoken-ring.onrender.com';
+            const resp = await fetch(`${backendUrl}/api/matchmaking/join`, {
+                method: 'POST',
+                headers: await this.getBackendAuthHeaders(),
+                body: JSON.stringify({
+                    song: { id: song.id, name: song.name, artist: song.artist, image: song.image, preview: song.preview },
+                    betAmount: normalizedBet,
+                    walletAddress: this.connectedWallet || localStorage.getItem('mtr_wallet') || null
+                })
+            });
+            const result = await resp.json().catch(() => ({}));
+            if (!resp.ok || !result.ok) {
+                showToast('No se pudo entrar a la cola: ' + (result.error || ('HTTP ' + resp.status)), 'error');
+                return false;
+            }
+            if (window.CreditsSystem) {
+                await window.CreditsSystem.loadBalance(this.connectedWallet || localStorage.getItem('mtr_wallet') || null, (await supabaseClient.auth.getSession()).data.session?.user?.id || null);
+            }
+            return true;
+        } catch (error) {
+            console.error('[joinMatchmakingQueueSecure] Error:', error);
+            showToast('Error al entrar a la cola. Intentá de nuevo.', 'error');
+            return false;
+        }
+    },
+
     // Saca al usuario de matchmaking_queue -- compartido entre el botón
     // "Cancelar búsqueda" (cancelMatchmaking, abajo) y el timeout de 60s de
     // startMatchmakingPolling (que en vez de cancelar sin más, sigue con
-    // startQuickCpuFallback). Nunca hay crédito que reembolsar acá: el
-    // crédito real recién se descuenta al formarse un match humano.
+    // startQuickCpuFallback). Reembolsa la apuesta real descontada al
+    // entrar (ver joinMatchmakingQueueSecure) -- antes no había nada que
+    // reembolsar porque nunca se había descontado nada.
     async leaveMatchmakingQueue() {
         clearInterval(this.matchmakingInterval);
         const { data: { session } } = await supabaseClient.auth.getSession();
         if (!session) return;
-        await supabaseClient
-            .from('matchmaking_queue')
-            .delete()
-            .eq('user_id', session.user.id);
+        try {
+            const backendUrl = window.CONFIG?.BACKEND_API || window.CreditsSystem?.backendUrl || 'https://musictoken-ring.onrender.com';
+            await fetch(`${backendUrl}/api/matchmaking/leave`, {
+                method: 'POST',
+                headers: await this.getBackendAuthHeaders(),
+                body: JSON.stringify({ walletAddress: this.connectedWallet || localStorage.getItem('mtr_wallet') || null })
+            });
+            if (window.CreditsSystem) {
+                await window.CreditsSystem.loadBalance(this.connectedWallet || localStorage.getItem('mtr_wallet') || null, session.user.id);
+            }
+        } catch (error) {
+            console.error('[leaveMatchmakingQueue] Error:', error);
+        }
     },
 
     async cancelMatchmaking() {
@@ -1251,124 +1291,62 @@ const GameEngine = {
         }
         
         try {
-            const { data: { session } } = await supabaseClient.auth.getSession();
-            
-            // Generar ID único para el desafío
-            const challengeId = this.generateChallengeId();
-            
-            // Crear desafío en la base de datos
-            const challengeRow = {
-                challenge_id: challengeId,
-                challenger_id: session.user.id,
-                challenger_song_id: song.id,
-                challenger_song_name: song.name,
-                challenger_song_artist: song.artist,
-                challenger_song_image: song.image,
-                challenger_song_preview: song.preview,
-                bet_amount: normalizedBet,
-                status: 'pending',
-                created_at: new Date().toISOString(),
-                expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString() // 7 días
-            };
-            if (genreId) {
-                challengeRow.genre_id = genreId;
-                challengeRow.genre_label = genreLabel || genreId;
-                if (genreCheck) {
-                    challengeRow.challenger_genre_confidence = genreCheck.confidence;
-                    challengeRow.challenger_genre_verdict = genreCheck.verdict;
-                }
-            }
-
-            let { data: challenge, error: challengeError } = await supabaseClient
-                .from('social_challenges')
-                .insert([challengeRow])
-                .select()
-                .single();
-
-            // Si la migración 026 (género en desafíos sociales) todavía no
-            // corrió en Supabase, reintentar sin esas columnas en vez de
-            // romper la creación entera del desafío por un dato opcional.
-            if (challengeError && genreId && String(challengeError.message || '').indexOf('genre') !== -1) {
-                delete challengeRow.genre_id;
-                delete challengeRow.genre_label;
-                delete challengeRow.challenger_genre_confidence;
-                delete challengeRow.challenger_genre_verdict;
-                ({ data: challenge, error: challengeError } = await supabaseClient
-                    .from('social_challenges')
-                    .insert([challengeRow])
-                    .select()
-                    .single());
-            }
-
-            if (challengeError) throw challengeError;
-            
-            // Descontar créditos del desafío ANTES de mostrar UI
-            // CRÍTICO: Esto debe ejecutarse ANTES de crear el desafío, pero como ya lo creamos,
-            // si falla debemos eliminarlo
-            let deductionSuccess = false;
-            try {
-                deductionSuccess = await this.updateBalance(-normalizedBet, 'bet', null);
-            } catch (deductionError) {
-                console.error('[createSocialChallenge] ❌ Error al descontar créditos (excepción):', deductionError);
-                deductionSuccess = false;
-            }
-            
-            if (!deductionSuccess) {
-                console.error('[createSocialChallenge] ❌ Deducción falló, eliminando desafío creado...');
-                
-                // Obtener información de saldo para mensaje de error más claro
-                const credits = window.CreditsSystem?.currentCredits || 0;
-                const onchainBalance = Number(window.__mtrOnChainBalance || 0);
-                
-                // Si falla la deducción, eliminar el desafío
-                try {
-                    await supabaseClient
-                        .from('social_challenges')
-                        .delete()
-                        .eq('id', challenge.id);
-                    console.log('[createSocialChallenge] ✅ Desafío eliminado correctamente');
-                } catch (deleteError) {
-                    console.error('[createSocialChallenge] ❌ Error al eliminar desafío:', deleteError);
-                }
-                
-                // Mensaje de error más claro
-                let errorMsg = `No se pudieron descontar ${normalizedBet} créditos. `;
-                
-                // CRÍTICO: Si había suficientes créditos pero el backend rechazó, indicar que es un problema del backend
-                if (credits >= normalizedBet) {
-                    errorMsg += `Tienes ${credits.toFixed(2)} créditos disponibles pero el backend rechazó la deducción. `;
-                    errorMsg += `Esto puede ser un problema de sincronización. Por favor, recarga la página e intenta nuevamente.`;
-                } else if (credits < normalizedBet && onchainBalance >= normalizedBet) {
-                    errorMsg += `Tienes ${credits.toFixed(2)} créditos pero ${onchainBalance.toLocaleString('es-ES')} MTR on-chain. La conversión automática falló. Intenta nuevamente.`;
-                } else if (credits < normalizedBet && onchainBalance < normalizedBet) {
-                    errorMsg += `Disponibles: ${credits.toFixed(2)} créditos y ${onchainBalance.toLocaleString('es-ES', { maximumFractionDigits: 4 })} MTR on-chain. `;
-                    errorMsg += `Añade saldo (depósito) para obtener más créditos.`;
-                } else {
-                    errorMsg += `Verifica tu saldo y vuelve a intentar.`;
-                }
-                
-                showToast(errorMsg, 'error');
+            // CRÍTICO -- auditoría de seguridad de hoy: antes esto insertaba
+            // la fila del desafío con bet_amount PRIMERO, y descontaba los
+            // créditos DESPUÉS (borrando la fila si el descuento fallaba).
+            // Ese patrón de dos pasos separados dejaba una ventana real: nada
+            // impedía mandar el INSERT directo a la API de Supabase con
+            // cualquier bet_amount, sin pasar nunca por el descuento -- RLS
+            // exige que challenger_id sea el tuyo, pero eso no valida que el
+            // monto declarado haya salido de verdad de tu saldo. Ahora el
+            // descuento y la creación son un solo paso atómico del lado del
+            // backend (mismo patrón que ya se usa para el equivalente con
+            // bono) -- el desafío solo existe si el descuento real ya se
+            // aplicó.
+            const backendUrl = window.CONFIG?.BACKEND_API || window.CreditsSystem?.backendUrl || 'https://musictoken-ring.onrender.com';
+            const resp = await fetch(`${backendUrl}/api/social-challenges/create`, {
+                method: 'POST',
+                headers: await this.getBackendAuthHeaders(),
+                body: JSON.stringify({
+                    song: { id: song.id, name: song.name, artist: song.artist, image: song.image, preview: song.preview },
+                    betAmount: normalizedBet,
+                    genreId, genreLabel,
+                    walletAddress: this.connectedWallet || localStorage.getItem('mtr_wallet') || null
+                })
+            });
+            const result = await resp.json().catch(() => ({}));
+            if (!resp.ok || !result.ok) {
+                console.error('[createSocialChallenge] ❌ Error del backend:', result);
+                showToast('No se pudo crear el desafío: ' + (result.error || ('HTTP ' + resp.status)), 'error');
                 return;
             }
-            
-            console.log('[createSocialChallenge] ✅ Créditos descontados exitosamente');
-            
+
+            const challenge = result.challenge;
+            console.log('[createSocialChallenge] ✅ Créditos descontados y desafío creado vía backend');
+
             // Generar link único
-            const challengeLink = `${window.location.origin}${window.location.pathname}?challenge=${challengeId}`;
-            
+            const challengeLink = `${window.location.origin}${window.location.pathname}?challenge=${challenge.challenge_id}`;
+
             console.log('[createSocialChallenge] ✅ Desafío creado exitosamente:', {
-                challengeId: challengeId,
+                challengeId: challenge.challenge_id,
                 challengeLink: challengeLink,
                 betAmount: normalizedBet
             });
-            
+
+            // Refrescar saldo en pantalla -- el descuento ya ocurrió del lado
+            // del backend, la UI todavía muestra el número viejo.
+            const walletForRefresh = this.connectedWallet || localStorage.getItem('mtr_wallet');
+            if (window.CreditsSystem) {
+                await window.CreditsSystem.loadBalance(walletForRefresh || null, (await supabaseClient.auth.getSession()).data.session?.user?.id || null);
+            }
+
             // Mostrar UI para compartir
             console.log('[createSocialChallenge] Mostrando UI de compartir...');
             this.showSocialChallengeShareUI(challenge, challengeLink, song, normalizedBet);
-            
+
             console.log('[createSocialChallenge] ✅ UI de compartir mostrada');
             showToast('Desafío creado. Comparte el link con tu amigo.', 'success');
-            
+
         } catch (error) {
             // CRÍTICO: antes este catch mostraba solo "Error al crear
             // desafío" sin ningún detalle, y como no relanza la excepción,

@@ -3448,6 +3448,291 @@ app.post('/api/user/refund-bonus-credits', requireCreditMutationAuth, async (req
 });
 
 /**
+ * Crea un Desafío Social con dinero real -- reemplaza el patrón viejo del
+ * cliente (insertar la fila con bet_amount, DESPUÉS descontar créditos, y
+ * si falla el descuento, borrar la fila). Ese patrón dejaba una ventana
+ * real: nada impedía mandar el INSERT directo a la API de Supabase con
+ * cualquier bet_amount, SIN pasar nunca por el descuento -- RLS ya
+ * restringe que solo puedas crear un desafío con tu propio challenger_id,
+ * pero eso no valida que el monto que declarás haya salido de verdad de tu
+ * saldo. Acá el descuento y la creación son un solo paso atómico
+ * server-side: el desafío solo existe si el descuento real ya se aplicó.
+ * Mismo patrón que ya se usó hoy para el equivalente con bono
+ * (/api/social-challenges/bonus/create).
+ */
+app.post('/api/social-challenges/create', requireCreditMutationAuth, async (req, res) => {
+    try {
+        if (!req.authUser) return res.status(401).json({ error: 'Inicia sesión primero.' });
+        const { song, betAmount, genreId, genreLabel, walletAddress } = req.body;
+        if (!song || !song.id || !song.name || !song.artist) {
+            return res.status(400).json({ error: 'Falta información de la canción' });
+        }
+        const normalizedBet = Math.max(1, Math.round(Number(betAmount) || 1));
+
+        const resolved = await resolveCreditsUserId(supabase, {
+            getUserIdFromWallet: (addr) => walletLinkService ? walletLinkService.getUserIdFromWallet(addr) : null
+        }, req.authUser, walletAddress || null);
+        const challengerId = resolved.userId;
+
+        const deduction = await deductUnifiedBalance(supabase, challengerId, normalizedBet);
+        if (!deduction.ok) {
+            return res.status(400).json({
+                error: deduction.error || 'Créditos insuficientes',
+                total_balance: deduction.total,
+                credits_balance: deduction.creditsBal,
+                fiat_balance: deduction.fiat,
+                onchain_balance: deduction.onchain
+            });
+        }
+
+        const genChallengeId = () => {
+            const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+            let id = '';
+            for (let i = 0; i < 12; i++) id += chars.charAt(Math.floor(Math.random() * chars.length));
+            return id;
+        };
+
+        const challengeRow = {
+            challenge_id: genChallengeId(),
+            challenger_id: challengerId,
+            challenger_song_id: song.id,
+            challenger_song_name: song.name,
+            challenger_song_artist: song.artist,
+            challenger_song_image: song.image || null,
+            challenger_song_preview: song.preview || null,
+            bet_amount: normalizedBet,
+            status: 'pending',
+            stake_type: 'real',
+            expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString()
+        };
+        if (genreId) {
+            challengeRow.genre_id = genreId;
+            challengeRow.genre_label = genreLabel || genreId;
+        }
+
+        let { data: challenge, error: insertError } = await supabase
+            .from('social_challenges')
+            .insert([challengeRow])
+            .select()
+            .single();
+
+        // Igual que createSocialChallenge() en game-engine.js: si la
+        // migración de género todavía no corrió, reintentar sin esas
+        // columnas en vez de romper la creación por un dato opcional.
+        if (insertError && genreId && String(insertError.message || '').indexOf('genre') !== -1) {
+            delete challengeRow.genre_id;
+            delete challengeRow.genre_label;
+            ({ data: challenge, error: insertError } = await supabase
+                .from('social_challenges')
+                .insert([challengeRow])
+                .select()
+                .single());
+        }
+
+        if (insertError) {
+            // Ya se descontó de verdad -- si falla crear el desafío, devolver
+            // el crédito (a la billetera real, siempre a `credits` por
+            // simplicidad -- una reversión perfecta por fuente exacta no
+            // vale la complejidad para este camino de error, raro por
+            // definición).
+            await supabase.rpc('increment_user_credits', {
+                user_id_param: challengerId,
+                credits_to_add: normalizedBet
+            }).catch(() => {});
+            console.error('[social-create] Error creando el desafío:', insertError);
+            return res.status(500).json({ error: 'No se pudo crear el desafío' });
+        }
+
+        res.json({ ok: true, challenge });
+    } catch (error) {
+        console.error('[social-create] Error:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+/**
+ * Modo Rápido: entrar a la cola de emparejamiento. Mismo problema que
+ * social_challenges, encontrado auditando la mecánica de resolución de
+ * batallas -- de hecho, PEOR: acá ni hace falta que nadie intente hacer
+ * trampa. joinQuickMatch() en el cliente insertaba la fila de la cola con
+ * bet_amount pero NUNCA descontaba nada en ese momento (el comentario del
+ * código decía explícitamente "el crédito real recién se descuenta al
+ * formarse un match humano") -- pero esa deducción solo corre del lado de
+ * quien ENCUENTRA rival (createMatch descuenta bet1, el suyo). A quien
+ * ya estaba esperando en la cola nunca se le descontó nada, en ningún
+ * punto del código -- juega gratis y cobra el premio completo con dinero
+ * que nunca puso, en CUALQUIER Modo Rápido real entre dos humanos, sin
+ * que nadie busque explotarlo. Acá se descuenta y se anota en la cola en
+ * un solo paso atómico, así el bet_amount que otro dispositivo lea de
+ * esta fila siempre está respaldado por un descuento real.
+ */
+app.post('/api/matchmaking/join', requireCreditMutationAuth, async (req, res) => {
+    try {
+        if (!req.authUser) return res.status(401).json({ error: 'Inicia sesión primero.' });
+        const { song, betAmount, walletAddress } = req.body;
+        if (!song || !song.id || !song.name || !song.artist) {
+            return res.status(400).json({ error: 'Falta información de la canción' });
+        }
+        const normalizedBet = Math.max(1, Math.round(Number(betAmount) || 1));
+
+        const resolved = await resolveCreditsUserId(supabase, {
+            getUserIdFromWallet: (addr) => walletLinkService ? walletLinkService.getUserIdFromWallet(addr) : null
+        }, req.authUser, walletAddress || null);
+        const userId = resolved.userId;
+
+        // Limpiar cualquier fila vieja de este usuario antes de agregar una
+        // nueva (mismo criterio que ya tenía el cliente) -- si quedó una de
+        // una búsqueda anterior sin reembolsar, reembolsarla primero para no
+        // perder ese crédito.
+        const { data: staleRows } = await supabase
+            .from('matchmaking_queue')
+            .select('id, bet_amount')
+            .eq('user_id', userId);
+        if (staleRows && staleRows.length) {
+            for (const row of staleRows) {
+                const staleAmount = parseFloat(row.bet_amount) || 0;
+                if (staleAmount > 0) {
+                    await supabase.rpc('increment_user_credits', { user_id_param: userId, credits_to_add: staleAmount }).catch(() => {});
+                }
+            }
+            await supabase.from('matchmaking_queue').delete().eq('user_id', userId);
+        }
+
+        const deduction = await deductUnifiedBalance(supabase, userId, normalizedBet);
+        if (!deduction.ok) {
+            return res.status(400).json({
+                error: deduction.error || 'Créditos insuficientes',
+                total_balance: deduction.total,
+                credits_balance: deduction.creditsBal,
+                fiat_balance: deduction.fiat,
+                onchain_balance: deduction.onchain
+            });
+        }
+
+        const { data: queueRow, error: insertError } = await supabase
+            .from('matchmaking_queue')
+            .insert([{
+                user_id: userId,
+                song_id: song.id,
+                song_name: song.name,
+                song_artist: song.artist,
+                song_image: song.image || null,
+                song_preview: song.preview || null,
+                bet_amount: normalizedBet
+            }])
+            .select()
+            .single();
+
+        if (insertError) {
+            // Ya se descontó de verdad -- si falla el insert, devolver el crédito.
+            await supabase.rpc('increment_user_credits', { user_id_param: userId, credits_to_add: normalizedBet }).catch(() => {});
+            console.error('[matchmaking-join] Error insertando en la cola:', insertError);
+            return res.status(500).json({ error: 'No se pudo entrar a la cola' });
+        }
+
+        res.json({ ok: true, queueRow });
+    } catch (error) {
+        console.error('[matchmaking-join] Error:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+/**
+ * Modo Rápido: salir de la cola (cancelar búsqueda, o timeout de 60s antes
+ * de caer a CPU) -- reembolsa la apuesta real que se descontó al entrar
+ * (ver /api/matchmaking/join). Idempotente: si no había fila (ya se había
+ * emparejado, o ya se había ido), no hace nada y no reembolsa dos veces.
+ */
+app.post('/api/matchmaking/leave', requireCreditMutationAuth, async (req, res) => {
+    try {
+        if (!req.authUser) return res.status(401).json({ error: 'Inicia sesión primero.' });
+        const { walletAddress } = req.body;
+
+        const resolved = await resolveCreditsUserId(supabase, {
+            getUserIdFromWallet: (addr) => walletLinkService ? walletLinkService.getUserIdFromWallet(addr) : null
+        }, req.authUser, walletAddress || null);
+        const userId = resolved.userId;
+
+        const { data: deleted, error: deleteError } = await supabase
+            .from('matchmaking_queue')
+            .delete()
+            .eq('user_id', userId)
+            .select('bet_amount');
+
+        if (deleteError) {
+            console.error('[matchmaking-leave] Error:', deleteError);
+            return res.status(500).json({ error: 'No se pudo salir de la cola' });
+        }
+
+        let refunded = 0;
+        for (const row of deleted || []) {
+            const amount = parseFloat(row.bet_amount) || 0;
+            if (amount > 0) {
+                const { error: refundError } = await supabase.rpc('increment_user_credits', { user_id_param: userId, credits_to_add: amount });
+                if (!refundError) refunded += amount;
+            }
+        }
+
+        res.json({ ok: true, refunded });
+    } catch (error) {
+        console.error('[matchmaking-leave] Error:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+/**
+ * Borra la fila de matchmaking_queue de OTRO jugador, sin reembolsar --
+ * solo para el caso de "encontré rival en la cola y le armé el match" (ver
+ * joinQuickMatch en game-engine.js). El cliente no puede hacer este borrado
+ * directo (RLS de matchmaking_queue restringe a "auth.uid() = user_id",
+ * correcto para todo lo demás, pero acá justamente hace falta borrar la
+ * fila de OTRO usuario) -- antes ese DELETE fallaba en silencio y la fila
+ * quedaba pegada; la próxima vez que ese jugador buscara partida, la
+ * limpieza de filas viejas la habría reembolsado de nuevo, duplicando el
+ * crédito. Nunca reembolsa: la apuesta de esa fila ya se usó de verdad en
+ * el match que se acaba de formar, no fue abandonada. Exige que el
+ * queueRowId corresponda de verdad a uno de los dos jugadores del matchId
+ * dado, y que quien llama sea el otro jugador -- no borra cualquier fila a
+ * pedido de cualquiera.
+ */
+app.post('/api/matchmaking/clear-matched', requireCreditMutationAuth, async (req, res) => {
+    try {
+        if (!req.authUser) return res.status(401).json({ error: 'Inicia sesión primero.' });
+        const { queueRowId, matchId } = req.body;
+        if (!queueRowId || !matchId) return res.status(400).json({ error: 'Falta queueRowId o matchId' });
+
+        const inMatch = await verifyUserInMatch(supabase, req.authUser, matchId);
+        if (!inMatch) return res.status(403).json({ error: 'No participas en esa partida.' });
+
+        const { data: match } = await supabase
+            .from('matches')
+            .select('player1_id, player2_id')
+            .eq('id', matchId)
+            .maybeSingle();
+        if (!match) return res.status(404).json({ error: 'Match no encontrado' });
+
+        const { data: queueRow } = await supabase
+            .from('matchmaking_queue')
+            .select('id, user_id')
+            .eq('id', queueRowId)
+            .maybeSingle();
+        if (!queueRow) return res.json({ ok: true, alreadyGone: true });
+
+        // La fila de la cola tiene que ser de uno de los dos jugadores de
+        // ESTE match específico -- si no, no se toca.
+        if (queueRow.user_id !== match.player1_id && queueRow.user_id !== match.player2_id) {
+            return res.status(403).json({ error: 'Esa fila no corresponde a este match' });
+        }
+
+        await supabase.from('matchmaking_queue').delete().eq('id', queueRowId);
+        res.json({ ok: true });
+    } catch (error) {
+        console.error('[matchmaking-clear-matched] Error:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+/**
  * Crea un Desafío Social financiado con bonus_credits. A diferencia del
  * flujo normal (insert desde el cliente + deducción aparte), esto corre
  * enteramente server-side: nunca confía en que el cliente ya insertó la
