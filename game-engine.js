@@ -840,8 +840,15 @@ const GameEngine = {
                 .eq('user_id', session.user.id);
 
             showToast('Buscando oponente...', 'info');
-            await this.broadcastQuickChallenge(song, betAmount, session.user.id);
-            
+            // CRÍTICO -- auditoría de hoy: el aviso en vivo (broadcastQuickChallenge)
+            // ya NO se manda acá arriba, antes de tener nada real detrás. Antes se
+            // mandaba con el betAmount tal cual lo tipeó el usuario, sin ningún
+            // descuento ni fila en la base que lo respaldara -- quien lo aceptaba
+            // (acceptQuickChallenge) confiaba en ese número ciegamente. Ahora solo
+            // se manda DESPUÉS de que joinMatchmakingQueueSecure() ya descontó de
+            // verdad y creó la fila (ver más abajo) -- y acceptQuickChallenge relee
+            // esa fila real en vez de confiar en el mensaje.
+
             // Buscar oponente en cola
             const { data: opponents } = await supabaseClient
                 .from('matchmaking_queue')
@@ -887,6 +894,7 @@ const GameEngine = {
                     showToast('Sin rival en rango ELO (<300). Te agregamos a la cola.', 'info');
                     const joined = await this.joinMatchmakingQueueSecure(song, normalizedBet);
                     if (!joined) return;
+                    await this.broadcastQuickChallenge(song, normalizedBet, session.user.id);
 
                     document.getElementById('songSelection').classList.add('hidden');
                     document.getElementById('waitingScreen').classList.remove('hidden');
@@ -897,6 +905,7 @@ const GameEngine = {
                 // paso atómico del backend (ver joinMatchmakingQueueSecure).
                 const joined = await this.joinMatchmakingQueueSecure(song, normalizedBet);
                 if (!joined) return;
+                await this.broadcastQuickChallenge(song, normalizedBet, session.user.id);
 
                 document.getElementById('songSelection').classList.add('hidden');
                 document.getElementById('waitingScreen').classList.remove('hidden');
@@ -934,11 +943,30 @@ const GameEngine = {
     async acceptQuickChallenge(song, betAmount, userId) {
         const challenge = this.pendingChallenge;
         if (!challenge) return;
-        if (betAmount < challenge.betAmount) {
-            showToast(`La apuesta debe ser mínimo ${challenge.betAmount} MTR`, 'error');
+        this.pendingChallenge = null;
+
+        // CRÍTICO -- auditoría de hoy: challenge.betAmount viaja por un
+        // mensaje de Supabase Realtime, sin respaldo de ningún tipo -- un
+        // mensaje falso (o simplemente cualquiera escuchando el canal)
+        // podía declarar cualquier monto. Ahora se relee el monto REAL desde
+        // la fila de matchmaking_queue del retador -- esa fila solo existe
+        // si joinMatchmakingQueueSecure() ya la descontó de verdad (ver
+        // joinQuickMatch). Si no existe, el reto ya no es válido.
+        const { data: challengerQueueRow } = await supabaseClient
+            .from('matchmaking_queue')
+            .select('id, bet_amount')
+            .eq('user_id', challenge.from)
+            .maybeSingle();
+
+        if (!challengerQueueRow) {
+            showToast('Ese reto ya no está disponible.', 'info');
             return;
         }
-        this.pendingChallenge = null;
+        const verifiedBet = parseFloat(challengerQueueRow.bet_amount) || 0;
+        if (betAmount < verifiedBet) {
+            showToast(`La apuesta debe ser mínimo ${verifiedBet} créditos`, 'error');
+            return;
+        }
 
         await this.createMatch(
             'quick',
@@ -953,8 +981,24 @@ const GameEngine = {
                 song_preview: challenge.song.preview
             },
             betAmount,
-            challenge.betAmount
+            verifiedBet
         );
+
+        // Limpiar la fila real del retador -- mismo endpoint que ya se usa
+        // para el emparejamiento por cola, sin reembolso (esa apuesta ya se
+        // usó de verdad en el match que se acaba de formar).
+        if (this.currentMatch && this.currentMatch.id) {
+            try {
+                const backendUrl = window.CONFIG?.BACKEND_API || window.CreditsSystem?.backendUrl || 'https://musictoken-ring.onrender.com';
+                await fetch(`${backendUrl}/api/matchmaking/clear-matched`, {
+                    method: 'POST',
+                    headers: await this.getBackendAuthHeaders(),
+                    body: JSON.stringify({ queueRowId: challengerQueueRow.id, matchId: this.currentMatch.id })
+                });
+            } catch (clearError) {
+                console.warn('[acceptQuickChallenge] No se pudo limpiar la fila del retador en la cola:', clearError);
+            }
+        }
 
         await this.quickMatchChannel.send({
             type: 'broadcast',
