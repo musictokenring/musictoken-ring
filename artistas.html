@@ -1,0 +1,341 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Artistas · MusicToken Ring</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+    :root { color-scheme: dark; }
+    * { box-sizing: border-box; }
+    .hidden { display: none !important; }
+    body {
+        margin: 0; min-height: 100vh;
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+        background: radial-gradient(560px circle at 10% -8%, rgba(0,240,255,0.14), transparent 60%),
+                    radial-gradient(480px circle at 105% 18%, rgba(255,0,190,0.10), transparent 55%),
+                    #05060a;
+        color: #e5e7eb;
+        padding: 1.5rem 1rem 4rem;
+    }
+    .wrap { max-width: 640px; margin: 0 auto; }
+    h1 { font-size: 1.3rem; color: #00f0ff; margin: 0 0 0.3rem; display: flex; align-items: center; gap: 0.5rem; }
+    .subtitle { color: #9ca3af; font-size: 0.85rem; margin: 0 0 1.5rem; }
+    a { color: #67e8f9; }
+    .card {
+        border: 1px solid rgba(255,255,255,0.1); border-radius: 16px; padding: 1.2rem;
+        background: rgba(255,255,255,0.03); margin-bottom: 1rem;
+    }
+    .card h2 { font-size: 1rem; margin: 0 0 0.8rem; color: #fff; }
+    label { display: block; font-size: 0.78rem; color: #9ca3af; margin-bottom: 0.3rem; margin-top: 0.8rem; }
+    label:first-child { margin-top: 0; }
+    input, textarea {
+        width: 100%; padding: 0.65rem 0.8rem; border-radius: 10px;
+        border: 1px solid rgba(255,255,255,0.12); background: #0a0b12; color: #eee;
+        font-size: 0.88rem; font-family: inherit;
+    }
+    input:focus, textarea:focus { outline: none; border-color: rgba(0,240,255,0.5); }
+    button {
+        padding: 0.7rem 1.1rem; border-radius: 10px; border: none;
+        font-size: 0.85rem; font-weight: 700; cursor: pointer;
+        background: rgba(255,255,255,0.06); color: #e5e7eb; border: 1px solid rgba(255,255,255,0.12);
+    }
+    button:hover { background: rgba(255,255,255,0.1); }
+    button.primary {
+        background: linear-gradient(90deg,#00f0ff,#0891b2); color: #05060a; border: none;
+    }
+    button:disabled { opacity: 0.5; cursor: not-allowed; }
+    .pill { display: inline-block; padding: 0.15rem 0.6rem; border-radius: 999px; font-size: 0.72rem; font-weight: 700; }
+    .pill.pending { background: rgba(251,191,36,0.15); color: #fbbf24; }
+    .pill.verified { background: rgba(52,211,153,0.15); color: #34d399; }
+    .pill.rejected { background: rgba(248,113,113,0.15); color: #f87171; }
+    .royalty-amount { font-size: 2rem; font-weight: 800; color: #fdba74; }
+    .royalty-note { font-size: 0.75rem; color: #9ca3af; margin-top: 0.2rem; }
+    .song-row {
+        display: flex; align-items: center; gap: 0.7rem; padding: 0.6rem 0;
+        border-bottom: 1px solid rgba(255,255,255,0.06);
+    }
+    .song-row:last-child { border-bottom: none; }
+    .song-row img { width: 42px; height: 42px; border-radius: 8px; object-fit: cover; flex-shrink: 0; }
+    .song-row .info { flex: 1; min-width: 0; }
+    .song-row .info .name { font-size: 0.85rem; font-weight: 600; color: #fff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .song-row .info .meta { font-size: 0.72rem; color: #9ca3af; }
+    .status-msg { font-size: 0.82rem; color: #9ca3af; margin-top: 0.6rem; }
+    .status-msg.error { color: #f87171; }
+    .status-msg.success { color: #34d399; }
+    .search-result {
+        display: flex; align-items: center; gap: 0.7rem; padding: 0.5rem;
+        border-radius: 10px; margin-bottom: 0.4rem; background: rgba(255,255,255,0.02);
+    }
+    .search-result img { width: 38px; height: 38px; border-radius: 6px; object-fit: cover; flex-shrink: 0; }
+    .search-result .info { flex: 1; min-width: 0; }
+    .search-result .info .name { font-size: 0.82rem; color: #fff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .search-result .info .artist { font-size: 0.72rem; color: #9ca3af; }
+    .empty { color: #6b7280; font-size: 0.85rem; text-align: center; padding: 1.5rem 0; }
+</style>
+</head>
+<body>
+<div class="wrap">
+    <h1>🎤 Portal de Artistas</h1>
+    <p class="subtitle">Registrá tu perfil, reclamá tus canciones, y ganá regalías de impulso cada vez que ganen una batalla real en MusicToken Ring.</p>
+
+    <div id="loggedOutCard" class="card hidden">
+        <h2>Iniciá sesión primero</h2>
+        <p class="status-msg">Este portal usa la misma cuenta que la app principal. Entrá ahí primero y volvé a esta página.</p>
+        <a href="./index.html"><button class="primary" style="margin-top:0.6rem;">Ir a MusicToken Ring</button></a>
+    </div>
+
+    <div id="loadingCard" class="card">
+        <p class="empty">Cargando...</p>
+    </div>
+
+    <!-- Registro (si no tiene perfil todavía) -->
+    <div id="registerCard" class="card hidden">
+        <h2>Registrate como artista</h2>
+        <label>Nombre artístico *</label>
+        <input type="text" id="regDisplayName" placeholder="Tu nombre o el de tu proyecto">
+        <label>Email de contacto</label>
+        <input type="email" id="regEmail" placeholder="opcional, usamos el de tu cuenta si lo dejás vacío">
+        <label>Link de Spotify (para verificarte)</label>
+        <input type="text" id="regSpotify" placeholder="https://open.spotify.com/artist/...">
+        <label>Link de Instagram (opcional)</label>
+        <input type="text" id="regInstagram" placeholder="https://instagram.com/...">
+        <button class="primary" style="margin-top:1rem; width:100%;" onclick="registerArtist()">Registrarme como artista</button>
+        <p id="registerStatus" class="status-msg"></p>
+        <p class="royalty-note" style="margin-top:0.8rem;">
+            Tu perfil queda en revisión manual antes de contar para nada -- así evitamos que alguien se registre
+            con el nombre de otro artista. Un link de Spotify o Instagram real acelera la aprobación.
+        </p>
+    </div>
+
+    <!-- Perfil existente -->
+    <div id="profileCard" class="card hidden">
+        <h2 style="display:flex; align-items:center; justify-content:space-between;">
+            <span id="profileName">-</span>
+            <span id="profilePill" class="pill pending">pending</span>
+        </h2>
+        <div class="royalty-amount" id="royaltyAmount">0 créditos</div>
+        <div class="royalty-note">Regalías de impulso acumuladas · <strong>no retirables todavía</strong> (Fase 1)</div>
+        <p id="profileRejectedNote" class="status-msg error hidden"></p>
+    </div>
+
+    <div id="songsCard" class="card hidden">
+        <h2>Tus canciones reclamadas</h2>
+        <div id="songsList"><p class="empty">Todavía no reclamaste ninguna canción.</p></div>
+    </div>
+
+    <div id="claimCard" class="card hidden">
+        <h2>Reclamar una canción</h2>
+        <p class="royalty-note" style="margin-bottom:0.6rem;">
+            Buscá tu canción exactamente como aparece en las batallas (usamos el mismo catálogo de Deezer).
+        </p>
+        <div style="display:flex; gap:0.5rem;">
+            <input type="text" id="claimSearchInput" placeholder="Nombre de la canción o artista" onkeydown="if(event.key==='Enter') searchSongToClaim();">
+            <button onclick="searchSongToClaim()">Buscar</button>
+        </div>
+        <div id="claimSearchResults" style="margin-top:0.8rem;"></div>
+        <p id="claimStatus" class="status-msg"></p>
+    </div>
+</div>
+
+<script>
+    var CONFIG = window.CONFIG || {};
+    var SUPABASE_URL = CONFIG.SUPABASE_URL || 'https://bscmgcnynbxalcuwdqlm.supabase.co';
+    var SUPABASE_ANON_KEY = CONFIG.SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJzY21nY255bmJ4YWxjdXdkcWxtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzA0NTYwOTUsImV4cCI6MjA4NjAzMjA5NX0.1iasFQ5H0GmrFqi6poWNE1aZOtbmQuB113RCyg2BBK4';
+    var BACKEND_API = (CONFIG.BACKEND_API) || 'https://musictoken-ring.onrender.com';
+    var supa = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+    function escapeHtml(s) {
+        return String(s === undefined || s === null ? '' : s)
+            .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+    }
+
+    function show(id) { document.getElementById(id).classList.remove('hidden'); }
+    function hide(id) { document.getElementById(id).classList.add('hidden'); }
+
+    async function authHeaders() {
+        var { data: { session } } = await supa.auth.getSession();
+        return session ? { 'Content-Type': 'application/json', Authorization: 'Bearer ' + session.access_token } : { 'Content-Type': 'application/json' };
+    }
+
+    async function init() {
+        var { data: { session } } = await supa.auth.getSession();
+        hide('loadingCard');
+        if (!session) {
+            show('loggedOutCard');
+            return;
+        }
+        await loadMyArtistProfile();
+    }
+
+    async function loadMyArtistProfile() {
+        try {
+            var r = await fetch(BACKEND_API + '/api/artists/me', { headers: await authHeaders() });
+            var j = await r.json().catch(function () { return {}; });
+            if (!r.ok || !j.ok) {
+                document.getElementById('loadingCard').innerHTML = '<p class="status-msg error">Error cargando tu perfil: ' + escapeHtml(j.error || r.status) + '</p>';
+                show('loadingCard');
+                return;
+            }
+            if (!j.artist) {
+                show('registerCard');
+                return;
+            }
+            renderProfile(j.artist, j.songs);
+        } catch (e) {
+            document.getElementById('loadingCard').innerHTML = '<p class="status-msg error">Error de red: ' + escapeHtml(e.message) + '</p>';
+            show('loadingCard');
+        }
+    }
+
+    function renderProfile(artist, songs) {
+        document.getElementById('profileName').textContent = artist.display_name;
+        var pill = document.getElementById('profilePill');
+        pill.textContent = artist.verification_status;
+        pill.className = 'pill ' + artist.verification_status;
+        document.getElementById('royaltyAmount').textContent = Number(artist.royalty_credits || 0).toLocaleString('es-CO', { maximumFractionDigits: 2 }) + ' créditos';
+
+        var rejectedNote = document.getElementById('profileRejectedNote');
+        if (artist.verification_status === 'rejected') {
+            rejectedNote.textContent = 'Tu perfil fue rechazado' + (artist.verification_note ? ': ' + artist.verification_note : '.') + ' Contactanos si creés que fue un error.';
+            show('profileRejectedNote');
+        }
+        show('profileCard');
+
+        var songsList = document.getElementById('songsList');
+        if (!songs || !songs.length) {
+            songsList.innerHTML = '<p class="empty">Todavía no reclamaste ninguna canción.</p>';
+        } else {
+            songsList.innerHTML = songs.map(function (s) {
+                return '<div class="song-row">' +
+                    (s.song_image ? '<img src="' + escapeHtml(s.song_image) + '" alt="">' : '<div style="width:42px;height:42px;border-radius:8px;background:rgba(255,255,255,0.06);flex-shrink:0;"></div>') +
+                    '<div class="info">' +
+                        '<div class="name">' + escapeHtml(s.song_name) + '</div>' +
+                        '<div class="meta">' + escapeHtml(s.song_artist) + ' · ' + s.wins_count + ' victoria(s) · ' + Number(s.total_royalties_earned || 0).toFixed(2) + ' créditos</div>' +
+                    '</div>' +
+                    '<span class="pill ' + s.status + '">' + s.status + '</span>' +
+                '</div>';
+            }).join('');
+        }
+        show('songsCard');
+
+        if (artist.verification_status === 'verified') {
+            show('claimCard');
+        }
+    }
+
+    async function registerArtist() {
+        var displayName = document.getElementById('regDisplayName').value.trim();
+        var statusEl = document.getElementById('registerStatus');
+        if (!displayName) { statusEl.textContent = 'Falta tu nombre artístico.'; statusEl.className = 'status-msg error'; return; }
+
+        statusEl.textContent = 'Registrando...';
+        statusEl.className = 'status-msg';
+        try {
+            var r = await fetch(BACKEND_API + '/api/artists/register', {
+                method: 'POST',
+                headers: await authHeaders(),
+                body: JSON.stringify({
+                    displayName: displayName,
+                    contactEmail: document.getElementById('regEmail').value.trim() || null,
+                    spotifyUrl: document.getElementById('regSpotify').value.trim() || null,
+                    instagramUrl: document.getElementById('regInstagram').value.trim() || null
+                })
+            });
+            var j = await r.json().catch(function () { return {}; });
+            if (!r.ok || !j.ok) { statusEl.textContent = 'Error: ' + (j.error || r.status); statusEl.className = 'status-msg error'; return; }
+            statusEl.textContent = '¡Listo! Tu perfil quedó en revisión.';
+            statusEl.className = 'status-msg success';
+            hide('registerCard');
+            await loadMyArtistProfile();
+        } catch (e) {
+            statusEl.textContent = 'Error de red: ' + e.message;
+            statusEl.className = 'status-msg error';
+        }
+    }
+
+    var claimedSongCache = {};
+    function searchSongToClaim() {
+        var query = document.getElementById('claimSearchInput').value.trim();
+        var resultsDiv = document.getElementById('claimSearchResults');
+        if (!query) return;
+        resultsDiv.innerHTML = '<p class="empty">Buscando...</p>';
+
+        var callbackName = 'deezerArtistCallback_' + Date.now();
+        var timeoutId = null;
+        window[callbackName] = function (data) {
+            if (timeoutId) clearTimeout(timeoutId);
+            delete window[callbackName];
+            var scriptEl = document.getElementById(callbackName);
+            if (scriptEl) scriptEl.remove();
+
+            var tracks = (data && data.data) || [];
+            if (!tracks.length) {
+                resultsDiv.innerHTML = '<p class="empty">No se encontraron resultados.</p>';
+                return;
+            }
+            resultsDiv.innerHTML = tracks.slice(0, 10).map(function (t) {
+                claimedSongCache[t.id] = t;
+                return '<div class="search-result">' +
+                    '<img src="' + escapeHtml(t.album && t.album.cover_small) + '" alt="">' +
+                    '<div class="info">' +
+                        '<div class="name">' + escapeHtml(t.title) + '</div>' +
+                        '<div class="artist">' + escapeHtml(t.artist && t.artist.name) + '</div>' +
+                    '</div>' +
+                    '<button onclick="claimSong(' + t.id + ')">Reclamar</button>' +
+                '</div>';
+            }).join('');
+        };
+
+        var script = document.createElement('script');
+        script.id = callbackName;
+        script.src = 'https://api.deezer.com/search?q=' + encodeURIComponent(query) + '&limit=10&output=jsonp&callback=' + callbackName;
+        script.onerror = function () {
+            if (timeoutId) clearTimeout(timeoutId);
+            delete window[callbackName];
+            resultsDiv.innerHTML = '<p class="status-msg error">Error en la búsqueda.</p>';
+        };
+        document.head.appendChild(script);
+        timeoutId = setTimeout(function () {
+            delete window[callbackName];
+            var scriptEl = document.getElementById(callbackName);
+            if (scriptEl) scriptEl.remove();
+            resultsDiv.innerHTML = '<p class="status-msg error">La búsqueda tardó demasiado.</p>';
+        }, 8000);
+    }
+
+    async function claimSong(songId) {
+        var track = claimedSongCache[songId];
+        if (!track) return;
+        var statusEl = document.getElementById('claimStatus');
+        statusEl.textContent = 'Reclamando...';
+        statusEl.className = 'status-msg';
+        try {
+            var r = await fetch(BACKEND_API + '/api/artists/claim-song', {
+                method: 'POST',
+                headers: await authHeaders(),
+                body: JSON.stringify({
+                    songId: track.id,
+                    songName: track.title,
+                    songArtist: track.artist && track.artist.name,
+                    songImage: track.album && track.album.cover_medium
+                })
+            });
+            var j = await r.json().catch(function () { return {}; });
+            if (!r.ok || !j.ok) { statusEl.textContent = 'Error: ' + (j.error || r.status); statusEl.className = 'status-msg error'; return; }
+            statusEl.textContent = '¡Reclamada! Queda en revisión antes de contar para regalías.';
+            statusEl.className = 'status-msg success';
+            document.getElementById('claimSearchResults').innerHTML = '';
+            document.getElementById('claimSearchInput').value = '';
+            await loadMyArtistProfile();
+        } catch (e) {
+            statusEl.textContent = 'Error de red: ' + e.message;
+            statusEl.className = 'status-msg error';
+        }
+    }
+
+    init();
+</script>
+</body>
+</html>

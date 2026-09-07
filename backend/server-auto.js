@@ -709,7 +709,7 @@ app.post('/api/matches/:matchId/award-winner', requireCreditMutationAuth, async 
 
         const { data: match, error: matchError } = await supabase
             .from('matches')
-            .select('id, status, winner, player1_id, player2_id, total_pot, match_type, stake_type')
+            .select('id, status, winner, player1_id, player2_id, total_pot, match_type, stake_type, player1_song_id, player2_song_id')
             .eq('id', matchId)
             .maybeSingle();
 
@@ -790,7 +790,63 @@ app.post('/api/matches/:matchId/award-winner', requireCreditMutationAuth, async 
         }
 
         console.log(`[award-winner] match ${matchId}: acreditados ${winnerPayout} a ${targetUserId} (winnerUserId original: ${winnerUserId})`);
-        res.json({ ok: true, winnerUserId: targetUserId, credited: winnerPayout, platformFee });
+
+        // FASE 1 de regalías de artista -- best-effort, nunca bloquea el
+        // premio real que ya se acreditó arriba. Si la canción ganadora
+        // está reclamada y VERIFICADA por un artista, se le suma acá su
+        // porcentaje del pozo a royalty_credits (acumulado, NO retirable
+        // todavía -- ver artist-royalties-system.sql). Nunca corre para
+        // partidas 'bonus' (pozo no es plata real).
+        let royaltyInfo = null;
+        try {
+            const winningSongId = match.winner === 1 ? match.player1_song_id : match.player2_song_id;
+            if (winningSongId) {
+                const { data: claimedSong } = await supabase
+                    .from('artist_songs')
+                    .select('id, artist_id, wins_count, total_royalties_earned')
+                    .eq('song_id', winningSongId)
+                    .eq('status', 'verified')
+                    .maybeSingle();
+
+                if (claimedSong) {
+                    const { data: artistRow } = await supabase
+                        .from('artists')
+                        .select('id, royalty_percent, royalty_credits')
+                        .eq('id', claimedSong.artist_id)
+                        .eq('verification_status', 'verified')
+                        .maybeSingle();
+
+                    if (artistRow) {
+                        const royaltyAmount = totalPot * (parseFloat(artistRow.royalty_percent) / 100);
+                        if (royaltyAmount > 0) {
+                            await supabase.from('artists').update({
+                                royalty_credits: parseFloat(artistRow.royalty_credits) + royaltyAmount
+                            }).eq('id', artistRow.id);
+
+                            await supabase.from('artist_songs').update({
+                                wins_count: (claimedSong.wins_count || 0) + 1,
+                                total_royalties_earned: parseFloat(claimedSong.total_royalties_earned || 0) + royaltyAmount
+                            }).eq('id', claimedSong.id);
+
+                            await supabase.from('artist_royalty_ledger').insert([{
+                                artist_id: artistRow.id,
+                                artist_song_id: claimedSong.id,
+                                match_id: matchId,
+                                amount: royaltyAmount,
+                                total_pot: totalPot
+                            }]);
+
+                            royaltyInfo = { artistId: artistRow.id, amount: royaltyAmount };
+                            console.log(`[award-winner] 🎵 Regalía de impulso: ${royaltyAmount.toFixed(4)} al artista ${artistRow.id} (canción ${winningSongId}, match ${matchId})`);
+                        }
+                    }
+                }
+            }
+        } catch (royaltyError) {
+            console.error('[award-winner] Error acreditando regalía de artista (no bloquea el premio):', royaltyError);
+        }
+
+        res.json({ ok: true, winnerUserId: targetUserId, credited: winnerPayout, platformFee, royalty: royaltyInfo });
     } catch (error) {
         console.error('[award-winner] Error:', error);
         res.status(500).json({ error: error.message });
@@ -3560,6 +3616,212 @@ app.post('/api/social-challenges/:challengeId/ensure-bonus-balance', requireCred
     } catch (error) {
         console.error('[ensure-bonus-balance] Error:', error);
         res.status(500).json({ error: error.message });
+    }
+});
+
+// ============================================================
+// ARTISTAS -- FASE 1 (ver artist-royalties-system.sql)
+// Registro + reclamo de canciones + regalías de impulso acumuladas por
+// batalla real ganada. royalty_credits es un acumulado NO retirable
+// todavía -- award-winner (arriba) lo va sumando solo cuando la canción
+// ganadora está reclamada y VERIFICADA. La verificación (de artista y de
+// cada canción) es manual, vía el panel admin, con requireInternalSecret
+// -- ningún cliente puede auto-verificarse ni tocar royalty_credits.
+// ============================================================
+
+/** Registra al usuario autenticado como artista (queda en 'pending' hasta revisión manual). */
+app.post('/api/artists/register', requireCreditMutationAuth, async (req, res) => {
+    try {
+        if (!req.authUser) return res.status(401).json({ error: 'Inicia sesión primero.' });
+        const { displayName, contactEmail, spotifyUrl, instagramUrl } = req.body;
+        if (!displayName || !String(displayName).trim()) {
+            return res.status(400).json({ error: 'Falta el nombre artístico' });
+        }
+
+        const { data: existing } = await supabase
+            .from('artists')
+            .select('id')
+            .eq('user_id', req.authUser.id)
+            .maybeSingle();
+        if (existing) {
+            return res.status(400).json({ error: 'Ya tenés un perfil de artista registrado' });
+        }
+
+        const { data: artist, error } = await supabase
+            .from('artists')
+            .insert([{
+                user_id: req.authUser.id,
+                display_name: String(displayName).trim().slice(0, 120),
+                contact_email: contactEmail || req.authUser.email || null,
+                spotify_url: spotifyUrl || null,
+                instagram_url: instagramUrl || null,
+                verification_status: 'pending'
+            }])
+            .select()
+            .single();
+
+        if (error) {
+            console.error('[artists-register] Error:', error);
+            return res.status(500).json({ error: 'No se pudo registrar el perfil de artista' });
+        }
+
+        res.json({ ok: true, artist });
+    } catch (error) {
+        console.error('[artists-register] Error:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+/** Reclama una canción (mismo song_id de Deezer que usan las batallas). Queda en 'pending' hasta revisión. */
+app.post('/api/artists/claim-song', requireCreditMutationAuth, async (req, res) => {
+    try {
+        if (!req.authUser) return res.status(401).json({ error: 'Inicia sesión primero.' });
+        const { songId, songName, songArtist, songImage } = req.body;
+        if (!songId || !songName || !songArtist) {
+            return res.status(400).json({ error: 'Falta songId, songName o songArtist' });
+        }
+
+        const { data: artist } = await supabase
+            .from('artists')
+            .select('id')
+            .eq('user_id', req.authUser.id)
+            .maybeSingle();
+        if (!artist) {
+            return res.status(400).json({ error: 'Registrate como artista primero (/api/artists/register)' });
+        }
+
+        const { data: alreadyClaimed } = await supabase
+            .from('artist_songs')
+            .select('id, artist_id')
+            .eq('song_id', songId)
+            .maybeSingle();
+        if (alreadyClaimed) {
+            return res.status(400).json({
+                error: alreadyClaimed.artist_id === artist.id
+                    ? 'Ya reclamaste esta canción'
+                    : 'Esta canción ya fue reclamada por otro perfil de artista'
+            });
+        }
+
+        const { data: song, error } = await supabase
+            .from('artist_songs')
+            .insert([{
+                artist_id: artist.id,
+                song_id: songId,
+                song_name: String(songName).slice(0, 200),
+                song_artist: String(songArtist).slice(0, 200),
+                song_image: songImage || null,
+                status: 'pending'
+            }])
+            .select()
+            .single();
+
+        if (error) {
+            console.error('[artists-claim-song] Error:', error);
+            return res.status(500).json({ error: 'No se pudo reclamar la canción' });
+        }
+
+        res.json({ ok: true, song });
+    } catch (error) {
+        console.error('[artists-claim-song] Error:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+/** Perfil propio del artista autenticado: datos, canciones reclamadas, regalías acumuladas. */
+app.get('/api/artists/me', requireCreditMutationAuth, async (req, res) => {
+    try {
+        if (!req.authUser) return res.status(401).json({ error: 'Inicia sesión primero.' });
+
+        const { data: artist } = await supabase
+            .from('artists')
+            .select('*')
+            .eq('user_id', req.authUser.id)
+            .maybeSingle();
+        if (!artist) {
+            return res.json({ ok: true, artist: null, songs: [] });
+        }
+
+        const { data: songs } = await supabase
+            .from('artist_songs')
+            .select('*')
+            .eq('artist_id', artist.id)
+            .order('created_at', { ascending: false });
+
+        res.json({ ok: true, artist, songs: songs || [] });
+    } catch (error) {
+        console.error('[artists-me] Error:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+/** Panel admin: artistas y canciones esperando revisión manual. */
+app.get('/api/admin/artists/pending', requireInternalSecret, async (req, res) => {
+    try {
+        const { data: pendingArtists } = await supabase
+            .from('artists')
+            .select('*')
+            .eq('verification_status', 'pending')
+            .order('created_at', { ascending: false });
+
+        const { data: pendingSongs } = await supabase
+            .from('artist_songs')
+            .select('*, artists(display_name, user_id)')
+            .eq('status', 'pending')
+            .order('created_at', { ascending: false });
+
+        res.json({ ok: true, artists: pendingArtists || [], songs: pendingSongs || [] });
+    } catch (error) {
+        console.error('[admin-artists-pending] Error:', error);
+        res.status(500).json({ ok: false, error: error.message });
+    }
+});
+
+/** Panel admin: aprobar/rechazar un perfil de artista. */
+app.post('/api/admin/artists/:id/verify', requireInternalSecret, async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { approve, note } = req.body;
+        const status = approve ? 'verified' : 'rejected';
+
+        const { data: artist, error } = await supabase
+            .from('artists')
+            .update({
+                verification_status: status,
+                verification_note: note || null,
+                verified_at: approve ? new Date().toISOString() : null
+            })
+            .eq('id', id)
+            .select()
+            .single();
+
+        if (error) return res.status(500).json({ ok: false, error: error.message });
+        res.json({ ok: true, artist });
+    } catch (error) {
+        console.error('[admin-artists-verify] Error:', error);
+        res.status(500).json({ ok: false, error: error.message });
+    }
+});
+
+/** Panel admin: aprobar/rechazar el reclamo de una canción. */
+app.post('/api/admin/artist-songs/:id/verify', requireInternalSecret, async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { approve } = req.body;
+        const status = approve ? 'verified' : 'rejected';
+
+        const { data: song, error } = await supabase
+            .from('artist_songs')
+            .update({ status })
+            .eq('id', id)
+            .select()
+            .single();
+
+        if (error) return res.status(500).json({ ok: false, error: error.message });
+        res.json({ ok: true, song });
+    } catch (error) {
+        console.error('[admin-artist-songs-verify] Error:', error);
+        res.status(500).json({ ok: false, error: error.message });
     }
 });
 

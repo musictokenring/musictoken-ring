@@ -107,6 +107,7 @@
         <button type="button" class="tab-btn active" data-tab="retiros" onclick="switchTab('retiros')">Retiros</button>
         <button type="button" class="tab-btn" data-tab="contabilidad" onclick="switchTab('contabilidad')">Contabilidad</button>
         <button type="button" class="tab-btn" data-tab="bonos" onclick="switchTab('bonos')">Bonos</button>
+        <button type="button" class="tab-btn" data-tab="artistas" onclick="switchTab('artistas')">Artistas</button>
     </div>
 
     <!-- ============ RETIROS ============ -->
@@ -163,6 +164,22 @@
         <table class="grant-table" id="bonusTable" style="margin-top: 0.6rem;"><tbody></tbody></table>
     </div>
 
+    <!-- ============ ARTISTAS ============ -->
+    <div id="tab-artistas" class="tab-panel">
+        <p class="empty" style="margin: 0 0 0.8rem;">
+            Fase 1: regalías de impulso acumuladas (NO retirables todavía). Revisión manual antes de que
+            cualquier artista o canción cuente para nada -- verificá el link de Spotify/Instagram antes de aprobar.
+        </p>
+        <button type="button" onclick="loadPendingArtists()">🔄 Actualizar</button>
+        <div id="artistsStatus" class="empty" style="margin: 0.6rem 0;"></div>
+
+        <h2>Artistas esperando verificación</h2>
+        <div id="pendingArtistsList"></div>
+
+        <h2>Canciones esperando verificación</h2>
+        <div id="pendingSongsList"></div>
+    </div>
+
 <script>
     var BACKEND_API = 'https://musictoken-ring.onrender.com';
 
@@ -187,6 +204,7 @@
         document.querySelectorAll('.tab-panel').forEach(function (p) { p.classList.toggle('active', p.id === 'tab-' + name); });
         if (name === 'contabilidad' && getSecret()) loadAccounting();
         if (name === 'bonos' && getSecret()) loadBonusList();
+        if (name === 'artistas' && getSecret()) loadPendingArtists();
     }
 
     // ============ RETIROS (ya existente) ============
@@ -480,6 +498,99 @@
             var j = await r.json().catch(function () { return {}; });
             if (!r.ok || !j.ok) { window.alert('Error: ' + (j.error || r.status)); return; }
             loadBonusList();
+        } catch (e) {
+            window.alert('Error de red: ' + e.message);
+        }
+    }
+
+    // ============ ARTISTAS ============
+    async function loadPendingArtists() {
+        var secret = getSecret();
+        if (!secret) { document.getElementById('artistsStatus').textContent = 'Ingresá la clave primero.'; return; }
+        document.getElementById('artistsStatus').textContent = 'Cargando...';
+        try {
+            var r = await fetch(BACKEND_API + '/api/admin/artists/pending', {
+                headers: { 'x-internal-secret': secret }
+            });
+            var j = await r.json().catch(function () { return {}; });
+            if (!r.ok || !j.ok) { document.getElementById('artistsStatus').textContent = 'Error: ' + (j.error || r.status); return; }
+            renderPendingArtists(j.artists, j.songs);
+            document.getElementById('artistsStatus').textContent = j.artists.length + ' artista(s) y ' + j.songs.length + ' canción(es) esperando revisión.';
+        } catch (e) {
+            document.getElementById('artistsStatus').textContent = 'Error de red: ' + e.message;
+        }
+    }
+
+    function renderPendingArtists(artists, songs) {
+        var artistsEl = document.getElementById('pendingArtistsList');
+        if (!artists || !artists.length) {
+            artistsEl.innerHTML = '<p class="empty">No hay artistas esperando revisión.</p>';
+        } else {
+            artistsEl.innerHTML = artists.map(function (a) {
+                return '<div class="req-card">' +
+                    '<div class="req-top"><span class="req-amount" style="font-size:1rem;">' + escapeHtml(a.display_name) + '</span>' +
+                    '<span class="req-meta">' + new Date(a.created_at).toLocaleString('es-CO') + '</span></div>' +
+                    '<div class="req-meta">Contacto: ' + escapeHtml(a.contact_email || '-') + '</div>' +
+                    '<div class="req-details">' +
+                        (a.spotify_url ? '<div class="copy-row"><span class="copy-label">Spotify:</span><a href="' + escapeHtml(a.spotify_url) + '" target="_blank" rel="noopener" style="color:#93c5fd; word-break:break-all;">' + escapeHtml(a.spotify_url) + '</a></div>' : '') +
+                        (a.instagram_url ? '<div class="copy-row"><span class="copy-label">Instagram:</span><a href="' + escapeHtml(a.instagram_url) + '" target="_blank" rel="noopener" style="color:#93c5fd; word-break:break-all;">' + escapeHtml(a.instagram_url) + '</a></div>' : '') +
+                        (!a.spotify_url && !a.instagram_url ? '<p class="empty">(sin links de verificación -- revisar con cuidado)</p>' : '') +
+                    '</div>' +
+                    '<div class="req-actions">' +
+                        '<button class="paid" onclick="verifyArtist(\'' + a.id + '\', true)">✅ Verificar</button>' +
+                        '<button class="reject" onclick="verifyArtist(\'' + a.id + '\', false)">❌ Rechazar</button>' +
+                    '</div>' +
+                '</div>';
+            }).join('');
+        }
+
+        var songsEl = document.getElementById('pendingSongsList');
+        if (!songs || !songs.length) {
+            songsEl.innerHTML = '<p class="empty">No hay canciones esperando revisión.</p>';
+        } else {
+            songsEl.innerHTML = songs.map(function (s) {
+                var artistName = (s.artists && s.artists.display_name) || s.artist_id;
+                return '<div class="req-card">' +
+                    '<div class="req-top"><span class="req-amount" style="font-size:1rem;">' + escapeHtml(s.song_name) + '</span>' +
+                    '<span class="req-meta">' + new Date(s.created_at).toLocaleString('es-CO') + '</span></div>' +
+                    '<div class="req-meta">Artista de Deezer: ' + escapeHtml(s.song_artist) + ' · reclamado por perfil: ' + escapeHtml(artistName) + ' · song_id: ' + escapeHtml(s.song_id) + '</div>' +
+                    '<div class="req-actions">' +
+                        '<button class="paid" onclick="verifySong(\'' + s.id + '\', true)">✅ Verificar</button>' +
+                        '<button class="reject" onclick="verifySong(\'' + s.id + '\', false)">❌ Rechazar</button>' +
+                    '</div>' +
+                '</div>';
+            }).join('');
+        }
+    }
+
+    async function verifyArtist(id, approve) {
+        var note = approve ? '' : (window.prompt('Motivo del rechazo (opcional):', '') || '');
+        var secret = getSecret();
+        try {
+            var r = await fetch(BACKEND_API + '/api/admin/artists/' + id + '/verify', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'x-internal-secret': secret },
+                body: JSON.stringify({ approve: approve, note: note })
+            });
+            var j = await r.json().catch(function () { return {}; });
+            if (!r.ok || !j.ok) { window.alert('Error: ' + (j.error || r.status)); return; }
+            loadPendingArtists();
+        } catch (e) {
+            window.alert('Error de red: ' + e.message);
+        }
+    }
+
+    async function verifySong(id, approve) {
+        var secret = getSecret();
+        try {
+            var r = await fetch(BACKEND_API + '/api/admin/artist-songs/' + id + '/verify', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'x-internal-secret': secret },
+                body: JSON.stringify({ approve: approve })
+            });
+            var j = await r.json().catch(function () { return {}; });
+            if (!r.ok || !j.ok) { window.alert('Error: ' + (j.error || r.status)); return; }
+            loadPendingArtists();
         } catch (e) {
             window.alert('Error de red: ' + e.message);
         }
