@@ -3990,9 +3990,17 @@ const GameEngine = {
         // createPrivateRoom/joinPrivateRoom). Solo aplica a match_type
         // 'private'; el resto de los modos mantiene los iconos de nota
         // musical de siempre.
+        // CRÍTICO: player1_avatar/player2_avatar ahora guardan un nombre de
+        // ícono (ver MTR_AVATARS en index.html, ya no un emoji) -- esto
+        // arma el SVG real en vez de imprimir el nombre como texto plano.
+        // El fallback ('music' para ambos) reemplaza los símbolos ♪/♫
+        // sueltos de antes, mismo criterio de "nada de texto plano" para
+        // cualquier modo, no solo Sala Privada.
         const isPrivateMatch = match.match_type === 'private';
-        const fighter1Badge = (isPrivateMatch && match.player1_avatar) ? match.player1_avatar : '♪';
-        const fighter2Badge = (isPrivateMatch && match.player2_avatar) ? match.player2_avatar : '♫';
+        const fighter1IconName = (isPrivateMatch && match.player1_avatar) ? match.player1_avatar : 'music';
+        const fighter2IconName = (isPrivateMatch && match.player2_avatar) ? match.player2_avatar : 'music';
+        const fighter1Badge = window.MTRIcons ? window.MTRIcons.svg(fighter1IconName, { size: 12 }) : '';
+        const fighter2Badge = window.MTRIcons ? window.MTRIcons.svg(fighter2IconName, { size: 12 }) : '';
 
         // Crear la sección de batalla y agregarla al contenedor
         console.log('[createBattleUI] Creando elemento battleSection...');

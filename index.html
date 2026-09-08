@@ -2484,6 +2484,44 @@
         </div>
     </div>
 
+    <!-- Invitación a Sala Privada: mismo problema que resolvimos para Reto
+         Social, aplicado acá -- antes, abrir un link ?room= solo tiraba un
+         toast fugaz y dejaba a la persona sola frente al buscador de
+         canciones, sin saber contra quién iba a competir ni cuánto se
+         apostaba hasta después de elegir canción y tocar "Unirse". Ahora se
+         muestra esto DE INMEDIATO al abrir el link (mismo momento que el
+         modal de Reto Social), con la info real ya cargada -- ver
+         showRoomInviteModal(). -->
+    <div id="roomInviteModal" class="hidden fixed inset-0 z-[100] flex items-center justify-center p-4">
+        <div class="modal-overlay" onclick="closeRoomInviteModal()"></div>
+        <div class="modal-box text-center max-w-md">
+            <button type="button" onclick="closeRoomInviteModal()" class="absolute top-4 right-4 text-gray-400 hover:text-white text-2xl leading-none cursor-pointer">×</button>
+            <h2 class="text-2xl font-bold text-white mb-4 flex items-center justify-center gap-2"><span data-mtr-icon="lock" data-mtr-color="magenta" data-mtr-inline data-mtr-size="20" style="margin:0"></span>Te invitaron a una Sala Privada</h2>
+
+            <div id="roomInviteInfo" class="mb-6">
+                <div class="flex items-center justify-center gap-4 mb-4">
+                    <img id="roomInviteSongImage" src="" alt="" class="w-20 h-20 rounded-xl object-cover shadow-lg shadow-fuchsia-500/25 border-2 border-fuchsia-500/30">
+                    <div id="roomInviteAvatar"></div>
+                </div>
+                <h3 id="roomInviteSongName" class="text-xl font-bold text-white mb-1">-</h3>
+                <p id="roomInviteSongArtist" class="text-gray-400 text-sm mb-2">-</p>
+                <p class="text-fuchsia-400 font-semibold">Apuesta de la sala: <span id="roomInviteBet">-</span> créditos</p>
+                <p class="text-gray-400 text-sm mt-4">Para aceptar, elegí tu canción -- te llevamos directo.</p>
+            </div>
+
+            <div id="roomInviteUnavailable" class="hidden mb-6">
+                <div class="flex justify-center mb-3"><span data-mtr-icon="help" data-mtr-color="gray" data-mtr-badge-size="56" data-mtr-size="26"></span></div>
+                <p id="roomInviteUnavailableMsg" class="text-white font-semibold mb-1">Sala no encontrada</p>
+                <p class="text-gray-400 text-sm">El link puede estar mal copiado, o la sala ya empezó a jugarse.</p>
+            </div>
+
+            <div class="flex gap-3">
+                <button type="button" onclick="closeRoomInviteModal()" class="flex-1 py-3 rounded-lg text-sm font-medium bg-white/5 border border-white/10 text-gray-300 hover:text-white transition cursor-pointer">Ahora no</button>
+                <button type="button" id="roomInviteAcceptBtn" onclick="acceptRoomInvite()" class="flex-1 py-3 rounded-lg text-sm font-bold bg-gradient-to-r from-cyan-500 to-fuchsia-500 text-white hover:opacity-90 transition cursor-pointer">Elegir mi canción</button>
+            </div>
+        </div>
+    </div>
+
     <!-- Campana de notificaciones de desafíos sociales -- z-[10000] y fuera
          de <main> a propósito, mismo motivo que profileModal arriba: tiene
          que abrirse tanto desde el header viejo como desde la pestaña Jugar
@@ -4190,29 +4228,19 @@
                 }
                 var roomParam = urlParams.get('room');
                 if (roomParam) {
+                    // CRÍTICO -- pedido explícito del usuario: antes esto solo
+                    // tiraba un toast fugaz y dejaba a quien abre el link
+                    // "perdido" sin saber contra quién compite ni cuánto se
+                    // apuesta hasta después de elegir canción. Ahora se
+                    // muestra de inmediato el modal con la info real (mismo
+                    // momento y mismo criterio que el modal de Reto Social) --
+                    // ver showRoomInviteModal() más abajo en este archivo.
                     selectMode('private');
                     var joinInput = document.getElementById('joinRoomCode');
                     if (joinInput) joinInput.value = roomParam.toUpperCase();
-                    if (typeof showToast === 'function') showToast('Sala privada detectada. Selecciona tu canción para unirte.', 'info');
-                    // Quien abre el link llegaba a la app pero quedaba "perdido"
-                    // en cualquier parte de la página -- el modo cambiaba
-                    // igual, pero nada llevaba la vista hasta ahí. Scrollear
-                    // a songSelection (con un pequeño delay: recién se está
-                    // armando el DOM del modo elegido) y resaltar el campo de
-                    // código un momento para que sea obvio que ya está listo.
                     setTimeout(function () {
-                        if (typeof window.scrollToSection === 'function') {
-                            window.scrollToSection('songSelection');
-                        } else {
-                            var songSelectionEl = document.getElementById('songSelection');
-                            if (songSelectionEl) songSelectionEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                        }
-                        var codeFieldNow = document.getElementById('joinRoomCode');
-                        if (codeFieldNow) {
-                            codeFieldNow.classList.add('ring-2', 'ring-fuchsia-400');
-                            setTimeout(function () {
-                                codeFieldNow.classList.remove('ring-2', 'ring-fuchsia-400');
-                            }, 2500);
+                        if (typeof window.showRoomInviteModal === 'function') {
+                            window.showRoomInviteModal(roomParam);
                         }
                     }, 300);
                 }
@@ -4898,12 +4926,23 @@
             }
         }
 
-        // Avatar de jugador para Sala Privada (pedido del usuario: elegir un
-        // avatar + poder reaccionar durante la batalla). Es solo un emoji --
-        // nada de subir fotos, así no hay nada que moderar. Se guarda en
-        // matches.player1_avatar/player2_avatar (ver migración 025) y se
-        // muestra en la pantalla de batalla junto a la canción de cada uno.
-        const MTR_AVATARS = ['🎸', '🎤', '🎧', '🥁', '🕺', '💃', '🔥', '⚡', '👑', '🚀', '🌟', '🦁'];
+        // Avatar de jugador para Sala Privada (elegir un avatar + mostrarlo
+        // durante la batalla). Antes era un emoji plano ("se ven muy
+        // genéricos" -- pedido explícito de mejorarlo); ahora son nombres de
+        // ícono del mismo sistema Tabler (src/icons.js) que ya usa el resto
+        // de la app, cada uno con su color -- se renderizan como insignia
+        // circular con resplandor, nunca como texto plano. Se sigue
+        // guardando el string tal cual en matches.player1_avatar/
+        // player2_avatar (ver migración 025), ahora es un nombre de ícono
+        // en vez de un emoji, sin cambio de esquema.
+        const MTR_AVATARS = ['music', 'mic', 'headphones', 'disc', 'flame', 'bolt', 'crown', 'rocket', 'star', 'diamond', 'trophy', 'sparkles'];
+        const MTR_AVATAR_COLORS = { music: 'cyan', mic: 'magenta', headphones: 'purple', disc: 'orange', flame: 'red', bolt: 'yellow', crown: 'yellow', rocket: 'cyan', star: 'purple', diamond: 'cyan', trophy: 'orange', sparkles: 'magenta' };
+        function avatarBadgeHtml(name, size) {
+            if (!window.MTRIcons || !name) return '';
+            var s = size || 40;
+            return window.MTRIcons.badge(name, { color: MTR_AVATAR_COLORS[name] || 'cyan', badgeSize: s, size: Math.round(s * 0.52) });
+        }
+        window.avatarBadgeHtml = avatarBadgeHtml;
         window.__myAvatar = window.__myAvatar || MTR_AVATARS[0];
 
         // Mismos 14 géneros que backend/tournament-genres.js (duplicado acá
@@ -5042,13 +5081,13 @@
         window.renderMyOpenPrivateRoom = renderMyOpenPrivateRoom;
 
         function avatarPickerHtml() {
-            return '<div class="mb-3"><p class="text-xs text-gray-400 mb-1.5">Elegí tu avatar</p><div class="flex flex-wrap gap-1.5">' +
+            return '<div class="mb-3"><p class="text-xs text-gray-400 mb-1.5">Elegí tu avatar</p><div class="flex flex-wrap gap-2">' +
                 MTR_AVATARS.map(function (a) {
                     var selected = (a === window.__myAvatar);
                     var cls = selected
-                        ? 'ring-2 ring-cyan-400 bg-cyan-500/20'
-                        : 'bg-white/5 hover:bg-white/10';
-                    return '<button type="button" class="w-9 h-9 rounded-lg text-lg flex items-center justify-center border border-white/10 transition cursor-pointer ' + cls + '" data-avatar="' + a + '" onclick="selectAvatar(this)">' + a + '</button>';
+                        ? 'ring-2 ring-offset-2 ring-offset-black ring-cyan-400'
+                        : 'opacity-70 hover:opacity-100';
+                    return '<button type="button" class="rounded-full transition cursor-pointer ' + cls + '" data-avatar="' + a + '" onclick="selectAvatar(this)">' + avatarBadgeHtml(a, 38) + '</button>';
                 }).join('') +
                 '</div></div>';
         }
@@ -5056,13 +5095,13 @@
             window.__myAvatar = btn.getAttribute('data-avatar');
             var container = btn.parentElement;
             Array.prototype.forEach.call(container.children, function (b) {
-                b.classList.remove('ring-2', 'ring-cyan-400', 'bg-cyan-500/20');
-                b.classList.add('bg-white/5');
+                b.classList.remove('ring-2', 'ring-offset-2', 'ring-offset-black', 'ring-cyan-400');
+                b.classList.add('opacity-70');
             });
-            btn.classList.remove('bg-white/5');
-            btn.classList.add('ring-2', 'ring-cyan-400', 'bg-cyan-500/20');
+            btn.classList.remove('opacity-70');
+            btn.classList.add('ring-2', 'ring-offset-2', 'ring-offset-black', 'ring-cyan-400');
             var myAvatarEl = document.getElementById('joinPreviewMyAvatar');
-            if (myAvatarEl) myAvatarEl.textContent = window.__myAvatar;
+            if (myAvatarEl) myAvatarEl.innerHTML = avatarBadgeHtml(window.__myAvatar, 30);
         }
         window.selectAvatar = selectAvatar;
 
@@ -5938,6 +5977,80 @@
             if (typeof GameEngine !== 'undefined') await GameEngine.createPrivateRoom(selectedSong, bet, window.__myAvatar);
             else showToast('GameEngine no está cargado', 'error');
         }
+        // Se muestra apenas se detecta ?room= en la URL -- ver el bootstrap
+        // más arriba en este archivo. Reusa previewPrivateRoom() (ya
+        // existía, de solo lectura, no cobra nada) para traer la info real
+        // de la sala ANTES de que la persona toque nada.
+        window.__pendingRoomInvite = null;
+        async function showRoomInviteModal(roomCode) {
+            var modal = document.getElementById('roomInviteModal');
+            if (!modal || typeof window.GameEngine === 'undefined') return;
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+            document.body.style.overflow = 'hidden';
+
+            var preview = await window.GameEngine.previewPrivateRoom(roomCode);
+            var infoEl = document.getElementById('roomInviteInfo');
+            var unavailableEl = document.getElementById('roomInviteUnavailable');
+            var acceptBtn = document.getElementById('roomInviteAcceptBtn');
+
+            if (!preview.ok) {
+                infoEl.classList.add('hidden');
+                unavailableEl.classList.remove('hidden');
+                document.getElementById('roomInviteUnavailableMsg').textContent = preview.error || 'Sala no encontrada';
+                if (acceptBtn) acceptBtn.classList.add('hidden');
+                return;
+            }
+
+            window.__pendingRoomInvite = roomCode;
+            infoEl.classList.remove('hidden');
+            unavailableEl.classList.add('hidden');
+            if (acceptBtn) acceptBtn.classList.remove('hidden');
+
+            document.getElementById('roomInviteSongImage').src = preview.match.player1_song_image || '';
+            document.getElementById('roomInviteSongName').textContent = preview.match.player1_song_name || 'Sin título';
+            document.getElementById('roomInviteSongArtist').textContent = preview.match.player1_song_artist || '';
+            document.getElementById('roomInviteBet').textContent = preview.match.player1_bet;
+            var avatarEl = document.getElementById('roomInviteAvatar');
+            if (avatarEl) {
+                avatarEl.innerHTML = preview.match.player1_avatar
+                    ? avatarBadgeHtml(preview.match.player1_avatar, 56)
+                    : (window.MTRIcons ? window.MTRIcons.badge('mic', { color: 'magenta', badgeSize: 56 }) : '');
+            }
+        }
+        window.showRoomInviteModal = showRoomInviteModal;
+
+        function closeRoomInviteModal() {
+            var modal = document.getElementById('roomInviteModal');
+            if (!modal) return;
+            modal.classList.add('hidden');
+            modal.classList.remove('flex');
+            document.body.style.overflow = '';
+        }
+        window.closeRoomInviteModal = closeRoomInviteModal;
+
+        // "Elegir mi canción": cierra el modal y lleva directo al buscador,
+        // con el modo ya en 'private' y el código ya cargado -- el mismo
+        // camino de siempre (joinRoom/confirmJoinRoom) sigue haciendo el
+        // trabajo real una vez que se elige una canción.
+        function acceptRoomInvite() {
+            var roomCode = window.__pendingRoomInvite;
+            closeRoomInviteModal();
+            if (!roomCode) return;
+            selectMode('private');
+            var joinInput = document.getElementById('joinRoomCode');
+            if (joinInput) joinInput.value = roomCode.toUpperCase();
+            setTimeout(function () {
+                if (typeof window.scrollToSection === 'function') {
+                    window.scrollToSection('songSelection');
+                } else {
+                    var el = document.getElementById('songSelection');
+                    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                }
+            }, 300);
+        }
+        window.acceptRoomInvite = acceptRoomInvite;
+
         // "Unirse" ya no cobra ni une directo -- primero busca la sala y
         // muestra una vista previa (contra quién se compite, cuánto pide de
         // apuesta) sin tocar el saldo. El saldo recién se valida al confirmar,
@@ -5978,13 +6091,15 @@
 
             var opponentAvatarEl = document.getElementById('joinPreviewOpponentAvatar');
             if (opponentAvatarEl) {
-                if (preview.match.player1_avatar) opponentAvatarEl.textContent = preview.match.player1_avatar;
-                else opponentAvatarEl.innerHTML = window.MTRIcons ? window.MTRIcons.svg('mic', { size: 24 }) : '';
+                opponentAvatarEl.innerHTML = preview.match.player1_avatar
+                    ? avatarBadgeHtml(preview.match.player1_avatar, 46)
+                    : (window.MTRIcons ? window.MTRIcons.badge('mic', { color: 'orange', badgeSize: 46 }) : '');
             }
             var myAvatarEl = document.getElementById('joinPreviewMyAvatar');
             if (myAvatarEl) {
-                if (window.__myAvatar) myAvatarEl.textContent = window.__myAvatar;
-                else myAvatarEl.innerHTML = window.MTRIcons ? window.MTRIcons.svg('user', { size: 24 }) : '';
+                myAvatarEl.innerHTML = window.__myAvatar
+                    ? avatarBadgeHtml(window.__myAvatar, 46)
+                    : (window.MTRIcons ? window.MTRIcons.badge('user', { color: 'gray', badgeSize: 46 }) : '');
             }
             var avatarPickerEl = document.getElementById('joinPreviewAvatarPicker');
             if (avatarPickerEl) avatarPickerEl.innerHTML = avatarPickerHtml();
