@@ -60,16 +60,35 @@ function showToast(message, type = 'info', duration = 3000) {
 
     const toast = document.createElement('div');
     toast.className = `toast toast-${type}`;
-    toast.textContent = message;
-    // Click para cerrar antes de tiempo -- útil sobre todo en los toasts
-    // largos con duration extendida, para no obligar a esperar los 12s
-    // completos si ya se terminó de leer.
-    toast.style.cursor = 'pointer';
-    toast.title = 'Clic para cerrar';
-    toast.addEventListener('click', () => {
+
+    const closeToast = () => {
         toast.classList.remove('show');
         setTimeout(() => toast.remove(), 300);
+    };
+
+    // Mensaje como texto plano (sin innerHTML) para no reintroducir riesgo
+    // de inyección -- se agrega aparte del botón de cerrar.
+    const textEl = document.createElement('span');
+    textEl.textContent = message;
+    toast.appendChild(textEl);
+
+    // Botón de cerrar visible además del clic-en-cualquier-parte -- antes
+    // solo existía el clic implícito (nada indicaba que se podía cerrar
+    // antes de tiempo), reportado como parte de que los avisos "se veían
+    // raros". Útil sobre todo en los toasts largos con duration extendida.
+    const closeBtn = document.createElement('span');
+    closeBtn.className = 'toast-close';
+    closeBtn.textContent = '✕';
+    closeBtn.setAttribute('aria-label', 'Cerrar aviso');
+    closeBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        closeToast();
     });
+    toast.appendChild(closeBtn);
+
+    toast.style.cursor = 'pointer';
+    toast.title = 'Clic para cerrar';
+    toast.addEventListener('click', closeToast);
 
     container.appendChild(toast);
 
