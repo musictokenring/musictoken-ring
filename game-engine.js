@@ -2306,6 +2306,11 @@ const GameEngine = {
             if (linkEl) {
                 linkEl.value = `${window.location.origin}${window.location.pathname}?room=${roomCode}`;
             }
+            // CRÍTICO: reportado en vivo -- esta pantalla nunca mostraba la
+            // canción que el creador ya eligió, solo un ícono genérico fijo.
+            if (typeof window.renderRoomPlayer1Card === 'function') {
+                window.renderRoomPlayer1Card({ image: song.image, name: song.name, artist: song.artist });
+            }
             if (typeof window.scrollToSection === 'function') {
                 window.scrollToSection('roomScreen', { delay: 100 });
             }
@@ -2641,9 +2646,215 @@ const GameEngine = {
     },
 
     // ==========================================
+    // SALA PRIVADA -- MODO TORNEO (mini-torneo eliminatorio privado)
+    // ==========================================
+    // Pedido explícito del usuario: cupo de invitados, arranca al llenarse
+    // o al lograr unanimidad votando "arrancar ya". Modo NUEVO y separado
+    // de la Sala Privada 1 vs 1 clásica (createPrivateRoom/joinPrivateRoom
+    // arriba) -- esa sigue exactamente igual, sin tocar. Todo el dinero se
+    // mueve en el backend (ver server-auto.js), acá solo se llama a esos
+    // endpoints y se refleja el estado en pantalla.
+
+    _privateTournamentPollInterval: null,
+    _privateTournamentActiveMatchId: null,
+
+    async createPrivateTournament(song, betAmount, avatar, capacity) {
+        const normalizedBet = Math.max(this.minBet, Math.round(betAmount || this.minBet));
+        if (!(await this.hasSufficientCredits(normalizedBet))) return;
+
+        try {
+            const backendUrl = window.CONFIG?.BACKEND_API || window.CreditsSystem?.backendUrl || 'https://musictoken-ring.onrender.com';
+            const resp = await fetch(`${backendUrl}/api/private-tournaments/create`, {
+                method: 'POST',
+                headers: await this.getBackendAuthHeaders(),
+                body: JSON.stringify({
+                    song: { id: song.id, name: song.name, artist: song.artist, image: song.image },
+                    betAmount: normalizedBet,
+                    avatar: avatar || null,
+                    capacity: capacity,
+                    walletAddress: this.connectedWallet || localStorage.getItem('mtr_wallet') || null
+                })
+            });
+            const result = await resp.json().catch(() => ({}));
+            if (!resp.ok || !result.ok) {
+                showToast('No se pudo crear la sala: ' + (result.error || ('HTTP ' + resp.status)), 'error');
+                return;
+            }
+            if (window.CreditsSystem) await window.CreditsSystem.loadBalance(this.connectedWallet || localStorage.getItem('mtr_wallet') || null, (await supabaseClient.auth.getSession()).data.session?.user?.id || null);
+            showToast(`Sala de torneo creada: ${result.room.room_code}`, 'success');
+            if (typeof window.showPrivateTournamentRoom === 'function') window.showPrivateTournamentRoom(result.room.room_code);
+        } catch (error) {
+            console.error('[createPrivateTournament] Error:', error);
+            showToast('Error al crear la sala de torneo', 'error');
+        }
+    },
+
+    async joinPrivateTournamentRoom(roomCode, song, avatar) {
+        try {
+            const backendUrl = window.CONFIG?.BACKEND_API || window.CreditsSystem?.backendUrl || 'https://musictoken-ring.onrender.com';
+            const resp = await fetch(`${backendUrl}/api/private-tournaments/${encodeURIComponent(roomCode)}/join`, {
+                method: 'POST',
+                headers: await this.getBackendAuthHeaders(),
+                body: JSON.stringify({
+                    song: { id: song.id, name: song.name, artist: song.artist, image: song.image },
+                    avatar: avatar || null,
+                    walletAddress: this.connectedWallet || localStorage.getItem('mtr_wallet') || null
+                })
+            });
+            const result = await resp.json().catch(() => ({}));
+            if (!resp.ok || !result.ok) {
+                showToast('No se pudo unir a la sala: ' + (result.error || ('HTTP ' + resp.status)), 'error');
+                return false;
+            }
+            if (window.CreditsSystem) await window.CreditsSystem.loadBalance(this.connectedWallet || localStorage.getItem('mtr_wallet') || null, (await supabaseClient.auth.getSession()).data.session?.user?.id || null);
+            return true;
+        } catch (error) {
+            console.error('[joinPrivateTournamentRoom] Error:', error);
+            showToast('Error al unirse a la sala', 'error');
+            return false;
+        }
+    },
+
+    async voteReadyPrivateTournament(roomCode, ready) {
+        try {
+            const backendUrl = window.CONFIG?.BACKEND_API || window.CreditsSystem?.backendUrl || 'https://musictoken-ring.onrender.com';
+            const resp = await fetch(`${backendUrl}/api/private-tournaments/${encodeURIComponent(roomCode)}/vote-ready`, {
+                method: 'POST',
+                headers: await this.getBackendAuthHeaders(),
+                body: JSON.stringify({ ready: !!ready, walletAddress: this.connectedWallet || localStorage.getItem('mtr_wallet') || null })
+            });
+            const result = await resp.json().catch(() => ({}));
+            if (!resp.ok || !result.ok) {
+                showToast('No se pudo registrar tu voto: ' + (result.error || ('HTTP ' + resp.status)), 'error');
+            }
+        } catch (error) {
+            console.error('[voteReadyPrivateTournament] Error:', error);
+        }
+    },
+
+    async cancelPrivateTournamentRoom(roomCode) {
+        try {
+            const backendUrl = window.CONFIG?.BACKEND_API || window.CreditsSystem?.backendUrl || 'https://musictoken-ring.onrender.com';
+            const resp = await fetch(`${backendUrl}/api/private-tournaments/${encodeURIComponent(roomCode)}/cancel`, {
+                method: 'POST',
+                headers: await this.getBackendAuthHeaders(),
+                body: JSON.stringify({ walletAddress: this.connectedWallet || localStorage.getItem('mtr_wallet') || null })
+            });
+            const result = await resp.json().catch(() => ({}));
+            if (!resp.ok || !result.ok) {
+                showToast('No se pudo cancelar la sala: ' + (result.error || ('HTTP ' + resp.status)), 'error');
+                return false;
+            }
+            showToast('Sala cancelada, créditos reembolsados a todos.', 'info');
+            return true;
+        } catch (error) {
+            console.error('[cancelPrivateTournamentRoom] Error:', error);
+            return false;
+        }
+    },
+
+    async loadPrivateTournamentState(roomCode) {
+        try {
+            const backendUrl = window.CONFIG?.BACKEND_API || window.CreditsSystem?.backendUrl || 'https://musictoken-ring.onrender.com';
+            const resp = await fetch(`${backendUrl}/api/private-tournaments/${encodeURIComponent(roomCode)}/state`);
+            const result = await resp.json().catch(() => ({}));
+            if (!resp.ok || !result.ok) return null;
+            return result;
+        } catch (error) {
+            console.error('[loadPrivateTournamentState] Error:', error);
+            return null;
+        }
+    },
+
+    // Sondeo cada 3s mientras la sala de torneo está abierta -- refleja
+    // la lista de participantes/votos en pantalla, y detecta cuándo me
+    // toca jugar una ronda (o cuándo el torneo ya terminó).
+    startPrivateTournamentPolling(roomCode) {
+        if (this._privateTournamentPollInterval) clearInterval(this._privateTournamentPollInterval);
+        const tick = async () => {
+            const state = await this.loadPrivateTournamentState(roomCode);
+            if (!state) return;
+            if (typeof window.renderPrivateTournamentRoom === 'function') window.renderPrivateTournamentRoom(state);
+
+            if (state.room.status === 'cancelled' || state.room.status === 'finished') {
+                clearInterval(this._privateTournamentPollInterval);
+                this._privateTournamentPollInterval = null;
+                return;
+            }
+            if (state.room.status !== 'in_progress') return;
+
+            const { data: { session } } = await supabaseClient.auth.getSession();
+            const myId = session?.user?.id;
+            if (!myId) return;
+
+            const currentRoundRows = state.bracket.filter(r => r.round === state.room.current_round);
+            const myRow = currentRoundRows.find(r => r.player1_id === myId || r.player2_id === myId);
+            if (myRow && !myRow.is_bye && myRow.matches && myRow.matches.status === 'ready' && this._privateTournamentActiveMatchId !== myRow.match_id) {
+                this._privateTournamentActiveMatchId = myRow.match_id;
+                clearInterval(this._privateTournamentPollInterval);
+                this._privateTournamentPollInterval = null;
+                // createBattleUI() no conoce estas 2 pantallas (son nuevas,
+                // no existían cuando se escribió) -- se ocultan a mano acá
+                // para que no queden visibles debajo/al lado de la arena.
+                document.getElementById('tournamentRoomScreen')?.classList.add('hidden');
+                document.getElementById('tournamentRoundResultScreen')?.classList.add('hidden');
+                this.startMatch(myRow.match_id);
+            }
+        };
+        tick();
+        this._privateTournamentPollInterval = setInterval(tick, 3000);
+    },
+
+    stopPrivateTournamentPolling() {
+        if (this._privateTournamentPollInterval) {
+            clearInterval(this._privateTournamentPollInterval);
+            this._privateTournamentPollInterval = null;
+        }
+    },
+
+    // Llamado desde endBattle() cuando match.match_type === 'private_bracket'
+    // -- reporta el resultado al backend (que elimina al perdedor, arma la
+    // próxima ronda, o paga al campeón si esta era la final) y muestra la
+    // pantalla correspondiente. Idempotente del lado del backend, así que
+    // se llama siempre, gane o no la carrera de resolución de la batalla.
+    async resolvePrivateTournamentRound(match, winner, wonResolutionRace) {
+        try {
+            const backendUrl = window.CONFIG?.BACKEND_API || window.CreditsSystem?.backendUrl || 'https://musictoken-ring.onrender.com';
+            const resp = await fetch(`${backendUrl}/api/private-tournaments/matches/${encodeURIComponent(match.id)}/resolve-round`, {
+                method: 'POST',
+                headers: await this.getBackendAuthHeaders(),
+                body: JSON.stringify({})
+            });
+            const result = await resp.json().catch(() => ({}));
+
+            const { data: { session } } = await supabaseClient.auth.getSession();
+            const myId = session?.user?.id;
+            const iWon = (winner === 1 && match.player1_id === myId) || (winner === 2 && match.player2_id === myId);
+
+            if (result.tournamentFinished) {
+                if (window.CreditsSystem) await window.CreditsSystem.loadBalance(this.connectedWallet || localStorage.getItem('mtr_wallet') || null, myId || null);
+                if (typeof window.showPrivateTournamentResultScreen === 'function') {
+                    window.showPrivateTournamentResultScreen({
+                        outcome: result.championId === myId ? 'champion' : (iWon ? 'advanced-final-pending' : 'eliminated'),
+                        room: result.room,
+                        winnerPayout: result.winnerPayout
+                    });
+                }
+            } else if (typeof window.showPrivateTournamentResultScreen === 'function') {
+                window.showPrivateTournamentResultScreen({
+                    outcome: iWon ? 'advanced' : 'eliminated',
+                    room: result.room
+                });
+            }
+        } catch (error) {
+            console.error('[resolvePrivateTournamentRound] Error:', error);
+        }
+    },
+
+    // ==========================================
     // MODO PRÁCTICA (Practice)
     // ==========================================
-    
+
     async startPracticeMatch(userSong, demoBet = 0) {
         console.log('[startPracticeMatch] ✅ INICIANDO práctica');
         console.log('[startPracticeMatch] Parámetros:', { userSong, demoBet });
@@ -4913,6 +5124,22 @@ const GameEngine = {
             // Si por algún motivo ni siquiera la relectura trajo un ganador
             // (ej. error de red), se sigue con el cálculo local como último
             // recurso -- no debería pasar en el uso normal.
+        }
+
+        // CRÍTICO: una ronda de Sala Privada (Torneo) NO paga premio acá --
+        // el pozo completo ya se juntó al anotarse todos, y solo se paga
+        // una vez al campeón final del bracket. Si esto siguiera de largo,
+        // caería en la rama de abajo (match.match_type !== 'practice') y le
+        // pagaría el pozo COMPLETO al ganador de CADA ronda, multiplicando
+        // el pago varias veces por el mismo dinero. Se corta acá, antes de
+        // esa rama, y se delega todo (eliminar al perdedor, armar la
+        // siguiente ronda, o pagar al campeón si esta era la final) al
+        // backend vía resolvePrivateTournamentRound(), que ya reusa la
+        // misma carrera atómica de arriba para no procesar el resultado
+        // dos veces.
+        if (match.match_type === 'private_bracket') {
+            await this.resolvePrivateTournamentRound(match, winner, wonResolutionRace);
+            return;
         }
 
         const userWon = (isPlayer1 && winner === 1) || (!isPlayer1 && winner === 2);

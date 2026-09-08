@@ -3732,6 +3732,526 @@ app.post('/api/matchmaking/clear-matched', requireCreditMutationAuth, async (req
     }
 });
 
+// ============================================================
+// SALA PRIVADA -- MODO TORNEO (mini-torneo eliminatorio privado)
+// ============================================================
+// Pedido explícito del usuario: cupo de invitados (3-16), arranca solo
+// al llenarse el cupo, o antes si el 100% de los presentes vota
+// "arrancar ya" (ver private-tournament-rooms.sql para el esquema y el
+// razonamiento de RLS). TODO el dinero se mueve acá, nunca desde el
+// cliente -- mismo criterio que el resto de los modos reales tras la
+// auditoría de esta sesión.
+const PRIVATE_TOURNAMENT_FEE_RATE = 0.02; // mismo 2% que el resto de la plataforma
+
+function generatePrivateTournamentCode() {
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+    let code = '';
+    for (let i = 0; i < 6; i++) code += chars.charAt(Math.floor(Math.random() * chars.length));
+    return code;
+}
+
+// Baraja (Fisher-Yates) y empareja: si la cantidad es impar, el último
+// de la lista mezclada queda con "bye" (avanza sin jugar esa ronda) --
+// nunca se rellena con CPU acá, a propósito, porque se supone que son
+// invitados reales.
+function pairForBracketRound(ids) {
+    const shuffled = [...ids];
+    for (let i = shuffled.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+    }
+    const pairs = [];
+    let bye = null;
+    for (let i = 0; i < shuffled.length; i += 2) {
+        if (i + 1 < shuffled.length) pairs.push([shuffled[i], shuffled[i + 1]]);
+        else bye = shuffled[i];
+    }
+    return { pairs, bye };
+}
+
+// Arma una ronda nueva a partir de la lista de "sobrevivientes" (ids de
+// participantes que siguen en pie) -- crea las filas reales en "matches"
+// para cada par (reusando el mismo motor de batalla que Sala Privada
+// 1 vs 1) y sus filas de seguimiento en private_tournament_matches. Las
+// filas "bye" quedan resolved=true de una, con su ganador ya puesto.
+async function startPrivateTournamentRound(room, survivorIds, participantsById, round) {
+    const { pairs, bye } = pairForBracketRound(survivorIds);
+    const rows = [];
+
+    for (let i = 0; i < pairs.length; i++) {
+        const [p1, p2] = pairs[i];
+        const s1 = participantsById[p1];
+        const s2 = participantsById[p2];
+        const matchInsert = {
+            match_type: 'private_bracket',
+            // No reusar room.room_code tal cual: no hay garantía de que esa
+            // columna sea única en "matches" a nivel de base de datos, y acá
+            // se van a insertar VARIAS filas (una por cada par, en cada
+            // ronda) -- si hubiera una constraint unique, la segunda fila
+            // fallaría. Un sufijo por ronda/posición lo evita sin tocar el
+            // esquema existente.
+            room_code: `${room.room_code}-R${round}-${i}`,
+            player1_id: p1,
+            player1_song_id: s1.song_id,
+            player1_song_name: s1.song_name,
+            player1_song_artist: s1.song_artist,
+            player1_song_image: s1.song_image,
+            player1_avatar: s1.avatar || null,
+            player1_bet: 0,
+            player2_id: p2,
+            player2_song_id: s2.song_id,
+            player2_song_name: s2.song_name,
+            player2_song_artist: s2.song_artist,
+            player2_song_image: s2.song_image,
+            player2_avatar: s2.avatar || null,
+            player2_bet: 0,
+            total_pot: 0, // el pozo real vive en private_tournament_rooms.total_pot, se paga una sola vez al final
+            status: 'ready'
+        };
+        const { data: matchRow, error: matchError } = await supabase.from('matches').insert([matchInsert]).select().single();
+        if (matchError) {
+            console.error('[private-tournament] Error creando match de ronda:', matchError);
+            continue;
+        }
+        rows.push({ room_id: room.id, round, match_id: matchRow.id, player1_id: p1, player2_id: p2, is_bye: false, resolved: false });
+    }
+
+    if (bye != null) {
+        rows.push({ room_id: room.id, round, match_id: null, player1_id: bye, player2_id: null, is_bye: true, resolved: true, winner_id: bye });
+    }
+
+    if (rows.length) {
+        await supabase.from('private_tournament_matches').insert(rows);
+    }
+    await supabase.from('private_tournament_rooms').update({ current_round: round }).eq('id', room.id);
+}
+
+// Arranca el bracket completo (ronda 1) -- se llama al llenarse el cupo,
+// o al lograrse unanimidad en la votación.
+async function startPrivateTournamentBracket(room) {
+    const { data: participants } = await supabase
+        .from('private_tournament_participants')
+        .select('*')
+        .eq('room_id', room.id)
+        .eq('eliminated', false);
+    if (!participants || participants.length < 2) return;
+
+    const participantsById = {};
+    participants.forEach(p => { participantsById[p.user_id] = p; });
+    const ids = participants.map(p => p.user_id);
+
+    // CRÍTICO: dos caminos distintos pueden disparar esto casi al mismo
+    // tiempo (el cupo se llena justo cuando también se completa la
+    // votación unánime) -- sin este guard, ambos armarían la ronda 1 por
+    // duplicado. El UPDATE solo afecta la fila si todavía sigue en
+    // 'waiting'; el segundo llamado ve 0 filas afectadas y no hace nada más.
+    const { data: claimed } = await supabase
+        .from('private_tournament_rooms')
+        .update({ status: 'in_progress', started_at: new Date().toISOString() })
+        .eq('id', room.id)
+        .eq('status', 'waiting')
+        .select()
+        .maybeSingle();
+
+    if (!claimed) return;
+
+    await startPrivateTournamentRound(room, ids, participantsById, 1);
+}
+
+/**
+ * Crea una Sala Privada modo Torneo. Descuenta el bono de entrada del
+ * creador ANTES de crear la sala (mismo criterio que todo lo demás en
+ * esta sesión) y lo anota como primer participante.
+ */
+app.post('/api/private-tournaments/create', requireCreditMutationAuth, async (req, res) => {
+    try {
+        if (!req.authUser) return res.status(401).json({ error: 'Inicia sesión primero.' });
+        const { song, betAmount, avatar, capacity, walletAddress } = req.body;
+        if (!song || !song.id || !song.name || !song.artist) {
+            return res.status(400).json({ error: 'Falta información de la canción' });
+        }
+        const normalizedBet = Math.max(1, Math.round(Number(betAmount) || 1));
+        const normalizedCapacity = Math.min(16, Math.max(3, Math.round(Number(capacity) || 4)));
+
+        const resolved = await resolveCreditsUserId(supabase, {
+            getUserIdFromWallet: (addr) => walletLinkService ? walletLinkService.getUserIdFromWallet(addr) : null
+        }, req.authUser, walletAddress || null);
+        const userId = resolved.userId;
+
+        const deduction = await deductUnifiedBalance(supabase, userId, normalizedBet);
+        if (!deduction.ok) {
+            return res.status(400).json({ error: deduction.error || 'Créditos insuficientes' });
+        }
+
+        let roomCode = generatePrivateTournamentCode();
+        // Reintentar si por casualidad el código ya existe (extremadamente
+        // improbable con 32^6 combinaciones, pero barato de cubrir).
+        for (let attempt = 0; attempt < 5; attempt++) {
+            const { data: existing } = await supabase.from('private_tournament_rooms').select('id').eq('room_code', roomCode).maybeSingle();
+            if (!existing) break;
+            roomCode = generatePrivateTournamentCode();
+        }
+
+        const { data: room, error: roomError } = await supabase.from('private_tournament_rooms').insert([{
+            room_code: roomCode,
+            creator_id: userId,
+            capacity: normalizedCapacity,
+            bet_amount: normalizedBet,
+            total_pot: normalizedBet
+        }]).select().single();
+
+        if (roomError) {
+            await supabase.rpc('increment_user_credits', { user_id_param: userId, credits_to_add: normalizedBet }).catch(() => {});
+            console.error('[private-tournament-create] Error creando sala:', roomError);
+            return res.status(500).json({ error: 'No se pudo crear la sala' });
+        }
+
+        const { error: participantError } = await supabase.from('private_tournament_participants').insert([{
+            room_id: room.id,
+            user_id: userId,
+            song_id: song.id,
+            song_name: song.name,
+            song_artist: song.artist,
+            song_image: song.image || null,
+            avatar: avatar || null
+        }]);
+
+        if (participantError) {
+            await supabase.rpc('increment_user_credits', { user_id_param: userId, credits_to_add: normalizedBet }).catch(() => {});
+            await supabase.from('private_tournament_rooms').delete().eq('id', room.id);
+            console.error('[private-tournament-create] Error anotando al creador:', participantError);
+            return res.status(500).json({ error: 'No se pudo crear la sala' });
+        }
+
+        res.json({ ok: true, room });
+    } catch (error) {
+        console.error('[private-tournament-create] Error:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+/**
+ * Unirse a una Sala Privada modo Torneo ya creada. La apuesta es SIEMPRE
+ * la que fijó el creador (room.bet_amount) -- el cliente no puede elegir
+ * la suya, así el pozo siempre queda consistente entre todos.
+ */
+app.post('/api/private-tournaments/:roomCode/join', requireCreditMutationAuth, async (req, res) => {
+    try {
+        if (!req.authUser) return res.status(401).json({ error: 'Inicia sesión primero.' });
+        const { roomCode } = req.params;
+        const { song, avatar, walletAddress } = req.body;
+        if (!song || !song.id || !song.name || !song.artist) {
+            return res.status(400).json({ error: 'Falta información de la canción' });
+        }
+
+        const { data: room } = await supabase.from('private_tournament_rooms').select('*').eq('room_code', roomCode).maybeSingle();
+        if (!room) return res.status(404).json({ error: 'Sala no encontrada' });
+        if (room.status !== 'waiting') return res.status(400).json({ error: 'Esa sala ya no está esperando invitados.' });
+
+        const { data: existingParticipants, error: countError } = await supabase
+            .from('private_tournament_participants')
+            .select('user_id')
+            .eq('room_id', room.id);
+        if (countError) return res.status(500).json({ error: 'No se pudo verificar la sala' });
+        if (existingParticipants.length >= room.capacity) {
+            return res.status(400).json({ error: 'La sala ya está llena.' });
+        }
+
+        const resolved = await resolveCreditsUserId(supabase, {
+            getUserIdFromWallet: (addr) => walletLinkService ? walletLinkService.getUserIdFromWallet(addr) : null
+        }, req.authUser, walletAddress || null);
+        const userId = resolved.userId;
+
+        if (existingParticipants.some(p => p.user_id === userId)) {
+            return res.status(400).json({ error: 'Ya estás anotado en esta sala.' });
+        }
+
+        const deduction = await deductUnifiedBalance(supabase, userId, room.bet_amount);
+        if (!deduction.ok) {
+            return res.status(400).json({ error: deduction.error || 'Créditos insuficientes' });
+        }
+
+        const { error: insertError } = await supabase.from('private_tournament_participants').insert([{
+            room_id: room.id,
+            user_id: userId,
+            song_id: song.id,
+            song_name: song.name,
+            song_artist: song.artist,
+            song_image: song.image || null,
+            avatar: avatar || null
+        }]);
+        if (insertError) {
+            await supabase.rpc('increment_user_credits', { user_id_param: userId, credits_to_add: room.bet_amount }).catch(() => {});
+            console.error('[private-tournament-join] Error anotando participante:', insertError);
+            return res.status(500).json({ error: 'No se pudo unir a la sala' });
+        }
+
+        // Pedido explícito del usuario: si alguien nuevo entra, el conteo de
+        // "listos para arrancar" se resetea -- nadie puede quedar afuera de
+        // la decisión de arrancar antes de tiempo por haberse unido tarde.
+        await supabase.from('private_tournament_participants').update({ ready_vote: false }).eq('room_id', room.id);
+        await supabase.from('private_tournament_rooms').update({ total_pot: Number(room.total_pot) + Number(room.bet_amount) }).eq('id', room.id);
+
+        const newCount = existingParticipants.length + 1;
+        if (newCount >= room.capacity) {
+            const { data: freshRoom } = await supabase.from('private_tournament_rooms').select('*').eq('id', room.id).single();
+            await startPrivateTournamentBracket(freshRoom);
+        }
+
+        res.json({ ok: true });
+    } catch (error) {
+        console.error('[private-tournament-join] Error:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+/**
+ * Votar "quiero arrancar con los presentes" / "prefiero esperar el cupo
+ * completo". Si el 100% de los presentes (mínimo 2) vota que sí, arranca
+ * solo, sin que nadie tenga que confirmar nada más.
+ */
+app.post('/api/private-tournaments/:roomCode/vote-ready', requireCreditMutationAuth, async (req, res) => {
+    try {
+        if (!req.authUser) return res.status(401).json({ error: 'Inicia sesión primero.' });
+        const { roomCode } = req.params;
+        const { ready, walletAddress } = req.body;
+
+        const { data: room } = await supabase.from('private_tournament_rooms').select('*').eq('room_code', roomCode).maybeSingle();
+        if (!room) return res.status(404).json({ error: 'Sala no encontrada' });
+        if (room.status !== 'waiting') return res.status(400).json({ error: 'Esta sala ya arrancó o cerró.' });
+
+        const resolved = await resolveCreditsUserId(supabase, {
+            getUserIdFromWallet: (addr) => walletLinkService ? walletLinkService.getUserIdFromWallet(addr) : null
+        }, req.authUser, walletAddress || null);
+        const userId = resolved.userId;
+
+        const { data: updatedParticipant, error: updateError } = await supabase
+            .from('private_tournament_participants')
+            .update({ ready_vote: !!ready })
+            .eq('room_id', room.id)
+            .eq('user_id', userId)
+            .select('id')
+            .maybeSingle();
+        if (updateError || !updatedParticipant) {
+            return res.status(403).json({ error: 'No estás anotado en esta sala.' });
+        }
+
+        const { data: participants } = await supabase.from('private_tournament_participants').select('*').eq('room_id', room.id);
+        const allReady = participants.length >= 2 && participants.every(p => p.ready_vote === true);
+        if (allReady) {
+            await startPrivateTournamentBracket(room);
+        }
+
+        res.json({ ok: true, allReady });
+    } catch (error) {
+        console.error('[private-tournament-vote] Error:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+/**
+ * Estado completo de la sala (participantes, votos, bracket) -- lectura
+ * pública, sondeada por el cliente cada pocos segundos mientras la sala
+ * está abierta o el torneo en curso.
+ */
+app.get('/api/private-tournaments/:roomCode/state', async (req, res) => {
+    try {
+        const { roomCode } = req.params;
+        const { data: room } = await supabase.from('private_tournament_rooms').select('*').eq('room_code', roomCode).maybeSingle();
+        if (!room) return res.status(404).json({ error: 'Sala no encontrada' });
+
+        const { data: participants } = await supabase
+            .from('private_tournament_participants')
+            .select('*')
+            .eq('room_id', room.id)
+            .order('joined_at', { ascending: true });
+
+        // Sintaxis de embed de PostgREST: "matches(...)" alcanza sola para
+        // resolver la FK (private_tournament_matches.match_id -> matches.id)
+        // porque es la única relación entre estas dos tablas -- no hace
+        // falta (ni es correcto) escribir "matches:match_id(...)" acá, eso
+        // mezclaría el nombre de columna donde va un nombre de relación.
+        const { data: bracketRows } = await supabase
+            .from('private_tournament_matches')
+            .select('*, matches (id, status, winner, player1_song_name, player1_song_image, player2_song_name, player2_song_image)')
+            .eq('room_id', room.id)
+            .order('round', { ascending: true });
+
+        res.json({ ok: true, room, participants: participants || [], bracket: bracketRows || [] });
+    } catch (error) {
+        console.error('[private-tournament-state] Error:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+/**
+ * Cancelar la sala mientras sigue en 'waiting' (el creador se arrepiente,
+ * o nadie más se unió) -- reembolsa a TODOS los que ya se habían anotado,
+ * no solo al creador.
+ */
+app.post('/api/private-tournaments/:roomCode/cancel', requireCreditMutationAuth, async (req, res) => {
+    try {
+        if (!req.authUser) return res.status(401).json({ error: 'Inicia sesión primero.' });
+        const { roomCode } = req.params;
+        const { walletAddress } = req.body;
+
+        const { data: room } = await supabase.from('private_tournament_rooms').select('*').eq('room_code', roomCode).maybeSingle();
+        if (!room) return res.status(404).json({ error: 'Sala no encontrada' });
+
+        const resolved = await resolveCreditsUserId(supabase, {
+            getUserIdFromWallet: (addr) => walletLinkService ? walletLinkService.getUserIdFromWallet(addr) : null
+        }, req.authUser, walletAddress || null);
+        if (resolved.userId !== room.creator_id) {
+            return res.status(403).json({ error: 'Solo quien creó la sala puede cancelarla.' });
+        }
+        if (room.status !== 'waiting') {
+            return res.status(400).json({ error: 'Esta sala ya arrancó, no se puede cancelar.' });
+        }
+
+        const { data: participants } = await supabase.from('private_tournament_participants').select('user_id').eq('room_id', room.id);
+        for (const p of (participants || [])) {
+            await supabase.rpc('increment_user_credits', { user_id_param: p.user_id, credits_to_add: room.bet_amount }).catch(() => {});
+        }
+
+        await supabase.from('private_tournament_rooms').update({ status: 'cancelled' }).eq('id', room.id);
+        res.json({ ok: true });
+    } catch (error) {
+        console.error('[private-tournament-cancel] Error:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+/**
+ * Procesa el resultado de UNA batalla de ronda del bracket. Se llama
+ * desde AMBOS dispositivos al terminar la batalla (mismo patrón que el
+ * resto de la app) -- "resolved=false -> true" con UPDATE condicionado
+ * es la carrera atómica que garantiza que esto corre exactamente una vez
+ * por partido, sea cual dispositivo llegue primero.
+ */
+app.post('/api/private-tournaments/matches/:matchId/resolve-round', requireCreditMutationAuth, async (req, res) => {
+    try {
+        if (!req.authUser) return res.status(401).json({ error: 'Inicia sesión primero.' });
+        const { matchId } = req.params;
+
+        const { data: bracketMatch } = await supabase.from('private_tournament_matches').select('*').eq('match_id', matchId).maybeSingle();
+        if (!bracketMatch) return res.status(404).json({ error: 'No es una batalla de torneo privado.' });
+
+        const { data: room } = await supabase.from('private_tournament_rooms').select('*').eq('id', bracketMatch.room_id).single();
+
+        if (bracketMatch.resolved) {
+            // Ya lo procesó el otro dispositivo -- devolver el estado actual
+            // sin volver a tocar nada (elimina/paga/avanza UNA sola vez).
+            return res.json({ ok: true, alreadyResolved: true, room });
+        }
+
+        const { data: realMatch } = await supabase.from('matches').select('id, status, winner, player1_id, player2_id').eq('id', matchId).single();
+        if (!realMatch || realMatch.status !== 'finished' || realMatch.winner == null) {
+            return res.status(400).json({ error: 'Esa batalla todavía no terminó.' });
+        }
+        const winnerId = realMatch.winner === 1 ? realMatch.player1_id : realMatch.player2_id;
+        const loserId = realMatch.winner === 1 ? realMatch.player2_id : realMatch.player1_id;
+
+        // Carrera atómica: solo el dispositivo que efectivamente cambie esta
+        // fila de resolved=false a true sigue adelante y procesa la
+        // eliminación/avance/pago. El otro simplemente devuelve el estado ya
+        // actualizado que dejó el primero.
+        const { data: claimed, error: claimError } = await supabase
+            .from('private_tournament_matches')
+            .update({ resolved: true, winner_id: winnerId })
+            .eq('id', bracketMatch.id)
+            .eq('resolved', false)
+            .select('id')
+            .maybeSingle();
+
+        if (claimError || !claimed) {
+            const { data: freshRoom } = await supabase.from('private_tournament_rooms').select('*').eq('id', room.id).single();
+            return res.json({ ok: true, alreadyResolved: true, room: freshRoom });
+        }
+
+        if (loserId) {
+            await supabase.from('private_tournament_participants').update({ eliminated: true }).eq('room_id', room.id).eq('user_id', loserId);
+        }
+
+        const { data: roundRows } = await supabase
+            .from('private_tournament_matches')
+            .select('*')
+            .eq('room_id', room.id)
+            .eq('round', bracketMatch.round);
+        const stillPending = roundRows.some(r => !r.resolved);
+
+        if (stillPending) {
+            return res.json({ ok: true, room, roundComplete: false });
+        }
+
+        // Ronda completa -- juntar a los sobrevivientes (ganadores de todos
+        // los emparejamientos y "byes" de esta ronda).
+        const survivorIds = roundRows.map(r => r.winner_id).filter(Boolean);
+
+        // CRÍTICO: cuando la ronda tiene MÁS de un emparejamiento (ej. 4
+        // jugadores, 2 batallas en paralelo), los dos partidos pueden
+        // terminar casi al mismo tiempo -- cada uno gana SU PROPIA carrera
+        // de arriba (son filas distintas), así que los dos dispositivos
+        // que resuelven el ÚLTIMO partido de cada emparejamiento llegan
+        // hasta acá y los dos ven "stillPending = false" al mismo tiempo.
+        // Sin un guard atómico separado, los dos armarían la ronda
+        // siguiente (o pagarían al campeón) DOS VECES. Se resuelve igual
+        // que arriba: un UPDATE condicionado a que el estado no haya
+        // cambiado todavía -- solo el que gane esta segunda carrera avanza
+        // de verdad.
+        if (survivorIds.length <= 1) {
+            const championId = survivorIds[0] || null;
+            const { data: claimedFinish } = await supabase
+                .from('private_tournament_rooms')
+                .update({ status: 'finished', winner_id: championId, finished_at: new Date().toISOString() })
+                .eq('id', room.id)
+                .eq('status', 'in_progress')
+                .select()
+                .maybeSingle();
+
+            if (!claimedFinish) {
+                // El otro dispositivo ya cerró el torneo -- no pagar de nuevo.
+                const { data: freshRoom } = await supabase.from('private_tournament_rooms').select('*').eq('id', room.id).single();
+                return res.json({ ok: true, roundComplete: true, tournamentFinished: true, championId, room: freshRoom });
+            }
+
+            const platformFee = Number(room.total_pot) * PRIVATE_TOURNAMENT_FEE_RATE;
+            const winnerPayout = Number(room.total_pot) - platformFee;
+            if (championId) {
+                await supabase.rpc('increment_user_credits', { user_id_param: championId, credits_to_add: winnerPayout }).catch((e) => {
+                    console.error('[private-tournament-resolve] No se pudo pagar al campeón:', e);
+                });
+            }
+            return res.json({ ok: true, roundComplete: true, tournamentFinished: true, championId, winnerPayout, room: claimedFinish });
+        }
+
+        const nextRound = bracketMatch.round + 1;
+        const { data: claimedAdvance } = await supabase
+            .from('private_tournament_rooms')
+            .update({ current_round: nextRound })
+            .eq('id', room.id)
+            .eq('current_round', bracketMatch.round)
+            .select()
+            .maybeSingle();
+
+        if (!claimedAdvance) {
+            // El otro dispositivo ya armó la ronda siguiente -- no duplicarla.
+            const { data: freshRoom } = await supabase.from('private_tournament_rooms').select('*').eq('id', room.id).single();
+            return res.json({ ok: true, roundComplete: true, tournamentFinished: false, room: freshRoom });
+        }
+
+        const { data: participants } = await supabase.from('private_tournament_participants').select('*').eq('room_id', room.id);
+        const participantsById = {};
+        participants.forEach(p => { participantsById[p.user_id] = p; });
+
+        await startPrivateTournamentRound(room, survivorIds, participantsById, nextRound);
+        const { data: advancedRoom } = await supabase.from('private_tournament_rooms').select('*').eq('id', room.id).single();
+        res.json({ ok: true, roundComplete: true, tournamentFinished: false, room: advancedRoom });
+    } catch (error) {
+        console.error('[private-tournament-resolve] Error:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
 /**
  * Crea un Desafío Social financiado con bonus_credits. A diferencia del
  * flujo normal (insert desde el cliente + deducción aparte), esto corre

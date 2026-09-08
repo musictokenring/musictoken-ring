@@ -1382,7 +1382,7 @@
                     <button type="button" onclick="copyRoomCode()" class="px-1.5 py-0.5 rounded bg-white/5 text-gray-500 hover:text-white transition cursor-pointer"><span data-mtr-icon="copy" data-mtr-plain data-mtr-size="14"></span></button>
                 </div>
                 <div class="flex items-center justify-center gap-6 mb-6">
-                    <div id="player1Card" class="text-center">
+                    <div id="player1Card" class="text-center w-24">
                         <div class="text-3xl mb-1 text-gray-400"><span data-mtr-icon="user" data-mtr-plain data-mtr-size="30"></span></div>
                         <span class="text-sm text-gray-400">Esperando...</span>
                     </div>
@@ -1393,6 +1393,26 @@
                     </div>
                 </div>
                 <button type="button" onclick="leaveRoom()" class="w-full py-2.5 rounded-lg text-sm font-medium bg-white/5 border border-white/10 text-gray-300 hover:text-white transition cursor-pointer">Salir de la Sala</button>
+            </div>
+        </section>
+
+        <!-- Sala Privada -- Modo Torneo: cupo de invitados, votación
+             unánime para arrancar antes de tiempo, y bracket eliminatorio.
+             Todo el contenido dinámico lo arma renderPrivateTournamentRoom()
+             más abajo -- este contenedor solo define el marco. -->
+        <section id="tournamentRoomScreen" class="hidden mb-16">
+            <div class="max-w-lg mx-auto p-8 rounded-2xl border border-fuchsia-500/40 bg-gray-900/50 neon-border-magenta">
+                <h2 class="text-2xl font-bold text-white mb-4 text-center flex items-center justify-center gap-2"><span data-mtr-icon="trophy" data-mtr-color="magenta" data-mtr-inline data-mtr-size="20" style="margin:0"></span>Sala de Torneo</h2>
+                <div id="tournamentRoomBody"></div>
+                <button type="button" onclick="window.leaveTournamentRoomScreen()" class="w-full mt-4 py-2.5 rounded-lg text-sm font-medium bg-white/5 border border-white/10 text-gray-300 hover:text-white transition cursor-pointer">Salir de la Sala</button>
+            </div>
+        </section>
+
+        <!-- Resultado de una ronda/final del torneo privado -- pantalla
+             corta que aparece después de cada batalla del bracket. -->
+        <section id="tournamentRoundResultScreen" class="hidden mb-16">
+            <div class="max-w-lg mx-auto p-8 rounded-2xl border border-fuchsia-500/40 bg-gray-900/50 neon-border-magenta text-center">
+                <div id="tournamentRoundResultBody"></div>
             </div>
         </section>
 
@@ -5063,6 +5083,21 @@
         window.avatarBadgeHtml = avatarBadgeHtml;
         window.__myAvatar = window.__myAvatar || MTR_AVATARS[0];
 
+        // #player1Card en la pantalla de Sala Privada ("esperando rival")
+        // era un ícono genérico fijo -- nunca mostraba la canción que el
+        // creador ya eligió, aunque ese dato siempre estuvo disponible.
+        // Reportado en vivo. Se llama tanto al crear la sala (game-engine.js)
+        // como al reingresar a una ya abierta (resumeOpenPrivateRoom).
+        window.renderRoomPlayer1Card = function (song) {
+            var el = document.getElementById('player1Card');
+            if (!el || !song) return;
+            el.innerHTML = (song.image
+                ? '<img src="' + song.image + '" class="w-12 h-12 rounded-lg object-cover mx-auto mb-1" alt="">'
+                : '<div class="text-3xl mb-1 text-gray-400">' + (window.MTRIcons ? window.MTRIcons.svg('music', { size: 30 }) : '') + '</div>') +
+                '<p class="text-xs text-white font-semibold truncate">' + (song.name || 'Tu canción') + '</p>' +
+                '<p class="text-[10px] text-gray-500 truncate">' + (song.artist || '') + '</p>';
+        };
+
         // Mismos 14 géneros que backend/tournament-genres.js (duplicado acá
         // porque ese archivo es un módulo Node, no se puede importar tal
         // cual en el navegador). Usado para el selector opcional de género
@@ -5260,6 +5295,7 @@
             if (linkEl) linkEl.value = window.location.origin + window.location.pathname + '?room=' + room.room_code;
             var codeEl = document.getElementById('roomCode');
             if (codeEl) codeEl.textContent = room.room_code;
+            window.renderRoomPlayer1Card({ image: room.player1_song_image, name: room.player1_song_name, artist: room.player1_song_artist });
 
             // Re-arrancar el polling de "¿ya se unió alguien?" -- se detiene
             // solo si se sale de esta pantalla sin pasar por leaveRoom(), así
@@ -5272,6 +5308,222 @@
                 window.scrollToSection('roomScreen', { delay: 100 });
             }
             if (typeof window.mtr2Sync === 'function') window.mtr2Sync();
+        };
+
+        // ==========================================
+        // SALA PRIVADA -- MODO TORNEO (UI)
+        // ==========================================
+        window.__tournamentRoomCode = null;
+
+        function hideAllPrivateRoomScreens() {
+            document.getElementById('modeSelector')?.classList.add('hidden');
+            document.getElementById('songSelection')?.classList.add('hidden');
+            document.getElementById('tournamentHub')?.classList.add('hidden');
+            document.getElementById('roomScreen')?.classList.add('hidden');
+            document.getElementById('joinRoomPreview')?.classList.add('hidden');
+            document.getElementById('tournamentRoundResultScreen')?.classList.add('hidden');
+            document.getElementById('battleArena')?.classList.add('hidden');
+        }
+
+        window.showPrivateTournamentRoom = function (roomCode) {
+            window.__tournamentRoomCode = roomCode;
+            window.currentMode = 'private';
+            hideAllPrivateRoomScreens();
+            document.getElementById('tournamentRoomScreen')?.classList.remove('hidden');
+            if (typeof window.scrollToSection === 'function') window.scrollToSection('tournamentRoomScreen', { delay: 100 });
+            if (typeof window.mtr2Sync === 'function') window.mtr2Sync();
+            if (typeof GameEngine !== 'undefined') GameEngine.startPrivateTournamentPolling(roomCode);
+        };
+
+        window.leaveTournamentRoomScreen = async function () {
+            var roomCode = window.__tournamentRoomCode;
+            if (typeof GameEngine !== 'undefined') GameEngine.stopPrivateTournamentPolling();
+            // Solo el creador puede cancelar de verdad (reembolsa a todos);
+            // un invitado que se va antes de arrancar simplemente deja de
+            // mirar la pantalla -- su lugar y su crédito ya invertido siguen
+            // contando en la sala (evita que irse "trabe" el torneo de los
+            // demás a mitad de camino). El backend valida quién puede
+            // cancelar, así que un intento de un no-creador simplemente
+            // vuelve al inicio sin romper nada.
+            document.getElementById('tournamentRoomScreen')?.classList.add('hidden');
+            document.getElementById('tournamentRoundResultScreen')?.classList.add('hidden');
+            if (typeof backToModes === 'function') backToModes();
+        };
+
+        window.cancelTournamentRoomFromUI = async function () {
+            var roomCode = window.__tournamentRoomCode;
+            if (!roomCode || typeof GameEngine === 'undefined') return;
+            var ok = await GameEngine.cancelPrivateTournamentRoom(roomCode);
+            if (ok) window.leaveTournamentRoomScreen();
+        };
+
+        window.toggleTournamentReadyFromUI = async function (btnEl) {
+            var roomCode = window.__tournamentRoomCode;
+            if (!roomCode || typeof GameEngine === 'undefined') return;
+            var currentlyReady = btnEl.getAttribute('data-ready') === 'true';
+            if (btnEl) btnEl.disabled = true;
+            await GameEngine.voteReadyPrivateTournament(roomCode, !currentlyReady);
+            if (btnEl) btnEl.disabled = false;
+        };
+
+        // Pintado completo de la sala de espera / bracket a partir del
+        // estado que devuelve GET /api/private-tournaments/:code/state --
+        // se llama cada ~3s desde GameEngine.startPrivateTournamentPolling().
+        window.renderPrivateTournamentRoom = async function (state) {
+            var body = document.getElementById('tournamentRoomBody');
+            if (!body || !state || !state.room) return;
+            var room = state.room;
+            var participants = state.participants || [];
+
+            if (room.status === 'cancelled') {
+                body.innerHTML = '<p class="text-center text-gray-400 py-6">Esta sala fue cancelada. Tus créditos ya fueron reembolsados.</p>';
+                return;
+            }
+            if (room.status === 'finished') {
+                // Si alguien vuelve a entrar a esta pantalla después de que
+                // el torneo ya terminó (ej. reabrió la pestaña), mostrar el
+                // resultado en vez de una sala de espera vacía.
+                var championRow = participants.find(function (p) { return p.user_id === room.winner_id; });
+                body.innerHTML = '<p class="text-center text-white font-bold py-2">' + (window.MTRIcons ? window.MTRIcons.svg('trophy', { size: 20, className: 'inline-block align-[-4px] mr-1 text-yellow-400' }) : '') + 'Torneo terminado</p>' +
+                    '<p class="text-center text-gray-400 text-sm pb-4">Campeón: ' + (championRow ? (championRow.song_name || 'un participante') : '—') + '</p>';
+                return;
+            }
+
+            var { data: { session } } = await supabaseClient.auth.getSession();
+            var myId = session?.user?.id;
+
+            if (room.status === 'in_progress') {
+                var currentRoundRows = (state.bracket || []).filter(function (r) { return r.round === room.current_round; });
+                var myRow = currentRoundRows.find(function (r) { return r.player1_id === myId || r.player2_id === myId; });
+                var resolvedCount = currentRoundRows.filter(function (r) { return r.resolved; }).length;
+                body.innerHTML = '<p class="text-center text-fuchsia-300 text-sm mb-2">Ronda ' + room.current_round + ' en curso · ' + resolvedCount + '/' + currentRoundRows.length + ' batallas resueltas</p>' +
+                    '<p class="text-center text-gray-400 text-sm">' + (myRow
+                        ? (myRow.is_bye ? 'Tenés bye esta ronda -- avanzás directo, esperando a los demás...' : (myRow.resolved ? 'Tu batalla de esta ronda ya terminó, esperando el resto...' : 'Preparando tu batalla de esta ronda...'))
+                        : 'Fuiste eliminado -- podés seguir mirando cómo avanza el torneo.') + '</p>';
+                return;
+            }
+
+            // status === 'waiting': lista de participantes + votos + link
+            var link = window.location.origin + window.location.pathname + '?room=' + room.room_code;
+            var readyCount = participants.filter(function (p) { return p.ready_vote; }).length;
+            var isCreator = myId === room.creator_id;
+            var myRow2 = participants.find(function (p) { return p.user_id === myId; });
+
+            var participantsHtml = participants.map(function (p) {
+                var badge = p.avatar ? avatarBadgeHtml(p.avatar, 34) : (window.MTRIcons ? window.MTRIcons.badge('user', { color: 'gray', badgeSize: 34 }) : '');
+                var readyBadge = p.ready_vote
+                    ? '<span class="text-[10px] px-1.5 py-0.5 rounded-full bg-green-500/15 border border-green-500/30 text-green-300">Listo</span>'
+                    : '<span class="text-[10px] px-1.5 py-0.5 rounded-full bg-white/5 border border-white/10 text-gray-500">Esperando</span>';
+                return '<div class="flex items-center gap-2 p-2 rounded-lg bg-black/30 border border-white/10">' +
+                    '<div class="flex-shrink-0">' + badge + '</div>' +
+                    '<div class="flex-1 min-w-0"><p class="text-xs text-white font-semibold truncate">' + (p.song_name || 'Sin canción') + '</p><p class="text-[10px] text-gray-500 truncate">' + (p.song_artist || '') + (p.user_id === room.creator_id ? ' · creador' : '') + '</p></div>' +
+                    readyBadge +
+                    '</div>';
+            }).join('');
+
+            body.innerHTML =
+                '<div class="mb-4 text-center">' +
+                    '<span class="text-3xl font-black text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-fuchsia-400">' + participants.length + '/' + room.capacity + '</span>' +
+                    '<p class="text-xs text-gray-400 mt-1">invitados anotados · apuesta ' + room.bet_amount + ' créditos c/u · pozo actual ' + room.total_pot + '</p>' +
+                '</div>' +
+                '<div class="mb-4">' +
+                    '<div class="flex gap-2">' +
+                        '<input type="text" readonly value="' + link + '" class="flex-1 px-3 py-2 rounded-lg bg-black/40 border border-white/10 text-white text-sm">' +
+                        '<button type="button" onclick="navigator.clipboard.writeText(\'' + link + '\'); showToast(\'Link copiado\',\'success\');" class="px-3 py-2 rounded-lg text-sm font-bold bg-gradient-to-r from-cyan-500 to-fuchsia-500 text-white cursor-pointer whitespace-nowrap">' + (window.MTRIcons ? window.MTRIcons.svg('copy', { size: 14 }) : '') + '</button>' +
+                    '</div>' +
+                    '<div class="flex flex-wrap justify-center gap-2 mt-2">' +
+                        '<button type="button" onclick="shareChallenge(\'whatsapp\', \'' + link + '\')" class="px-3 py-1.5 rounded-lg text-xs font-semibold bg-green-500/15 border border-green-500/30 text-green-400 hover:bg-green-500/25 transition cursor-pointer">' + (window.MTRIcons ? window.MTRIcons.svg('whatsapp', { size: 13 }) : '') + ' WhatsApp</button>' +
+                        '<button type="button" onclick="shareChallenge(\'telegram\', \'' + link + '\')" class="px-3 py-1.5 rounded-lg text-xs font-semibold bg-cyan-500/15 border border-cyan-500/30 text-cyan-400 hover:bg-cyan-500/25 transition cursor-pointer">' + (window.MTRIcons ? window.MTRIcons.svg('telegram', { size: 13 }) : '') + ' Telegram</button>' +
+                    '</div>' +
+                    '<p class="text-center text-xs text-gray-500 mt-2">o compartí el código: <strong class="font-mono text-fuchsia-400">' + room.room_code + '</strong></p>' +
+                '</div>' +
+                '<div class="space-y-2 mb-4">' + participantsHtml + '</div>' +
+                (myRow2 ? (
+                    '<button type="button" data-ready="' + (myRow2.ready_vote ? 'true' : 'false') + '" onclick="window.toggleTournamentReadyFromUI(this)" class="w-full py-2.5 rounded-lg text-sm font-bold transition cursor-pointer ' + (myRow2.ready_vote ? 'bg-green-500/20 border border-green-500/40 text-green-300' : 'bg-white/5 border border-white/10 text-gray-300 hover:text-white') + '">' +
+                        (myRow2.ready_vote ? '✓ Vas a arrancar con los presentes (tocá para cancelar tu voto)' : 'Arrancar ya con los presentes (' + readyCount + '/' + participants.length + ' de acuerdo)') +
+                    '</button>'
+                ) : '') +
+                (isCreator ? '<button type="button" onclick="window.cancelTournamentRoomFromUI()" class="w-full mt-2 py-2 rounded-lg text-xs font-medium bg-red-500/10 border border-red-500/30 text-red-300 hover:bg-red-500/20 transition cursor-pointer">Cancelar sala (reembolsa a todos)</button>' : '');
+        };
+
+        // Pantalla corta post-batalla del bracket: eliminado / avanzaste /
+        // campeón -- llamada desde GameEngine.resolvePrivateTournamentRound().
+        window.showPrivateTournamentResultScreen = function (result) {
+            hideAllPrivateRoomScreens();
+            document.getElementById('battleArena')?.classList.add('hidden');
+            document.getElementById('victorySection')?.remove();
+            var section = document.getElementById('tournamentRoundResultScreen');
+            var body = document.getElementById('tournamentRoundResultBody');
+            if (!section || !body) return;
+
+            var iconName = result.outcome === 'champion' ? 'trophy' : (result.outcome === 'eliminated' ? 'circleX' : 'swords');
+            var color = result.outcome === 'champion' ? 'text-yellow-400' : (result.outcome === 'eliminated' ? 'text-red-400' : 'text-cyan-400');
+            var title = result.outcome === 'champion' ? '¡Sos el campeón del torneo!'
+                : result.outcome === 'eliminated' ? 'Fuiste eliminado'
+                : '¡Avanzaste de ronda!';
+            var sub = result.outcome === 'champion' ? ('Ganaste ' + (result.winnerPayout ? Math.round(result.winnerPayout) : 0) + ' créditos del pozo total')
+                : result.outcome === 'eliminated' ? 'Gracias por competir -- podés seguir mirando cómo avanza el torneo.'
+                : 'Esperando a que se resuelvan las demás batallas de esta ronda...';
+
+            body.innerHTML = '<div class="mb-4 flex justify-center ' + color + '">' + (window.MTRIcons ? window.MTRIcons.svg(iconName, { size: 64 }) : '') + '</div>' +
+                '<h2 class="text-2xl font-bold text-white mb-2">' + title + '</h2>' +
+                '<p class="text-gray-400 text-sm mb-6">' + sub + '</p>' +
+                '<button type="button" onclick="window.showPrivateTournamentRoom(\'' + (result.room ? result.room.room_code : window.__tournamentRoomCode) + '\')" class="px-6 py-2.5 rounded-lg text-sm font-bold bg-gradient-to-r from-cyan-500 to-fuchsia-500 text-white hover:opacity-90 transition cursor-pointer">Volver a la sala</button>';
+
+            section.classList.remove('hidden');
+            if (typeof window.scrollToSection === 'function') window.scrollToSection('tournamentRoundResultScreen', { delay: 100 });
+            if (typeof window.mtr2Sync === 'function') window.mtr2Sync();
+        };
+
+        // Elegir entre Sala Privada clásica (1 vs 1) o modo Torneo (cupo de
+        // invitados, bracket eliminatorio) -- pedido explícito del usuario.
+        window.__privateRoomMode = window.__privateRoomMode || 'duel';
+        function privateRoomModePillsHtml() {
+            var isDuel = window.__privateRoomMode !== 'tournament';
+            var activeCls = 'bg-gradient-to-r from-cyan-500 to-fuchsia-500 text-white';
+            var inactiveCls = 'bg-white/5 border border-white/10 text-gray-400 hover:text-white';
+            return '<div class="mb-3 flex items-center gap-2">' +
+                '<button type="button" onclick="setPrivateRoomMode(\'duel\')" class="flex-1 py-2 rounded-lg text-xs font-bold transition cursor-pointer ' + (isDuel ? activeCls : inactiveCls) + '">1 vs 1</button>' +
+                '<button type="button" onclick="setPrivateRoomMode(\'tournament\')" class="flex-1 py-2 rounded-lg text-xs font-bold transition cursor-pointer ' + (!isDuel ? activeCls : inactiveCls) + '">' + (window.MTRIcons ? window.MTRIcons.svg('trophy', { size: 12, className: 'inline-block align-[-1px] mr-1' }) : '') + 'Torneo</button>' +
+                '</div>' +
+                '<div id="privateTournamentCapacityRow" class="mb-3' + (isDuel ? ' hidden' : '') + '">' +
+                '<label class="text-xs text-gray-400 mb-1 block">Cupo de invitados (arranca solo o si todos votan arrancar antes)</label>' +
+                '<select id="privateTournamentCapacity" class="w-full px-3 py-2 rounded-lg bg-black/40 border border-white/10 text-white text-sm">' +
+                [3, 4, 5, 6, 8, 10, 12, 16].map(function (n) { return '<option value="' + n + '"' + (n === 4 ? ' selected' : '') + '>' + n + ' jugadores</option>'; }).join('') +
+                '</select></div>';
+        }
+        window.setPrivateRoomMode = function (mode) {
+            window.__privateRoomMode = mode;
+            var label = document.getElementById('createRoomBtnLabel');
+            if (label) label.textContent = mode === 'tournament' ? 'Crear Sala de Torneo' : 'Crear Sala';
+            var capacityRow = document.getElementById('privateTournamentCapacityRow');
+            if (capacityRow) capacityRow.classList.toggle('hidden', mode !== 'tournament');
+            // Repintar los pills sin perder el resto del formulario (avatar
+            // ya elegido, etc.) -- solo esta franja de arriba.
+            var container = document.querySelector('#actionButtons');
+            if (container && container.firstElementChild) {
+                var temp = document.createElement('div');
+                temp.innerHTML = privateRoomModePillsHtml();
+                container.replaceChild(temp.firstElementChild, container.firstElementChild);
+                // El segundo nodo (capacityRow) también hay que reemplazarlo --
+                // privateRoomModePillsHtml() devuelve 2 elementos hermanos.
+                if (temp.children.length > 1 && container.children.length > 1) {
+                    container.replaceChild(temp.children[1], container.children[1]);
+                }
+            }
+        };
+        window.handleCreatePrivateRoomClick = async function () {
+            if (!selectedSong) return;
+            if (window.__privateRoomMode === 'tournament') {
+                var capacitySelect = document.getElementById('privateTournamentCapacity');
+                var capacity = capacitySelect ? parseInt(capacitySelect.value, 10) : 4;
+                var minBetAmount = (typeof GameEngine !== 'undefined' && GameEngine.minBet) ? GameEngine.minBet : 1;
+                var bet = parseInt(document.getElementById('betAmount').value) || minBetAmount;
+                if (typeof GameEngine !== 'undefined') await GameEngine.createPrivateTournament(selectedSong, bet, window.__myAvatar, capacity);
+                else showToast('GameEngine no está cargado', 'error');
+            } else {
+                createRoom();
+            }
         };
 
         function avatarPickerHtml() {
@@ -5331,8 +5583,12 @@
                 if (sq) sq.dataset.baseState = 'ready';
                 updateBetEligibility();
             } else if (mode === 'private') {
-                buttonsDiv.innerHTML = avatarPickerHtml() +
-                    '<button type="button" onclick="createRoom()" class="' + btnPrimary + '" id="createRoomBtn" disabled>' + (window.MTRIcons ? window.MTRIcons.svg('lock', { size: 14, className: 'inline-block align-[-2px] mr-1' }) : '') + 'Crear Sala</button>' +
+                // Pedido explícito del usuario: además del 1 vs 1 clásico,
+                // la sala puede armarse como mini-torneo con cupo de
+                // invitados (3 a 16) -- ver privateRoomModePillsHtml().
+                buttonsDiv.innerHTML = privateRoomModePillsHtml() +
+                    avatarPickerHtml() +
+                    '<button type="button" onclick="handleCreatePrivateRoomClick()" class="' + btnPrimary + '" id="createRoomBtn" disabled>' + (window.MTRIcons ? window.MTRIcons.svg('lock', { size: 14, className: 'inline-block align-[-2px] mr-1' }) : '') + '<span id="createRoomBtnLabel">Crear Sala</span></button>' +
                     '<div class="flex items-center gap-3 my-3"><div class="flex-1 h-px bg-white/10"></div><span class="text-xs text-gray-500">o</span><div class="flex-1 h-px bg-white/10"></div></div>' +
                     '<div class="flex gap-2"><input type="text" id="joinRoomCode" placeholder="Código" class="flex-1 px-3 py-2.5 rounded-lg bg-black/40 border border-white/10 text-white text-sm" maxlength="6"' +
                     ' oninput="this.value=this.value.toUpperCase(); if(typeof window.updateBetEligibility===\'function\') window.updateBetEligibility();">' +
@@ -6260,6 +6516,34 @@
             var joinBtn = document.getElementById('joinRoomBtn');
             var originalLabel = joinBtn ? joinBtn.textContent : '';
             if (joinBtn) { joinBtn.disabled = true; joinBtn.textContent = 'Buscando...'; }
+
+            // Un código puede ser de una Sala Privada clásica (1 vs 1) o de
+            // una Sala de Torneo -- se prueba primero como torneo (lectura
+            // pública, no cobra nada) porque no hay otra forma de distinguir
+            // el tipo antes de consultar. Si no es una, sigue el flujo
+            // clásico de siempre sin cambios.
+            var tournamentState = await window.GameEngine.loadPrivateTournamentState(roomCode);
+            if (tournamentState && tournamentState.room) {
+                if (joinBtn) { joinBtn.disabled = false; joinBtn.textContent = originalLabel || 'Unirse'; }
+                if (tournamentState.room.status !== 'waiting') {
+                    showToast('Esa sala de torneo ya arrancó o cerró.', 'info');
+                    return;
+                }
+                if (tournamentState.participants.length >= tournamentState.room.capacity) {
+                    showToast('Esa sala de torneo ya está llena.', 'info');
+                    return;
+                }
+                var credits = window.CreditsSystem ? (window.CreditsSystem.currentCredits || 0) : 0;
+                if (credits < tournamentState.room.bet_amount) {
+                    showToast(`Necesitás ${tournamentState.room.bet_amount} créditos para unirte, tenés ${credits.toFixed(2)}.`, 'error');
+                    return;
+                }
+                var joined = await window.GameEngine.joinPrivateTournamentRoom(roomCode, selectedSong, window.__myAvatar);
+                if (joined && typeof window.showPrivateTournamentRoom === 'function') {
+                    window.showPrivateTournamentRoom(roomCode);
+                }
+                return;
+            }
 
             var preview = await window.GameEngine.previewPrivateRoom(roomCode);
 
