@@ -2735,13 +2735,18 @@
                         ? '<button type="button" class="flex-shrink-0 px-2.5 py-1.5 rounded-lg text-[11px] font-bold bg-orange-500/15 border border-orange-500/30 text-orange-300 hover:bg-orange-500/25 transition cursor-pointer" onclick="window.openBattleSpectator(\'' + c.challenge_id + '\')">' + (window.MTRIcons ? window.MTRIcons.svg('eye', { size: 12, className: 'inline-block align-[-1px] mr-1' }) : '') + 'Ver en vivo</button>'
                         : '<button type="button" class="flex-shrink-0 px-2.5 py-1.5 rounded-lg text-[11px] font-bold bg-orange-500/15 border border-orange-500/30 text-orange-300 hover:bg-orange-500/25 transition cursor-pointer" onclick="window.checkChallengeResultNow(\'' + c.challenge_id + '\', this)">Ver estado</button>';
                 } else if (c.status === 'pending') {
-                    // Antes solo había "Cancelar" -- reportado en vivo que
-                    // no había forma de volver a llegar al link del desafío
-                    // desde acá. "Copiar link" reusa la misma función global
-                    // que ya usa la vista de Desafío Social para esto mismo.
-                    var pendingLink = window.location.origin + window.location.pathname + '?challenge=' + c.challenge_id;
+                    // Antes tenía "Copiar link" -- pero eso copiaba en
+                    // silencio sin ninguna confirmación visual de a dónde
+                    // fue, y el pedido explícito fue "un botón que diga Ver
+                    // o Ir... y que al presionarlo me dirija ahí". "Ver"
+                    // cierra la campana y entra a Desafío Social, la MISMA
+                    // pantalla que ya arma esta tarjeta completa (imagen,
+                    // canción, apuesta) con su propio botón de copiar link
+                    // -- exactamente el destino que ya prometía el aviso de
+                    // bienvenida ('Entrá a "Desafío Social" para ver el
+                    // link o cancelarlo').
                     actionHtml = '<div class="flex flex-col gap-1.5 flex-shrink-0">' +
-                        '<button type="button" class="px-2.5 py-1.5 rounded-lg text-[11px] font-bold bg-cyan-500/15 border border-cyan-500/30 text-cyan-300 hover:bg-cyan-500/25 transition cursor-pointer" onclick="window.copyPendingChallengeLink(\'' + pendingLink + '\')">' + (window.MTRIcons ? window.MTRIcons.svg('link', { size: 12, className: 'inline-block align-[-1px] mr-1' }) : '') + 'Copiar link</button>' +
+                        '<button type="button" class="px-2.5 py-1.5 rounded-lg text-[11px] font-bold bg-cyan-500/15 border border-cyan-500/30 text-cyan-300 hover:bg-cyan-500/25 transition cursor-pointer" onclick="window.closeChallengeNotifications(); if (typeof selectMode === \'function\') selectMode(\'social\');">' + (window.MTRIcons ? window.MTRIcons.svg('eye', { size: 12, className: 'inline-block align-[-1px] mr-1' }) : '') + 'Ver</button>' +
                         '<button type="button" class="px-2.5 py-1.5 rounded-lg text-[11px] font-bold bg-red-500/15 border border-red-500/30 text-red-300 hover:bg-red-500/25 transition cursor-pointer" onclick="window.cancelPendingChallengeFromBell(\'' + c.challenge_id + '\', this)">Cancelar</button>' +
                     '</div>';
                 } else {
@@ -2763,20 +2768,17 @@
             // también reflejada acá para que la campana no contradiga ese
             // aviso.
             var roomCard = lastRoomEntry
-                ? (function () {
-                    var roomLink = window.location.origin + window.location.pathname + '?room=' + lastRoomEntry.room_code;
-                    return '<div class="rounded-xl border border-white/10 bg-white/[0.03] p-3 flex items-center gap-3">' +
-                        '<div class="flex-shrink-0">' + (window.MTRIcons ? window.MTRIcons.badge('link', { color: 'cyan', badgeSize: 40, size: 20 }) : '') + '</div>' +
-                        '<div class="flex-1 min-w-0">' +
-                            '<p class="text-white text-sm font-bold">Sala Privada abierta</p>' +
-                            '<p class="text-gray-400 text-xs mt-0.5">Código ' + lastRoomEntry.room_code + ' · esperando que alguien se una</p>' +
-                        '</div>' +
-                        '<div class="flex flex-col gap-1.5 flex-shrink-0">' +
-                            '<button type="button" class="px-2.5 py-1.5 rounded-lg text-[11px] font-bold bg-cyan-500/15 border border-cyan-500/30 text-cyan-300 hover:bg-cyan-500/25 transition cursor-pointer" onclick="window.copyPendingChallengeLink(\'' + roomLink + '\')">' + (window.MTRIcons ? window.MTRIcons.svg('link', { size: 12, className: 'inline-block align-[-1px] mr-1' }) : '') + 'Copiar link</button>' +
-                            '<button type="button" class="px-2.5 py-1.5 rounded-lg text-[11px] font-bold bg-red-500/15 border border-red-500/30 text-red-300 hover:bg-red-500/25 transition cursor-pointer" onclick="window.cancelRoomFromBell(\'' + lastRoomEntry.room_code + '\', this)">Cancelar</button>' +
-                        '</div>' +
-                    '</div>';
-                })()
+                ? '<div class="rounded-xl border border-white/10 bg-white/[0.03] p-3 flex items-center gap-3">' +
+                    '<div class="flex-shrink-0">' + (window.MTRIcons ? window.MTRIcons.badge('link', { color: 'cyan', badgeSize: 40, size: 20 }) : '') + '</div>' +
+                    '<div class="flex-1 min-w-0">' +
+                        '<p class="text-white text-sm font-bold">Sala Privada abierta</p>' +
+                        '<p class="text-gray-400 text-xs mt-0.5">Código ' + lastRoomEntry.room_code + ' · esperando que alguien se una</p>' +
+                    '</div>' +
+                    '<div class="flex flex-col gap-1.5 flex-shrink-0">' +
+                        '<button type="button" class="px-2.5 py-1.5 rounded-lg text-[11px] font-bold bg-cyan-500/15 border border-cyan-500/30 text-cyan-300 hover:bg-cyan-500/25 transition cursor-pointer" onclick="window.closeChallengeNotifications(); if (typeof selectMode === \'function\') selectMode(\'private\');">' + (window.MTRIcons ? window.MTRIcons.svg('eye', { size: 12, className: 'inline-block align-[-1px] mr-1' }) : '') + 'Ver</button>' +
+                        '<button type="button" class="px-2.5 py-1.5 rounded-lg text-[11px] font-bold bg-red-500/15 border border-red-500/30 text-red-300 hover:bg-red-500/25 transition cursor-pointer" onclick="window.cancelRoomFromBell(\'' + lastRoomEntry.room_code + '\', this)">Cancelar</button>' +
+                    '</div>' +
+                '</div>'
                 : '';
 
             var tournamentCard = lastTournamentEntry
