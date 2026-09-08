@@ -1359,7 +1359,21 @@
                     <label for="roomInviteLink" class="text-sm text-gray-400 mb-1 block">Compartí este link para invitar a alguien</label>
                     <div class="flex gap-2">
                         <input id="roomInviteLink" type="text" readonly class="flex-1 px-3 py-2 rounded-lg bg-black/40 border border-white/10 text-white text-sm">
-                        <button type="button" onclick="copyRoomLink()" class="px-4 py-2 rounded-lg text-sm font-bold bg-gradient-to-r from-cyan-500 to-fuchsia-500 text-white hover:opacity-90 shadow-lg shadow-cyan-500/20 transition cursor-pointer whitespace-nowrap"><span data-mtr-icon="copy" data-mtr-plain data-mtr-size="16" style="display:inline-flex;vertical-align:-3px;margin-right:4px"></span>Copiar y compartir</button>
+                        <button type="button" onclick="copyRoomLink()" class="px-4 py-2 rounded-lg text-sm font-bold bg-gradient-to-r from-cyan-500 to-fuchsia-500 text-white hover:opacity-90 shadow-lg shadow-cyan-500/20 transition cursor-pointer whitespace-nowrap"><span data-mtr-icon="copy" data-mtr-plain data-mtr-size="16" style="display:inline-flex;vertical-align:-3px;margin-right:4px"></span>Copiar link</button>
+                    </div>
+                </div>
+                <!-- Mismo patrón de "compartir en redes" que ya tiene Desafío
+                     Social (shareChallenge() es genérica, no específica de
+                     ese modo) -- pedido explícito del usuario: la pantalla
+                     de la sala debe indicar el flujo de compartir, no solo
+                     un botón de copiar suelto. -->
+                <div class="mb-6">
+                    <p class="text-xs text-gray-500 mb-2 text-center">o compartir directo en:</p>
+                    <div class="flex flex-wrap justify-center gap-2">
+                        <button type="button" onclick="shareChallenge('whatsapp', document.getElementById('roomInviteLink').value)" class="px-3 py-1.5 rounded-lg text-xs font-semibold bg-green-500/15 border border-green-500/30 text-green-400 hover:bg-green-500/25 transition cursor-pointer flex items-center gap-1.5"><span data-mtr-icon="whatsapp" data-mtr-plain data-mtr-size="14"></span>WhatsApp</button>
+                        <button type="button" onclick="shareChallenge('telegram', document.getElementById('roomInviteLink').value)" class="px-3 py-1.5 rounded-lg text-xs font-semibold bg-cyan-500/15 border border-cyan-500/30 text-cyan-400 hover:bg-cyan-500/25 transition cursor-pointer flex items-center gap-1.5"><span data-mtr-icon="telegram" data-mtr-plain data-mtr-size="14"></span>Telegram</button>
+                        <button type="button" onclick="shareChallenge('twitter', document.getElementById('roomInviteLink').value)" class="px-3 py-1.5 rounded-lg text-xs font-semibold bg-blue-500/15 border border-blue-500/30 text-blue-400 hover:bg-blue-500/25 transition cursor-pointer flex items-center gap-1.5"><span data-mtr-icon="twitterX" data-mtr-plain data-mtr-size="14"></span>Twitter</button>
+                        <button type="button" onclick="shareChallenge('facebook', document.getElementById('roomInviteLink').value)" class="px-3 py-1.5 rounded-lg text-xs font-semibold bg-blue-600/15 border border-blue-600/30 text-blue-500 hover:bg-blue-600/25 transition cursor-pointer flex items-center gap-1.5"><span data-mtr-icon="facebook" data-mtr-plain data-mtr-size="14"></span>Facebook</button>
                     </div>
                 </div>
                 <div class="flex items-center justify-center gap-2 mb-6 text-sm">
@@ -2735,18 +2749,13 @@
                         ? '<button type="button" class="flex-shrink-0 px-2.5 py-1.5 rounded-lg text-[11px] font-bold bg-orange-500/15 border border-orange-500/30 text-orange-300 hover:bg-orange-500/25 transition cursor-pointer" onclick="window.openBattleSpectator(\'' + c.challenge_id + '\')">' + (window.MTRIcons ? window.MTRIcons.svg('eye', { size: 12, className: 'inline-block align-[-1px] mr-1' }) : '') + 'Ver en vivo</button>'
                         : '<button type="button" class="flex-shrink-0 px-2.5 py-1.5 rounded-lg text-[11px] font-bold bg-orange-500/15 border border-orange-500/30 text-orange-300 hover:bg-orange-500/25 transition cursor-pointer" onclick="window.checkChallengeResultNow(\'' + c.challenge_id + '\', this)">Ver estado</button>';
                 } else if (c.status === 'pending') {
-                    // Antes tenía "Copiar link" -- pero eso copiaba en
-                    // silencio sin ninguna confirmación visual de a dónde
-                    // fue, y el pedido explícito fue "un botón que diga Ver
-                    // o Ir... y que al presionarlo me dirija ahí". "Ver"
-                    // cierra la campana y entra a Desafío Social, la MISMA
-                    // pantalla que ya arma esta tarjeta completa (imagen,
-                    // canción, apuesta) con su propio botón de copiar link
-                    // -- exactamente el destino que ya prometía el aviso de
-                    // bienvenida ('Entrá a "Desafío Social" para ver el
-                    // link o cancelarlo').
+                    // "Ir" cierra la campana y abre directo la pantalla real
+                    // de compartir (link + WhatsApp/Telegram/Twitter/
+                    // Facebook), la misma que arma resumeSocialChallengeShare()
+                    // en la vista de Desafío Social -- no un simple copiar en
+                    // silencio.
                     actionHtml = '<div class="flex flex-col gap-1.5 flex-shrink-0">' +
-                        '<button type="button" class="px-2.5 py-1.5 rounded-lg text-[11px] font-bold bg-cyan-500/15 border border-cyan-500/30 text-cyan-300 hover:bg-cyan-500/25 transition cursor-pointer" onclick="window.closeChallengeNotifications(); if (typeof selectMode === \'function\') selectMode(\'social\');">' + (window.MTRIcons ? window.MTRIcons.svg('eye', { size: 12, className: 'inline-block align-[-1px] mr-1' }) : '') + 'Ver</button>' +
+                        '<button type="button" class="px-2.5 py-1.5 rounded-lg text-[11px] font-bold bg-cyan-500/15 border border-cyan-500/30 text-cyan-300 hover:bg-cyan-500/25 transition cursor-pointer" onclick="window.closeChallengeNotifications(); window.resumeSocialChallengeShare(\'' + c.challenge_id + '\');">' + (window.MTRIcons ? window.MTRIcons.svg('eye', { size: 12, className: 'inline-block align-[-1px] mr-1' }) : '') + 'Ir</button>' +
                         '<button type="button" class="px-2.5 py-1.5 rounded-lg text-[11px] font-bold bg-red-500/15 border border-red-500/30 text-red-300 hover:bg-red-500/25 transition cursor-pointer" onclick="window.cancelPendingChallengeFromBell(\'' + c.challenge_id + '\', this)">Cancelar</button>' +
                     '</div>';
                 } else {
@@ -2775,7 +2784,7 @@
                         '<p class="text-gray-400 text-xs mt-0.5">Código ' + lastRoomEntry.room_code + ' · esperando que alguien se una</p>' +
                     '</div>' +
                     '<div class="flex flex-col gap-1.5 flex-shrink-0">' +
-                        '<button type="button" class="px-2.5 py-1.5 rounded-lg text-[11px] font-bold bg-cyan-500/15 border border-cyan-500/30 text-cyan-300 hover:bg-cyan-500/25 transition cursor-pointer" onclick="window.closeChallengeNotifications(); if (typeof selectMode === \'function\') selectMode(\'private\');">' + (window.MTRIcons ? window.MTRIcons.svg('eye', { size: 12, className: 'inline-block align-[-1px] mr-1' }) : '') + 'Ver</button>' +
+                        '<button type="button" class="px-2.5 py-1.5 rounded-lg text-[11px] font-bold bg-cyan-500/15 border border-cyan-500/30 text-cyan-300 hover:bg-cyan-500/25 transition cursor-pointer" onclick="window.closeChallengeNotifications(); window.resumeOpenPrivateRoom();">' + (window.MTRIcons ? window.MTRIcons.svg('eye', { size: 12, className: 'inline-block align-[-1px] mr-1' }) : '') + 'Ir</button>' +
                         '<button type="button" class="px-2.5 py-1.5 rounded-lg text-[11px] font-bold bg-red-500/15 border border-red-500/30 text-red-300 hover:bg-red-500/25 transition cursor-pointer" onclick="window.cancelRoomFromBell(\'' + lastRoomEntry.room_code + '\', this)">Cancelar</button>' +
                     '</div>' +
                 '</div>'
@@ -5126,7 +5135,7 @@
                     '<div class="mt-1 flex flex-wrap gap-1.5">' + genreBadge + expiryBadge + '</div>' +
                     '</div>' +
                     '<div class="flex flex-col gap-1.5 flex-shrink-0">' +
-                    '<button type="button" onclick="copyPendingChallengeLink(\'' + link + '\')" class="px-3 py-1.5 rounded-lg text-xs font-medium bg-cyan-500/15 border border-cyan-500/30 text-cyan-300 hover:bg-cyan-500/25 transition cursor-pointer flex items-center gap-1">' + (window.MTRIcons ? window.MTRIcons.svg('copy', {size:13}) : '') + ' Copiar link</button>' +
+                    '<button type="button" onclick="window.resumeSocialChallengeShare(\'' + c.challenge_id + '\')" class="px-3 py-1.5 rounded-lg text-xs font-medium bg-cyan-500/15 border border-cyan-500/30 text-cyan-300 hover:bg-cyan-500/25 transition cursor-pointer flex items-center gap-1">' + (window.MTRIcons ? window.MTRIcons.svg('eye', {size:13}) : '') + ' Ir</button>' +
                     '<button type="button" onclick="if(typeof GameEngine!==\'undefined\')GameEngine.cancelSocialChallenge(\'' + c.challenge_id + '\').then(renderMyPendingChallenges)" class="px-3 py-1.5 rounded-lg text-xs font-medium bg-red-500/10 border border-red-500/30 text-red-300 hover:bg-red-500/20 transition cursor-pointer">Cancelar</button>' +
                     '</div>' +
                     '</div>';
@@ -5139,6 +5148,35 @@
             container.classList.remove('hidden');
         }
         window.renderMyPendingChallenges = renderMyPendingChallenges;
+
+        // Mismo criterio que resumeOpenPrivateRoom() para Sala Privada: en
+        // vez de copiar el link en silencio, "Ir" lleva a la pantalla real
+        // que ya arma GameEngine.showSocialChallengeShareUI() al crear un
+        // desafío -- imagen, link, y botones de WhatsApp/Telegram/Twitter/
+        // Facebook -- reconstruida acá con los mismos datos que ya trae
+        // loadMyPendingChallenges().
+        window.resumeSocialChallengeShare = async function (challengeId) {
+            if (typeof GameEngine === 'undefined' || typeof GameEngine.loadMyPendingChallenges !== 'function') return;
+            var challenges = await GameEngine.loadMyPendingChallenges();
+            var c = (challenges || []).find(function (x) { return x.challenge_id === challengeId; });
+            if (!c) {
+                if (typeof showToast === 'function') showToast('Ese desafío ya no está pendiente (puede que ya lo hayan aceptado, o ya se haya cancelado).', 'info');
+                if (typeof renderMyPendingChallenges === 'function') renderMyPendingChallenges();
+                return;
+            }
+            var link = window.location.origin + window.location.pathname + '?challenge=' + c.challenge_id;
+            var song = { image: c.challenger_song_image, name: c.challenger_song_name || 'Sin título', artist: c.challenger_song_artist || '' };
+            // Se puede llegar acá desde cualquier pantalla (ej. la campana
+            // abierta desde el inicio, antes de elegir ningún modo) --
+            // ocultar todo lo demás igual que hace selectMode() al cambiar
+            // de modo, antes de que showSocialChallengeShareUI() arme su
+            // propia pantalla encima.
+            document.getElementById('modeSelector')?.classList.add('hidden');
+            document.getElementById('tournamentHub')?.classList.add('hidden');
+            document.getElementById('myPendingChallenges')?.classList.add('hidden');
+            window.currentMode = 'social';
+            GameEngine.showSocialChallengeShareUI(c, link, song, c.bet_amount);
+        };
 
         function copyPendingChallengeLink(link) {
             if (navigator.clipboard && navigator.clipboard.writeText) {
@@ -5180,7 +5218,7 @@
                 '<p class="text-gray-400 text-xs truncate">' + (room.player1_song_artist || '') + ' · ' + Number(room.player1_bet) + ' créditos · código ' + room.room_code + ' · ' + created + '</p>' +
                 '</div>' +
                 '<div class="flex flex-col gap-1.5 flex-shrink-0">' +
-                '<button type="button" onclick="copyPendingChallengeLink(\'' + link + '\')" class="px-3 py-1.5 rounded-lg text-xs font-medium bg-cyan-500/15 border border-cyan-500/30 text-cyan-300 hover:bg-cyan-500/25 transition cursor-pointer flex items-center gap-1">' + (window.MTRIcons ? window.MTRIcons.svg('copy', {size:13}) : '') + ' Copiar link</button>' +
+                '<button type="button" onclick="window.resumeOpenPrivateRoom()" class="px-3 py-1.5 rounded-lg text-xs font-medium bg-cyan-500/15 border border-cyan-500/30 text-cyan-300 hover:bg-cyan-500/25 transition cursor-pointer flex items-center gap-1">' + (window.MTRIcons ? window.MTRIcons.svg('eye', {size:13}) : '') + ' Ir</button>' +
                 '<button type="button" onclick="if(typeof GameEngine!==\'undefined\')GameEngine.leavePrivateRoom(\'' + room.room_code + '\').then(renderMyOpenPrivateRoom)" class="px-3 py-1.5 rounded-lg text-xs font-medium bg-red-500/10 border border-red-500/30 text-red-300 hover:bg-red-500/20 transition cursor-pointer">Cancelar</button>' +
                 '</div>' +
                 '</div>' +
@@ -5188,6 +5226,53 @@
             container.classList.remove('hidden');
         }
         window.renderMyOpenPrivateRoom = renderMyOpenPrivateRoom;
+
+        // Volver a mostrar la pantalla real de "Esperando rival" (#roomScreen,
+        // con link + compartir en redes + código) para una sala que ya existe
+        // -- distinto de crear una sala nueva. Pedido explícito del usuario:
+        // el botón de la lista no debe copiar el link en silencio, tiene que
+        // "llevarte" a la pantalla que explica cómo compartirlo.
+        window.resumeOpenPrivateRoom = async function () {
+            if (typeof GameEngine === 'undefined' || typeof GameEngine.loadMyOpenPrivateRoom !== 'function') return;
+            var room = await GameEngine.loadMyOpenPrivateRoom();
+            if (!room) {
+                if (typeof showToast === 'function') showToast('Esa sala ya no está abierta (puede que ya se haya unido alguien, o ya esté cerrada).', 'info');
+                if (typeof renderMyOpenPrivateRoom === 'function') renderMyOpenPrivateRoom();
+                return;
+            }
+            GameEngine.currentRoomCode = room.room_code;
+            GameEngine.currentPrivateMatchId = room.id;
+
+            // Se puede llegar acá desde cualquier pantalla (ej. la campana
+            // abierta desde el inicio, antes de elegir ningún modo) -- ocultar
+            // también el hub de torneos por las dudas, igual que hace
+            // selectMode() al cambiar de modo.
+            document.getElementById('modeSelector')?.classList.add('hidden');
+            document.getElementById('songSelection')?.classList.add('hidden');
+            document.getElementById('tournamentHub')?.classList.add('hidden');
+            document.getElementById('myOpenPrivateRoom')?.classList.add('hidden');
+            window.currentMode = 'private';
+            var roomScreen = document.getElementById('roomScreen');
+            if (!roomScreen) return;
+            roomScreen.classList.remove('hidden');
+
+            var linkEl = document.getElementById('roomInviteLink');
+            if (linkEl) linkEl.value = window.location.origin + window.location.pathname + '?room=' + room.room_code;
+            var codeEl = document.getElementById('roomCode');
+            if (codeEl) codeEl.textContent = room.room_code;
+
+            // Re-arrancar el polling de "¿ya se unió alguien?" -- se detiene
+            // solo si se sale de esta pantalla sin pasar por leaveRoom(), así
+            // que se limpia cualquier intervalo previo antes de arrancar uno
+            // nuevo para no duplicar la consulta cada 2s.
+            if (GameEngine.roomWaitInterval) clearInterval(GameEngine.roomWaitInterval);
+            GameEngine.waitForOpponent(room.id);
+
+            if (typeof window.scrollToSection === 'function') {
+                window.scrollToSection('roomScreen', { delay: 100 });
+            }
+            if (typeof window.mtr2Sync === 'function') window.mtr2Sync();
+        };
 
         function avatarPickerHtml() {
             return '<div class="mb-3"><p class="text-xs text-gray-400 mb-1.5">Elegí tu avatar</p><div class="flex flex-wrap gap-2">' +
