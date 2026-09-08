@@ -2147,12 +2147,19 @@ const GameEngine = {
 
             // Ventana de 14 días: evita que la lista crezca sin límite con
             // desafíos viejos ya vistos hace mucho.
+            // Incluye 'pending' además de 'accepted'/'expired' -- antes la
+            // campanita solo mostraba desafíos una vez que YA habían
+            // cambiado de estado, dejando afuera los que siguen esperando
+            // respuesta. Eso generaba una inconsistencia real reportada en
+            // vivo: el aviso de bienvenida decía "tenés 1 desafío
+            // esperando" pero la campana mostraba "no hay novedades" --
+            // dos fuentes de la misma información en desacuerdo.
             const cutoff = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString();
             const { data, error } = await supabaseClient
                 .from('social_challenges')
                 .select('*')
                 .eq('challenger_id', session.user.id)
-                .in('status', ['accepted', 'expired'])
+                .in('status', ['pending', 'accepted', 'expired'])
                 .gte('created_at', cutoff)
                 .order('created_at', { ascending: false })
                 .limit(20);

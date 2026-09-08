@@ -2620,7 +2620,16 @@
         }
 
         var lastEntries = [];
+        var lastRoomEntry = null;
+        var lastTournamentEntry = null;
 
+        // La campana antes solo reflejaba desafíos que YA habían cambiado
+        // de estado (aceptado/vencido/resultado) -- ver cambio de filtro en
+        // loadMyChallengeUpdates. Ahora además trae la Sala Privada abierta
+        // y el torneo activo, las mismas dos fuentes que ya usa el aviso de
+        // bienvenida (auth-system.js), para que la campana sea el reflejo
+        // completo de "todo lo que tenés pendiente" y no muestre "no hay
+        // novedades" mientras ese mismo aviso dice lo contrario.
         async function refreshChallengeBell(opts) {
             opts = opts || {};
             if (typeof window.GameEngine === 'undefined' || typeof window.GameEngine.loadMyChallengeUpdates !== 'function') return;
@@ -2629,15 +2638,35 @@
                 entries = await window.GameEngine.loadMyChallengeUpdates();
             } catch (e) {
                 console.warn('[challengeBell] refresh falló:', e && e.message);
-                return;
+                entries = [];
             }
             lastEntries = entries || [];
+
+            try {
+                lastRoomEntry = (typeof window.GameEngine.loadMyOpenPrivateRoom === 'function')
+                    ? await window.GameEngine.loadMyOpenPrivateRoom()
+                    : null;
+            } catch (e) {
+                console.warn('[challengeBell] sala privada falló:', e && e.message);
+                lastRoomEntry = null;
+            }
+
+            try {
+                lastTournamentEntry = (typeof window.GameEngine.loadMyActiveTournamentEnrollment === 'function')
+                    ? await window.GameEngine.loadMyActiveTournamentEnrollment()
+                    : null;
+            } catch (e) {
+                console.warn('[challengeBell] torneo falló:', e && e.message);
+                lastTournamentEntry = null;
+            }
 
             var seen = getSeenMap();
             var unread = 0;
             lastEntries.forEach(function (entry) {
                 if (seen[entry.challenge.challenge_id] !== stateSignature(entry)) unread++;
             });
+            if (lastRoomEntry && seen['room:' + lastRoomEntry.room_code] !== 'waiting') unread++;
+            if (lastTournamentEntry && seen['tournament:' + lastTournamentEntry.id] !== lastTournamentEntry.status) unread++;
 
             document.querySelectorAll('.challenge-bell-badge').forEach(function (badge) {
                 if (unread > 0) {
@@ -2661,12 +2690,12 @@
             var list = document.getElementById('challengeBellList');
             if (!list) return;
 
-            if (!lastEntries.length) {
+            if (!lastEntries.length && !lastRoomEntry && !lastTournamentEntry) {
                 list.innerHTML = '<p class="text-center text-gray-500 text-sm py-8">Todavía no hay novedades. Acá vas a ver cuándo alguien acepte uno de tus desafíos, y el resultado de la batalla.</p>';
                 return;
             }
 
-            list.innerHTML = lastEntries.map(function (entry) {
+            var challengeCards = lastEntries.map(function (entry) {
                 var c = entry.challenge;
                 var m = entry.match;
                 var iWon = entry.finished && m && m.winner === 1;
@@ -2686,6 +2715,11 @@
                     colorKey = 'orange';
                     title = 'Aceptaron tu desafío';
                     sub = 'vs ' + opponentLabel + ' · la batalla está en curso';
+                } else if (c.status === 'pending') {
+                    iconName = 'clock';
+                    colorKey = 'cyan';
+                    title = 'Esperando que alguien acepte';
+                    sub = 'Todavía nadie respondió tu desafío social';
                 } else {
                     iconName = 'clock';
                     colorKey = 'gray';
@@ -2695,27 +2729,82 @@
 
                 var badgeHtml = window.MTRIcons ? window.MTRIcons.badge(iconName, { color: colorKey, badgeSize: 40, size: 20 }) : '';
 
+                var actionHtml;
+                if (!entry.finished && c.status === 'accepted') {
+                    actionHtml = m && m.id
+                        ? '<button type="button" class="flex-shrink-0 px-2.5 py-1.5 rounded-lg text-[11px] font-bold bg-orange-500/15 border border-orange-500/30 text-orange-300 hover:bg-orange-500/25 transition cursor-pointer" onclick="window.openBattleSpectator(\'' + c.challenge_id + '\')">' + (window.MTRIcons ? window.MTRIcons.svg('eye', { size: 12, className: 'inline-block align-[-1px] mr-1' }) : '') + 'Ver en vivo</button>'
+                        : '<button type="button" class="flex-shrink-0 px-2.5 py-1.5 rounded-lg text-[11px] font-bold bg-orange-500/15 border border-orange-500/30 text-orange-300 hover:bg-orange-500/25 transition cursor-pointer" onclick="window.checkChallengeResultNow(\'' + c.challenge_id + '\', this)">Ver estado</button>';
+                } else if (c.status === 'pending') {
+                    actionHtml = '<button type="button" class="flex-shrink-0 px-2.5 py-1.5 rounded-lg text-[11px] font-bold bg-red-500/15 border border-red-500/30 text-red-300 hover:bg-red-500/25 transition cursor-pointer" onclick="window.cancelPendingChallengeFromBell(\'' + c.challenge_id + '\', this)">Cancelar</button>';
+                } else {
+                    actionHtml = '<span class="flex-shrink-0 text-[10px] text-gray-500">' + fmtWhen(c.created_at) + '</span>';
+                }
+
                 return '<div class="rounded-xl border border-white/10 bg-white/[0.03] p-3 flex items-center gap-3">' +
                     '<div class="flex-shrink-0">' + badgeHtml + '</div>' +
                     '<div class="flex-1 min-w-0">' +
                         '<p class="text-white text-sm font-bold">' + title + '</p>' +
                         '<p class="text-gray-400 text-xs mt-0.5">' + sub + '</p>' +
                     '</div>' +
-                    (!entry.finished && c.status === 'accepted'
-                        ? (m && m.id
-                            ? '<button type="button" class="flex-shrink-0 px-2.5 py-1.5 rounded-lg text-[11px] font-bold bg-orange-500/15 border border-orange-500/30 text-orange-300 hover:bg-orange-500/25 transition cursor-pointer" onclick="window.openBattleSpectator(\'' + c.challenge_id + '\')">' + (window.MTRIcons ? window.MTRIcons.svg('eye', { size: 12, className: 'inline-block align-[-1px] mr-1' }) : '') + 'Ver en vivo</button>'
-                            : '<button type="button" class="flex-shrink-0 px-2.5 py-1.5 rounded-lg text-[11px] font-bold bg-orange-500/15 border border-orange-500/30 text-orange-300 hover:bg-orange-500/25 transition cursor-pointer" onclick="window.checkChallengeResultNow(\'' + c.challenge_id + '\', this)">Ver estado</button>')
-                        : '<span class="flex-shrink-0 text-[10px] text-gray-500">' + fmtWhen(c.created_at) + '</span>') +
+                    actionHtml +
                 '</div>';
-            }).join('');
+            });
+
+            // Sala Privada abierta y torneo activo -- misma info que ya
+            // muestra el aviso de bienvenida (auth-system.js), ahora
+            // también reflejada acá para que la campana no contradiga ese
+            // aviso.
+            var roomCard = lastRoomEntry
+                ? '<div class="rounded-xl border border-white/10 bg-white/[0.03] p-3 flex items-center gap-3">' +
+                    '<div class="flex-shrink-0">' + (window.MTRIcons ? window.MTRIcons.badge('link', { color: 'cyan', badgeSize: 40, size: 20 }) : '') + '</div>' +
+                    '<div class="flex-1 min-w-0">' +
+                        '<p class="text-white text-sm font-bold">Sala Privada abierta</p>' +
+                        '<p class="text-gray-400 text-xs mt-0.5">Código ' + lastRoomEntry.room_code + ' · esperando que alguien se una</p>' +
+                    '</div>' +
+                    '<button type="button" class="flex-shrink-0 px-2.5 py-1.5 rounded-lg text-[11px] font-bold bg-red-500/15 border border-red-500/30 text-red-300 hover:bg-red-500/25 transition cursor-pointer" onclick="window.cancelRoomFromBell(\'' + lastRoomEntry.room_code + '\', this)">Cancelar</button>' +
+                '</div>'
+                : '';
+
+            var tournamentCard = lastTournamentEntry
+                ? '<div class="rounded-xl border border-white/10 bg-white/[0.03] p-3 flex items-center gap-3">' +
+                    '<div class="flex-shrink-0">' + (window.MTRIcons ? window.MTRIcons.badge('trophy', { color: 'orange', badgeSize: 40, size: 20 }) : '') + '</div>' +
+                    '<div class="flex-1 min-w-0">' +
+                        '<p class="text-white text-sm font-bold">Seguís inscripto en un torneo</p>' +
+                        '<p class="text-gray-400 text-xs mt-0.5">' + (lastTournamentEntry.name || 'Torneo') + '</p>' +
+                    '</div>' +
+                '</div>'
+                : '';
+
+            list.innerHTML = challengeCards.join('') + roomCard + tournamentCard;
 
             // Todo lo que se acaba de mostrar cuenta como "visto" -- apaga
             // el conteo de la campana hasta el próximo cambio real.
             var seen = getSeenMap();
             lastEntries.forEach(function (entry) { seen[entry.challenge.challenge_id] = stateSignature(entry); });
+            if (lastRoomEntry) seen['room:' + lastRoomEntry.room_code] = 'waiting';
+            if (lastTournamentEntry) seen['tournament:' + lastTournamentEntry.id] = lastTournamentEntry.status;
             setSeenMap(seen);
             document.querySelectorAll('.challenge-bell-badge').forEach(function (badge) { badge.classList.add('hidden'); });
         }
+
+        // Cancelar desde la campana -- reusa exactamente la misma lógica de
+        // reembolso que ya usan las vistas de Desafío Social / Sala
+        // Privada, para no duplicar esa lógica sensible a dinero acá.
+        window.cancelPendingChallengeFromBell = async function (challengeId, btnEl) {
+            if (btnEl) { btnEl.disabled = true; btnEl.textContent = 'Cancelando...'; }
+            if (typeof window.GameEngine === 'undefined' || typeof window.GameEngine.cancelSocialChallenge !== 'function') return;
+            // cancelSocialChallenge ya muestra su propio toast de
+            // éxito/error -- no duplicar acá, solo refrescar la lista.
+            await window.GameEngine.cancelSocialChallenge(challengeId);
+            await refreshChallengeBell({ renderList: true });
+        };
+
+        window.cancelRoomFromBell = async function (roomCode, btnEl) {
+            if (btnEl) { btnEl.disabled = true; btnEl.textContent = 'Cancelando...'; }
+            if (typeof window.GameEngine === 'undefined' || typeof window.GameEngine.leavePrivateRoom !== 'function') return;
+            await window.GameEngine.leavePrivateRoom(roomCode);
+            await refreshChallengeBell({ renderList: true });
+        };
 
         // Botón "Ver estado" de un desafío aceptado-pero-sin-terminar:
         // vuelve a consultar en el momento en vez de esperar al próximo
