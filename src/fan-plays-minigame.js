@@ -9,10 +9,13 @@
  * archivo depende de que fan-plays-scoring.js ya esté cargado
  * (window.FanPlaysScoring).
  *
- * Refinado dos veces a pedido del usuario: primero estrellas + destello
+ * Refinado tres veces a pedido del usuario: primero estrellas + destello
  * + doble puntaje "perfecto" + sonido láser; después aspecto 3D
  * (degradés, brillo, giro suave) + destello con chispas + un estallido
- * estilo cómic ("¡PERFECTO!") cuando las dos estrellas coinciden.
+ * estilo cómic ("¡PERFECTO!") cuando las dos estrellas coinciden; y por
+ * último ondas de fondo tipo ecualizador (moviéndose todo el tiempo,
+ * de fondo en toda la pista) + una moneda MTR que salta al estilo
+ * "bloque de Mario Bros" cada vez que hay match perfecto.
  *
  * El puntaje que se calcula ACÁ es solo para el feedback visual
  * inmediato del jugador -- el que realmente vale (el que decide la
@@ -170,6 +173,56 @@
         ], { duration: 750, easing: 'cubic-bezier(.34,1.56,.64,1)' }).onfinish = function () { wrap.remove(); };
     }
 
+    // Mismo logo que ya usa el header de la app (ver index.html) -- así
+    // la moneda que salta es reconocible como "de verdad" MTR, no un
+    // ícono genérico de moneda.
+    var MTR_LOGO_URL = 'https://pink-blank-vicuna-260.mypinata.cloud/ipfs/bafybeiah2fffgw6y6aomfx5b5pgav7wedo3qdtqxqteg2glvmgzs6fpivu';
+
+    // Moneda MTR que salta al estilo "bloque de Mario Bros" -- pedido
+    // explícito del usuario -- en cada match perfecto. Gira sobre su eje
+    // (rotateY, necesita perspective en el padre, ver track.style más
+    // abajo) mientras sube, y se desvanece arriba en vez de caer.
+    function spawnMtrCoin(hostEl, leftPct) {
+        var size = 32;
+        var coin = document.createElement('div');
+        coin.style.cssText = 'position:absolute;top:50%;left:' + leftPct + '%;width:' + size + 'px;height:' + size + 'px;margin-left:-' + (size / 2) + 'px;margin-top:-' + (size / 2) + 'px;pointer-events:none;z-index:11;border-radius:50%;overflow:hidden;border:2px solid #fde047;box-shadow:0 0 10px rgba(250,204,21,0.85),0 2px 6px rgba(0,0,0,0.4);background:radial-gradient(circle,#fde047,#f59e0b);';
+        coin.innerHTML = '<img src="' + MTR_LOGO_URL + '" style="width:100%;height:100%;object-fit:cover;" alt="" onerror="this.remove()">';
+        hostEl.appendChild(coin);
+        coin.animate([
+            { transform: 'translateY(0) scale(0.4) rotateY(0deg)', opacity: 1, offset: 0 },
+            { transform: 'translateY(-44px) scale(1.15) rotateY(360deg)', opacity: 1, offset: 0.55 },
+            { transform: 'translateY(-56px) scale(1) rotateY(540deg)', opacity: 1, offset: 0.78 },
+            { transform: 'translateY(-38px) scale(0.7) rotateY(720deg)', opacity: 0, offset: 1 }
+        ], { duration: 700, easing: 'cubic-bezier(.2,.7,.3,1)' }).onfinish = function () { coin.remove(); };
+    }
+
+    // Ondas de fondo tipo ecualizador -- pedido explícito ("ondas
+    // vibrantes moviéndose" de fondo en todo el espacio de la animación).
+    // Dos capas, cada una con 2 ciclos de onda dibujados uno al lado del
+    // otro dentro del mismo viewBox -- animar transform:translateX() de
+    // 0% a -50% (con la Web Animations API, infinito) desplaza EXACTO un
+    // ciclo completo, así el loop no se nota. Puramente decorativo, con
+    // opacidad baja para no competir con las estrellas.
+    function waveTilePath(amplitude, yBase, w) {
+        var y = yBase, a = amplitude;
+        return 'M0,' + y +
+            ' C ' + (w * 0.125) + ',' + (y - a) + ' ' + (w * 0.375) + ',' + (y - a) + ' ' + (w * 0.5) + ',' + y +
+            ' C ' + (w * 0.625) + ',' + (y + a) + ' ' + (w * 0.875) + ',' + (y + a) + ' ' + w + ',' + y +
+            ' C ' + (w * 1.125) + ',' + (y - a) + ' ' + (w * 1.375) + ',' + (y - a) + ' ' + (w * 1.5) + ',' + y +
+            ' C ' + (w * 1.625) + ',' + (y + a) + ' ' + (w * 1.875) + ',' + (y + a) + ' ' + (w * 2) + ',' + y;
+    }
+
+    function waveBackgroundSvg() {
+        var tileW = 200, h = 52;
+        var wave1 = '<svg id="fanPlaysWave1" width="100%" height="100%" viewBox="0 0 ' + (tileW * 2) + ' ' + h + '" preserveAspectRatio="none" style="position:absolute;inset:0;">' +
+            '<path d="' + waveTilePath(9, h * 0.35, tileW) + '" stroke="rgba(34,211,238,0.4)" stroke-width="2" fill="none"/>' +
+        '</svg>';
+        var wave2 = '<svg id="fanPlaysWave2" width="100%" height="100%" viewBox="0 0 ' + (tileW * 2) + ' ' + h + '" preserveAspectRatio="none" style="position:absolute;inset:0;">' +
+            '<path d="' + waveTilePath(13, h * 0.68, tileW) + '" stroke="rgba(217,70,239,0.32)" stroke-width="2" fill="none"/>' +
+        '</svg>';
+        return '<div style="position:absolute;inset:0;overflow:hidden;pointer-events:none;">' + wave1 + wave2 + '</div>';
+    }
+
     const FanPlaysMinigame = {
         _raf: null,
         _active: false,
@@ -202,7 +255,8 @@
                 '<div class="text-center text-[11px] text-gray-400 mb-1">Tocá cuando la estrella que se desliza entre en la zona -- si coincide con la estrella fija, ¡doble puntaje!</div>' +
                 // overflow:visible a propósito -- el destello y el estallido
                 // cómic de un toque perfecto se salen del alto de la pista.
-                '<div id="fanPlaysTrack" style="position:relative;height:52px;border-radius:10px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);overflow:visible;cursor:pointer;touch-action:manipulation;">' +
+                '<div id="fanPlaysTrack" style="position:relative;height:52px;border-radius:10px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);overflow:visible;cursor:pointer;touch-action:manipulation;perspective:300px;">' +
+                    waveBackgroundSvg() +
                     '<div style="position:absolute;inset:0;border-radius:10px;overflow:hidden;">' +
                         '<div id="fanPlaysZone" style="position:absolute;top:0;bottom:0;background:linear-gradient(90deg,rgba(0,243,255,0.18),rgba(217,70,239,0.18));border-left:2px solid rgba(0,243,255,0.5);border-right:2px solid rgba(217,70,239,0.5);"></div>' +
                     '</div>' +
@@ -228,6 +282,15 @@
                 [{ transform: 'rotate(0deg)' }, { transform: 'rotate(360deg)' }],
                 { duration: 3400, iterations: Infinity, easing: 'linear' }
             );
+
+            // Scroll infinito de las dos ondas de fondo -- direcciones y
+            // velocidades distintas para que se sientan orgánicas, no un
+            // patrón mecánico repitiéndose igual.
+            var wave1El = containerEl.querySelector('#fanPlaysWave1');
+            var wave2El = containerEl.querySelector('#fanPlaysWave2');
+            this._waveAnims = [];
+            if (wave1El) this._waveAnims.push(wave1El.animate([{ transform: 'translateX(0%)' }, { transform: 'translateX(-50%)' }], { duration: 3200, iterations: Infinity, easing: 'linear' }));
+            if (wave2El) this._waveAnims.push(wave2El.animate([{ transform: 'translateX(-50%)' }, { transform: 'translateX(0%)' }], { duration: 4600, iterations: Infinity, easing: 'linear' }));
 
             function renderZoneFor(roundIndex) {
                 const center = S.zoneCenterForRound(usedSeed, roundIndex);
@@ -263,6 +326,7 @@
                     spawnFlash(track, indicatorPct, perfect);
                     if (perfect) {
                         spawnComicBurst(track, indicatorPct);
+                        spawnMtrCoin(track, indicatorPct);
                         targetStarEl.animate([{ filter: 'drop-shadow(0 0 3px rgba(255,255,255,0.35))' }, { filter: 'drop-shadow(0 0 16px rgba(250,204,21,1))' }, { filter: 'drop-shadow(0 0 3px rgba(255,255,255,0.35))' }], { duration: 500 });
                     }
                 }
@@ -298,6 +362,7 @@
                     track.removeEventListener('mousedown', handleTap);
                     track.removeEventListener('touchstart', handleTap);
                     if (this._spinAnim) { this._spinAnim.cancel(); this._spinAnim = null; }
+                    if (this._waveAnims) { this._waveAnims.forEach(function (a) { a.cancel(); }); this._waveAnims = null; }
                     var finalSum = resolvedRounds.reduce(function (a, s) { return a + (s || 0); }, 0);
                     var finalAvg = Math.round((finalSum / totalRounds) * 10) / 10;
                     var roundsHit = resolvedRounds.filter(function (s) { return s !== null; }).length;
@@ -326,6 +391,10 @@
             if (this._spinAnim) {
                 this._spinAnim.cancel();
                 this._spinAnim = null;
+            }
+            if (this._waveAnims) {
+                this._waveAnims.forEach(function (a) { a.cancel(); });
+                this._waveAnims = null;
             }
         },
 
