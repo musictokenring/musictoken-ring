@@ -418,15 +418,28 @@
             const lastScoreEl = containerEl.querySelector('#fanPlaysLastScore');
             const roundCountEl = containerEl.querySelector('#fanPlaysRoundCount');
 
-            // Pedido explícito: que la sección del juego quede plenamente
-            // visible para el jugador -- createBattleUI() ya hace scroll
-            // hasta el TOPE de la arena, pero eso no garantiza que la
-            // pista (más abajo, después del VS y las barras de salud)
-            // quede a la vista en una pantalla chica. Este segundo scroll
-            // corre un instante después (para no pelear con el de
-            // arriba) y centra la pista en el viewport.
+            // Ajuste MÍNIMO, no un recentrado -- reportado en vivo que
+            // block:'center' se pasaba de largo: dejaba solo la pista
+            // chica en el medio de la pantalla y tapaba todo lo de
+            // arriba (timer, VS) y de abajo (mensaje de resultado).
+            // createBattleUI() ya deja bien ubicado el tope de la arena;
+            // acá solo se corrige si el FONDO de la pista queda tapado
+            // por abajo -- y en ese caso se baja SOLO lo que falta para
+            // que entre, ni un píxel más, para no perder de vista lo de
+            // arriba sin necesidad.
             setTimeout(function () {
-                try { containerEl.scrollIntoView({ behavior: 'smooth', block: 'center' }); } catch (e) { /* ignore */ }
+                try {
+                    var rect = containerEl.getBoundingClientRect();
+                    var header = document.querySelector('header');
+                    var headerHeight = header ? header.offsetHeight : 64;
+                    var margin = 12;
+                    var alreadyVisible = rect.top >= headerHeight && rect.bottom <= window.innerHeight - margin;
+                    if (alreadyVisible) return;
+                    var overflowBottom = rect.bottom - (window.innerHeight - margin);
+                    if (overflowBottom > 0) {
+                        window.scrollBy({ top: overflowBottom, behavior: 'smooth' });
+                    }
+                } catch (e) { /* ignore */ }
             }, 450);
 
             // Giro suave y constante -- junto con el degradé/brillo de
