@@ -33,6 +33,11 @@ const {
 } = require('./auth-middleware');
 const { startTournamentScheduler } = require('./tournament-scheduler');
 const { deductUnifiedBalance } = require('./unified-balance');
+// Fórmula de puntaje de "Reproducciones de Fan" -- mismo archivo que
+// carga el navegador (src/fan-plays-minigame.js la usa igual), así el
+// servidor recalcula EXACTAMENTE lo mismo que debería haber salido del
+// lado del cliente, en vez de confiar en un puntaje que mande él mismo.
+const FanPlaysScoring = require('../src/fan-plays-scoring.js');
 
 const LEGACY_CHAIN_DEPOSITS = process.env.ENABLE_LEGACY_CHAIN_DEPOSITS === 'true';
 
@@ -723,6 +728,32 @@ app.post('/api/matches/:matchId/award-winner', requireCreditMutationAuth, async 
         const inMatch = await verifyUserInMatch(supabase, req.authUser, matchId);
         if (!inMatch) {
             return res.status(403).json({ error: 'No participas en esta partida.' });
+        }
+
+        // CRÍTICO -- encontrado revisando el flujo de "Reproducciones de
+        // Fan" (verificación server-side, dos jugadores reales llamando a
+        // este mismo endpoint): este endpoint no tenía NINGÚN seguro contra
+        // llamarse dos veces para el mismo match -- pagaba el pozo
+        // completo cada vez, sin marcar nunca "esto ya se pagó". Hasta
+        // ahora era inofensivo solo porque la carrera atómica del lado del
+        // cliente (ver endBattle()) aseguraba que un solo dispositivo lo
+        // llamara -- pero es una base frágil (un reintento de red, un bug,
+        // o el nuevo flujo de batallas verificadas donde AMBOS lados
+        // pueden llamarlo legítimamente) podía haber pagado doble en
+        // cualquier modo real. Mismo patrón de "carrera atómica" que ya
+        // usa el resto de la app: solo el primer llamado que gane este
+        // UPDATE sigue adelante y paga; cualquier otro devuelve
+        // alreadyProcessed sin tocar nada más.
+        const { data: claimedAward } = await supabase
+            .from('matches')
+            .update({ award_processed: true })
+            .eq('id', matchId)
+            .eq('award_processed', false)
+            .select('id')
+            .maybeSingle();
+        if (!claimedAward) {
+            const winnerUserIdAlready = match.winner === 1 ? match.player1_id : match.player2_id;
+            return res.json({ ok: true, alreadyProcessed: true, winnerUserId: winnerUserIdAlready });
         }
 
         const winnerUserId = match.winner === 1 ? match.player1_id : match.player2_id;
@@ -4265,34 +4296,236 @@ app.post('/api/private-tournaments/matches/:matchId/resolve-round', requireCredi
 // da a un empate reñido un desempate genuinamente imposible de calcular
 // de antemano -- a diferencia de un Math.random() nuestro, que nadie
 // puede auditar.
+async function fetchBattleFairTokenInternal() {
+    const rpcResp = await fetch('https://mainnet.base.org', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            jsonrpc: '2.0',
+            id: 1,
+            method: 'eth_getBlockByNumber',
+            params: ['latest', false]
+        }),
+        signal: AbortSignal.timeout(5000)
+    });
+    const data = await rpcResp.json();
+    const block = data && data.result;
+    if (!block || !block.hash) throw new Error('RPC de Base no devolvió un bloque válido');
+    const blockNumber = parseInt(block.number, 16);
+    return {
+        blockNumber,
+        blockHash: block.hash,
+        timestamp: parseInt(block.timestamp, 16),
+        explorerUrl: `https://basescan.org/block/${blockNumber}`
+    };
+}
+
 app.get('/api/battle-fair-token', async (req, res) => {
     try {
-        const rpcResp = await fetch('https://mainnet.base.org', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                jsonrpc: '2.0',
-                id: 1,
-                method: 'eth_getBlockByNumber',
-                params: ['latest', false]
-            }),
-            signal: AbortSignal.timeout(5000)
-        });
-        const data = await rpcResp.json();
-        const block = data && data.result;
-        if (!block || !block.hash) throw new Error('RPC de Base no devolvió un bloque válido');
-
-        const blockNumber = parseInt(block.number, 16);
-        res.json({
-            ok: true,
-            blockNumber,
-            blockHash: block.hash,
-            timestamp: parseInt(block.timestamp, 16),
-            explorerUrl: `https://basescan.org/block/${blockNumber}`
-        });
+        const token = await fetchBattleFairTokenInternal();
+        res.json({ ok: true, ...token });
     } catch (error) {
         console.error('[battle-fair-token] Error consultando Base:', error.message);
         res.status(503).json({ ok: false, error: 'No se pudo consultar la blockchain en este momento' });
+    }
+});
+
+// Mismo puntaje de popularidad Deezer que ya usa el cliente
+// (fetchOracleStats en game-engine.js) -- se recalcula acá para no
+// confiar en un "tilt" que mande el cliente (aunque el dato de Deezer
+// es público, dejar que el cliente lo autoinforme reabriría la misma
+// puerta que se cierra con el resto de esta verificación).
+async function fetchDeezerRank(songId) {
+    try {
+        const resp = await fetch(`https://api.deezer.com/track/${songId}`, { signal: AbortSignal.timeout(4000) });
+        if (!resp.ok) return null;
+        const data = await resp.json();
+        return typeof data.rank === 'number' ? data.rank : null;
+    } catch (e) {
+        return null;
+    }
+}
+
+/**
+ * Aplica la fórmula de decisión acordada: si hay diferencia CLARA de
+ * destreza (>20/100) gana quien jugó mejor, sin que nada más lo pueda
+ * revertir. Solo en empate técnico entran a desempatar la popularidad
+ * de Deezer (tope ±10%, punto de partida honesto) y el token de
+ * aleatoriedad verificable (último bloque de Base, imposible de
+ * predecir de antemano).
+ */
+async function resolveFanPlaysWinner(p1Score, p2Score, match) {
+    const CLEAR_SKILL_THRESHOLD = 20;
+    const diff = p1Score - p2Score;
+    const breakdown = { player1Avg: p1Score, player2Avg: p2Score };
+
+    if (Math.abs(diff) > CLEAR_SKILL_THRESHOLD) {
+        breakdown.resultKind = 'destreza_clara';
+        return { winner: diff > 0 ? 1 : 2, breakdown };
+    }
+
+    let tilt = 0;
+    try {
+        const [rank1, rank2] = await Promise.all([
+            fetchDeezerRank(match.player1_song_id),
+            fetchDeezerRank(match.player2_song_id)
+        ]);
+        if (rank1 != null && rank2 != null && (rank1 + rank2) > 0) {
+            const rawSplit1 = (rank1 / (rank1 + rank2)) * 100;
+            tilt = Math.max(-10, Math.min(10, rawSplit1 - 50));
+        }
+    } catch (e) { /* deja tilt en 0 si Deezer no responde */ }
+
+    let tokenValue = 0, tokenInfo = null;
+    try {
+        tokenInfo = await fetchBattleFairTokenInternal();
+        const lastHex = tokenInfo.blockHash.slice(-8);
+        const n = parseInt(lastHex, 16) % 2001;
+        tokenValue = ((n - 1000) / 1000) * 15; // -15..15
+    } catch (e) { /* deja tokenValue en 0 si Base no responde -- se desempata solo con Deezer */ }
+
+    const combined = diff + tilt + tokenValue;
+    breakdown.resultKind = 'empate_tecnico';
+    breakdown.tilt = Math.round(tilt * 10) / 10;
+    breakdown.tokenValue = Math.round(tokenValue * 10) / 10;
+    breakdown.tokenInfo = tokenInfo;
+    return { winner: combined >= 0 ? 1 : 2, breakdown };
+}
+
+/**
+ * Emite (o devuelve, si ya existía) la semilla determinística de una
+ * batalla real -- la usan los dos jugadores para armar EXACTAMENTE el
+ * mismo horario de rondas y posiciones de zona. Que sea pública no
+ * abre ninguna puerta nueva: lo que de verdad evita hacer trampa es que
+ * el puntaje final SIEMPRE se recalcula acá (submit-fanplay-score),
+ * nunca se confía en lo que el cliente afirma.
+ */
+app.get('/api/battles/:matchId/fanplay-seed', async (req, res) => {
+    try {
+        const { matchId } = req.params;
+        const { data: match } = await supabase.from('matches').select('id, fanplay_seed').eq('id', matchId).maybeSingle();
+        if (!match) return res.status(404).json({ error: 'Match no encontrado' });
+
+        if (match.fanplay_seed != null) {
+            return res.json({ ok: true, seed: Number(match.fanplay_seed) });
+        }
+
+        // Carrera atómica: el primer pedido fija la semilla; cualquier
+        // pedido posterior (el otro jugador pidiéndola también) recibe la
+        // MISMA semilla ya fijada, nunca una generada aparte.
+        const newSeed = Math.floor(Math.random() * 2147483647);
+        const { data: claimed } = await supabase
+            .from('matches')
+            .update({ fanplay_seed: newSeed })
+            .eq('id', matchId)
+            .is('fanplay_seed', null)
+            .select('fanplay_seed')
+            .maybeSingle();
+
+        if (claimed) return res.json({ ok: true, seed: Number(claimed.fanplay_seed) });
+
+        const { data: fresh } = await supabase.from('matches').select('fanplay_seed').eq('id', matchId).single();
+        res.json({ ok: true, seed: Number(fresh.fanplay_seed) });
+    } catch (error) {
+        console.error('[fanplay-seed] Error:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+/**
+ * Recibe los TOQUES CRUDOS de un jugador (nunca un puntaje ya
+ * calculado) y los recalcula de forma independiente con la misma
+ * fórmula que corrió en el navegador (FanPlaysScoring, ver
+ * src/fan-plays-scoring.js) -- si alguien manda datos fabricados, no
+ * hay forma de que coincidan con un puntaje alto real, porque el
+ * cálculo lo hace este servidor, no el cliente. Cuando ya están los
+ * puntajes de los dos lados, cierra la batalla acá mismo (mismo lugar
+ * que ya usa el resto de la app: matches.status/winner) para que el
+ * flujo normal de award-winner pague el premio como siempre.
+ */
+app.post('/api/battles/:matchId/submit-fanplay-score', requireCreditMutationAuth, async (req, res) => {
+    try {
+        if (!req.authUser) return res.status(401).json({ error: 'Inicia sesión primero.' });
+        const { matchId } = req.params;
+        const { taps, durationMs, walletAddress } = req.body;
+        if (!Array.isArray(taps)) return res.status(400).json({ error: 'Faltan los toques' });
+
+        const { data: match } = await supabase.from('matches').select('*').eq('id', matchId).maybeSingle();
+        if (!match) return res.status(404).json({ error: 'Match no encontrado' });
+        if (match.fanplay_seed == null) return res.status(400).json({ error: 'Esta batalla todavía no tiene semilla asignada -- pedí primero /fanplay-seed' });
+
+        const resolved = await resolveCreditsUserId(supabase, {
+            getUserIdFromWallet: (addr) => walletLinkService ? walletLinkService.getUserIdFromWallet(addr) : null
+        }, req.authUser, walletAddress || null);
+        const userId = resolved.userId;
+
+        let side;
+        if (match.player1_id === userId) side = 1;
+        else if (match.player2_id === userId) side = 2;
+        else return res.status(403).json({ error: 'No participás en esta batalla.' });
+
+        const scoreCol = side === 1 ? 'player1_fanplay_score' : 'player2_fanplay_score';
+        if (match[scoreCol] != null) {
+            // Ya había un puntaje registrado para este lado -- no se
+            // sobreescribe (evita reintentos con toques distintos después
+            // de ver cómo le fue al rival).
+            return res.json({ ok: true, alreadySubmitted: true, score: match[scoreCol] });
+        }
+
+        const durationMsSafe = Math.max(1000, Math.min(300000, Number(durationMs) || 60000));
+        const result = FanPlaysScoring.computeScoreFromTaps(taps, Number(match.fanplay_seed), durationMsSafe);
+
+        const { data: claimed } = await supabase
+            .from('matches')
+            .update({ [scoreCol]: result.average })
+            .eq('id', matchId)
+            .is(scoreCol, null)
+            .select('id, player1_fanplay_score, player2_fanplay_score, status')
+            .maybeSingle();
+
+        if (!claimed) {
+            // Perdió la carrera (el mismo lado ya había mandado el suyo hace
+            // un instante) -- no recalcular ni sobreescribir de nuevo.
+            const { data: fresh } = await supabase.from('matches').select('player1_fanplay_score, player2_fanplay_score, status, winner').eq('id', matchId).single();
+            return res.json({ ok: true, score: fresh[scoreCol], ...fresh });
+        }
+
+        const otherScore = side === 1 ? claimed.player2_fanplay_score : claimed.player1_fanplay_score;
+        if (otherScore == null) {
+            return res.json({ ok: true, score: result.average, waitingForOpponent: true });
+        }
+        if (claimed.status === 'finished') {
+            return res.json({ ok: true, score: result.average, alreadyResolved: true });
+        }
+
+        const p1Score = side === 1 ? result.average : otherScore;
+        const p2Score = side === 1 ? otherScore : result.average;
+        const decision = await resolveFanPlaysWinner(Number(p1Score), Number(p2Score), match);
+
+        const { data: finished } = await supabase
+            .from('matches')
+            .update({
+                status: 'finished',
+                winner: decision.winner,
+                player1_final_health: Math.round(p1Score),
+                player2_final_health: Math.round(p2Score),
+                finished_at: new Date().toISOString()
+            })
+            .eq('id', matchId)
+            .neq('status', 'finished')
+            .select('winner')
+            .maybeSingle();
+
+        res.json({
+            ok: true,
+            score: result.average,
+            resolved: true,
+            winner: finished ? finished.winner : decision.winner,
+            breakdown: decision.breakdown
+        });
+    } catch (error) {
+        console.error('[submit-fanplay-score] Error:', error);
+        res.status(500).json({ error: error.message });
     }
 });
 

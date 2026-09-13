@@ -1,25 +1,21 @@
 /**
- * Reproducciones de Fan -- mini-juego de precisión rítmica
+ * Reproducciones de Fan -- mini-juego de precisión rítmica (UI cliente)
  * ============================================================
- * Fase 1 del rediseño de resolución de batallas (Modo Práctica, sin
- * dinero real). Reemplaza el viejo mecanismo "cosmético" (popularidad
- * estática de Deezer + Math.random() sin ninguna acción del jugador)
- * por algo genuinamente real y medible: qué tan preciso sos tocando en
- * el momento justo.
+ * Rediseñado para verificación server-side: el horario de rondas y la
+ * posición de cada zona salen de una SEMILLA determinística (la misma
+ * que el servidor va a usar para recalcular el puntaje real a partir
+ * de los toques crudos -- ver src/fan-plays-scoring.js y
+ * backend/server-auto.js, endpoints /api/battles/:id/fanplay-seed y
+ * .../submit-fanplay-score). Este archivo depende de que
+ * fan-plays-scoring.js ya esté cargado (window.FanPlaysScoring).
  *
- * Mecánica: un indicador se mueve de un lado a otro de una pista. Hay
- * una "zona" resaltada en una posición aleatoria. Tocás cuando el
- * indicador está adentro de la zona -- cuanto más cerca del centro,
- * más puntaje esa ronda (0-100). Al tocar (o al vencerse el tiempo de
- * la ronda sin tocar, que cuenta como 0), arranca una ronda nueva con
- * una zona nueva, hasta que se acaba el tiempo total de la batalla.
- * El puntaje final es el promedio de todas las rondas jugadas --
- * recompensa precisión sostenida, no solo tocar rápido.
- *
- * Nada de esto depende de ninguna API externa ni de ningún dato de
- * streaming -- es 100% generado y medido acá mismo, en el momento,
- * por eso es honesto llamarlo "real": es tu desempeño real, no un
- * número inventado disfrazado de otra cosa.
+ * El puntaje que se calcula ACÁ es solo para el feedback visual
+ * inmediato del jugador -- el que realmente vale (el que decide la
+ * batalla y el pago) es el que recalcula el servidor de forma
+ * independiente a partir de los toques crudos que se mandan en
+ * onFinish. En Modo Práctica (sin dinero real, sin verificación
+ * server-side) el puntaje local sigue siendo la única fuente, por eso
+ * onFinish siempre lo manda también.
  */
 
 (function () {
@@ -30,25 +26,26 @@
         _active: false,
 
         /**
-         * @param {HTMLElement} containerEl - dónde se dibuja el juego
-         * @param {number} durationSec - duración total de la batalla
-         * @param {function} onTick - (liveScore0to100, roundsPlayed) => void, llamado en cada ronda resuelta
-         * @param {function} onFinish - (finalScore0to100, roundsPlayed) => void, llamado al terminar el tiempo
+         * @param {HTMLElement} containerEl
+         * @param {number} durationSec
+         * @param {function} onTick - (liveAvg0to100, roundsResolved) => void
+         * @param {function} onFinish - (finalAvg0to100, roundsResolved, rawTaps, totalRounds) => void
+         * @param {number} [seed] - semilla determinística; si no se pasa, se genera una local (solo válido para Modo Práctica, sin verificación server-side posible)
          */
-        start(containerEl, durationSec, onTick, onFinish) {
-            if (!containerEl) return;
-            this.stop(); // por si quedó una instancia previa sin limpiar
+        start(containerEl, durationSec, onTick, onFinish, seed) {
+            if (!containerEl || !window.FanPlaysScoring) return;
+            this.stop();
 
-            const ROUND_MS = 2200; // tiempo máximo por ronda antes de contar como fallo
-            const ZONE_WIDTH_PCT = 16; // ancho de la zona objetivo, % de la pista
-            const MIN_TAP_GAP_MS = 150; // anti-bot: ignora toques más rápidos que esto (spam/macro)
+            const S = window.FanPlaysScoring;
+            const usedSeed = (seed != null) ? seed : Math.floor(Math.random() * 2147483647);
+            const durationMs = durationSec * 1000;
+            const totalRounds = S.totalRoundsFor(durationMs);
 
-            let scores = [];
-            let roundStart = 0;
-            let zoneCenterPct = 50;
-            let lastTapAt = 0;
+            let battleStartAt = null; // se fija en el primer frame (performance.now())
+            let rawTaps = []; // {atMs} -- lo único que se manda al servidor
+            let lastTapAt = -Infinity;
+            let resolvedRounds = new Array(totalRounds).fill(null); // solo para feedback visual local
             let finished = false;
-            let battleEndAt = Date.now() + durationSec * 1000;
 
             containerEl.innerHTML =
                 '<div class="text-center text-[11px] text-gray-400 mb-1">Tocá cuando el indicador entre en la zona -- más al centro, más reproducciones</div>' +
@@ -56,7 +53,7 @@
                     '<div id="fanPlaysZone" style="position:absolute;top:0;bottom:0;background:linear-gradient(90deg,rgba(0,243,255,0.25),rgba(217,70,239,0.25));border-left:2px solid rgba(0,243,255,0.6);border-right:2px solid rgba(217,70,239,0.6);"></div>' +
                     '<div id="fanPlaysIndicator" style="position:absolute;top:-4px;bottom:-4px;width:4px;background:#fff;box-shadow:0 0 10px rgba(255,255,255,0.9);"></div>' +
                 '</div>' +
-                '<div class="flex justify-between mt-1 text-[10px] text-gray-500"><span id="fanPlaysLastScore"></span><span id="fanPlaysRoundCount">0 rondas</span></div>';
+                '<div class="flex justify-between mt-1 text-[10px] text-gray-500"><span id="fanPlaysLastScore"></span><span id="fanPlaysRoundCount">0/' + totalRounds + ' rondas</span></div>';
 
             const track = containerEl.querySelector('#fanPlaysTrack');
             const zoneEl = containerEl.querySelector('#fanPlaysZone');
@@ -64,101 +61,73 @@
             const lastScoreEl = containerEl.querySelector('#fanPlaysLastScore');
             const roundCountEl = containerEl.querySelector('#fanPlaysRoundCount');
 
-            function placeZone() {
-                zoneCenterPct = 10 + Math.random() * (90 - 10);
-                const half = ZONE_WIDTH_PCT / 2;
-                zoneEl.style.left = Math.max(0, zoneCenterPct - half) + '%';
-                zoneEl.style.width = ZONE_WIDTH_PCT + '%';
+            function renderZoneFor(roundIndex) {
+                const center = S.zoneCenterForRound(usedSeed, roundIndex);
+                const half = S.ZONE_WIDTH_PCT / 2;
+                zoneEl.style.left = Math.max(0, center - half) + '%';
+                zoneEl.style.width = S.ZONE_WIDTH_PCT + '%';
             }
 
-            function currentIndicatorPct(now) {
-                // Ping-pong triangular entre 0% y 100% de la pista, período fijo
-                // por ronda -- así cada ronda es "ganable" en el tiempo que dura.
-                const elapsed = now - roundStart;
-                const period = ROUND_MS; // ida y vuelta completa
-                const t = (elapsed % period) / period; // 0..1
-                // Triangular: 0->1->0
-                return t < 0.5 ? (t * 2) * 100 : (1 - (t - 0.5) * 2) * 100;
-            }
-
-            function newRound() {
-                roundStart = Date.now();
-                placeZone();
-            }
-
-            function resolveRound(tapPct) {
-                let score = 0;
-                if (tapPct != null) {
-                    const half = ZONE_WIDTH_PCT / 2;
-                    const dist = Math.abs(tapPct - zoneCenterPct);
-                    if (dist <= half) {
-                        score = Math.round(100 * (1 - dist / half));
-                    }
-                }
-                scores.push(score);
-                if (lastScoreEl) {
-                    lastScoreEl.textContent = tapPct == null
-                        ? 'Sin toque -- 0 pts'
-                        : (score > 0 ? ('¡Bien! +' + score + ' pts') : 'Fuera de zona -- 0 pts');
-                }
-                if (roundCountEl) roundCountEl.textContent = scores.length + (scores.length === 1 ? ' ronda' : ' rondas');
-                const live = scores.reduce((a, b) => a + b, 0) / scores.length;
-                if (typeof onTick === 'function') onTick(Math.round(live), scores.length);
-                newRound();
-            }
+            function currentRoundIndex(tMs) { return S.roundIndexForTime(tMs); }
 
             function handleTap(e) {
-                if (finished) return;
-                const now = Date.now();
-                // Anti-bot / anti-doble-toque accidental: ignora toques
-                // demasiado seguidos (un macro/script mandaría taps a
-                // intervalos perfectamente regulares y muy rápidos -- un
-                // humano tocando con intención no llega a ese ritmo).
-                if (now - lastTapAt < MIN_TAP_GAP_MS) return;
+                if (finished || battleStartAt == null) return;
+                const now = performance.now();
+                if (now - lastTapAt < S.MIN_TAP_GAP_MS) return; // anti-bot / doble toque accidental
+                const atMs = now - battleStartAt;
+                if (atMs < 0 || atMs > durationMs) return;
+                const roundIndex = currentRoundIndex(atMs);
+                if (roundIndex >= totalRounds || resolvedRounds[roundIndex] !== null) return; // ya se tocó esta ronda
+
                 lastTapAt = now;
+                rawTaps.push({ atMs: Math.round(atMs) });
 
-                const rect = track.getBoundingClientRect();
-                const clientX = (e.touches && e.touches[0]) ? e.touches[0].clientX : e.clientX;
-                // La posición del TOQUE en la pista no es lo que se evalúa
-                // (tocar en cualquier lado sirve) -- lo que importa es DÓNDE
-                // ESTABA EL INDICADOR en el instante del toque. Se deja la
-                // posición del clic solo para no romper si en el futuro se
-                // quiere un modo "tocá el indicador" en vez de "tocá cuando
-                // esté en la zona".
-                void rect; void clientX;
+                const score = S.scoreForTap(atMs, usedSeed, durationMs);
+                resolvedRounds[roundIndex] = score == null ? 0 : score;
 
-                const tapPct = currentIndicatorPct(Date.now());
-                resolveRound(tapPct);
+                if (lastScoreEl) {
+                    lastScoreEl.textContent = (resolvedRounds[roundIndex] > 0)
+                        ? ('¡Bien! +' + resolvedRounds[roundIndex] + ' pts')
+                        : 'Fuera de zona -- 0 pts';
+                }
+                var hitCount = resolvedRounds.filter(function (s) { return s !== null; }).length;
+                if (roundCountEl) roundCountEl.textContent = hitCount + '/' + totalRounds + ' rondas';
+
+                var liveSum = resolvedRounds.reduce(function (a, s) { return a + (s || 0); }, 0);
+                if (typeof onTick === 'function') onTick(Math.round((liveSum / totalRounds) * 10) / 10, hitCount);
             }
 
             track.addEventListener('mousedown', handleTap);
             track.addEventListener('touchstart', handleTap, { passive: true });
 
-            newRound();
             this._active = true;
+            let lastRenderedRound = -1;
 
             const loop = () => {
                 if (!this._active) return;
-                const now = Date.now();
+                const now = performance.now();
+                if (battleStartAt == null) battleStartAt = now;
+                const elapsed = now - battleStartAt;
 
-                if (now >= battleEndAt) {
+                if (elapsed >= durationMs) {
                     finished = true;
                     this._active = false;
                     track.removeEventListener('mousedown', handleTap);
                     track.removeEventListener('touchstart', handleTap);
-                    const finalScore = scores.length ? Math.round(scores.reduce((a, b) => a + b, 0) / scores.length) : 0;
-                    if (typeof onFinish === 'function') onFinish(finalScore, scores.length);
+                    var finalSum = resolvedRounds.reduce(function (a, s) { return a + (s || 0); }, 0);
+                    var finalAvg = Math.round((finalSum / totalRounds) * 10) / 10;
+                    var roundsHit = resolvedRounds.filter(function (s) { return s !== null; }).length;
+                    if (typeof onFinish === 'function') onFinish(finalAvg, roundsHit, rawTaps, totalRounds);
                     return;
                 }
 
-                // Ronda vencida sin toque -- cuenta como 0 y arranca la próxima.
-                if (now - roundStart >= ROUND_MS) {
-                    resolveRound(null);
+                const roundIndex = currentRoundIndex(elapsed);
+                if (roundIndex !== lastRenderedRound && roundIndex < totalRounds) {
+                    lastRenderedRound = roundIndex;
+                    renderZoneFor(roundIndex);
                 }
 
-                const pct = currentIndicatorPct(now);
-                indicatorEl.style.left = pct + '%';
-
+                indicatorEl.style.left = S.indicatorPctAtTime(elapsed) + '%';
                 this._raf = requestAnimationFrame(loop);
             };
             this._raf = requestAnimationFrame(loop);
@@ -178,14 +147,7 @@
          * modo vs. CPU simula su nivel de juego, es una convención
          * universalmente entendida. Lo único que hay que cuidar es que la
          * dificultad sea PAREJA y quede documentada acá mismo, nunca
-         * ajustada en secreto para favorecer a la casa -- sobre todo
-         * relevante para cuando este mismo mecanismo se use en el fallback
-         * de Modo Rápido con dinero real (fase futura, no esta).
-         *
-         * Curva: centrada en 62/100 (un jugador humano promedio, ni
-         * perfecto ni torpe) con variación aleatoria uniforme de ±22 --
-         * deja margen real para que un jugador atento gane la mayoría de
-         * las veces, sin que sea automático.
+         * ajustada en secreto para favorecer a la casa.
          */
         simulateCpuScore() {
             const baseline = 62;

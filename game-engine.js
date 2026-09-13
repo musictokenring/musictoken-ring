@@ -5003,7 +5003,220 @@ const GameEngine = {
         }
     },
     
+    // ==========================================
+    // "REPRODUCCIONES DE FAN" -- Fase 2 (piloto en dinero real: Sala
+    // Privada 1 vs 1 clásica)
+    // ==========================================
+    // Mismo mecanismo que Modo Práctica (ver startFanPlaysPractice más
+    // arriba) pero con verificación server-side obligatoria: acá SÍ hay
+    // dos humanos reales y dinero real, así que el puntaje NUNCA se
+    // confía del cliente -- se manda la semilla que emite el backend,
+    // se juega con ella, y se mandan los TOQUES CRUDOS a
+    // /api/battles/:id/submit-fanplay-score, que recalcula el puntaje
+    // real de forma independiente (ver src/fan-plays-scoring.js,
+    // idéntico en cliente y servidor) antes de decidir el ganador.
+    //
+    // Elegido Sala Privada 1 vs 1 como piloto -- ya auditada como segura
+    // en la auditoría de economía de batallas de esta misma sesión, y es
+    // el modo real más simple (sin colas, sin brackets). El resto de los
+    // modos reales (Modo Rápido, Desafío Social, Torneos) sigue con el
+    // mecanismo clásico hasta que este piloto se valide en vivo.
+    async runVerifiedFanPlaysBattle(match) {
+        var self = this;
+        const { data: { session } } = await supabaseClient.auth.getSession();
+        const isPlayer1 = session.user.id === match.player1_id;
+        const mySide = isPlayer1 ? 1 : 2;
+
+        const userSong = isPlayer1 ? match.player1_song_preview : match.player2_song_preview;
+        this.playUserSong(userSong);
+        this.beginBattleBroadcast(match);
+
+        // Semilla determinística del backend -- si por algún motivo no se
+        // puede conseguir (backend caído, etc.), se cae al mecanismo
+        // clásico en vez de dejar la batalla trabada sin forma de jugarse.
+        var seed;
+        try {
+            const backendUrl = window.CONFIG?.BACKEND_API || window.CreditsSystem?.backendUrl || 'https://musictoken-ring.onrender.com';
+            const resp = await fetch(`${backendUrl}/api/battles/${match.id}/fanplay-seed`);
+            const data = await resp.json();
+            if (!resp.ok || !data.ok) throw new Error(data.error || 'seed no disponible');
+            seed = data.seed;
+        } catch (e) {
+            console.error('[runVerifiedFanPlaysBattle] No se pudo obtener la semilla verificable, usando el mecanismo clásico como respaldo:', e && e.message);
+            return this.runBattleLegacy(match);
+        }
+
+        // Popularidad de Deezer SOLO para el visual en vivo de esta
+        // pantalla -- el servidor la recalcula de forma independiente al
+        // resolver (resolveFanPlaysWinner en server-auto.js), esto de acá
+        // nunca decide nada por sí solo.
+        var oracleStats;
+        try { oracleStats = await this.fetchOracleStats(match); }
+        catch (e) { oracleStats = { player1Projected: 500000, player2Projected: 500000 }; }
+        var totalBase = (oracleStats.player1Projected || 0) + (oracleStats.player2Projected || 0);
+        var rawSplit1 = totalBase > 0 ? (oracleStats.player1Projected / totalBase) * 100 : 50;
+        var tilt = Math.max(-10, Math.min(10, rawSplit1 - 50));
+        var myStartHealth = mySide === 1 ? (50 + tilt) : (50 - tilt);
+
+        var gameArea = document.getElementById('fanPlaysGameArea');
+        var statusEl = document.getElementById('battleStatusText');
+        var timeLeft = this.battleDuration;
+
+        var timerInterval = setInterval(function () {
+            timeLeft--;
+            var timerEl = document.getElementById('battleTimer');
+            if (timerEl) timerEl.textContent = Math.max(0, timeLeft);
+            if (statusEl) {
+                statusEl.innerHTML = timeLeft <= 5
+                    ? '<span class="text-red-400 font-bold animate-pulse">' + svgIcon('bolt', 14) + 'FINAL ÉPICO</span>'
+                    : '<span class="text-cyan-400">' + svgIcon('music', 14) + 'Sumá reproducciones tocando en el momento justo</span>';
+            }
+        }, 1000);
+
+        function updateMyHealthDisplay(liveAvg, roundsResolved) {
+            var health = Math.max(5, Math.min(95, myStartHealth + (liveAvg - 50) / 2));
+            var mineFillId = mySide === 1 ? 'health1Fill' : 'health2Fill';
+            var mineTextId = mySide === 1 ? 'health1Text' : 'health2Text';
+            var theirsFillId = mySide === 1 ? 'health2Fill' : 'health1Fill';
+            var theirsTextId = mySide === 1 ? 'health2Text' : 'health1Text';
+            var hf = document.getElementById(mineFillId), ht = document.getElementById(mineTextId);
+            var hf2 = document.getElementById(theirsFillId), ht2 = document.getElementById(theirsTextId);
+            if (hf) hf.style.width = health + '%';
+            if (ht) ht.textContent = Math.round(health) + '%';
+            if (hf2) hf2.style.width = (100 - health) + '%';
+            if (ht2) ht2.textContent = Math.round(100 - health) + '%';
+            var minePlaysId = mySide === 1 ? 'plays1' : 'plays2';
+            var minePlaysEl = document.getElementById(minePlaysId);
+            if (minePlaysEl) minePlaysEl.textContent = Math.round(liveAvg * roundsResolved).toLocaleString('es-ES');
+        }
+
+        if (!gameArea || !window.FanPlaysMinigame) {
+            clearInterval(timerInterval);
+            console.error('[runVerifiedFanPlaysBattle] Falta el mini-juego, usando el mecanismo clásico como respaldo.');
+            return this.runBattleLegacy(match);
+        }
+
+        window.FanPlaysMinigame.start(gameArea, this.battleDuration, updateMyHealthDisplay, async function (finalAvg, roundsHit, rawTaps) {
+            clearInterval(timerInterval);
+            await self.submitVerifiedFanPlaysScore(match, mySide, rawTaps, isPlayer1);
+        }, seed);
+    },
+
+    // Manda los toques crudos al backend, espera (si hace falta) a que el
+    // rival también mande los suyos, y una vez resuelto el match paga el
+    // premio -- reusando awardCredits()/recordMatchBattleHistory() ya
+    // existentes, ahora seguros de llamarse desde los dos lados gracias
+    // al guard de idempotencia agregado en award-winner (ver
+    // fan-plays-verification.sql).
+    async submitVerifiedFanPlaysScore(match, mySide, rawTaps, isPlayer1) {
+        var statusEl = document.getElementById('battleStatusText');
+        const backendUrl = window.CONFIG?.BACKEND_API || window.CreditsSystem?.backendUrl || 'https://musictoken-ring.onrender.com';
+
+        var result;
+        try {
+            const resp = await fetch(`${backendUrl}/api/battles/${match.id}/submit-fanplay-score`, {
+                method: 'POST',
+                headers: await this.getBackendAuthHeaders(),
+                body: JSON.stringify({ taps: rawTaps, durationMs: this.battleDuration * 1000 })
+            });
+            result = await resp.json().catch(() => ({}));
+        } catch (e) {
+            console.error('[submitVerifiedFanPlaysScore] Error mandando toques:', e);
+            if (statusEl) statusEl.innerHTML = '<div class="text-red-300 text-sm">No se pudo verificar tu resultado -- revisá tu conexión y contactá soporte si no se resuelve.</div>';
+            return;
+        }
+
+        if (!result || result.error) {
+            if (statusEl) statusEl.innerHTML = '<div class="text-red-300 text-sm">Error verificando tu resultado: ' + (result && result.error || 'desconocido') + '</div>';
+            return;
+        }
+
+        if (statusEl && !result.resolved && !result.alreadyResolved) {
+            statusEl.innerHTML = '<div class="text-cyan-300 text-sm animate-pulse">Esperando el resultado del rival...</div>';
+        }
+
+        var finalMatch = null;
+        if (result.resolved || result.alreadyResolved) {
+            const { data: fresh } = await supabaseClient.from('matches').select('*').eq('id', match.id).maybeSingle();
+            finalMatch = fresh;
+        } else {
+            // Sondeo hasta que el rival también mande los suyos -- igual
+            // criterio que el resto de la app para "esperar a que se
+            // resuelva del otro lado" (ver checkChallengeResultNow, etc.).
+            for (var i = 0; i < 40 && !finalMatch; i++) {
+                await new Promise(function (r) { setTimeout(r, 3000); });
+                const { data: polled } = await supabaseClient.from('matches').select('*').eq('id', match.id).maybeSingle();
+                if (polled && polled.status === 'finished') finalMatch = polled;
+            }
+            if (!finalMatch) {
+                if (statusEl) statusEl.innerHTML = '<div class="text-yellow-300 text-sm">El rival no terminó a tiempo -- contactá soporte con el código de esta sala si tu saldo no se actualiza.</div>';
+                return;
+            }
+        }
+
+        const winner = finalMatch.winner;
+        const userWon = (isPlayer1 && winner === 1) || (!isPlayer1 && winner === 2);
+        const winnerUserId = winner === 1 ? finalMatch.player1_id : finalMatch.player2_id;
+        const payouts = this.calculateMatchPayouts(finalMatch.total_pot);
+
+        this.stopUserSong();
+        var winnerSong = winner === 1 ? finalMatch.player1_song_preview : finalMatch.player2_song_preview;
+        this.playVictorySong(winnerSong);
+
+        // recordMatchBattleHistory ya es un upsert (seguro de llamar desde
+        // los dos lados sin duplicar filas) -- pero awardCredits() NO lo
+        // es: adentro hace un INSERT liso en match_wins y llama a
+        // updateUserStats(), ninguno de los dos protegido contra
+        // duplicarse. Acá se llama a award-winner DIRECTO (no por el
+        // wrapper) para leer si este dispositivo fue el primero en
+        // procesar el pago -- solo ESE hace el resto de los efectos
+        // (match_wins, stats, fee al vault). El otro lado, si ganó, solo
+        // refresca su propio saldo (que el primero ya acreditó).
+        await this.recordMatchBattleHistory(finalMatch, winner, payouts.winnerPayout);
+
+        var alreadyProcessed = false;
+        if (winnerUserId) {
+            try {
+                const backendUrl = window.CONFIG?.BACKEND_API || window.CreditsSystem?.backendUrl || 'https://musictoken-ring.onrender.com';
+                const awardResp = await fetch(`${backendUrl}/api/matches/${finalMatch.id}/award-winner`, {
+                    method: 'POST',
+                    headers: await this.getBackendAuthHeaders()
+                });
+                const awardData = await awardResp.json().catch(() => ({}));
+                alreadyProcessed = !!awardData.alreadyProcessed;
+            } catch (e) {
+                console.error('[submitVerifiedFanPlaysScore] Error llamando a award-winner:', e);
+            }
+        }
+
+        if (!alreadyProcessed) {
+            if (winnerUserId) await this.updateUserStats(winnerUserId, true, payouts.winnerPayout, finalMatch.id);
+            await this.sendBetFeeToVault(payouts.platformFee, finalMatch.id);
+        }
+        if (userWon && window.CreditsSystem) {
+            const walletAddress = this.connectedWallet || localStorage.getItem('mtr_wallet');
+            const { data: { session: mySession } } = await supabaseClient.auth.getSession();
+            await window.CreditsSystem.loadBalance(walletAddress || null, mySession?.user?.id || null);
+        }
+
+        this.showVictoryScreen(finalMatch, winner, userWon, payouts);
+    },
+
     async runBattle(match) {
+        const { data: { session } } = await supabaseClient.auth.getSession();
+        const isPlayer1 = session.user.id === match.player1_id;
+
+        // FASE 2 del rediseño de resolución de batallas -- piloto en
+        // dinero real, solo Sala Privada 1 vs 1 clásica por ahora (el
+        // resto de los modos reales sigue con el mecanismo de abajo hasta
+        // validar este piloto en vivo).
+        if (match.match_type === 'private' && window.FanPlaysMinigame && window.FanPlaysScoring) {
+            return this.runVerifiedFanPlaysBattle(match);
+        }
+        return this.runBattleLegacy(match);
+    },
+
+    async runBattleLegacy(match) {
         const { data: { session } } = await supabaseClient.auth.getSession();
         const isPlayer1 = session.user.id === match.player1_id;
 
