@@ -179,21 +179,29 @@
     var MTR_LOGO_URL = 'https://pink-blank-vicuna-260.mypinata.cloud/ipfs/bafybeiah2fffgw6y6aomfx5b5pgav7wedo3qdtqxqteg2glvmgzs6fpivu';
 
     // Moneda MTR que salta al estilo "bloque de Mario Bros" -- pedido
-    // explícito del usuario -- en cada match perfecto. Gira sobre su eje
-    // (rotateY, necesita perspective en el padre, ver track.style más
-    // abajo) mientras sube, y se desvanece arriba en vez de caer.
-    function spawnMtrCoin(hostEl, leftPct) {
-        var size = 32;
-        var coin = document.createElement('div');
-        coin.style.cssText = 'position:absolute;top:50%;left:' + leftPct + '%;width:' + size + 'px;height:' + size + 'px;margin-left:-' + (size / 2) + 'px;margin-top:-' + (size / 2) + 'px;pointer-events:none;z-index:11;border-radius:50%;overflow:hidden;border:2px solid #fde047;box-shadow:0 0 10px rgba(250,204,21,0.85),0 2px 6px rgba(0,0,0,0.4);background:radial-gradient(circle,#fde047,#f59e0b);';
-        coin.innerHTML = '<img src="' + MTR_LOGO_URL + '" style="width:100%;height:100%;object-fit:cover;" alt="" onerror="this.remove()">';
-        hostEl.appendChild(coin);
-        coin.animate([
-            { transform: 'translateY(0) scale(0.4) rotateY(0deg)', opacity: 1, offset: 0 },
-            { transform: 'translateY(-44px) scale(1.15) rotateY(360deg)', opacity: 1, offset: 0.55 },
-            { transform: 'translateY(-56px) scale(1) rotateY(540deg)', opacity: 1, offset: 0.78 },
-            { transform: 'translateY(-38px) scale(0.7) rotateY(720deg)', opacity: 0, offset: 1 }
-        ], { duration: 700, easing: 'cubic-bezier(.2,.7,.3,1)' }).onfinish = function () { coin.remove(); };
+    // explícito del usuario -- en cada match perfecto. Segunda vuelta,
+    // también pedida explícitamente: mucho más grande y centrada en TODA
+    // la pantalla (position:fixed sobre document.body, no relativa a la
+    // pista) para que el momento se sienta como un premio grande -- "eso
+    // le da más adicción al juego". pointer-events:none todo el tiempo,
+    // así nunca tapa ni bloquea el toque de la ronda siguiente aunque
+    // aparezca sobre el resto de la pantalla.
+    function spawnMtrCoin() {
+        var size = 130;
+        var wrap = document.createElement('div');
+        wrap.style.cssText = 'position:fixed;top:50%;left:50%;width:' + size + 'px;height:' + size + 'px;margin-left:-' + (size / 2) + 'px;margin-top:-' + (size / 2) + 'px;pointer-events:none;z-index:99999;';
+        wrap.innerHTML =
+            '<div style="position:absolute;inset:-40px;border-radius:50%;background:radial-gradient(circle,rgba(250,204,21,0.5) 0%,rgba(250,204,21,0) 70%);"></div>' +
+            '<div style="position:absolute;inset:0;border-radius:50%;overflow:hidden;border:4px solid #fde047;box-shadow:0 0 40px rgba(250,204,21,0.9),0 10px 30px rgba(0,0,0,0.5);background:radial-gradient(circle,#fde047,#f59e0b);">' +
+                '<img src="' + MTR_LOGO_URL + '" style="width:100%;height:100%;object-fit:cover;" alt="" onerror="this.remove()">' +
+            '</div>';
+        document.body.appendChild(wrap);
+        wrap.animate([
+            { transform: 'perspective(700px) translateY(50px) scale(0.15) rotateY(0deg)', opacity: 0, offset: 0 },
+            { transform: 'perspective(700px) translateY(-16px) scale(1.2) rotateY(360deg)', opacity: 1, offset: 0.42 },
+            { transform: 'perspective(700px) translateY(0px) scale(1) rotateY(540deg)', opacity: 1, offset: 0.7 },
+            { transform: 'perspective(700px) translateY(-20px) scale(0.85) rotateY(720deg)', opacity: 0, offset: 1 }
+        ], { duration: 950, easing: 'cubic-bezier(.2,.7,.3,1)' }).onfinish = function () { wrap.remove(); };
     }
 
     // Ondas de fondo tipo ecualizador -- pedido explícito ("ondas
@@ -326,7 +334,7 @@
                     spawnFlash(track, indicatorPct, perfect);
                     if (perfect) {
                         spawnComicBurst(track, indicatorPct);
-                        spawnMtrCoin(track, indicatorPct);
+                        spawnMtrCoin();
                         targetStarEl.animate([{ filter: 'drop-shadow(0 0 3px rgba(255,255,255,0.35))' }, { filter: 'drop-shadow(0 0 16px rgba(250,204,21,1))' }, { filter: 'drop-shadow(0 0 3px rgba(255,255,255,0.35))' }], { duration: 500 });
                     }
                 }
