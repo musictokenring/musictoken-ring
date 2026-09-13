@@ -103,6 +103,71 @@
         } catch (e) { /* audio nunca debe romper el juego */ }
     }
 
+    // Capa de audio extra pedida explícitamente: una ovación de tribuna
+    // (aplausos) que suena JUNTO con el láser cuando el toque es
+    // perfecto -- no reemplaza el sonido del toque, se suma. Sintetizada
+    // con ruido blanco filtrado (el "rugido" de fondo) más varios
+    // golpecitos cortos superpuestos (los "aplausos" individuales), sin
+    // ningún archivo de audio externo.
+    function playCrowdCheer() {
+        try {
+            if (!_audioCtx) _audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            if (_audioCtx.state === 'suspended') _audioCtx.resume();
+            var now = _audioCtx.currentTime;
+
+            // "Rugido" de fondo: ruido blanco pasado por un filtro
+            // pasa-banda, con una envolvente que sube rápido y baja
+            // gradual -- da la sensación de la tribuna reaccionando de
+            // golpe y calmándose de a poco.
+            var duration = 1.0;
+            var bufferSize = Math.floor(_audioCtx.sampleRate * duration);
+            var buffer = _audioCtx.createBuffer(1, bufferSize, _audioCtx.sampleRate);
+            var data = buffer.getChannelData(0);
+            for (var i = 0; i < bufferSize; i++) data[i] = Math.random() * 2 - 1;
+
+            var noise = _audioCtx.createBufferSource();
+            noise.buffer = buffer;
+            var bandpass = _audioCtx.createBiquadFilter();
+            bandpass.type = 'bandpass';
+            bandpass.frequency.setValueAtTime(1600, now);
+            bandpass.Q.value = 0.5;
+            var roarGain = _audioCtx.createGain();
+            roarGain.gain.setValueAtTime(0.0001, now);
+            roarGain.gain.exponentialRampToValueAtTime(0.2, now + 0.1);
+            roarGain.gain.exponentialRampToValueAtTime(0.001, now + duration);
+            noise.connect(bandpass);
+            bandpass.connect(roarGain);
+            roarGain.connect(_audioCtx.destination);
+            noise.start(now);
+            noise.stop(now + duration);
+
+            // Golpecitos individuales (los "aplausos") -- ruido corto y
+            // agudo, esparcidos en los primeros ~0.5s para simular una
+            // ráfaga de manos aplaudiendo, no un solo "pum" seco.
+            var clapCount = 7;
+            for (var c = 0; c < clapCount; c++) {
+                var at = now + Math.random() * 0.5;
+                var clapSize = Math.floor(_audioCtx.sampleRate * 0.04);
+                var clapBuffer = _audioCtx.createBuffer(1, clapSize, _audioCtx.sampleRate);
+                var clapData = clapBuffer.getChannelData(0);
+                for (var j = 0; j < clapSize; j++) clapData[j] = (Math.random() * 2 - 1) * (1 - j / clapSize);
+                var clap = _audioCtx.createBufferSource();
+                clap.buffer = clapBuffer;
+                var clapFilter = _audioCtx.createBiquadFilter();
+                clapFilter.type = 'highpass';
+                clapFilter.frequency.value = 1200;
+                var clapGain = _audioCtx.createGain();
+                clapGain.gain.setValueAtTime(0.14, at);
+                clapGain.gain.exponentialRampToValueAtTime(0.001, at + 0.05);
+                clap.connect(clapFilter);
+                clapFilter.connect(clapGain);
+                clapGain.connect(_audioCtx.destination);
+                clap.start(at);
+                clap.stop(at + 0.06);
+            }
+        } catch (e) { /* audio nunca debe romper el juego */ }
+    }
+
     // Destello "rico" en el punto de impacto: núcleo brillante + anillo
     // expandiéndose + un puñado de chispas volando hacia afuera. Todo con
     // la Web Animations API (sin CSS global nuevo).
@@ -298,17 +363,28 @@
                     '<div id="fanPlaysTargetStar" style="position:absolute;top:50%;transform:translate(-50%,-50%);pointer-events:none;filter:drop-shadow(0 0 3px rgba(255,255,255,0.35));">' + targetStarSvg() + '</div>' +
                     '<div id="fanPlaysIndicator" style="position:absolute;top:50%;transform:translate(-50%,-50%);pointer-events:none;filter:drop-shadow(0 1px 2px rgba(0,0,0,0.5)) drop-shadow(0 0 7px rgba(0,243,255,0.85));">' + movingStarSvg() + '</div>' +
                 '</div>' +
-                '<div class="flex justify-between mt-1 text-[10px] text-gray-500"><span id="fanPlaysLastScore"></span><span id="fanPlaysRoundCount">0/' + totalRounds + ' rondas</span></div>' +
-                '<div style="margin-top:6px;display:flex;flex-direction:column;gap:3px;">' +
-                    '<div style="display:flex;align-items:center;gap:6px;">' +
-                        '<span class="text-[10px]" style="color:#22d3ee;font-weight:700;width:34px;flex-shrink:0;">Vos</span>' +
-                        '<div id="fanPlaysMyCoins" style="display:flex;gap:3px;flex-wrap:wrap;min-height:11px;"></div>' +
-                        '<span id="fanPlaysMyCoinsCount" class="text-[10px] text-gray-500"></span>' +
+                '<div class="flex justify-between mt-1 text-[10px] text-gray-500"><span id="fanPlaysLastScore"></span><span id="fanPlaysRoundCount">0/' + totalRounds + ' rondas</span></div>';
+
+            // Tablerito de moneditas: pedido explícito de ubicarlo justo
+            // debajito del contador de tiempo, no acá abajo de la pista --
+            // ese placeholder lo arma createBattleUI() (game-engine.js) y
+            // vive fuera de containerEl. Si por algún motivo no está (otro
+            // contexto que reuse este módulo sin ese placeholder), se cae
+            // a un lugar propio dentro de containerEl para no perder la
+            // función por completo.
+            var achievementsHost = document.getElementById('fanPlaysAchievementsTop') || containerEl;
+            achievementsHost.innerHTML =
+                '<div style="display:flex;align-items:center;justify-content:center;gap:10px;">' +
+                    '<div style="display:flex;align-items:center;gap:4px;">' +
+                        '<span style="color:#22d3ee;font-weight:700;font-size:10px;">VOS</span>' +
+                        '<div id="fanPlaysMyCoins" style="display:flex;gap:2px;flex-wrap:wrap;min-height:11px;"></div>' +
+                        '<span id="fanPlaysMyCoinsCount" style="color:#9ca3af;font-size:10px;"></span>' +
                     '</div>' +
-                    '<div style="display:flex;align-items:center;gap:6px;">' +
-                        '<span class="text-[10px]" style="color:#e879f9;font-weight:700;width:34px;flex-shrink:0;">Rival</span>' +
-                        '<div id="fanPlaysCpuCoins" style="display:flex;gap:3px;flex-wrap:wrap;min-height:11px;"></div>' +
-                        '<span id="fanPlaysCpuCoinsCount" class="text-[10px] text-gray-500"></span>' +
+                    '<span style="color:#4b5563;font-size:10px;">·</span>' +
+                    '<div style="display:flex;align-items:center;gap:4px;">' +
+                        '<span style="color:#e879f9;font-weight:700;font-size:10px;">RIVAL</span>' +
+                        '<div id="fanPlaysCpuCoins" style="display:flex;gap:2px;flex-wrap:wrap;min-height:11px;"></div>' +
+                        '<span id="fanPlaysCpuCoinsCount" style="color:#9ca3af;font-size:10px;"></span>' +
                     '</div>' +
                 '</div>';
 
@@ -317,8 +393,8 @@
             const targetStarEl = containerEl.querySelector('#fanPlaysTargetStar');
             const indicatorEl = containerEl.querySelector('#fanPlaysIndicator');
             const indicatorInner = indicatorEl.firstElementChild;
-            const myCoinsEl = containerEl.querySelector('#fanPlaysMyCoins');
-            const myCoinsCountEl = containerEl.querySelector('#fanPlaysMyCoinsCount');
+            const myCoinsEl = achievementsHost.querySelector('#fanPlaysMyCoins');
+            const myCoinsCountEl = achievementsHost.querySelector('#fanPlaysMyCoinsCount');
             const lastScoreEl = containerEl.querySelector('#fanPlaysLastScore');
             const roundCountEl = containerEl.querySelector('#fanPlaysRoundCount');
 
@@ -377,6 +453,7 @@
                         spawnComicBurst(track, indicatorPct);
                         spawnMtrCoin();
                         appendCoinDot(myCoinsEl, myCoinsCountEl);
+                        playCrowdCheer();
                         targetStarEl.animate([{ filter: 'drop-shadow(0 0 3px rgba(255,255,255,0.35))' }, { filter: 'drop-shadow(0 0 16px rgba(250,204,21,1))' }, { filter: 'drop-shadow(0 0 3px rgba(255,255,255,0.35))' }], { duration: 500 });
                     }
                 }
@@ -475,8 +552,13 @@
         // no acá) cada vez que a la CPU "le toca" un perfecto -- agrega la
         // moneda a la fila del rival dentro de ESTE contenedor de juego.
         markOpponentPerfect(containerEl) {
-            if (!containerEl) return;
-            appendCoinDot(containerEl.querySelector('#fanPlaysCpuCoins'), containerEl.querySelector('#fanPlaysCpuCoinsCount'));
+            // El tablerito vive en #fanPlaysAchievementsTop (debajo del
+            // contador de tiempo, ver createBattleUI en game-engine.js),
+            // no dentro de containerEl -- salvo que ese placeholder no
+            // exista, ahí sí se cae a buscarlo adentro (ver start()).
+            var host = document.getElementById('fanPlaysAchievementsTop') || containerEl;
+            if (!host) return;
+            appendCoinDot(host.querySelector('#fanPlaysCpuCoins'), host.querySelector('#fanPlaysCpuCoinsCount'));
         }
     };
 

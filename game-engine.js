@@ -4472,6 +4472,13 @@ const GameEngine = {
                     <span class="text-3xl font-black text-white tabular-nums" id="battleTimer">${this.battleDuration}</span>
                     <span class="text-xs text-gray-400">seg</span>
                 </div>
+                <!-- Tablerito de moneditas de "Reproducciones de Fan" (Vos
+                     vs Rival) -- pedido explícito: justo debajito del
+                     contador de tiempo. Vacío por defecto, solo lo llena
+                     fan-plays-minigame.js cuando corresponde (Modo
+                     Práctica / Sala Privada verificada); en el resto de
+                     los modos queda vacío y sin efecto visual. -->
+                <div id="fanPlaysAchievementsTop" style="max-width:300px;margin:0 auto 6px;"></div>
                 <div class="text-sm text-gray-500" title="Lo que arriesgan los dos jugadores entre si, no incluye lo que apuesten los fans">${svgIcon('cash', 14)}Pozo de jugadores: ${pot} MTR</div>
             </div>
 

@@ -1229,8 +1229,6 @@
             </div>
         </section>
 
-        <audio id="mtrBattleAudio" loop playsinline webkit-playsinline preload="auto" style="display:none" aria-hidden="true"></audio>
-
         <!-- TOURNAMENT ARENA (lobby + bracket + resultados) -->
         <section id="tournamentArena" class="hidden mb-16">
             <div class="tournament-arena-header mb-6">
@@ -1554,6 +1552,24 @@
         </section>
 
     </main>
+
+    <!-- CRÍTICO -- reportado en vivo: la canción ganadora dejaba de sonar
+         a partir de la segunda batalla de la sesión. Causa real: este
+         elemento vivía DENTRO de <main>, y tanto showVictoryScreen() como
+         showFanPlaysResultScreen() hacen container.innerHTML = '...' sobre
+         <main> completo para mostrar el resultado -- eso lo destruye. La
+         primera batalla nunca lo notaba (el elemento original de acá
+         seguía existiendo hasta esa primera pantalla de resultado), pero
+         de ahí en más ensureUserAudio() ya no lo encontraba
+         (getElementById devolvía null) y creaba un `new Audio()` nuevo, que
+         el navegador nunca considera "desbloqueado" para autoplay -- exactamente
+         el bug que el comentario en playVictorySong() (game-engine.js) ya
+         documentaba haber arreglado, solo que la solución dependía de que
+         este elemento sobreviviera, y no sobrevivía. Se mueve acá, mismo
+         criterio que los modales de depósito/retiro de abajo: fuera de
+         <main> para que ningún reemplazo de su contenido lo destruya.
+    -->
+    <audio id="mtrBattleAudio" loop playsinline webkit-playsinline preload="auto" style="display:none" aria-hidden="true"></audio>
 
     <!-- Modales de deposito/retiro movidos fuera de <main> para que sigan
          visibles cuando el shell movil (mtr2) oculta <main> por completo. -->
