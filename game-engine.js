@@ -3270,28 +3270,74 @@ const GameEngine = {
         var userWon = winner === 1;
         this.stopUserSong();
         if (this.battleAnimState) { this.battleAnimState.finished = true; this.battleAnimState.winner = winner; }
-        this.spawnVictoryParticles(winner);
         var winnerSong = winner === 1 ? match.player1_song_preview : match.player2_song_preview;
         this.playVictorySong(winnerSong);
 
-        var statusEl = document.getElementById('battleStatusText');
-        if (statusEl) {
-            // Narrativa honesta y transparente -- nunca un desglose confuso
-            // de 4 números: o "ganaste por destreza, sin discusión", o "fue
-            // parejo, se definió en el último instante" -- pedido explícito
-            // del usuario para cuidar la psicología del jugador.
-            var explain = resultKind === 'destreza_clara'
-                ? ('Le diste ' + breakdown.playerAvg + ' reproducciones de fan a tu canción -- la Máquina, ' + breakdown.cpuAvg + '. ' + (userWon ? '¡Ganaste claramente por destreza!' : 'Te ganó claramente por destreza -- practicá y volvé a intentarlo.'))
-                : ('Fue parejo (' + breakdown.playerAvg + ' vs ' + breakdown.cpuAvg + ' reproducciones) -- se definió en el último instante.');
-            statusEl.innerHTML = '<div class="inline-block py-4 px-6 rounded-2xl ' + (userWon ? 'bg-gradient-to-r from-cyan-500/20 to-cyan-600/20 border-2 border-cyan-400/50' : 'bg-gradient-to-r from-red-500/20 to-red-600/20 border-2 border-red-400/50') + ' shadow-2xl">' +
-                '<span class="text-xl sm:text-2xl font-black inline-flex items-center gap-2 ' + (userWon ? 'text-cyan-300' : 'text-red-300') + '">' + svgIcon(userWon ? 'trophy' : 'circleX', 24) + (userWon ? '¡Le ganaste a la Máquina!' : 'Perdiste esta vez') + '</span>' +
-                '<div class="mt-2 text-sm ' + (userWon ? 'text-cyan-200' : 'text-red-200') + ' font-bold">' + explain + '</div>' +
-                (breakdown.tokenInfo ? '<div class="mt-1 text-[11px] text-gray-400">Desempate verificable -- bloque Base #' + breakdown.tokenInfo.blockNumber + ' <a href="' + breakdown.tokenInfo.explorerUrl + '" target="_blank" class="underline">ver</a></div>' : '') +
-                '</div>';
-        }
+        this.showFanPlaysResultScreen(match, winner, resultKind, breakdown);
 
         var practiceWinnerArtist = winner === 1 ? (match.player1_song_artist || 'Vos') : (match.player2_song_artist || 'CPU');
         triggerHostNarration(match.id || match.match_id, 'result', (userWon ? 'Ganaste vos' : 'Ganó la CPU') + ' (' + practiceWinnerArtist + '). Batalla de práctica terminada.');
+    },
+
+    // Pantalla completa de resultado para "Reproducciones de Fan" --
+    // pedido explícito del usuario: que el mensaje "salte a la vista
+    // principal" (no quedar como una cajita chica dentro de la arena) y
+    // tenga un ícono "de lujo temático" en vez de un genérico trofeo/X.
+    // Corona dorada con brillo para la victoria (el jugador es "el
+    // campeón"), medalla plateada para la derrota (un intento digno, no
+    // un fracaso) -- mismo criterio de mensajes que ya se acordó
+    // ("ganaste/perdiste por destreza" o "fue parejo"), reusa el mismo
+    // fondo de partículas y el mismo scroll automático que
+    // showVictoryScreen() (ver scrollToVictorySection/initVictoryCanvas).
+    showFanPlaysResultScreen(match, winner, resultKind, breakdown) {
+        this.destroyBattleCanvas();
+        var userWon = winner === 1;
+        var winnerName = winner === 1 ? match.player1_song_name : match.player2_song_name;
+        var winnerImg = winner === 1 ? match.player1_song_image : match.player2_song_image;
+
+        var explain = resultKind === 'destreza_clara'
+            ? ('Le diste ' + breakdown.playerAvg + ' reproducciones de fan a tu canción -- la Máquina, ' + breakdown.cpuAvg + '. ' + (userWon ? '¡Ganaste claramente por destreza!' : 'Te ganó claramente por destreza -- practicá y volvé a intentarlo.'))
+            : ('Fue parejo (' + breakdown.playerAvg + ' vs ' + breakdown.cpuAvg + ' reproducciones) -- se definió en el último instante.');
+
+        var icon = userWon ? 'crown' : 'medal';
+        var iconColor = userWon ? '#fde047' : '#cbd5e1';
+        var iconGlow = userWon ? 'drop-shadow(0 0 18px rgba(250,204,21,0.85))' : 'drop-shadow(0 0 12px rgba(148,163,184,0.5))';
+        // CRÍTICO: este proyecto usa un tailwind.css PRE-COMPILADO (ver el
+        // comentario grande en index.html) -- clases nuevas que no estaban
+        // ya en el HTML en el momento de generar ese archivo simplemente no
+        // existen en el CSS final y quedan invisibles (pasó acá mismo: el
+        // título en degradé no se veía con `from-yellow-300 ...`). Todo lo
+        // nuevo de esta pantalla va en estilos inline a propósito, en vez
+        // de inventar clases de Tailwind que necesitarían regenerar ese
+        // archivo para funcionar.
+        var titleStyle = userWon
+            ? 'animation:fadeInUp 0.5s ease-out;background:linear-gradient(90deg,#fde047,#fef3c7,#f59e0b);-webkit-background-clip:text;background-clip:text;color:transparent;'
+            : 'animation:fadeInUp 0.5s ease-out;color:#cbd5e1;';
+        var borderGlowStyle = userWon
+            ? 'border-color:#fde047;box-shadow:0 0 40px rgba(250,204,21,0.45);'
+            : 'border-color:#94a3b8;box-shadow:0 0 25px rgba(148,163,184,0.25);';
+
+        var container = document.querySelector('main') || document.querySelector('.container');
+        container.innerHTML = '<section id="victorySection" class="max-w-3xl mx-auto py-12 px-4 text-center relative min-h-[500px]">' +
+            '<canvas id="victoryCanvas" class="absolute inset-0 w-full h-full pointer-events-none rounded-2xl"></canvas>' +
+            '<div class="relative z-10">' +
+            '<div class="mb-4 flex justify-center" style="color:' + iconColor + ';filter:' + iconGlow + ';animation:bounce 0.6s ease-out">' + (window.MTRIcons ? window.MTRIcons.svg(icon, { size: 92 }) : '') + '</div>' +
+            '<h1 class="text-4xl sm:text-6xl font-black mb-3" style="' + titleStyle + '">' + (userWon ? '¡VICTORIA!' : 'Perdiste esta vez') + '</h1>' +
+            '<div class="flex items-center justify-center gap-4 mb-4">' +
+            '<img src="' + winnerImg + '" class="w-16 h-16 rounded-full" style="border:2px solid;' + borderGlowStyle + '">' +
+            '<h2 class="text-xl sm:text-2xl font-bold text-white">' + winnerName + '</h2>' +
+            '</div>' +
+            '<p class="text-base sm:text-lg text-gray-300 mb-2 max-w-xl mx-auto">' + explain + '</p>' +
+            '<p class="text-sm text-gray-500 mb-6">Batalla de práctica · sin apuesta -- tus créditos no cambiaron</p>' +
+            (breakdown.tokenInfo ? '<p class="text-gray-500 mb-6" style="font-size:11px;">Desempate verificable -- bloque Base #' + breakdown.tokenInfo.blockNumber + ' <a href="' + breakdown.tokenInfo.explorerUrl + '" target="_blank" class="underline text-cyan-400">ver en BaseScan</a></p>' : '') +
+            '<button onclick="GameEngine.goToPracticeSelection()" class="px-8 py-3 rounded-xl text-lg font-bold bg-gradient-to-r from-cyan-500 to-fuchsia-500 text-white hover:opacity-90 transition-all shadow-lg shadow-cyan-500/25 cursor-pointer">' +
+            svgIcon('target', 16) + 'Volver a intentarlo' +
+            '</button>' +
+            '</div></section>';
+
+        if (typeof window.mtr2Sync === 'function') window.mtr2Sync();
+        this.initVictoryCanvas(userWon);
+        this.scrollToVictorySection('victorySection');
     },
 
     /**
@@ -5646,81 +5692,58 @@ const GameEngine = {
         if (typeof window.mtr2Sync === 'function') window.mtr2Sync();
 
         this.initVictoryCanvas(userWon);
-        
-        // SCROLL AUTOMÁTICO A LA PANTALLA DE VICTORIA
+        this.scrollToVictorySection('victorySection');
+    },
+
+    // Extraído de showVictoryScreen() para poder reusarlo desde
+    // showFanPlaysResultScreen() (Modo Práctica, mecanismo de
+    // "reproducciones de fan") sin duplicar todo este cálculo -- el
+    // ajuste fino existe porque en vivo se reportó que el scroll simple
+    // a veces dejaba la pantalla de resultado tapada por el header.
+    scrollToVictorySection(sectionId) {
         setTimeout(() => {
             try {
-                const victorySection = document.getElementById('victorySection');
-                if (victorySection) {
-                    // Detectar si es móvil
+                const section = document.getElementById(sectionId);
+                if (section) {
                     const isMobile = typeof window !== 'undefined' && (
                         /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) ||
                         (window.innerWidth <= 768) ||
                         (typeof isMobileDevice === 'function' && isMobileDevice())
                     );
-                    
-                    console.log('[showVictoryScreen] Iniciando scroll automático a pantalla de victoria...');
-                    console.log('[showVictoryScreen] Plataforma:', isMobile ? 'MÓVIL' : 'DESKTOP');
-                    
+
                     const header = document.querySelector('header');
                     const headerHeight = header ? header.offsetHeight : (isMobile ? 64 : 80);
-                    
-                    // Obtener posición del elemento
-                    const rect = victorySection.getBoundingClientRect();
+
+                    const rect = section.getBoundingClientRect();
                     const scrollTop = window.pageYOffset || document.documentElement.scrollTop || window.scrollY;
                     const elementTop = rect.top + scrollTop;
-                    
-                    // Calcular posición objetivo
+
                     const paddingOffset = isMobile ? 15 : 25;
                     const offset = headerHeight + paddingOffset;
                     const targetPosition = Math.max(0, elementTop - offset);
-                    
-                    console.log('[showVictoryScreen] Scroll calculado:', {
-                        plataforma: isMobile ? 'MÓVIL' : 'DESKTOP',
-                        elementTop: elementTop,
-                        headerHeight: headerHeight,
-                        targetPosition: targetPosition
-                    });
-                    
-                    // Hacer scroll suave a la pantalla de victoria
-                    window.scrollTo({
-                        top: targetPosition,
-                        behavior: 'smooth'
-                    });
-                    
-                    // Verificación después del scroll
+
+                    window.scrollTo({ top: targetPosition, behavior: 'smooth' });
+
                     setTimeout(() => {
-                        const finalRect = victorySection.getBoundingClientRect();
+                        const finalRect = section.getBoundingClientRect();
                         const finalTop = finalRect.top;
                         const viewportHeight = window.innerHeight;
                         const isVisible = finalTop >= headerHeight && finalTop < viewportHeight - 50;
-                        
-                        console.log('[showVictoryScreen] Verificación scroll:', {
-                            finalTop: finalTop,
-                            headerHeight: headerHeight,
-                            isVisible: isVisible
-                        });
-                        
-                        // Si no está completamente visible, hacer ajuste fino
+
                         if (!isVisible || finalTop < headerHeight + 10) {
                             const currentScroll = window.pageYOffset || document.documentElement.scrollTop || window.scrollY;
                             const finalElementTop = finalRect.top + currentScroll;
                             const fineTarget = finalElementTop - headerHeight - paddingOffset;
-                            
-                            window.scrollTo({
-                                top: fineTarget,
-                                behavior: 'smooth'
-                            });
-                            console.log('[showVictoryScreen] Ajuste fino aplicado');
+                            window.scrollTo({ top: fineTarget, behavior: 'smooth' });
                         }
                     }, 400);
                 } else {
-                    console.warn('[showVictoryScreen] ⚠️ victorySection no encontrado');
+                    console.warn('[scrollToVictorySection] ⚠️ sección no encontrada:', sectionId);
                 }
             } catch (scrollError) {
-                console.error('[showVictoryScreen] ❌ Error en scroll automático:', scrollError);
+                console.error('[scrollToVictorySection] ❌ Error en scroll automático:', scrollError);
             }
-        }, 200); // Pequeño delay para que el elemento se renderice
+        }, 200);
     },
 
     initVictoryCanvas(userWon) {
