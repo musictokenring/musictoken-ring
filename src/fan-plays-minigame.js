@@ -196,12 +196,23 @@
                 '<img src="' + MTR_LOGO_URL + '" style="width:100%;height:100%;object-fit:cover;" alt="" onerror="this.remove()">' +
             '</div>';
         document.body.appendChild(wrap);
+        // Pedido explícito: que quede visible más tiempo para captar la
+        // atención del jugador -- en vez de solo estirar la misma curva de
+        // antes (que se sentiría lenta/pastosa), son 3 fases: entrada
+        // rápida (~15%), una espera larga con pulso y giro continuo
+        // (~70%, para que no se sienta "congelada" mientras dura), y un
+        // desvanecido rápido al final (~15%). Casi el doble de duración
+        // que antes (950ms -> 1900ms).
         wrap.animate([
             { transform: 'perspective(700px) translateY(50px) scale(0.15) rotateY(0deg)', opacity: 0, offset: 0 },
-            { transform: 'perspective(700px) translateY(-16px) scale(1.2) rotateY(360deg)', opacity: 1, offset: 0.42 },
-            { transform: 'perspective(700px) translateY(0px) scale(1) rotateY(540deg)', opacity: 1, offset: 0.7 },
-            { transform: 'perspective(700px) translateY(-20px) scale(0.85) rotateY(720deg)', opacity: 0, offset: 1 }
-        ], { duration: 950, easing: 'cubic-bezier(.2,.7,.3,1)' }).onfinish = function () { wrap.remove(); };
+            { transform: 'perspective(700px) translateY(-18px) scale(1.3) rotateY(300deg)', opacity: 1, offset: 0.15 },
+            { transform: 'perspective(700px) translateY(-10px) scale(1.05) rotateY(480deg)', opacity: 1, offset: 0.3 },
+            { transform: 'perspective(700px) translateY(-16px) scale(1.15) rotateY(660deg)', opacity: 1, offset: 0.48 },
+            { transform: 'perspective(700px) translateY(-10px) scale(1.05) rotateY(840deg)', opacity: 1, offset: 0.65 },
+            { transform: 'perspective(700px) translateY(-14px) scale(1.12) rotateY(1020deg)', opacity: 1, offset: 0.82 },
+            { transform: 'perspective(700px) translateY(-8px) scale(1) rotateY(1160deg)', opacity: 1, offset: 0.9 },
+            { transform: 'perspective(700px) translateY(-30px) scale(0.7) rotateY(1260deg)', opacity: 0, offset: 1 }
+        ], { duration: 1900, easing: 'ease-in-out' }).onfinish = function () { wrap.remove(); };
     }
 
     // Ondas de fondo tipo ecualizador -- pedido explícito ("ondas
