@@ -4486,12 +4486,21 @@ const GameEngine = {
                      (misma altura que las moneditas bonus), lado
                      superior derecho -- pedido explícito tras corregir un
                      primer intento en el header fijo, que quedaba en el
-                     lugar equivocado. Ver toggleHeaderBattleTimerBadge en
-                     este mismo archivo. -->
-                <div class="relative flex items-center justify-center" style="min-height:34px;margin-bottom:6px;">
-                    <div id="fanPlaysAchievementsTop" style="max-width:300px;margin:0 auto;"></div>
-                    <div id="battleTimerHeaderBadge" style="position:absolute; right:0; top:50%; transform:translateY(-50%); width:34px; height:34px; border-radius:50%; background:radial-gradient(circle at 35% 30%, #f87171, #dc2626 55%, #991b1b 100%); border:2px solid rgba(255,255,255,0.3); box-shadow:0 0 12px rgba(220,38,38,0.75), 0 2px 6px rgba(0,0,0,0.4); display:flex; align-items:center; justify-content:center; flex-shrink:0; z-index:5;">
-                        <span id="battleTimerHeaderBadgeValue" style="font-size:13px; font-weight:900; color:#fff; line-height:1;">60</span>
+                     lugar equivocado.
+                     GRILLA de 3 columnas (no absolute+centrado): con
+                     position:absolute el círculo terminaba pisando el
+                     texto "RIVAL (N)" en pantallas angostas (algunos
+                     Android chicos, iPhone SE/mini) porque el tablerito
+                     se centraba en el ANCHO TOTAL de la fila sin dejarle
+                     espacio. La columna lateral (mismo ancho que el
+                     círculo) reserva ese espacio de verdad, así nunca se
+                     superponen sea cual sea el ancho de pantalla. Ver
+                     toggleHeaderBattleTimerBadge en este mismo archivo. -->
+                <div class="relative" style="display:grid; grid-template-columns:32px 1fr 32px; align-items:center; column-gap:6px; margin-bottom:6px;">
+                    <div aria-hidden="true"></div>
+                    <div id="fanPlaysAchievementsTop" style="min-width:0;"></div>
+                    <div id="battleTimerHeaderBadge" style="justify-self:end; width:32px; height:32px; border-radius:50%; background:radial-gradient(circle at 35% 30%, #f87171, #dc2626 55%, #991b1b 100%); border:2px solid rgba(255,255,255,0.3); box-shadow:0 0 10px rgba(220,38,38,0.75), 0 2px 6px rgba(0,0,0,0.4); display:flex; align-items:center; justify-content:center; flex-shrink:0; z-index:5;">
+                        <span id="battleTimerHeaderBadgeValue" style="font-size:12px; font-weight:900; color:#fff; line-height:1; font-variant-numeric:tabular-nums;">60</span>
                     </div>
                 </div>
                 <div class="text-sm text-gray-500" title="Lo que arriesgan los dos jugadores entre si, no incluye lo que apuesten los fans">${svgIcon('cash', 14)}Pozo de jugadores: ${pot} MTR</div>
@@ -6297,37 +6306,69 @@ const GameEngine = {
         try {
             const data = await this.fetchDeezerJsonp(`https://api.deezer.com/artist/${artistId}/top?limit=6`);
             const tracks = data?.data || [];
-            return tracks.find(track => track.preview) || tracks[0];
+            // Antes siempre devolvía el track #1 (el "hit" más grande de
+            // cada artista) -- acá está la otra mitad de por qué la CPU
+            // se sentía repetitiva: entre las hasta 6 más populares del
+            // artista, se elige una al azar en vez de siempre la misma.
+            const withPreview = this.shuffleCopy(tracks.filter(t => t.preview));
+            return withPreview[0] || tracks[0];
         } catch (error) {
             console.warn('No se pudo obtener top tracks:', error);
             return null;
         }
     },
 
+    // Baraja una copia del array (Fisher-Yates) -- usado en toda la
+    // selección de canción CPU para que no salga siempre "la primera
+    // que cumple la condición" (eso es lo que hacía la selección
+    // repetitiva: mismo orden de la API => mismo resultado siempre).
+    shuffleCopy(arr) {
+        const copy = (arr || []).slice();
+        for (let i = copy.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [copy[i], copy[j]] = [copy[j], copy[i]];
+        }
+        return copy;
+    },
+
     pickCpuTrack(tracks, userSong) {
         if (!tracks || tracks.length === 0) return null;
-        const differentArtist = tracks.find(track => {
+        // Se baraja ANTES de filtrar -- así, entre varias canciones que
+        // cumplen el mismo criterio (distinto artista, distinta tapa),
+        // no siempre gana la que Deezer devolvió primero. Pedido
+        // explícito del usuario: la CPU se sentía repetitiva en Modo
+        // Práctica porque esto siempre elegía el mismo resultado para
+        // la misma canción de entrada.
+        const shuffled = this.shuffleCopy(tracks);
+
+        const differentArtistCandidates = shuffled.filter(track => {
             const artistName = track.artist?.name?.toLowerCase();
             const sameArtist = artistName === userSong.artist.toLowerCase();
             const cover = track.album?.cover_big || track.album?.cover_medium;
             return track.preview && cover && cover !== userSong.image && !sameArtist;
         });
-        if (differentArtist) return differentArtist;
+        if (differentArtistCandidates.length > 0) return differentArtistCandidates[0];
 
-        const differentCover = tracks.find(track => {
+        const differentCoverCandidates = shuffled.filter(track => {
             const cover = track.album?.cover_big || track.album?.cover_medium;
             return track.preview && cover && cover !== userSong.image;
         });
-        if (differentCover) return differentCover;
+        if (differentCoverCandidates.length > 0) return differentCoverCandidates[0];
 
-        return tracks.find(track => track.preview) || tracks[0];
+        return shuffled.find(track => track.preview) || shuffled[0];
     },
 
     async fetchCpuOpponentTrack(userSong) {
         const userDetails = await this.fetchTrackDetails(userSong.id);
         const artistId = userDetails?.artist?.id;
         if (artistId) {
-            const relatedArtists = await this.fetchRelatedArtists(artistId);
+            // Deezer siempre devuelve los artistas relacionados en el
+            // MISMO orden (por relevancia) -- sin barajar, el primero
+            // válido de la lista era casi siempre el mismo, así que la
+            // CPU repetía rival para la misma canción del jugador una y
+            // otra vez. Barajado + top track también al azar (ver
+            // fetchTopTrackForArtist) le dan variedad real.
+            const relatedArtists = this.shuffleCopy(await this.fetchRelatedArtists(artistId));
             for (const artist of relatedArtists) {
                 if (artist.name?.toLowerCase() === userSong.artist.toLowerCase()) continue;
                 const topTrack = await this.fetchTopTrackForArtist(artist.id);

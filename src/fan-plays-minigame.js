@@ -393,15 +393,21 @@
             // a un lugar propio dentro de containerEl para no perder la
             // función por completo.
             var achievementsHost = document.getElementById('fanPlaysAchievementsTop') || containerEl;
+            // flex-wrap + min-width:0 en los dos grupos -- esta fila ahora
+            // vive en una columna angosta (compartida con el círculo del
+            // cronómetro, ver createBattleUI en game-engine.js), así que
+            // en pantallas muy chicas (Android gama baja, iPhone SE) tiene
+            // que poder pasar a 2 líneas en vez de desbordar y empujar el
+            // resto del layout hacia los costados.
             achievementsHost.innerHTML =
-                '<div style="display:flex;align-items:center;justify-content:center;gap:10px;">' +
-                    '<div style="display:flex;align-items:center;gap:4px;">' +
+                '<div style="display:flex;align-items:center;justify-content:center;flex-wrap:wrap;gap:6px;">' +
+                    '<div style="display:flex;align-items:center;gap:4px;min-width:0;">' +
                         '<span style="color:#22d3ee;font-weight:700;font-size:10px;">VOS</span>' +
                         '<div id="fanPlaysMyCoins" style="display:flex;gap:2px;flex-wrap:wrap;min-height:11px;"></div>' +
                         '<span id="fanPlaysMyCoinsCount" style="color:#9ca3af;font-size:10px;"></span>' +
                     '</div>' +
                     '<span style="color:#4b5563;font-size:10px;">·</span>' +
-                    '<div style="display:flex;align-items:center;gap:4px;">' +
+                    '<div style="display:flex;align-items:center;gap:4px;min-width:0;">' +
                         '<span style="color:#e879f9;font-weight:700;font-size:10px;">RIVAL</span>' +
                         '<div id="fanPlaysCpuCoins" style="display:flex;gap:2px;flex-wrap:wrap;min-height:11px;"></div>' +
                         '<span id="fanPlaysCpuCoinsCount" style="color:#9ca3af;font-size:10px;"></span>' +
