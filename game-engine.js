@@ -4408,11 +4408,6 @@ const GameEngine = {
     createBattleUI(match) {
         console.log('[createBattleUI] ✅ Creando UI de batalla');
         console.log('[createBattleUI] Match:', match);
-        // Círculo del cronómetro en la barra fija de arriba -- visible
-        // desde que arranca CUALQUIER batalla, se oculta en
-        // showVictoryScreen()/showFanPlaysResultScreen() al terminar.
-        this.toggleHeaderBattleTimerBadge(true);
-
         // Ocultar todas las secciones principales primero
         const songSelection = document.getElementById('songSelection');
         const waitingScreen = document.getElementById('waitingScreen');
@@ -4480,13 +4475,25 @@ const GameEngine = {
                     <span class="text-3xl font-black text-white tabular-nums" id="battleTimer">${this.battleDuration}</span>
                     <span class="text-xs text-gray-400">seg</span>
                 </div>
-                <!-- Tablerito de moneditas de "Reproducciones de Fan" (Vos
-                     vs Rival) -- pedido explícito: justo debajito del
-                     contador de tiempo. Vacío por defecto, solo lo llena
+                <!-- Fila del tablerito de moneditas de "Reproducciones de
+                     Fan" (Vos vs Rival) -- pedido explícito: justo
+                     debajito del contador de tiempo. El tablerito en sí
+                     queda vacío por defecto, solo lo llena
                      fan-plays-minigame.js cuando corresponde (Modo
                      Práctica / Sala Privada verificada); en el resto de
-                     los modos queda vacío y sin efecto visual. -->
-                <div id="fanPlaysAchievementsTop" style="max-width:300px;margin:0 auto 6px;"></div>
+                     los modos queda vacío y sin efecto visual.
+                     El círculo rojo del cronómetro va PEGADO A ESTA FILA
+                     (misma altura que las moneditas bonus), lado
+                     superior derecho -- pedido explícito tras corregir un
+                     primer intento en el header fijo, que quedaba en el
+                     lugar equivocado. Ver toggleHeaderBattleTimerBadge en
+                     este mismo archivo. -->
+                <div class="relative flex items-center justify-center" style="min-height:34px;margin-bottom:6px;">
+                    <div id="fanPlaysAchievementsTop" style="max-width:300px;margin:0 auto;"></div>
+                    <div id="battleTimerHeaderBadge" style="position:absolute; right:0; top:50%; transform:translateY(-50%); width:34px; height:34px; border-radius:50%; background:radial-gradient(circle at 35% 30%, #f87171, #dc2626 55%, #991b1b 100%); border:2px solid rgba(255,255,255,0.3); box-shadow:0 0 12px rgba(220,38,38,0.75), 0 2px 6px rgba(0,0,0,0.4); display:flex; align-items:center; justify-content:center; flex-shrink:0; z-index:5;">
+                        <span id="battleTimerHeaderBadgeValue" style="font-size:13px; font-weight:900; color:#fff; line-height:1;">60</span>
+                    </div>
+                </div>
                 <div class="text-sm text-gray-500" title="Lo que arriesgan los dos jugadores entre si, no incluye lo que apuesten los fans">${svgIcon('cash', 14)}Pozo de jugadores: ${pot} MTR</div>
             </div>
 

@@ -878,20 +878,6 @@
                     <!-- Créditos de prueba (bono) -- ver bonus-credits-system.sql. Nunca retirables,
                          solo aparece si el usuario tiene saldo de prueba activo (CreditsSystem.updateBonusDisplay). -->
                     <span class="mtr-bonus-badge hidden px-1.5 py-0.5 rounded text-[10px] bg-orange-500/15 text-orange-300 font-semibold whitespace-nowrap cursor-help" title="Créditos de prueba: no son dinero real, son solo para probar la plataforma por tiempo limitado"></span>
-                    <!-- Cronómetro de batalla -- pedido explícito: en móvil,
-                         durante una batalla, el shell mtr2 se desactiva a
-                         propósito (ver mtr2ShouldBeActive() más abajo,
-                         MTR2_IN_PROGRESS_IDS incluye battleArena) y este
-                         header CLÁSICO es el que de verdad queda visible,
-                         en cualquier tamaño de pantalla -- por eso el
-                         círculo va ACÁ, no en el topbar de mtr2 (un primer
-                         intento ahí nunca se veía durante la pelea, que es
-                         justo cuando hace falta). Misma altura que los
-                         contadores de créditos/bono, oculto por defecto.
-                         Ver toggleHeaderBattleTimerBadge en game-engine.js. -->
-                    <div id="battleTimerHeaderBadge" class="hidden" style="width:34px; height:34px; border-radius:50%; background:radial-gradient(circle at 35% 30%, #f87171, #dc2626 55%, #991b1b 100%); border:2px solid rgba(255,255,255,0.3); box-shadow:0 0 12px rgba(220,38,38,0.75), 0 2px 6px rgba(0,0,0,0.4); display:flex; align-items:center; justify-content:center; flex-shrink:0;">
-                        <span id="battleTimerHeaderBadgeValue" style="font-size:13px; font-weight:900; color:#fff; line-height:1;">60</span>
-                    </div>
                     <!-- Saldos en móvil (compacto) -->
                     <span id="creditsCombinedDisplayMobile" class="sm:hidden px-1.5 py-0.5 rounded text-[10px] bg-fuchsia-500/10 text-fuchsia-400 font-semibold whitespace-nowrap cursor-help" title="MTR créditos jugables: fichas estables 1:1 USD nominal">
                         <span id="creditsDisplayMobile">0</span> <span id="usdcValueDisplayMobile" class="text-gray-400">$0</span>
