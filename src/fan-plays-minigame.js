@@ -61,14 +61,17 @@
         // Relleno con degradé (volumen) + trazo oscuro (borde definido) +
         // una elipse de brillo (glare) arriba a la izquierda -- el truco
         // clásico para que un ícono plano lea como "objeto con volumen".
-        return '<svg width="26" height="26" viewBox="0 0 24 24">' +
+        // Agrandada (26px -> 36px) a pedido explícito -- tiene que quedar
+        // en un tamaño cómodo para tocar, sobre todo en el dedo de un
+        // celular, no solo "visible".
+        return '<svg width="36" height="36" viewBox="0 0 24 24">' +
             '<path d="' + STAR_PATH + '" fill="url(#fpStarMoving)" stroke="#0891b2" stroke-width="0.8" stroke-linejoin="round"/>' +
             '<ellipse cx="9.3" cy="7.2" rx="2.1" ry="1.1" fill="rgba(255,255,255,0.85)" transform="rotate(-25 9.3 7.2)"/>' +
         '</svg>';
     }
 
     function targetStarSvg() {
-        return '<svg width="24" height="24" viewBox="0 0 24 24">' +
+        return '<svg width="33" height="33" viewBox="0 0 24 24">' +
             '<path d="' + STAR_PATH + '" fill="url(#fpStarTarget)" stroke="rgba(255,255,255,0.5)" stroke-width="1.2" stroke-linejoin="round"/>' +
         '</svg>';
     }
@@ -109,61 +112,75 @@
     // con ruido blanco filtrado (el "rugido" de fondo) más varios
     // golpecitos cortos superpuestos (los "aplausos" individuales), sin
     // ningún archivo de audio externo.
+    function scheduleCrowdCheerNodes() {
+        var now = _audioCtx.currentTime;
+
+        // "Rugido" de fondo: ruido blanco con un simple pasa-altos (corta
+        // solo el retumbe grave, deja pasar casi toda la energía del
+        // ruido -- un pasa-banda angosto lo dejaba casi inaudible) y una
+        // envolvente que sube de golpe y baja gradual.
+        var duration = 1.1;
+        var bufferSize = Math.floor(_audioCtx.sampleRate * duration);
+        var buffer = _audioCtx.createBuffer(1, bufferSize, _audioCtx.sampleRate);
+        var data = buffer.getChannelData(0);
+        for (var i = 0; i < bufferSize; i++) data[i] = Math.random() * 2 - 1;
+
+        var noise = _audioCtx.createBufferSource();
+        noise.buffer = buffer;
+        var highpass = _audioCtx.createBiquadFilter();
+        highpass.type = 'highpass';
+        highpass.frequency.setValueAtTime(500, now);
+        var roarGain = _audioCtx.createGain();
+        roarGain.gain.setValueAtTime(0.0001, now);
+        roarGain.gain.exponentialRampToValueAtTime(0.55, now + 0.08);
+        roarGain.gain.exponentialRampToValueAtTime(0.3, now + 0.4);
+        roarGain.gain.exponentialRampToValueAtTime(0.001, now + duration);
+        noise.connect(highpass);
+        highpass.connect(roarGain);
+        roarGain.connect(_audioCtx.destination);
+        noise.start(now);
+        noise.stop(now + duration);
+
+        // Golpecitos individuales (los "aplausos") -- ruido corto y
+        // agudo, esparcidos en los primeros ~0.6s para simular una
+        // ráfaga de manos aplaudiendo, no un solo "pum" seco.
+        var clapCount = 9;
+        for (var c = 0; c < clapCount; c++) {
+            var at = now + Math.random() * 0.6;
+            var clapSize = Math.floor(_audioCtx.sampleRate * 0.045);
+            var clapBuffer = _audioCtx.createBuffer(1, clapSize, _audioCtx.sampleRate);
+            var clapData = clapBuffer.getChannelData(0);
+            for (var j = 0; j < clapSize; j++) clapData[j] = (Math.random() * 2 - 1) * (1 - j / clapSize);
+            var clap = _audioCtx.createBufferSource();
+            clap.buffer = clapBuffer;
+            var clapFilter = _audioCtx.createBiquadFilter();
+            clapFilter.type = 'highpass';
+            clapFilter.frequency.value = 1000;
+            var clapGain = _audioCtx.createGain();
+            clapGain.gain.setValueAtTime(0.4, at);
+            clapGain.gain.exponentialRampToValueAtTime(0.001, at + 0.07);
+            clap.connect(clapFilter);
+            clapFilter.connect(clapGain);
+            clapGain.connect(_audioCtx.destination);
+            clap.start(at);
+            clap.stop(at + 0.08);
+        }
+    }
+
     function playCrowdCheer() {
         try {
             if (!_audioCtx) _audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-            if (_audioCtx.state === 'suspended') _audioCtx.resume();
-            var now = _audioCtx.currentTime;
-
-            // "Rugido" de fondo: ruido blanco pasado por un filtro
-            // pasa-banda, con una envolvente que sube rápido y baja
-            // gradual -- da la sensación de la tribuna reaccionando de
-            // golpe y calmándose de a poco.
-            var duration = 1.0;
-            var bufferSize = Math.floor(_audioCtx.sampleRate * duration);
-            var buffer = _audioCtx.createBuffer(1, bufferSize, _audioCtx.sampleRate);
-            var data = buffer.getChannelData(0);
-            for (var i = 0; i < bufferSize; i++) data[i] = Math.random() * 2 - 1;
-
-            var noise = _audioCtx.createBufferSource();
-            noise.buffer = buffer;
-            var bandpass = _audioCtx.createBiquadFilter();
-            bandpass.type = 'bandpass';
-            bandpass.frequency.setValueAtTime(1600, now);
-            bandpass.Q.value = 0.5;
-            var roarGain = _audioCtx.createGain();
-            roarGain.gain.setValueAtTime(0.0001, now);
-            roarGain.gain.exponentialRampToValueAtTime(0.2, now + 0.1);
-            roarGain.gain.exponentialRampToValueAtTime(0.001, now + duration);
-            noise.connect(bandpass);
-            bandpass.connect(roarGain);
-            roarGain.connect(_audioCtx.destination);
-            noise.start(now);
-            noise.stop(now + duration);
-
-            // Golpecitos individuales (los "aplausos") -- ruido corto y
-            // agudo, esparcidos en los primeros ~0.5s para simular una
-            // ráfaga de manos aplaudiendo, no un solo "pum" seco.
-            var clapCount = 7;
-            for (var c = 0; c < clapCount; c++) {
-                var at = now + Math.random() * 0.5;
-                var clapSize = Math.floor(_audioCtx.sampleRate * 0.04);
-                var clapBuffer = _audioCtx.createBuffer(1, clapSize, _audioCtx.sampleRate);
-                var clapData = clapBuffer.getChannelData(0);
-                for (var j = 0; j < clapSize; j++) clapData[j] = (Math.random() * 2 - 1) * (1 - j / clapSize);
-                var clap = _audioCtx.createBufferSource();
-                clap.buffer = clapBuffer;
-                var clapFilter = _audioCtx.createBiquadFilter();
-                clapFilter.type = 'highpass';
-                clapFilter.frequency.value = 1200;
-                var clapGain = _audioCtx.createGain();
-                clapGain.gain.setValueAtTime(0.14, at);
-                clapGain.gain.exponentialRampToValueAtTime(0.001, at + 0.05);
-                clap.connect(clapFilter);
-                clapFilter.connect(clapGain);
-                clapGain.connect(_audioCtx.destination);
-                clap.start(at);
-                clap.stop(at + 0.06);
+            // CRÍTICO: resume() es asíncrono -- si se seguía de largo sin
+            // esperarlo, los nodos podían programarse mientras el contexto
+            // todavía estaba "suspended" y el navegador los descartaba en
+            // silencio (sin ningún error visible, por eso "no se
+            // escuchaba" nada aunque el código corriera entero). Ahora se
+            // arman los nodos recién cuando el contexto confirma que ya
+            // está "running".
+            if (_audioCtx.state === 'suspended') {
+                _audioCtx.resume().then(scheduleCrowdCheerNodes).catch(function () { /* ignore */ });
+            } else {
+                scheduleCrowdCheerNodes();
             }
         } catch (e) { /* audio nunca debe romper el juego */ }
     }
@@ -313,7 +330,7 @@
     }
 
     function waveBackgroundSvg() {
-        var tileW = 200, h = 52;
+        var tileW = 200, h = 76;
         var wave1 = '<svg id="fanPlaysWave1" width="100%" height="100%" viewBox="0 0 ' + (tileW * 2) + ' ' + h + '" preserveAspectRatio="none" style="position:absolute;inset:0;">' +
             '<path d="' + waveTilePath(9, h * 0.35, tileW) + '" stroke="rgba(34,211,238,0.4)" stroke-width="2" fill="none"/>' +
         '</svg>';
@@ -355,7 +372,10 @@
                 '<div class="text-center text-[11px] text-gray-400 mb-1">Tocá cuando la estrella que se desliza entre en la zona -- si coincide con la estrella fija, ¡doble puntaje!</div>' +
                 // overflow:visible a propósito -- el destello y el estallido
                 // cómic de un toque perfecto se salen del alto de la pista.
-                '<div id="fanPlaysTrack" style="position:relative;height:52px;border-radius:10px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);overflow:visible;cursor:pointer;touch-action:manipulation;perspective:300px;">' +
+                // Pedido explícito: que el juego quede en un tamaño
+                // cómodo para el jugador, no apretado -- pista de 52px a
+                // 76px (junto con las estrellas más grandes de arriba).
+                '<div id="fanPlaysTrack" style="position:relative;height:76px;border-radius:12px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);overflow:visible;cursor:pointer;touch-action:manipulation;perspective:300px;">' +
                     waveBackgroundSvg() +
                     '<div style="position:absolute;inset:0;border-radius:10px;overflow:hidden;">' +
                         '<div id="fanPlaysZone" style="position:absolute;top:0;bottom:0;background:linear-gradient(90deg,rgba(0,243,255,0.18),rgba(217,70,239,0.18));border-left:2px solid rgba(0,243,255,0.5);border-right:2px solid rgba(217,70,239,0.5);"></div>' +
@@ -397,6 +417,17 @@
             const myCoinsCountEl = achievementsHost.querySelector('#fanPlaysMyCoinsCount');
             const lastScoreEl = containerEl.querySelector('#fanPlaysLastScore');
             const roundCountEl = containerEl.querySelector('#fanPlaysRoundCount');
+
+            // Pedido explícito: que la sección del juego quede plenamente
+            // visible para el jugador -- createBattleUI() ya hace scroll
+            // hasta el TOPE de la arena, pero eso no garantiza que la
+            // pista (más abajo, después del VS y las barras de salud)
+            // quede a la vista en una pantalla chica. Este segundo scroll
+            // corre un instante después (para no pelear con el de
+            // arriba) y centra la pista en el viewport.
+            setTimeout(function () {
+                try { containerEl.scrollIntoView({ behavior: 'smooth', block: 'center' }); } catch (e) { /* ignore */ }
+            }, 450);
 
             // Giro suave y constante -- junto con el degradé/brillo de
             // movingStarSvg(), es lo que vende el aspecto "3D" (un objeto
