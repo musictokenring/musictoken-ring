@@ -30,6 +30,13 @@
     var ROUND_MS = 2200;
     var ZONE_WIDTH_PCT = 16;
     var MIN_TAP_GAP_MS = 150;
+    // "Perfecto": tocar tan cerca del centro de la zona que la estrella que
+    // se desliza coincide con la estrella fija dibujada ahí -- dentro de
+    // esta fracción del medio-ancho de la zona, el toque vale DOBLE.
+    // Pedido explícito del usuario ("si coincide con su misma forma...
+    // será doble puntuación"). Vive acá (no solo en el cliente) porque
+    // afecta el puntaje que el servidor recalcula para dinero real.
+    var PERFECT_TOLERANCE_RATIO = 0.18;
 
     // mulberry32 -- PRNG determinístico chico y rápido, misma salida en
     // cualquier motor JS (navegador o Node) para la misma semilla.
@@ -82,7 +89,24 @@
         var half = ZONE_WIDTH_PCT / 2;
         var dist = Math.abs(indicatorPct - zoneCenter);
         if (dist > half) return 0;
-        return Math.round(100 * (1 - dist / half));
+        var base = 100 * (1 - dist / half);
+        // Toque "perfecto" -- coincide con la estrella fija -- vale doble.
+        // Un puntaje devuelto por acá mayor a 100 SIEMPRE significa
+        // "perfecto"; lo usa la UI del cliente para disparar el destello
+        // grande sin tener que recalcular la distancia por su cuenta.
+        if (dist <= half * PERFECT_TOLERANCE_RATIO) return Math.round(base * 2);
+        return Math.round(base);
+    }
+
+    // Solo para la UI (destello/sonido especial) -- ¿este toque hubiera
+    // sido "perfecto" en este momento? Usa la misma tolerancia que
+    // scoreForTap para no duplicar el número mágico en dos lugares.
+    function isPerfectTap(atMs, seed) {
+        var roundIndex = roundIndexForTime(atMs);
+        var zoneCenter = zoneCenterForRound(seed, roundIndex);
+        var indicatorPct = indicatorPctAtTime(atMs);
+        var half = ZONE_WIDTH_PCT / 2;
+        return Math.abs(indicatorPct - zoneCenter) <= half * PERFECT_TOLERANCE_RATIO;
     }
 
     /**
@@ -128,9 +152,11 @@
         ROUND_MS: ROUND_MS,
         ZONE_WIDTH_PCT: ZONE_WIDTH_PCT,
         MIN_TAP_GAP_MS: MIN_TAP_GAP_MS,
+        PERFECT_TOLERANCE_RATIO: PERFECT_TOLERANCE_RATIO,
         mulberry32: mulberry32,
         zoneCenterForRound: zoneCenterForRound,
         indicatorPctAtTime: indicatorPctAtTime,
+        isPerfectTap: isPerfectTap,
         roundIndexForTime: roundIndexForTime,
         totalRoundsFor: totalRoundsFor,
         scoreForTap: scoreForTap,
