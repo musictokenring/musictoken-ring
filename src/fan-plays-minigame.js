@@ -215,6 +215,22 @@
         ], { duration: 1900, easing: 'ease-in-out' }).onfinish = function () { wrap.remove(); };
     }
 
+    // "Tablerito" de moneditas de la suerte -- pedido explícito: un
+    // indicador chico de cuántas veces se consiguió el match perfecto,
+    // una fila para el jugador y otra para el rival, para comparar de un
+    // vistazo sin tener que leer números. Cada logro agrega una moneda
+    // nueva con una lucecita (glow) -- no hay un máximo fijo, la fila
+    // simplemente crece (son eventos raros, en la práctica no van a ser
+    // muchas por batalla).
+    function appendCoinDot(hostEl, countEl) {
+        if (!hostEl) return;
+        var dot = document.createElement('div');
+        dot.style.cssText = 'width:11px;height:11px;border-radius:50%;background:radial-gradient(circle,#fff7cc 0%,#fde047 45%,#f59e0b 100%);box-shadow:0 0 5px rgba(250,204,21,0.9),0 0 2px rgba(255,255,255,0.9);flex-shrink:0;';
+        hostEl.appendChild(dot);
+        dot.animate([{ transform: 'scale(0)' }, { transform: 'scale(1.4)' }, { transform: 'scale(1)' }], { duration: 320, easing: 'ease-out' });
+        if (countEl) countEl.textContent = '(' + hostEl.children.length + ')';
+    }
+
     // Ondas de fondo tipo ecualizador -- pedido explícito ("ondas
     // vibrantes moviéndose" de fondo en todo el espacio de la animación).
     // Dos capas, cada una con 2 ciclos de onda dibujados uno al lado del
@@ -282,13 +298,27 @@
                     '<div id="fanPlaysTargetStar" style="position:absolute;top:50%;transform:translate(-50%,-50%);pointer-events:none;filter:drop-shadow(0 0 3px rgba(255,255,255,0.35));">' + targetStarSvg() + '</div>' +
                     '<div id="fanPlaysIndicator" style="position:absolute;top:50%;transform:translate(-50%,-50%);pointer-events:none;filter:drop-shadow(0 1px 2px rgba(0,0,0,0.5)) drop-shadow(0 0 7px rgba(0,243,255,0.85));">' + movingStarSvg() + '</div>' +
                 '</div>' +
-                '<div class="flex justify-between mt-1 text-[10px] text-gray-500"><span id="fanPlaysLastScore"></span><span id="fanPlaysRoundCount">0/' + totalRounds + ' rondas</span></div>';
+                '<div class="flex justify-between mt-1 text-[10px] text-gray-500"><span id="fanPlaysLastScore"></span><span id="fanPlaysRoundCount">0/' + totalRounds + ' rondas</span></div>' +
+                '<div style="margin-top:6px;display:flex;flex-direction:column;gap:3px;">' +
+                    '<div style="display:flex;align-items:center;gap:6px;">' +
+                        '<span class="text-[10px]" style="color:#22d3ee;font-weight:700;width:34px;flex-shrink:0;">Vos</span>' +
+                        '<div id="fanPlaysMyCoins" style="display:flex;gap:3px;flex-wrap:wrap;min-height:11px;"></div>' +
+                        '<span id="fanPlaysMyCoinsCount" class="text-[10px] text-gray-500"></span>' +
+                    '</div>' +
+                    '<div style="display:flex;align-items:center;gap:6px;">' +
+                        '<span class="text-[10px]" style="color:#e879f9;font-weight:700;width:34px;flex-shrink:0;">Rival</span>' +
+                        '<div id="fanPlaysCpuCoins" style="display:flex;gap:3px;flex-wrap:wrap;min-height:11px;"></div>' +
+                        '<span id="fanPlaysCpuCoinsCount" class="text-[10px] text-gray-500"></span>' +
+                    '</div>' +
+                '</div>';
 
             const track = containerEl.querySelector('#fanPlaysTrack');
             const zoneEl = containerEl.querySelector('#fanPlaysZone');
             const targetStarEl = containerEl.querySelector('#fanPlaysTargetStar');
             const indicatorEl = containerEl.querySelector('#fanPlaysIndicator');
             const indicatorInner = indicatorEl.firstElementChild;
+            const myCoinsEl = containerEl.querySelector('#fanPlaysMyCoins');
+            const myCoinsCountEl = containerEl.querySelector('#fanPlaysMyCoinsCount');
             const lastScoreEl = containerEl.querySelector('#fanPlaysLastScore');
             const roundCountEl = containerEl.querySelector('#fanPlaysRoundCount');
 
@@ -346,6 +376,7 @@
                     if (perfect) {
                         spawnComicBurst(track, indicatorPct);
                         spawnMtrCoin();
+                        appendCoinDot(myCoinsEl, myCoinsCountEl);
                         targetStarEl.animate([{ filter: 'drop-shadow(0 0 3px rgba(255,255,255,0.35))' }, { filter: 'drop-shadow(0 0 16px rgba(250,204,21,1))' }, { filter: 'drop-shadow(0 0 3px rgba(255,255,255,0.35))' }], { duration: 500 });
                     }
                 }
@@ -430,6 +461,22 @@
             const spread = 22;
             const score = baseline + (Math.random() * 2 - 1) * spread;
             return Math.max(5, Math.min(97, Math.round(score)));
+        },
+
+        /**
+         * Tasa fija y documentada de "perfectos" simulados de la CPU --
+         * mismo criterio que simulateCpuScore(): nunca se ajusta en
+         * secreto, vive acá a la vista. 10% por ronda, un valor parejo
+         * (ni imposible de igualar ni regalado).
+         */
+        CPU_PERFECT_RATE: 0.10,
+
+        // Llamado desde game-engine.js (el simulador de la CPU vive ahí,
+        // no acá) cada vez que a la CPU "le toca" un perfecto -- agrega la
+        // moneda a la fila del rival dentro de ESTE contenedor de juego.
+        markOpponentPerfect(containerEl) {
+            if (!containerEl) return;
+            appendCoinDot(containerEl.querySelector('#fanPlaysCpuCoins'), containerEl.querySelector('#fanPlaysCpuCoinsCount'));
         }
     };
 

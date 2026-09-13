@@ -3192,7 +3192,17 @@ const GameEngine = {
         // simulateCpuScore() en fan-plays-minigame.js para el porqué esto
         // no es deshonesto (todo modo vs. CPU simula su nivel de juego).
         var cpuInterval = setInterval(function () {
-            cpuScores.push(window.FanPlaysMinigame.simulateCpuScore());
+            var cpuScore = window.FanPlaysMinigame.simulateCpuScore();
+            // Misma tasa fija y documentada que simulateCpuScore() -- ver
+            // CPU_PERFECT_RATE en fan-plays-minigame.js -- para que el
+            // "tablerito" de monedas de la CPU tenga con qué compararse
+            // contra el del jugador, sin regalarle ni negarle perfectos.
+            var cpuPerfect = Math.random() < window.FanPlaysMinigame.CPU_PERFECT_RATE;
+            if (cpuPerfect) {
+                cpuScore = Math.min(200, cpuScore * 2);
+                window.FanPlaysMinigame.markOpponentPerfect(gameArea);
+            }
+            cpuScores.push(cpuScore);
             refreshDisplay();
         }, 2200);
 
