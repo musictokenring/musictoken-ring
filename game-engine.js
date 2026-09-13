@@ -3076,6 +3076,7 @@ const GameEngine = {
             timeLeft--;
             var timerEl = document.getElementById('battleTimer');
             if (timerEl) timerEl.textContent = timeLeft;
+            if (window.GameEngine) window.GameEngine.updateHeaderBattleTimerBadge(timeLeft);
 
             plays1 += self.calculatePlaysIncrement(basePlays1);
             plays2 += self.calculatePlaysIncrement(basePlays2);
@@ -3211,6 +3212,7 @@ const GameEngine = {
             timeLeft--;
             var timerEl = document.getElementById('battleTimer');
             if (timerEl) timerEl.textContent = Math.max(0, timeLeft);
+            if (window.GameEngine) window.GameEngine.updateHeaderBattleTimerBadge(timeLeft);
             if (statusEl) {
                 if (timeLeft <= 5) statusEl.innerHTML = '<span class="text-red-400 font-bold animate-pulse">' + svgIcon('bolt', 14) + 'FINAL ÉPICO</span>';
                 else statusEl.innerHTML = '<span class="text-cyan-400">' + svgIcon('music', 14) + 'Sumá reproducciones tocando en el momento justo</span>';
@@ -3301,6 +3303,7 @@ const GameEngine = {
     // showVictoryScreen() (ver scrollToVictorySection/initVictoryCanvas).
     showFanPlaysResultScreen(match, winner, resultKind, breakdown) {
         this.destroyBattleCanvas();
+        this.toggleHeaderBattleTimerBadge(false);
         var userWon = winner === 1;
         var winnerName = winner === 1 ? match.player1_song_name : match.player2_song_name;
         var winnerImg = winner === 1 ? match.player1_song_image : match.player2_song_image;
@@ -3420,6 +3423,7 @@ const GameEngine = {
             timeLeft--;
             var timerEl = document.getElementById('battleTimer');
             if (timerEl) timerEl.textContent = timeLeft;
+            if (window.GameEngine) window.GameEngine.updateHeaderBattleTimerBadge(timeLeft);
 
             var progress = 1 - (timeLeft / self.battleDuration);
             plays1 = Math.floor(target1 * progress);
@@ -4404,7 +4408,11 @@ const GameEngine = {
     createBattleUI(match) {
         console.log('[createBattleUI] ✅ Creando UI de batalla');
         console.log('[createBattleUI] Match:', match);
-        
+        // Círculo del cronómetro en la barra fija de arriba -- visible
+        // desde que arranca CUALQUIER batalla, se oculta en
+        // showVictoryScreen()/showFanPlaysResultScreen() al terminar.
+        this.toggleHeaderBattleTimerBadge(true);
+
         // Ocultar todas las secciones principales primero
         const songSelection = document.getElementById('songSelection');
         const waitingScreen = document.getElementById('waitingScreen');
@@ -5129,6 +5137,7 @@ const GameEngine = {
             timeLeft--;
             var timerEl = document.getElementById('battleTimer');
             if (timerEl) timerEl.textContent = Math.max(0, timeLeft);
+            if (window.GameEngine) window.GameEngine.updateHeaderBattleTimerBadge(timeLeft);
             if (statusEl) {
                 statusEl.innerHTML = timeLeft <= 5
                     ? '<span class="text-red-400 font-bold animate-pulse">' + svgIcon('bolt', 14) + 'FINAL ÉPICO</span>'
@@ -5330,6 +5339,7 @@ const GameEngine = {
 
             const timerEl = document.getElementById('battleTimer');
             if (timerEl) timerEl.textContent = timeLeft;
+            if (window.GameEngine) window.GameEngine.updateHeaderBattleTimerBadge(timeLeft);
 
             // Use real-time streams data if available, otherwise fallback to calculated
             const streamData = this.getRealTimeStreams(match.id);
@@ -5669,6 +5679,7 @@ const GameEngine = {
     
     showVictoryScreen(match, winner, userWon, payouts) {
         this.destroyBattleCanvas();
+        this.toggleHeaderBattleTimerBadge(false);
         var winnerName = winner === 1 ? match.player1_song_name : match.player2_song_name;
         var winnerImg = winner === 1 ? match.player1_song_image : match.player2_song_image;
         var prize = userWon ? payouts.winnerPayout : 0;
@@ -5710,6 +5721,24 @@ const GameEngine = {
 
         this.initVictoryCanvas(userWon);
         this.scrollToVictorySection('victorySection');
+    },
+
+    // Círculo rojo del cronómetro en el header CLÁSICO -- pedido
+    // explícito: en móvil, el contador de la arena queda fuera de vista
+    // al hacer scroll hacia la pista del mini-juego. Va en el header
+    // clásico (no en el topbar del shell mtr2) porque mtr2ShouldBeActive()
+    // desactiva a propósito el shell mtr2 mientras #battleArena está
+    // visible -- ese header clásico es el que de verdad queda en
+    // pantalla durante una batalla, en cualquier tamaño de pantalla. Se
+    // llama junto con cada actualización de #battleTimer, nunca
+    // reemplaza esa lógica ya existente.
+    updateHeaderBattleTimerBadge(timeLeft) {
+        var el = document.getElementById('battleTimerHeaderBadgeValue');
+        if (el) el.textContent = Math.max(0, Math.round(timeLeft));
+    },
+    toggleHeaderBattleTimerBadge(show) {
+        var badge = document.getElementById('battleTimerHeaderBadge');
+        if (badge) badge.classList.toggle('hidden', !show);
     },
 
     // Extraído de showVictoryScreen() para poder reusarlo desde
