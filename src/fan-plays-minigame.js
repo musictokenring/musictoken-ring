@@ -9,48 +9,70 @@
  * archivo depende de que fan-plays-scoring.js ya esté cargado
  * (window.FanPlaysScoring).
  *
- * Refinado a pedido del usuario: la marca que se desliza y el blanco
- * fijo son ambos una ESTRELLA (no una línea) -- tocar dentro de la zona
- * dispara un destello, y si el toque coincide casi exactamente con la
- * estrella fija (la fórmula compartida ya define qué tan cerca es
- * "perfecto", ver PERFECT_TOLERANCE_RATIO) el puntaje sale doble y el
- * destello es más grande. Cada toque además dispara un sonido breve de
- * "disparo láser" sintetizado con Web Audio -- no hace falta ningún
- * archivo de audio.
+ * Refinado dos veces a pedido del usuario: primero estrellas + destello
+ * + doble puntaje "perfecto" + sonido láser; después aspecto 3D
+ * (degradés, brillo, giro suave) + destello con chispas + un estallido
+ * estilo cómic ("¡PERFECTO!") cuando las dos estrellas coinciden.
  *
  * El puntaje que se calcula ACÁ es solo para el feedback visual
  * inmediato del jugador -- el que realmente vale (el que decide la
  * batalla y el pago en dinero real) es el que recalcula el servidor de
  * forma independiente a partir de los toques crudos que se mandan en
- * onFinish. En Modo Práctica (sin dinero real, sin verificación
- * server-side) el puntaje local sigue siendo la única fuente.
+ * onFinish.
  */
 
 (function () {
     'use strict';
 
-    // Estrella de 5 puntas, viewBox 0 0 24 24 (mismo trazo que un ícono
-    // de "favorito" estándar) -- se reusa para la marca que se desliza y
-    // para el blanco fijo dentro de la zona.
+    // Estrella de 5 puntas, viewBox 0 0 24 24.
     var STAR_PATH = 'M12 2.5 L14.9 9.1 L22 9.8 L16.7 14.6 L18.2 21.5 L12 17.8 L5.8 21.5 L7.3 14.6 L2 9.8 L9.1 9.1 Z';
 
-    function starSvg(opts) {
-        opts = opts || {};
-        var size = opts.size || 26;
-        var fill = opts.fill || 'none';
-        var stroke = opts.stroke || '#fff';
-        var strokeWidth = opts.strokeWidth != null ? opts.strokeWidth : 1.5;
-        var extra = opts.extra || '';
-        return '<svg width="' + size + '" height="' + size + '" viewBox="0 0 24 24" style="' + (opts.style || '') + '">' +
-            '<path d="' + STAR_PATH + '" fill="' + fill + '" stroke="' + stroke + '" stroke-width="' + strokeWidth + '" stroke-linejoin="round"/>' +
-            extra +
-            '</svg>';
+    // Degradés compartidos (se inyectan una sola vez por instancia de
+    // juego) -- le dan el aspecto 3D: la estrella que se desliza es
+    // "sólida" con un brillo tipo vidrio/metal; la fija es más fantasma,
+    // como el hueco que hay que llenar.
+    function starDefsSvg() {
+        return '<svg width="0" height="0" style="position:absolute">' +
+            '<defs>' +
+                '<radialGradient id="fpStarMoving" cx="35%" cy="28%" r="80%">' +
+                    '<stop offset="0%" stop-color="#ffffff"/>' +
+                    '<stop offset="30%" stop-color="#bff4ff"/>' +
+                    '<stop offset="70%" stop-color="#22d3ee"/>' +
+                    '<stop offset="100%" stop-color="#0e7490"/>' +
+                '</radialGradient>' +
+                '<radialGradient id="fpStarTarget" cx="35%" cy="28%" r="80%">' +
+                    '<stop offset="0%" stop-color="rgba(255,255,255,0.5)"/>' +
+                    '<stop offset="60%" stop-color="rgba(255,255,255,0.14)"/>' +
+                    '<stop offset="100%" stop-color="rgba(255,255,255,0.03)"/>' +
+                '</radialGradient>' +
+                '<radialGradient id="fpBurstGrad" cx="50%" cy="45%" r="60%">' +
+                    '<stop offset="0%" stop-color="#fff7cc"/>' +
+                    '<stop offset="55%" stop-color="#facc15"/>' +
+                    '<stop offset="100%" stop-color="#f97316"/>' +
+                '</radialGradient>' +
+            '</defs>' +
+        '</svg>';
+    }
+
+    function movingStarSvg() {
+        // Relleno con degradé (volumen) + trazo oscuro (borde definido) +
+        // una elipse de brillo (glare) arriba a la izquierda -- el truco
+        // clásico para que un ícono plano lea como "objeto con volumen".
+        return '<svg width="26" height="26" viewBox="0 0 24 24">' +
+            '<path d="' + STAR_PATH + '" fill="url(#fpStarMoving)" stroke="#0891b2" stroke-width="0.8" stroke-linejoin="round"/>' +
+            '<ellipse cx="9.3" cy="7.2" rx="2.1" ry="1.1" fill="rgba(255,255,255,0.85)" transform="rotate(-25 9.3 7.2)"/>' +
+        '</svg>';
+    }
+
+    function targetStarSvg() {
+        return '<svg width="24" height="24" viewBox="0 0 24 24">' +
+            '<path d="' + STAR_PATH + '" fill="url(#fpStarTarget)" stroke="rgba(255,255,255,0.5)" stroke-width="1.2" stroke-linejoin="round"/>' +
+        '</svg>';
     }
 
     // Sonido de "disparo láser" sintetizado -- barrido de frecuencia
     // descendente, sin ningún archivo externo. Volumen bajo a propósito
-    // ("sonido sutil", pedido explícito). Un solo AudioContext reusado
-    // entre toques para no crear uno nuevo cada vez.
+    // ("sonido sutil", pedido explícito).
     var _audioCtx = null;
     function playTapSound(perfect, missed) {
         try {
@@ -60,7 +82,6 @@
             var osc = _audioCtx.createOscillator();
             var gain = _audioCtx.createGain();
             if (missed) {
-                // Toque fuera de la zona -- un "thud" corto y grave, no un láser.
                 osc.type = 'sine';
                 osc.frequency.setValueAtTime(180, now);
                 osc.frequency.exponentialRampToValueAtTime(80, now + 0.12);
@@ -79,27 +100,80 @@
         } catch (e) { /* audio nunca debe romper el juego */ }
     }
 
-    // Destello en el punto de impacto -- un círculo con degradé que crece
-    // y se desvanece, animado con la Web Animations API (sin CSS global
-    // nuevo, para no ensuciar el resto de la página).
-    function spawnFlash(containerEl, leftPct, perfect) {
-        var flash = document.createElement('div');
-        var size = perfect ? 64 : 40;
-        var color = perfect ? 'rgba(250,204,21,0.9)' : 'rgba(0,243,255,0.75)';
-        flash.style.cssText = 'position:absolute;top:50%;left:' + leftPct + '%;width:' + size + 'px;height:' + size + 'px;' +
-            'margin-left:-' + (size / 2) + 'px;margin-top:-' + (size / 2) + 'px;border-radius:50%;pointer-events:none;' +
-            'background:radial-gradient(circle,' + color + ' 0%,rgba(0,0,0,0) 70%);z-index:5;';
-        containerEl.appendChild(flash);
-        var anim = flash.animate([
-            { transform: 'scale(0.3)', opacity: 1 },
-            { transform: 'scale(' + (perfect ? 2.4 : 1.6) + ')', opacity: 0 }
-        ], { duration: perfect ? 450 : 300, easing: 'ease-out' });
-        anim.onfinish = function () { flash.remove(); };
+    // Destello "rico" en el punto de impacto: núcleo brillante + anillo
+    // expandiéndose + un puñado de chispas volando hacia afuera. Todo con
+    // la Web Animations API (sin CSS global nuevo).
+    function spawnFlash(trackEl, leftPct, perfect) {
+        var color1 = perfect ? 'rgba(250,204,21,1)' : 'rgba(34,211,238,0.95)';
+        var color2 = perfect ? 'rgba(249,115,22,0.55)' : 'rgba(217,70,239,0.45)';
+
+        var core = document.createElement('div');
+        var coreSize = perfect ? 70 : 42;
+        core.style.cssText = 'position:absolute;top:50%;left:' + leftPct + '%;width:' + coreSize + 'px;height:' + coreSize + 'px;margin-left:-' + (coreSize / 2) + 'px;margin-top:-' + (coreSize / 2) + 'px;border-radius:50%;pointer-events:none;z-index:6;background:radial-gradient(circle,' + color1 + ' 0%,' + color2 + ' 45%,rgba(0,0,0,0) 75%);';
+        trackEl.appendChild(core);
+        core.animate([
+            { transform: 'scale(0.2)', opacity: 1 },
+            { transform: 'scale(' + (perfect ? 2.6 : 1.7) + ')', opacity: 0 }
+        ], { duration: perfect ? 520 : 300, easing: 'cubic-bezier(.2,.8,.3,1)' }).onfinish = function () { core.remove(); };
+
+        var ringSize = coreSize * 1.35;
+        var ring = document.createElement('div');
+        ring.style.cssText = 'position:absolute;top:50%;left:' + leftPct + '%;width:' + ringSize + 'px;height:' + ringSize + 'px;margin-left:-' + (ringSize / 2) + 'px;margin-top:-' + (ringSize / 2) + 'px;border-radius:50%;pointer-events:none;z-index:6;border:2px solid ' + color1 + ';';
+        trackEl.appendChild(ring);
+        ring.animate([
+            { transform: 'scale(0.4)', opacity: 0.9 },
+            { transform: 'scale(' + (perfect ? 2.1 : 1.5) + ')', opacity: 0 }
+        ], { duration: perfect ? 480 : 280, easing: 'ease-out' }).onfinish = function () { ring.remove(); };
+
+        var sparkCount = perfect ? 8 : 4;
+        for (var i = 0; i < sparkCount; i++) {
+            var angle = (Math.PI * 2 * i / sparkCount) + Math.random() * 0.5;
+            var dist = perfect ? 34 + Math.random() * 18 : 18 + Math.random() * 10;
+            var dx = Math.cos(angle) * dist, dy = Math.sin(angle) * dist;
+            var s = perfect ? 5 : 3;
+            var spark = document.createElement('div');
+            spark.style.cssText = 'position:absolute;top:50%;left:' + leftPct + '%;width:' + s + 'px;height:' + s + 'px;margin-left:-' + (s / 2) + 'px;margin-top:-' + (s / 2) + 'px;border-radius:50%;pointer-events:none;z-index:6;background:' + color1 + ';box-shadow:0 0 4px ' + color1 + ';';
+            trackEl.appendChild(spark);
+            (function (spark, dx, dy) {
+                spark.animate([
+                    { transform: 'translate(0,0) scale(1)', opacity: 1 },
+                    { transform: 'translate(' + dx + 'px,' + dy + 'px) scale(0.3)', opacity: 0 }
+                ], { duration: perfect ? 500 : 320, easing: 'ease-out' }).onfinish = function () { spark.remove(); };
+            })(spark, dx, dy);
+        }
+    }
+
+    // Estallido estilo cómic ("¡PERFECTO!") -- pedido explícito del
+    // usuario -- una explosión de picos con degradé dorado, texto en
+    // negrita con contorno blanco, y una animación de rebote (entra
+    // chico girado, sobrepasa el tamaño final, se asienta, se desvanece).
+    function spawnComicBurst(hostEl, leftPct) {
+        var spikes = 12, outerR = 46, innerR = 23, pts = [];
+        for (var i = 0; i < spikes * 2; i++) {
+            var r = i % 2 === 0 ? outerR : innerR;
+            var a = (Math.PI * i) / spikes - Math.PI / 2;
+            pts.push((60 + r * Math.cos(a)).toFixed(1) + ',' + (60 + r * Math.sin(a)).toFixed(1));
+        }
+        var wrap = document.createElement('div');
+        wrap.style.cssText = 'position:absolute;top:50%;left:' + leftPct + '%;width:120px;height:120px;margin-left:-60px;margin-top:-60px;pointer-events:none;z-index:10;';
+        wrap.innerHTML =
+            '<svg width="120" height="120" viewBox="0 0 120 120" style="position:absolute;inset:0;overflow:visible;">' +
+                '<polygon points="' + pts.join(' ') + '" fill="url(#fpBurstGrad)" stroke="#7c2d12" stroke-width="2.5"/>' +
+            '</svg>' +
+            '<div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-family:Arial Black,Arial,sans-serif;font-weight:900;font-style:italic;font-size:13px;color:#7c2d12;text-shadow:1.5px 0 0 #fff,-1.5px 0 0 #fff,0 1.5px 0 #fff,0 -1.5px 0 #fff;letter-spacing:0.5px;white-space:nowrap;transform:rotate(-8deg);">¡PERFECTO!</div>';
+        hostEl.appendChild(wrap);
+        wrap.animate([
+            { transform: 'translate(0,0) scale(0.2) rotate(-20deg)', opacity: 0 },
+            { transform: 'translate(0,0) scale(1.3) rotate(6deg)', opacity: 1, offset: 0.4 },
+            { transform: 'translate(0,0) scale(1) rotate(0deg)', opacity: 1, offset: 0.65 },
+            { transform: 'translate(0,0) scale(0.85) rotate(0deg)', opacity: 0 }
+        ], { duration: 750, easing: 'cubic-bezier(.34,1.56,.64,1)' }).onfinish = function () { wrap.remove(); };
     }
 
     const FanPlaysMinigame = {
         _raf: null,
         _active: false,
+        _spinAnim: null,
 
         /**
          * @param {HTMLElement} containerEl
@@ -123,12 +197,17 @@
             let resolvedRounds = new Array(totalRounds).fill(null);
             let finished = false;
 
-            containerEl.innerHTML =
+            containerEl.style.position = containerEl.style.position || 'relative';
+            containerEl.innerHTML = starDefsSvg() +
                 '<div class="text-center text-[11px] text-gray-400 mb-1">Tocá cuando la estrella que se desliza entre en la zona -- si coincide con la estrella fija, ¡doble puntaje!</div>' +
-                '<div id="fanPlaysTrack" style="position:relative;height:52px;border-radius:10px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);overflow:hidden;cursor:pointer;touch-action:manipulation;">' +
-                    '<div id="fanPlaysZone" style="position:absolute;top:0;bottom:0;background:linear-gradient(90deg,rgba(0,243,255,0.18),rgba(217,70,239,0.18));border-left:2px solid rgba(0,243,255,0.5);border-right:2px solid rgba(217,70,239,0.5);"></div>' +
-                    '<div id="fanPlaysTargetStar" style="position:absolute;top:50%;transform:translate(-50%,-50%);pointer-events:none;filter:drop-shadow(0 0 3px rgba(255,255,255,0.4));">' + starSvg({ size: 22, fill: 'none', stroke: 'rgba(255,255,255,0.55)', strokeWidth: 1.3 }) + '</div>' +
-                    '<div id="fanPlaysIndicator" style="position:absolute;top:50%;transform:translate(-50%,-50%);pointer-events:none;filter:drop-shadow(0 0 6px rgba(0,243,255,0.9));">' + starSvg({ size: 24, fill: '#fff', stroke: '#22d3ee', strokeWidth: 1 }) + '</div>' +
+                // overflow:visible a propósito -- el destello y el estallido
+                // cómic de un toque perfecto se salen del alto de la pista.
+                '<div id="fanPlaysTrack" style="position:relative;height:52px;border-radius:10px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);overflow:visible;cursor:pointer;touch-action:manipulation;">' +
+                    '<div style="position:absolute;inset:0;border-radius:10px;overflow:hidden;">' +
+                        '<div id="fanPlaysZone" style="position:absolute;top:0;bottom:0;background:linear-gradient(90deg,rgba(0,243,255,0.18),rgba(217,70,239,0.18));border-left:2px solid rgba(0,243,255,0.5);border-right:2px solid rgba(217,70,239,0.5);"></div>' +
+                    '</div>' +
+                    '<div id="fanPlaysTargetStar" style="position:absolute;top:50%;transform:translate(-50%,-50%);pointer-events:none;filter:drop-shadow(0 0 3px rgba(255,255,255,0.35));">' + targetStarSvg() + '</div>' +
+                    '<div id="fanPlaysIndicator" style="position:absolute;top:50%;transform:translate(-50%,-50%);pointer-events:none;filter:drop-shadow(0 1px 2px rgba(0,0,0,0.5)) drop-shadow(0 0 7px rgba(0,243,255,0.85));">' + movingStarSvg() + '</div>' +
                 '</div>' +
                 '<div class="flex justify-between mt-1 text-[10px] text-gray-500"><span id="fanPlaysLastScore"></span><span id="fanPlaysRoundCount">0/' + totalRounds + ' rondas</span></div>';
 
@@ -136,8 +215,19 @@
             const zoneEl = containerEl.querySelector('#fanPlaysZone');
             const targetStarEl = containerEl.querySelector('#fanPlaysTargetStar');
             const indicatorEl = containerEl.querySelector('#fanPlaysIndicator');
+            const indicatorInner = indicatorEl.firstElementChild;
             const lastScoreEl = containerEl.querySelector('#fanPlaysLastScore');
             const roundCountEl = containerEl.querySelector('#fanPlaysRoundCount');
+
+            // Giro suave y constante -- junto con el degradé/brillo de
+            // movingStarSvg(), es lo que vende el aspecto "3D" (un objeto
+            // sólido rotando, no un ícono plano pegado a la pantalla). Va en
+            // el SVG interno, no en el div que ya usa transform para
+            // centrarse y para moverse por la pista.
+            this._spinAnim = indicatorInner.animate(
+                [{ transform: 'rotate(0deg)' }, { transform: 'rotate(360deg)' }],
+                { duration: 3400, iterations: Infinity, easing: 'linear' }
+            );
 
             function renderZoneFor(roundIndex) {
                 const center = S.zoneCenterForRound(usedSeed, roundIndex);
@@ -145,6 +235,9 @@
                 zoneEl.style.left = Math.max(0, center - half) + '%';
                 zoneEl.style.width = S.ZONE_WIDTH_PCT + '%';
                 targetStarEl.style.left = center + '%';
+                // Pequeño "acomodo" al aparecer la zona nueva, para que no
+                // se sienta estática -- refuerza la lectura 3D.
+                targetStarEl.animate([{ transform: 'translate(-50%,-50%) scale(0.6)', opacity: 0 }, { transform: 'translate(-50%,-50%) scale(1)', opacity: 1 }], { duration: 220, easing: 'ease-out' });
             }
 
             function currentRoundIndex(tMs) { return S.roundIndexForTime(tMs); }
@@ -169,9 +262,8 @@
                 if (resolvedRounds[roundIndex] > 0) {
                     spawnFlash(track, indicatorPct, perfect);
                     if (perfect) {
-                        // Las dos estrellas "coinciden" -- breve pulso dorado en
-                        // ambas para que se vea la coincidencia, no solo el número.
-                        targetStarEl.animate([{ filter: 'drop-shadow(0 0 3px rgba(255,255,255,0.4))' }, { filter: 'drop-shadow(0 0 14px rgba(250,204,21,1))' }, { filter: 'drop-shadow(0 0 3px rgba(255,255,255,0.4))' }], { duration: 450 });
+                        spawnComicBurst(track, indicatorPct);
+                        targetStarEl.animate([{ filter: 'drop-shadow(0 0 3px rgba(255,255,255,0.35))' }, { filter: 'drop-shadow(0 0 16px rgba(250,204,21,1))' }, { filter: 'drop-shadow(0 0 3px rgba(255,255,255,0.35))' }], { duration: 500 });
                     }
                 }
                 playTapSound(perfect, resolvedRounds[roundIndex] === 0);
@@ -205,6 +297,7 @@
                     this._active = false;
                     track.removeEventListener('mousedown', handleTap);
                     track.removeEventListener('touchstart', handleTap);
+                    if (this._spinAnim) { this._spinAnim.cancel(); this._spinAnim = null; }
                     var finalSum = resolvedRounds.reduce(function (a, s) { return a + (s || 0); }, 0);
                     var finalAvg = Math.round((finalSum / totalRounds) * 10) / 10;
                     var roundsHit = resolvedRounds.filter(function (s) { return s !== null; }).length;
@@ -229,6 +322,10 @@
             if (this._raf) {
                 cancelAnimationFrame(this._raf);
                 this._raf = null;
+            }
+            if (this._spinAnim) {
+                this._spinAnim.cancel();
+                this._spinAnim = null;
             }
         },
 
