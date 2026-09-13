@@ -4252,6 +4252,50 @@ app.post('/api/private-tournaments/matches/:matchId/resolve-round', requireCredi
     }
 });
 
+// ============================================================
+// TOKEN DE ALEATORIEDAD VERIFICABLE (Fase 1 -- rediseño de resolución
+// de batallas: "reproducciones de fan")
+// ============================================================
+// La fuente es el último bloque minado en Base -- la misma red donde
+// vive MTR (ver basescan.org usado en otras partes del código) -- leído
+// directo del RPC público, sin API key ni intermediarios. Nadie puede
+// predecir el hash de un bloque que todavía no se minó (ni un jugador,
+// ni nosotros), y cualquiera puede verificarlo después con el número de
+// bloque que devolvemos, en cualquier explorador de Base. Es lo que le
+// da a un empate reñido un desempate genuinamente imposible de calcular
+// de antemano -- a diferencia de un Math.random() nuestro, que nadie
+// puede auditar.
+app.get('/api/battle-fair-token', async (req, res) => {
+    try {
+        const rpcResp = await fetch('https://mainnet.base.org', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                jsonrpc: '2.0',
+                id: 1,
+                method: 'eth_getBlockByNumber',
+                params: ['latest', false]
+            }),
+            signal: AbortSignal.timeout(5000)
+        });
+        const data = await rpcResp.json();
+        const block = data && data.result;
+        if (!block || !block.hash) throw new Error('RPC de Base no devolvió un bloque válido');
+
+        const blockNumber = parseInt(block.number, 16);
+        res.json({
+            ok: true,
+            blockNumber,
+            blockHash: block.hash,
+            timestamp: parseInt(block.timestamp, 16),
+            explorerUrl: `https://basescan.org/block/${blockNumber}`
+        });
+    } catch (error) {
+        console.error('[battle-fair-token] Error consultando Base:', error.message);
+        res.status(503).json({ ok: false, error: 'No se pudo consultar la blockchain en este momento' });
+    }
+});
+
 /**
  * Crea un Desafío Social financiado con bonus_credits. A diferencia del
  * flujo normal (insert desde el cliente + deducción aparte), esto corre

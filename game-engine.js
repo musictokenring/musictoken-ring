@@ -3000,7 +3000,7 @@ const GameEngine = {
     async startLocalPractice(match) {
         console.log('[startLocalPractice] ✅ INICIANDO batalla local');
         console.log('[startLocalPractice] Match:', match);
-        
+
         if (!match) {
             console.error('[startLocalPractice] ❌ Match inválido');
             showToast('Error: Datos de batalla inválidos', 'error');
@@ -3016,7 +3016,7 @@ const GameEngine = {
         console.log('[startLocalPractice] Secciones ocultadas');
 
         this.currentMatch = match;
-        
+
         try {
             console.log('[startLocalPractice] Creando UI de batalla...');
             this.createBattleUI(match);
@@ -3040,6 +3040,17 @@ const GameEngine = {
             }
         }
 
+        // FASE 1 del rediseño de resolución de batallas ("reproducciones de
+        // fan" -- ver src/fan-plays-minigame.js): solo aplica a Modo
+        // Práctica de verdad. El fallback de Modo Rápido sin rival humano
+        // (is_cpu_fallback=true) SÍ tiene dinero real en juego y todavía no
+        // pasó por este rediseño -- queda con el mecanismo viejo intacto a
+        // propósito, hasta la Fase 2.
+        var isRealPractice = match.match_type === 'practice' && match.is_cpu_fallback !== true && window.FanPlaysMinigame;
+        if (isRealPractice) {
+            return this.startFanPlaysPractice(match);
+        }
+
         var oracleStats;
         try {
             oracleStats = await Promise.race([
@@ -3053,7 +3064,7 @@ const GameEngine = {
                 player2Projected: Math.floor(Math.random() * 800000) + 200000
             };
         }
-        
+
         var basePlays1 = oracleStats.player1Projected;
         var basePlays2 = oracleStats.player2Projected;
         var plays1 = 0, plays2 = 0;
@@ -3110,6 +3121,177 @@ const GameEngine = {
                 self.endPracticeLocally(match, plays1, plays2);
             }
         }, 1000);
+    },
+
+    // ==========================================
+    // "REPRODUCCIONES DE FAN" -- Fase 1 (Modo Práctica)
+    // ==========================================
+    // Fórmula acordada: si hay diferencia CLARA de destreza (>20 puntos
+    // sobre 100) gana quien jugó mejor, sin que nada more la revierta --
+    // esto protege al jugador de la sensación de "jugué mejor y me lo
+    // sacaron igual", que es lo que más hace desertar a un jugador de una
+    // plataforma real. Solo en un empate técnico entran a definir el
+    // punto de partida de popularidad (Deezer, tope 10%) y el token de
+    // aleatoriedad verificable (último bloque de Base).
+    async startFanPlaysPractice(match) {
+        var self = this;
+
+        var oracleStats;
+        try {
+            oracleStats = await Promise.race([
+                this.fetchOracleStats(match),
+                new Promise((_, reject) => setTimeout(() => reject(new Error('Oracle timeout')), 8000))
+            ]);
+        } catch (e) {
+            oracleStats = {
+                player1Projected: Math.floor(Math.random() * 800000) + 200000,
+                player2Projected: Math.floor(Math.random() * 800000) + 200000
+            };
+        }
+        var totalBase = (oracleStats.player1Projected || 0) + (oracleStats.player2Projected || 0);
+        var rawSplit1 = totalBase > 0 ? (oracleStats.player1Projected / totalBase) * 100 : 50;
+        // Techo del 10%: la popularidad real de Deezer sigue siendo un
+        // punto de partida honesto, pero nunca puede decidir sola.
+        var tilt = Math.max(-10, Math.min(10, rawSplit1 - 50));
+        var startHealth1 = 50 + tilt;
+
+        var gameArea = document.getElementById('fanPlaysGameArea');
+        var statusEl = document.getElementById('battleStatusText');
+        // El promedio del jugador viene directo del onTick del minijuego
+        // (ya lo calcula él, ronda a ronda) -- acá solo se guarda el
+        // último valor recibido, no hace falta (ni sería correcto)
+        // reconstruir un array de rondas del lado de afuera.
+        var livePlayerAvg = 0, livePlayerRounds = 0;
+        var cpuScores = [];
+
+        function cpuAvg() { return cpuScores.length ? cpuScores.reduce((a, b) => a + b, 0) / cpuScores.length : 0; }
+
+        function refreshDisplay() {
+            var cAvg = cpuAvg();
+            var health1 = Math.max(5, Math.min(95, startHealth1 + (livePlayerAvg - cAvg) / 2));
+            var health2 = 100 - health1;
+            var h1f = document.getElementById('health1Fill'), h2f = document.getElementById('health2Fill');
+            var h1t = document.getElementById('health1Text'), h2t = document.getElementById('health2Text');
+            if (h1f) h1f.style.width = health1 + '%';
+            if (h2f) h2f.style.width = health2 + '%';
+            if (h1t) h1t.textContent = Math.round(health1) + '%';
+            if (h2t) h2t.textContent = Math.round(health2) + '%';
+            var p1 = document.getElementById('plays1'), p2 = document.getElementById('plays2');
+            // "Reproducciones" mostradas = promedio × rondas jugadas, que
+            // matemáticamente es la suma real de todas las rondas -- crece
+            // de forma monótona y se siente bien verla subir, sin falsear
+            // nada (es la misma cuenta, presentada como total en vez de
+            // promedio).
+            var sum1 = livePlayerAvg * livePlayerRounds, sum2 = cpuScores.reduce((a, b) => a + b, 0);
+            if (p1) p1.textContent = Math.round(sum1).toLocaleString('es-ES');
+            if (p2) p2.textContent = Math.round(sum2).toLocaleString('es-ES');
+        }
+
+        // La CPU "juega" en paralelo con el mismo ritmo de rondas que el
+        // jugador, para que su barra también avance en vivo -- ver
+        // simulateCpuScore() en fan-plays-minigame.js para el porqué esto
+        // no es deshonesto (todo modo vs. CPU simula su nivel de juego).
+        var cpuInterval = setInterval(function () {
+            cpuScores.push(window.FanPlaysMinigame.simulateCpuScore());
+            refreshDisplay();
+        }, 2200);
+
+        var timeLeft = this.battleDuration;
+        var timerInterval = setInterval(function () {
+            timeLeft--;
+            var timerEl = document.getElementById('battleTimer');
+            if (timerEl) timerEl.textContent = Math.max(0, timeLeft);
+            if (statusEl) {
+                if (timeLeft <= 5) statusEl.innerHTML = '<span class="text-red-400 font-bold animate-pulse">' + svgIcon('bolt', 14) + 'FINAL ÉPICO</span>';
+                else statusEl.innerHTML = '<span class="text-cyan-400">' + svgIcon('music', 14) + 'Sumá reproducciones tocando en el momento justo</span>';
+            }
+        }, 1000);
+
+        if (gameArea) {
+            window.FanPlaysMinigame.start(gameArea, this.battleDuration, function (liveAvg, rounds) {
+                livePlayerAvg = liveAvg || 0;
+                livePlayerRounds = rounds || 0;
+                refreshDisplay();
+            }, async function (finalPlayerAvg, playerRounds) {
+                clearInterval(cpuInterval);
+                clearInterval(timerInterval);
+                await self.resolveFanPlaysPractice(match, finalPlayerAvg, cpuAvg(), tilt);
+            });
+        }
+    },
+
+    async resolveFanPlaysPractice(match, playerAvg, cpuAvgScore, tilt) {
+        var diff = playerAvg - cpuAvgScore;
+        var CLEAR_SKILL_THRESHOLD = 20;
+        var winner, resultKind, breakdown = { playerAvg: Math.round(playerAvg), cpuAvg: Math.round(cpuAvgScore), tilt: Math.round(tilt) };
+
+        if (Math.abs(diff) > CLEAR_SKILL_THRESHOLD) {
+            winner = diff > 0 ? 1 : 2;
+            resultKind = 'destreza_clara';
+        } else {
+            // Empate técnico -- acá entran Deezer (ya viene como "tilt",
+            // tope ±10) y el token de aleatoriedad verificable (último
+            // bloque de Base) a desempatar. Nadie puede predecir un hash de
+            // bloque que todavía no se minó -- ni el jugador, ni nosotros.
+            var tokenValue = 0;
+            var tokenInfo = null;
+            try {
+                tokenInfo = await this.fetchBattleFairToken();
+                if (tokenInfo && tokenInfo.blockHash) {
+                    var lastHex = tokenInfo.blockHash.slice(-8);
+                    var n = parseInt(lastHex, 16) % 2001; // 0..2000
+                    tokenValue = ((n - 1000) / 1000) * 15; // -15..15
+                }
+            } catch (e) {
+                console.warn('[resolveFanPlaysPractice] No se pudo obtener el token verificable, se usa solo Deezer para desempatar:', e && e.message);
+            }
+            var combined = diff + tilt + tokenValue;
+            winner = combined >= 0 ? 1 : 2;
+            resultKind = 'empate_tecnico';
+            breakdown.tokenValue = Math.round(tokenValue * 10) / 10;
+            breakdown.tokenInfo = tokenInfo;
+        }
+
+        this.endFanPlaysPractice(match, winner, resultKind, breakdown);
+    },
+
+    async fetchBattleFairToken() {
+        const backendUrl = window.CONFIG?.BACKEND_API || window.CreditsSystem?.backendUrl || 'https://musictoken-ring.onrender.com';
+        const resp = await Promise.race([
+            fetch(`${backendUrl}/api/battle-fair-token`),
+            new Promise((_, reject) => setTimeout(() => reject(new Error('fair-token timeout')), 5000))
+        ]);
+        const data = await resp.json();
+        if (!resp.ok || !data.ok) throw new Error(data.error || 'fair-token no disponible');
+        return data;
+    },
+
+    endFanPlaysPractice(match, winner, resultKind, breakdown) {
+        var userWon = winner === 1;
+        this.stopUserSong();
+        if (this.battleAnimState) { this.battleAnimState.finished = true; this.battleAnimState.winner = winner; }
+        this.spawnVictoryParticles(winner);
+        var winnerSong = winner === 1 ? match.player1_song_preview : match.player2_song_preview;
+        this.playVictorySong(winnerSong);
+
+        var statusEl = document.getElementById('battleStatusText');
+        if (statusEl) {
+            // Narrativa honesta y transparente -- nunca un desglose confuso
+            // de 4 números: o "ganaste por destreza, sin discusión", o "fue
+            // parejo, se definió en el último instante" -- pedido explícito
+            // del usuario para cuidar la psicología del jugador.
+            var explain = resultKind === 'destreza_clara'
+                ? ('Le diste ' + breakdown.playerAvg + ' reproducciones de fan a tu canción -- la Máquina, ' + breakdown.cpuAvg + '. ' + (userWon ? '¡Ganaste claramente por destreza!' : 'Te ganó claramente por destreza -- practicá y volvé a intentarlo.'))
+                : ('Fue parejo (' + breakdown.playerAvg + ' vs ' + breakdown.cpuAvg + ' reproducciones) -- se definió en el último instante.');
+            statusEl.innerHTML = '<div class="inline-block py-4 px-6 rounded-2xl ' + (userWon ? 'bg-gradient-to-r from-cyan-500/20 to-cyan-600/20 border-2 border-cyan-400/50' : 'bg-gradient-to-r from-red-500/20 to-red-600/20 border-2 border-red-400/50') + ' shadow-2xl">' +
+                '<span class="text-xl sm:text-2xl font-black inline-flex items-center gap-2 ' + (userWon ? 'text-cyan-300' : 'text-red-300') + '">' + svgIcon(userWon ? 'trophy' : 'circleX', 24) + (userWon ? '¡Le ganaste a la Máquina!' : 'Perdiste esta vez') + '</span>' +
+                '<div class="mt-2 text-sm ' + (userWon ? 'text-cyan-200' : 'text-red-200') + ' font-bold">' + explain + '</div>' +
+                (breakdown.tokenInfo ? '<div class="mt-1 text-[11px] text-gray-400">Desempate verificable -- bloque Base #' + breakdown.tokenInfo.blockNumber + ' <a href="' + breakdown.tokenInfo.explorerUrl + '" target="_blank" class="underline">ver</a></div>' : '') +
+                '</div>';
+        }
+
+        var practiceWinnerArtist = winner === 1 ? (match.player1_song_artist || 'Vos') : (match.player2_song_artist || 'CPU');
+        triggerHostNarration(match.id || match.match_id, 'result', (userWon ? 'Ganaste vos' : 'Ganó la CPU') + ' (' + practiceWinnerArtist + '). Batalla de práctica terminada.');
     },
 
     /**
@@ -4303,6 +4485,7 @@ const GameEngine = {
                     </div>
                 </div>
             </div>
+            <div id="fanPlaysGameArea" class="max-w-md mx-auto mb-4"></div>
             <div id="battleStatusText" class="text-center py-4 px-4 mb-4"></div>
             <div id="hostCommentary" class="hidden max-w-3xl mx-auto text-center text-xs sm:text-sm text-amber-300/90 italic px-4 mb-4"></div>
             ${isPrivateMatch ? `
