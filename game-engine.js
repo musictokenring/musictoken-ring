@@ -4657,9 +4657,9 @@ const GameEngine = {
             // patrón de bug reportado antes en esta misma conversación.
             // Mismas condiciones que usan startLocalPractice() y
             // runBattle() para decidir si van por el camino nuevo.
-            const willUseFanPlaysAutoFit = !!window.FanPlaysMinigame && (
-                (match.match_type === 'practice' && match.is_cpu_fallback !== true) ||
-                (match.match_type === 'private' && !!window.FanPlaysScoring)
+            const willUseFanPlaysAutoFit = !!window.FanPlaysMinigame && match.is_cpu_fallback !== true && (
+                match.match_type === 'practice' ||
+                ((match.match_type === 'private' || match.match_type === 'quick' || match.match_type === 'social') && !!window.FanPlaysScoring)
             );
 
             // SCROLL AUTOMÁTICO AL ÁREA DE BATALLA (CON DETECCIÓN DE PLATAFORMA)
@@ -5315,11 +5315,26 @@ const GameEngine = {
         const { data: { session } } = await supabaseClient.auth.getSession();
         const isPlayer1 = session.user.id === match.player1_id;
 
-        // FASE 2 del rediseño de resolución de batallas -- piloto en
-        // dinero real, solo Sala Privada 1 vs 1 clásica por ahora (el
-        // resto de los modos reales sigue con el mecanismo de abajo hasta
-        // validar este piloto en vivo).
-        if (match.match_type === 'private' && window.FanPlaysMinigame && window.FanPlaysScoring) {
+        // FASE 2 del rediseño de resolución de batallas -- el piloto en
+        // Sala Privada 1 vs 1 (commit 63e78eb) ya se validó, así que se
+        // extiende a Modo Rápido y Desafío Social: mismo código
+        // (runVerifiedFanPlaysBattle/submitVerifiedFanPlaysScore) sin
+        // ningún cambio, porque ya era genérico -- no asume nada
+        // específico de Sala Privada, solo necesita player1_id/
+        // player2_id/total_pot/las canciones, que tienen los tres modos
+        // por igual. El backend (fanplay-seed, submit-fanplay-score,
+        // resolveFanPlaysWinner) tampoco distingue match_type, así que no
+        // hizo falta tocarlo.
+        // NO incluye el fallback de Modo Rápido contra CPU
+        // (is_cpu_fallback=true): ese nunca llega acá -- pasa por
+        // startLocalPractice()/startQuickCpuFallback() directo, un
+        // camino distinto (un solo humano real + CPU simulada) que
+        // todavía no tiene verificación server-side. Sigue pendiente,
+        // ver [[project-battle-resolution-redesign]].
+        // Torneos tampoco está incluido todavía (sigue con el mecanismo
+        // clásico) -- son brackets multi-ronda, no un 1 vs 1 simple.
+        var fanPlaysRealModes = match.match_type === 'private' || match.match_type === 'quick' || match.match_type === 'social';
+        if (fanPlaysRealModes && match.is_cpu_fallback !== true && window.FanPlaysMinigame && window.FanPlaysScoring) {
             return this.runVerifiedFanPlaysBattle(match);
         }
         return this.runBattleLegacy(match);
