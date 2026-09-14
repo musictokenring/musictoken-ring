@@ -3041,13 +3041,21 @@ const GameEngine = {
         }
 
         // FASE 1 del rediseño de resolución de batallas ("reproducciones de
-        // fan" -- ver src/fan-plays-minigame.js): solo aplica a Modo
-        // Práctica de verdad. El fallback de Modo Rápido sin rival humano
-        // (is_cpu_fallback=true) SÍ tiene dinero real en juego y todavía no
-        // pasó por este rediseño -- queda con el mecanismo viejo intacto a
-        // propósito, hasta la Fase 2.
+        // fan" -- ver src/fan-plays-minigame.js): Modo Práctica de verdad,
+        // Y el fallback de Modo Rápido sin rival humano a tiempo
+        // (is_cpu_fallback=true, ver startQuickCpuFallback). CORRECCIÓN a
+        // un comentario anterior de esta misma sesión: ese fallback NO
+        // tiene dinero real en juego -- la apuesta real ya se reembolsó
+        // en leaveMatchmakingQueue() ANTES de caer acá (ver
+        // /api/matchmaking/leave), y esta batalla amistosa arranca con
+        // player1_bet/player2_bet en 0. Por eso no hace falta ningún
+        // endpoint de verificación server-side para este caso (igual que
+        // Práctica): alcanza con darle el mismo mini-juego real en vez
+        // del mecanismo viejo (Deezer+random), por consistencia y
+        // honestidad, no por anti-trampa.
         var isRealPractice = match.match_type === 'practice' && match.is_cpu_fallback !== true && window.FanPlaysMinigame;
-        if (isRealPractice) {
+        var isQuickCpuFriendly = match.match_type === 'quick' && match.is_cpu_fallback === true && window.FanPlaysMinigame;
+        if (isRealPractice || isQuickCpuFriendly) {
             return this.startFanPlaysPractice(match);
         }
 
@@ -3288,7 +3296,8 @@ const GameEngine = {
         this.showFanPlaysResultScreen(match, winner, resultKind, breakdown);
 
         var practiceWinnerArtist = winner === 1 ? (match.player1_song_artist || 'Vos') : (match.player2_song_artist || 'CPU');
-        triggerHostNarration(match.id || match.match_id, 'result', (userWon ? 'Ganaste vos' : 'Ganó la CPU') + ' (' + practiceWinnerArtist + '). Batalla de práctica terminada.');
+        var battleLabel = match.match_type === 'practice' ? 'Batalla de práctica terminada.' : 'Batalla amistosa terminada.';
+        triggerHostNarration(match.id || match.match_id, 'result', (userWon ? 'Ganaste vos' : 'Ganó la CPU') + ' (' + practiceWinnerArtist + '). ' + battleLabel);
     },
 
     // Pantalla completa de resultado para "Reproducciones de Fan" --
@@ -3311,6 +3320,17 @@ const GameEngine = {
         var explain = resultKind === 'destreza_clara'
             ? ('Le diste ' + breakdown.playerAvg + ' reproducciones de fan a tu canción -- la Máquina, ' + breakdown.cpuAvg + '. ' + (userWon ? '¡Ganaste claramente por destreza!' : 'Te ganó claramente por destreza -- practicá y volvé a intentarlo.'))
             : ('Fue parejo (' + breakdown.playerAvg + ' vs ' + breakdown.cpuAvg + ' reproducciones) -- se definió en el último instante.');
+
+        // "Batalla de práctica" solo si de verdad es Modo Práctica -- el
+        // fallback amistoso de Modo Rápido (is_cpu_fallback=true) reusa
+        // esta misma pantalla (mismo mini-juego, ver startLocalPractice)
+        // pero necesita su propio texto/botón, igual que ya distingue
+        // showVictoryScreen() para las batallas reales.
+        var isRealPracticeMode = match.match_type === 'practice';
+        var friendlyNote = isRealPracticeMode
+            ? 'Batalla de práctica · sin apuesta -- tus créditos no cambiaron'
+            : 'Batalla amistosa · sin apuesta -- tus créditos no cambiaron';
+        var backButtonAction = isRealPracticeMode ? 'GameEngine.goToPracticeSelection()' : 'location.reload()';
 
         var icon = userWon ? 'crown' : 'medal';
         var iconColor = userWon ? '#fde047' : '#cbd5e1';
@@ -3341,9 +3361,9 @@ const GameEngine = {
             '<h2 class="text-xl sm:text-2xl font-bold text-white">' + winnerName + '</h2>' +
             '</div>' +
             '<p class="text-base sm:text-lg text-gray-300 mb-2 max-w-xl mx-auto">' + explain + '</p>' +
-            '<p class="text-sm text-gray-500 mb-6">Batalla de práctica · sin apuesta -- tus créditos no cambiaron</p>' +
+            '<p class="text-sm text-gray-500 mb-6">' + friendlyNote + '</p>' +
             (breakdown.tokenInfo ? '<p class="text-gray-500 mb-6" style="font-size:11px;">Desempate verificable -- bloque Base #' + breakdown.tokenInfo.blockNumber + ' <a href="' + breakdown.tokenInfo.explorerUrl + '" target="_blank" class="underline text-cyan-400">ver en BaseScan</a></p>' : '') +
-            '<button onclick="GameEngine.goToPracticeSelection()" class="px-8 py-3 rounded-xl text-lg font-bold bg-gradient-to-r from-cyan-500 to-fuchsia-500 text-white hover:opacity-90 transition-all shadow-lg shadow-cyan-500/25 cursor-pointer">' +
+            '<button onclick="' + backButtonAction + '" class="px-8 py-3 rounded-xl text-lg font-bold bg-gradient-to-r from-cyan-500 to-fuchsia-500 text-white hover:opacity-90 transition-all shadow-lg shadow-cyan-500/25 cursor-pointer">' +
             svgIcon('target', 16) + 'Volver a intentarlo' +
             '</button>' +
             '</div></section>';
@@ -4656,10 +4676,14 @@ const GameEngine = {
             // interactiva -- entra en pantalla), que es exactamente el
             // patrón de bug reportado antes en esta misma conversación.
             // Mismas condiciones que usan startLocalPractice() y
-            // runBattle() para decidir si van por el camino nuevo.
-            const willUseFanPlaysAutoFit = !!window.FanPlaysMinigame && match.is_cpu_fallback !== true && (
-                match.match_type === 'practice' ||
-                ((match.match_type === 'private' || match.match_type === 'quick' || match.match_type === 'social') && !!window.FanPlaysScoring)
+            // runBattle() para decidir si van por el camino nuevo. El
+            // fallback amistoso de Modo Rápido (is_cpu_fallback=true)
+            // también entra acá desde esta sesión -- ver startLocalPractice().
+            const isCpuFallbackMatch = match.is_cpu_fallback === true;
+            const willUseFanPlaysAutoFit = !!window.FanPlaysMinigame && (
+                (match.match_type === 'practice' && !isCpuFallbackMatch) ||
+                (match.match_type === 'quick' && isCpuFallbackMatch) ||
+                ((match.match_type === 'private' || match.match_type === 'quick' || match.match_type === 'social') && !isCpuFallbackMatch && !!window.FanPlaysScoring)
             );
 
             // SCROLL AUTOMÁTICO AL ÁREA DE BATALLA (CON DETECCIÓN DE PLATAFORMA)
