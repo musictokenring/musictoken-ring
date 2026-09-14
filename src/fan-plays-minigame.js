@@ -344,6 +344,8 @@
         _raf: null,
         _active: false,
         _spinAnim: null,
+        _viewFitObserver: null,
+        _viewFitOrientationHandler: null,
 
         /**
          * @param {HTMLElement} containerEl
@@ -424,29 +426,138 @@
             const lastScoreEl = containerEl.querySelector('#fanPlaysLastScore');
             const roundCountEl = containerEl.querySelector('#fanPlaysRoundCount');
 
-            // Ajuste MÍNIMO, no un recentrado -- reportado en vivo que
-            // block:'center' se pasaba de largo: dejaba solo la pista
-            // chica en el medio de la pantalla y tapaba todo lo de
-            // arriba (timer, VS) y de abajo (mensaje de resultado).
-            // createBattleUI() ya deja bien ubicado el tope de la arena;
-            // acá solo se corrige si el FONDO de la pista queda tapado
-            // por abajo -- y en ese caso se baja SOLO lo que falta para
-            // que entre, ni un píxel más, para no perder de vista lo de
-            // arriba sin necesidad.
-            setTimeout(function () {
+            // Encuadre automático de TODA la escena (no solo la pista) --
+            // historial: primero block:'center' se pasaba de largo (tapaba
+            // timer/VS de arriba); después se corrigió solo el
+            // desbordamiento de la pista sola, pero eso no garantizaba
+            // que el resto del "plano" (cronómetro, moneditas, tarjetas
+            // VS) entrara junto con ella -- si no entraba todo, el
+            // jugador igual tenía que scrollear a mano para verlo.
+            // Ahora se mide la escena COMPLETA: desde el techo de
+            // #battleArena (arranca en el cronómetro) hasta el fondo de
+            // este contenedor (instrucciones + pista + contador de
+            // rondas, lo último que hace falta ver). Si entra completa en
+            // lo que queda de viewport debajo del header, se alinea
+            // prolijo justo debajo del header; si de verdad no entra
+            // (pantallas muy bajas / apaisado), se prioriza que la parte
+            // INTERACTIVA (la pista) quede entera, igual que antes.
+            var self = this;
+            var sceneEl = containerEl.closest('#battleArena') || containerEl;
+            var fitSceneIntoView = function (behavior) {
                 try {
-                    var rect = containerEl.getBoundingClientRect();
+                    if (!document.body.contains(containerEl)) return false; // la batalla ya terminó
+                    var sceneRect = sceneEl.getBoundingClientRect();
+                    var trackRect = containerEl.getBoundingClientRect();
                     var header = document.querySelector('header');
                     var headerHeight = header ? header.offsetHeight : 64;
-                    var margin = 12;
-                    var alreadyVisible = rect.top >= headerHeight && rect.bottom <= window.innerHeight - margin;
-                    if (alreadyVisible) return;
-                    var overflowBottom = rect.bottom - (window.innerHeight - margin);
-                    if (overflowBottom > 0) {
-                        window.scrollBy({ top: overflowBottom, behavior: 'smooth' });
+                    var margin = 10;
+                    // visualViewport.height es más preciso que
+                    // window.innerHeight en iOS Safari/Chrome Android
+                    // cuando la barra de direcciones se expande o
+                    // contrae -- evita recalcular con un alto que ya no
+                    // es el real.
+                    var viewportH = window.visualViewport ? window.visualViewport.height : window.innerHeight;
+                    var sceneTop = sceneRect.top;
+                    var sceneBottom = trackRect.bottom;
+                    var sceneHeight = sceneBottom - sceneTop;
+                    var availableHeight = viewportH - headerHeight - margin * 2;
+                    var desiredTop = sceneHeight <= availableHeight
+                        ? headerHeight + margin
+                        : (viewportH - margin) - sceneHeight;
+                    var delta = sceneTop - desiredTop;
+                    if (Math.abs(delta) > 2) {
+                        window.scrollBy({ top: delta, behavior: behavior || 'auto' });
+                        return true;
                     }
-                } catch (e) { /* ignore */ }
-            }, 450);
+                    return false;
+                } catch (e) { return false; }
+            };
+
+            // UN solo desplazamiento animado, no varios pisándose entre sí
+            // -- eso era justo lo que restaba precisión: cada corrección
+            // relanzaba su propia animación "smooth" y, con varias
+            // superpuestas (imágenes de tapa cargando en momentos
+            // distintos, o la tipografía terminando de cargar y
+            // recalculando dónde corta "Corazon Espi...'/'Tears in
+            // Hea...'), el resultado final variaba según el navegador en
+            // vez de quedar siempre igual de preciso. Ahora se espera a
+            // que TANTO las imágenes de tapa como la tipografía de la
+            // escena terminen de cargar (o 900ms como techo) y RECIÉN AHÍ
+            // se hace el único scroll animado.
+            var imgs = sceneEl.querySelectorAll('img');
+            var imgsReady = Promise.all(Array.prototype.map.call(imgs, function (img) {
+                if (img.complete) return Promise.resolve();
+                return new Promise(function (resolve) {
+                    img.addEventListener('load', resolve, { once: true });
+                    img.addEventListener('error', resolve, { once: true });
+                });
+            }));
+            var fontsReady = document.fonts && document.fonts.ready ? document.fonts.ready : Promise.resolve();
+            Promise.race([
+                Promise.all([imgsReady, fontsReady]),
+                new Promise(function (resolve) { setTimeout(resolve, 900); })
+            ]).then(function () {
+                // rAF: que el navegador termine de aplicar el layout de
+                // la última imagen antes de medir.
+                requestAnimationFrame(function () {
+                    fitSceneIntoView('smooth');
+
+                    // Red de seguridad, no un segundo protagonista:
+                    // recién ahora (después del único scroll "de
+                    // verdad") se activan las correcciones silenciosas.
+                    // Dos fuentes de desajuste distintas, cubiertas por
+                    // separado:
+                    // 1) la escena misma cambia de alto (una imagen de
+                    //    tapa que recién ahora define su tamaño real) --
+                    //    ResizeObserver sobre sceneEl.
+                    // 2) el contenido que está ARRIBA de la escena en la
+                    //    página (el carrusel/hero de la home, que sigue
+                    //    cargando imágenes en segundo plano) crece y
+                    //    empuja la escena más abajo -- sceneEl ni se
+                    //    entera porque su propio alto no cambió, pero el
+                    //    "scroll anchoring" del navegador SÍ mueve el
+                    //    scroll para compensar esa carga de arriba, y
+                    //    ahí es donde el encuadre se desviaba después de
+                    //    verse bien un instante. ResizeObserver sobre
+                    //    <main> agarra ese caso.
+                    // Arranca DESPUÉS del scroll principal a propósito --
+                    // un ResizeObserver siempre dispara un primer aviso
+                    // obligatorio apenas se lo activa, y si arrancaba
+                    // antes competía con ese scroll. Debounce para
+                    // colapsar varios cambios seguidos en una sola
+                    // corrección, e instantánea (no 'smooth') para no
+                    // generar un segundo salto animado encima del
+                    // primero. Se desconecta a los pocos segundos para
+                    // no pelearle el scroll a un jugador que ya está
+                    // jugando.
+                    if (window.ResizeObserver) {
+                        var startedAt = Date.now();
+                        var settleUntil = startedAt + 4000;
+                        var debounceTimer = null;
+                        var scheduleCorrection = function () {
+                            // Ignora el/los avisos obligatorios que dispara
+                            // TODO ResizeObserver apenas se activa (uno por
+                            // elemento observado, a veces agrupados en una
+                            // sola llamada, a veces no según el navegador)
+                            // -- no son un cambio real todavía.
+                            if (Date.now() - startedAt < 40) return;
+                            if (Date.now() > settleUntil) { observer.disconnect(); return; }
+                            clearTimeout(debounceTimer);
+                            debounceTimer = setTimeout(function () { fitSceneIntoView('auto'); }, 150);
+                        };
+                        var observer = new ResizeObserver(scheduleCorrection);
+                        self._viewFitObserver = observer;
+                        observer.observe(sceneEl);
+                        var mainEl = document.querySelector('main');
+                        if (mainEl && mainEl !== sceneEl) observer.observe(mainEl);
+                    }
+                });
+            });
+            // Un cambio de orientación sí amerita re-encuadrar siempre
+            // (el layout entero cambia de forma deliberada, no es un
+            // scroll incidental del jugador) -- se limpia en stop().
+            this._viewFitOrientationHandler = function () { setTimeout(function () { fitSceneIntoView('smooth'); }, 300); };
+            window.addEventListener('orientationchange', this._viewFitOrientationHandler);
 
             // Giro suave y constante -- junto con el degradé/brillo de
             // movingStarSvg(), es lo que vende el aspecto "3D" (un objeto
@@ -572,6 +683,14 @@
             if (this._waveAnims) {
                 this._waveAnims.forEach(function (a) { a.cancel(); });
                 this._waveAnims = null;
+            }
+            if (this._viewFitObserver) {
+                this._viewFitObserver.disconnect();
+                this._viewFitObserver = null;
+            }
+            if (this._viewFitOrientationHandler) {
+                window.removeEventListener('orientationchange', this._viewFitOrientationHandler);
+                this._viewFitOrientationHandler = null;
             }
         },
 

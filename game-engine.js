@@ -4642,10 +4642,31 @@ const GameEngine = {
                 (window.innerWidth <= 768) ||
                 (typeof isMobileDevice === 'function' && isMobileDevice())
             );
-            
+
+            // Encontrado en vivo (reportado como "todavía falta precisión,
+            // no queda automático"): en Modo Práctica real y Sala Privada
+            // verificada, este bloque de scroll de acá abajo competía a
+            // ciegas contra el encuadre de ESCENA COMPLETA que hace
+            // FanPlaysMinigame.start() (ver src/fan-plays-minigame.js) --
+            // dos sistemas de scroll corriendo por separado, cada uno
+            // "ganando" la carrera en momentos distintos según qué tan
+            // rápido cargaran las imágenes, lo que producía un resultado
+            // distinto cada vez. Este bloque viejo además solo alinea el
+            // TOPE del área (sin importar si el resto -- la pista
+            // interactiva -- entra en pantalla), que es exactamente el
+            // patrón de bug reportado antes en esta misma conversación.
+            // Mismas condiciones que usan startLocalPractice() y
+            // runBattle() para decidir si van por el camino nuevo.
+            const willUseFanPlaysAutoFit = !!window.FanPlaysMinigame && (
+                (match.match_type === 'practice' && match.is_cpu_fallback !== true) ||
+                (match.match_type === 'private' && !!window.FanPlaysScoring)
+            );
+
             // SCROLL AUTOMÁTICO AL ÁREA DE BATALLA (CON DETECCIÓN DE PLATAFORMA)
             // Delay más largo para desktop para asegurar renderizado completo
-            setTimeout(() => {
+            // Se salta por completo cuando FanPlaysMinigame va a encuadrar
+            // la escena él solo (ver más arriba).
+            if (!willUseFanPlaysAutoFit) setTimeout(() => {
                 try {
                     // Verificar nuevamente que el elemento existe y está en el DOM
                     const verifyArena = document.getElementById('battleArena');
