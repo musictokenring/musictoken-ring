@@ -3350,6 +3350,21 @@ const GameEngine = {
             ? 'border-color:#fde047;box-shadow:0 0 40px rgba(250,204,21,0.45);'
             : 'border-color:#94a3b8;box-shadow:0 0 25px rgba(148,163,184,0.25);';
 
+        // Botón "Compartir" -- solo en victoria (nadie comparte una
+        // derrota, y para eso está el crecimiento orgánico). Los datos de
+        // la tarjeta se guardan en `this._pendingShare` en vez de meterlos
+        // en el atributo onclick -- el nombre de una canción puede traer
+        // comillas/apóstrofes (ej. "Ain't No Sunshine") que romperían el
+        // HTML si se insertan ahí directo.
+        if (userWon) {
+            this._pendingShare = { kind: 'fanplays', match: match, winner: winner, resultKind: resultKind, breakdown: breakdown };
+        }
+        var shareButtonHtml = userWon
+            ? '<button onclick="GameEngine.shareLastResult()" class="ml-3 px-6 py-3 rounded-xl text-lg font-bold border-2 border-cyan-400/50 text-cyan-300 hover:bg-cyan-400/10 transition-all cursor-pointer">' +
+              svgIcon('share', 16) + 'Compartir' +
+              '</button>'
+            : '';
+
         var container = document.querySelector('main') || document.querySelector('.container');
         container.innerHTML = '<section id="victorySection" class="max-w-3xl mx-auto py-12 px-4 text-center relative min-h-[500px]">' +
             '<canvas id="victoryCanvas" class="absolute inset-0 w-full h-full pointer-events-none rounded-2xl"></canvas>' +
@@ -3363,14 +3378,317 @@ const GameEngine = {
             '<p class="text-base sm:text-lg text-gray-300 mb-2 max-w-xl mx-auto">' + explain + '</p>' +
             '<p class="text-sm text-gray-500 mb-6">' + friendlyNote + '</p>' +
             (breakdown.tokenInfo ? '<p class="text-gray-500 mb-6" style="font-size:11px;">Desempate verificable -- bloque Base #' + breakdown.tokenInfo.blockNumber + ' <a href="' + breakdown.tokenInfo.explorerUrl + '" target="_blank" class="underline text-cyan-400">ver en BaseScan</a></p>' : '') +
+            '<div class="flex flex-wrap items-center justify-center">' +
             '<button onclick="' + backButtonAction + '" class="px-8 py-3 rounded-xl text-lg font-bold bg-gradient-to-r from-cyan-500 to-fuchsia-500 text-white hover:opacity-90 transition-all shadow-lg shadow-cyan-500/25 cursor-pointer">' +
             svgIcon('target', 16) + 'Volver a intentarlo' +
             '</button>' +
+            shareButtonHtml +
+            '</div>' +
             '</div></section>';
 
         if (typeof window.mtr2Sync === 'function') window.mtr2Sync();
         this.initVictoryCanvas(userWon);
         this.scrollToVictorySection('victorySection');
+    },
+
+    // ==========================================
+    // Compartir resultado -- tarjeta para Instagram/TikTok/Facebook
+    // ==========================================
+    // Por qué así: ninguna de las tres deja leer ni escribir el LIVE de
+    // un usuario cualquiera vía API pública -- mismo tipo de muro técnico
+    // que ya encontramos con las APIs de streaming musical al principio
+    // de este rediseño. Lo que SÍ es estándar y funciona en las tres a la
+    // vez es el share sheet nativo del sistema (Web Share API) con una
+    // imagen ya armada -- el usuario elige ahí mismo si la manda a
+    // Instagram Stories, TikTok, Facebook, WhatsApp, etc. Pedido
+    // explícito del usuario ("como integramos con tik tok, instagram y
+    // facebook para los lives").
+
+    // Arma el string data:image/svg+xml de un ícono ya existente en
+    // MTRIcons.PATHS (Tabler, viewBox 24x24) con un color explícito --
+    // MTRIcons.svg() normal usa stroke="currentColor", que no sirve acá
+    // porque esta imagen no tiene contexto CSS (se dibuja aparte en un
+    // <canvas>). Reusa los mismos glyphs que el resto de la app en vez de
+    // necesitar assets nuevos.
+    iconSvgDataUrl(name, color, size, strokeWidth) {
+        var inner = (window.MTRIcons && window.MTRIcons.PATHS) ? window.MTRIcons.PATHS[name] : '';
+        if (!inner) return null;
+        var svgStr = '<svg xmlns="http://www.w3.org/2000/svg" width="' + size + '" height="' + size + '" viewBox="0 0 24 24" fill="none" stroke="' + color + '" stroke-width="' + (strokeWidth || 2) + '" stroke-linecap="round" stroke-linejoin="round">' + inner + '</svg>';
+        return 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svgStr);
+    },
+
+    // Carga una imagen sin nunca rechazar la promesa -- si falla (o la
+    // imagen de tapa de Deezer no manda cabeceras CORS), se resuelve con
+    // null y quien llama sigue sin ella, en vez de romper toda la tarjeta
+    // por una sola imagen externa.
+    loadImageSafe(src, crossOrigin) {
+        return new Promise(function (resolve) {
+            if (!src) { resolve(null); return; }
+            var img = new Image();
+            if (crossOrigin) img.crossOrigin = 'anonymous';
+            img.onload = function () { resolve(img); };
+            img.onerror = function () { resolve(null); };
+            img.src = src;
+        });
+    },
+
+    // Tarjeta vertical (1080x1920, formato Stories) con el resultado --
+    // devuelve un Blob PNG o null si algo salió mal. Todo dibujado a
+    // mano en <canvas> (degradés + íconos reusados + texto), sin
+    // depender de ningún asset ni backend nuevo.
+    async buildResultShareCard(cardData) {
+        try {
+            var W = 1080, H = 1920;
+            var canvas = document.createElement('canvas');
+            canvas.width = W; canvas.height = H;
+            var ctx = canvas.getContext('2d');
+
+            function roundRectPath(x, y, w, h, r) {
+                if (ctx.roundRect) { ctx.beginPath(); ctx.roundRect(x, y, w, h, r); return; }
+                ctx.beginPath();
+                ctx.moveTo(x + r, y);
+                ctx.arcTo(x + w, y, x + w, y + h, r);
+                ctx.arcTo(x + w, y + h, x, y + h, r);
+                ctx.arcTo(x, y + h, x, y, r);
+                ctx.arcTo(x, y, x + w, y, r);
+                ctx.closePath();
+            }
+            // Texto centrado con salto de línea automático (no existe
+            // nativo en Canvas 2D) -- devuelve el Y donde terminó, para
+            // poder seguir dibujando debajo sin superponerse.
+            function wrapText(text, cx, y, maxWidth, lineHeight) {
+                var words = String(text || '').split(' ');
+                var line = '';
+                for (var i = 0; i < words.length; i++) {
+                    var test = line ? (line + ' ' + words[i]) : words[i];
+                    if (ctx.measureText(test).width > maxWidth && line) {
+                        ctx.fillText(line, cx, y);
+                        line = words[i];
+                        y += lineHeight;
+                    } else {
+                        line = test;
+                    }
+                }
+                if (line) { ctx.fillText(line, cx, y); y += lineHeight; }
+                return y;
+            }
+
+            // Fondo degradé oscuro -- mismo lenguaje visual violeta/negro
+            // con acentos cian/fucsia que el resto de la app.
+            var bg = ctx.createLinearGradient(0, 0, 0, H);
+            bg.addColorStop(0, '#0a0118');
+            bg.addColorStop(1, '#170a2b');
+            ctx.fillStyle = bg;
+            ctx.fillRect(0, 0, W, H);
+
+            function glow(x, y, r, color) {
+                var g = ctx.createRadialGradient(x, y, 0, x, y, r);
+                g.addColorStop(0, color);
+                g.addColorStop(1, 'rgba(0,0,0,0)');
+                ctx.fillStyle = g;
+                ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
+            }
+            glow(140, 180, 460, 'rgba(0,243,255,0.28)');
+            glow(W - 140, H - 360, 520, 'rgba(217,70,239,0.24)');
+
+            // Marca arriba.
+            var coinImg = await this.loadImageSafe(this.iconSvgDataUrl('coin', '#facc15', 64, 2.2));
+            if (coinImg) ctx.drawImage(coinImg, W / 2 - 32, 96, 64, 64);
+            ctx.textAlign = 'center';
+            ctx.fillStyle = '#e5e7eb';
+            ctx.font = '600 34px system-ui, -apple-system, Segoe UI, Roboto, sans-serif';
+            ctx.fillText('MUSICTOKEN RING', W / 2, 210);
+
+            var y = 300;
+            // Insignia "Batalla Sorpresa" -- pedido de la Fase 3 del
+            // rediseño (ver memoria del proyecto): un underdog le ganó a
+            // un favorito más popular, vale la pena resaltarlo.
+            if (cardData.isUnderdog) {
+                var pillW = 620, pillH = 84, px = W / 2 - pillW / 2;
+                ctx.fillStyle = 'rgba(250,204,21,0.14)';
+                ctx.strokeStyle = '#fde047';
+                ctx.lineWidth = 3;
+                roundRectPath(px, y, pillW, pillH, pillH / 2);
+                ctx.fill(); ctx.stroke();
+                ctx.fillStyle = '#fde047';
+                ctx.font = '800 36px system-ui, sans-serif';
+                ctx.fillText('⚡ BATALLA SORPRESA', W / 2, y + pillH / 2 + 13);
+                y += pillH + 50;
+            } else {
+                y += 20;
+            }
+
+            var trophyImg = await this.loadImageSafe(this.iconSvgDataUrl('crown', '#fde047', 180, 1.6));
+            if (trophyImg) ctx.drawImage(trophyImg, W / 2 - 90, y, 180, 180);
+            y += 210;
+
+            ctx.fillStyle = '#ffffff';
+            ctx.font = '900 92px system-ui, sans-serif';
+            ctx.fillText('¡VICTORIA!', W / 2, y + 70);
+            y += 150;
+
+            // Tapa de la canción ganadora, con manejo de CORS: si Deezer
+            // no manda cabeceras CORS para esa imagen puntual, dibujarla
+            // "contamina" el canvas y toBlob() falla en silencio más
+            // adelante -- por eso el try/catch acá, con un placeholder
+            // (círculo + nota musical) como red de seguridad.
+            var coverSize = 460;
+            var coverY = y + 10;
+            var coverImg = await this.loadImageSafe(cardData.winnerImg, true);
+            var coverDrawn = false;
+            if (coverImg) {
+                try {
+                    ctx.save();
+                    ctx.beginPath();
+                    ctx.arc(W / 2, coverY + coverSize / 2, coverSize / 2, 0, Math.PI * 2);
+                    ctx.closePath();
+                    ctx.clip();
+                    ctx.drawImage(coverImg, W / 2 - coverSize / 2, coverY, coverSize, coverSize);
+                    ctx.restore();
+                    coverDrawn = true;
+                } catch (drawErr) {
+                    console.warn('[buildResultShareCard] No se pudo dibujar la tapa (CORS), uso placeholder:', drawErr && drawErr.message);
+                }
+            }
+            if (!coverDrawn) {
+                ctx.beginPath();
+                ctx.fillStyle = 'rgba(255,255,255,0.06)';
+                ctx.arc(W / 2, coverY + coverSize / 2, coverSize / 2, 0, Math.PI * 2);
+                ctx.fill();
+                var musicImg = await this.loadImageSafe(this.iconSvgDataUrl('music', '#67e8f9', 160, 2));
+                if (musicImg) ctx.drawImage(musicImg, W / 2 - 80, coverY + coverSize / 2 - 80, 160, 160);
+            }
+            ctx.beginPath();
+            ctx.arc(W / 2, coverY + coverSize / 2, coverSize / 2 + 6, 0, Math.PI * 2);
+            ctx.strokeStyle = '#22d3ee';
+            ctx.lineWidth = 6;
+            ctx.shadowColor = 'rgba(34,211,238,0.8)';
+            ctx.shadowBlur = 30;
+            ctx.stroke();
+            ctx.shadowBlur = 0;
+
+            y = coverY + coverSize + 80;
+            ctx.fillStyle = '#ffffff';
+            ctx.font = '800 56px system-ui, sans-serif';
+            y = wrapText(cardData.winnerName || '', W / 2, y, 900, 66);
+            if (cardData.winnerArtist) {
+                ctx.fillStyle = '#94a3b8';
+                ctx.font = '500 38px system-ui, sans-serif';
+                ctx.fillText(cardData.winnerArtist, W / 2, y + 6);
+                y += 66;
+            }
+            if (cardData.scoreLine) {
+                ctx.fillStyle = '#22d3ee';
+                ctx.font = '700 42px system-ui, sans-serif';
+                wrapText(cardData.scoreLine, W / 2, y + 34, 900, 52);
+            }
+
+            // Pie de página / CTA.
+            ctx.fillStyle = '#64748b';
+            ctx.font = '500 32px system-ui, sans-serif';
+            ctx.fillText('Batallas reales de destreza musical', W / 2, H - 160);
+            ctx.fillStyle = '#e879f9';
+            ctx.font = '700 40px system-ui, sans-serif';
+            ctx.fillText((window.location && window.location.host) || 'musictokenring.com', W / 2, H - 100);
+
+            return await new Promise(function (resolve) {
+                canvas.toBlob(function (blob) { resolve(blob); }, 'image/png');
+            });
+        } catch (e) {
+            console.error('[buildResultShareCard] Error:', e);
+            return null;
+        }
+    },
+
+    // Orquesta armar la tarjeta + el share sheet nativo (Web Share API
+    // con archivo) -- si el navegador no lo soporta (desktop, o un
+    // navegador viejo), descarga la imagen y copia el texto en vez de
+    // dejar el botón sin hacer nada.
+    async shareBattleResult(cardData) {
+        var blob = null;
+        try { blob = await this.buildResultShareCard(cardData); } catch (e) { console.error('[shareBattleResult] Error armando la tarjeta:', e); }
+        var caption = cardData.shareText || '¡Gané una batalla en MusicToken Ring! 🎧🏆';
+
+        if (blob && window.File && navigator.share && navigator.canShare) {
+            try {
+                var file = new File([blob], 'mtr-resultado.png', { type: 'image/png' });
+                if (navigator.canShare({ files: [file] })) {
+                    await navigator.share({ files: [file], title: 'MusicToken Ring', text: caption });
+                    return;
+                }
+            } catch (shareErr) {
+                if (shareErr && shareErr.name === 'AbortError') return; // el usuario cerró el share sheet, no es un error
+                console.warn('[shareBattleResult] navigator.share con archivo falló, se cae a descarga:', shareErr);
+            }
+        }
+
+        // Respaldo (desktop / sin soporte de archivos en Web Share API):
+        // descargar la imagen y copiar el texto, con un aviso claro de
+        // qué hacer con eso en vez de dejar el botón sin efecto visible.
+        if (blob) {
+            try {
+                var url = URL.createObjectURL(blob);
+                var a = document.createElement('a');
+                a.href = url; a.download = 'mtr-resultado.png';
+                document.body.appendChild(a); a.click(); document.body.removeChild(a);
+                setTimeout(function () { URL.revokeObjectURL(url); }, 30000);
+            } catch (dlErr) { console.error('[shareBattleResult] Error descargando la imagen:', dlErr); }
+        }
+        try { if (navigator.clipboard) await navigator.clipboard.writeText(caption); } catch (e) { /* ignore */ }
+        showToast(blob
+            ? 'Descargamos la imagen y copiamos el texto -- subila a Instagram, TikTok o Facebook desde ahí'
+            : 'No se pudo armar la imagen -- copiamos el texto para que lo compartas igual', 'info', 7000);
+    },
+
+    // Punto de entrada sin argumentos para el botón "Compartir" -- lee
+    // los datos guardados en this._pendingShare (ver
+    // showFanPlaysResultScreen()/showVictoryScreen()) en vez de recibirlos
+    // por el atributo onclick, donde un nombre de canción con comillas
+    // rompería el HTML.
+    shareLastResult() {
+        var pending = this._pendingShare;
+        if (!pending) return;
+        if (pending.kind === 'fanplays') {
+            this.shareFanPlaysResult(pending.match, pending.winner, pending.resultKind, pending.breakdown);
+        } else if (pending.kind === 'victory') {
+            this.shareVictoryResult(pending.match, pending.winner, pending.prize);
+        }
+    },
+
+    shareFanPlaysResult(match, winner, resultKind, breakdown) {
+        var winnerName = winner === 1 ? match.player1_song_name : match.player2_song_name;
+        var winnerArtist = winner === 1 ? match.player1_song_artist : match.player2_song_artist;
+        var winnerImg = winner === 1 ? match.player1_song_image : match.player2_song_image;
+        var pAvg = Math.round(breakdown && breakdown.playerAvg || 0);
+        var cAvg = Math.round(breakdown && breakdown.cpuAvg || 0);
+        var scoreLine = (breakdown && (breakdown.playerAvg != null))
+            ? (pAvg + ' vs ' + cAvg + ' reproducciones de fan')
+            : '';
+        // "Underdog": ganó por destreza clara siendo el que Deezer NO
+        // tenía como favorito -- mismo "tilt" que ya calcula
+        // resolveFanPlaysPractice()/resolveFanPlaysWinner() para el
+        // desempate (tilt>0 favorece al lado 1, tilt<0 al lado 2). Umbral
+        // chico (3 puntos) para no marcar como "sorpresa" un tilt casi
+        // parejo.
+        var tilt = breakdown ? Number(breakdown.tilt) || 0 : 0;
+        var isUnderdog = resultKind === 'destreza_clara' && ((winner === 1 && tilt < -3) || (winner === 2 && tilt > 3));
+        this.shareBattleResult({
+            winnerName: winnerName, winnerArtist: winnerArtist, winnerImg: winnerImg,
+            scoreLine: scoreLine, isUnderdog: isUnderdog,
+            shareText: '¡Gané una batalla en MusicToken Ring con ' + (winnerName || 'mi canción') + '! 🎧🏆 Reproducciones de fan reales, no algoritmos -- jugá vos también.'
+        });
+    },
+
+    shareVictoryResult(match, winner, prize) {
+        var winnerName = winner === 1 ? match.player1_song_name : match.player2_song_name;
+        var winnerArtist = winner === 1 ? match.player1_song_artist : match.player2_song_artist;
+        var winnerImg = winner === 1 ? match.player1_song_image : match.player2_song_image;
+        var scoreLine = prize > 0 ? ('+' + prize + ' MTR ganados') : '';
+        this.shareBattleResult({
+            winnerName: winnerName, winnerArtist: winnerArtist, winnerImg: winnerImg,
+            scoreLine: scoreLine, isUnderdog: false,
+            shareText: '¡Gané una batalla real en MusicToken Ring con ' + (winnerName || 'mi canción') + '! 🎧🏆 Jugá vos también.'
+        });
     },
 
     /**
@@ -5769,6 +6087,19 @@ const GameEngine = {
         var accentColor = userWon ? 'cyan' : 'fuchsia';
         var glowClass = userWon ? 'shadow-[0_0_40px_rgba(0,243,255,0.4)]' : 'shadow-[0_0_40px_rgba(239,68,68,0.3)]';
 
+        // Ver el mismo comentario en showFanPlaysResultScreen() -- solo se
+        // comparte una victoria, y los datos van en this._pendingShare (no
+        // en el onclick) para no romperse con comillas/apóstrofes en el
+        // nombre de la canción.
+        if (userWon) {
+            this._pendingShare = { kind: 'victory', match: match, winner: winner, prize: prize };
+        }
+        var shareButtonHtml = userWon
+            ? '<button onclick="GameEngine.shareLastResult()" class="ml-3 px-6 py-3 rounded-xl text-lg font-bold border-2 border-cyan-400/50 text-cyan-300 hover:bg-cyan-400/10 transition-all cursor-pointer">' +
+              svgIcon('share', 16) + 'Compartir' +
+              '</button>'
+            : '';
+
         var container = document.querySelector('main') || document.querySelector('.container');
         container.innerHTML = '<section id="victorySection" class="max-w-3xl mx-auto py-12 px-4 text-center relative min-h-[500px]">' +
             '<canvas id="victoryCanvas" class="absolute inset-0 w-full h-full pointer-events-none rounded-2xl"></canvas>' +
@@ -5784,9 +6115,12 @@ const GameEngine = {
                 : (prize > 0 ? '<p class="text-3xl sm:text-4xl font-black text-cyan-400 mb-6" style="text-shadow:0 0 20px rgba(0,243,255,0.5);animation:pulse 1s ease-in-out infinite">+' + prize + ' MTR</p>' : '<p class="text-lg text-gray-400 mb-6">Mejor suerte la próxima vez</p>')) +
             (!isPractice && !isFriendlyFallback && payouts.platformFee ? '<div class="text-sm text-gray-500 mb-6 space-y-1"><p>Comisión: ' + payouts.platformFee + ' MTR</p><p>Pago ganador: ' + payouts.winnerPayout + ' MTR</p></div>' : '') +
             (this.lastPrizeTxHash ? '<p class="text-sm text-cyan-400 mb-4">Tx: <a href="https://basescan.org/tx/' + this.lastPrizeTxHash + '" target="_blank" class="underline">' + this.lastPrizeTxHash.slice(0, 14) + '...</a></p>' : '') +
+            '<div class="flex flex-wrap items-center justify-center">' +
             '<button onclick="' + (isPractice ? 'GameEngine.goToPracticeSelection()' : 'location.reload()') + '" class="px-8 py-3 rounded-xl text-lg font-bold bg-gradient-to-r from-cyan-500 to-fuchsia-500 text-white hover:opacity-90 transition-all shadow-lg shadow-cyan-500/25 cursor-pointer">' +
             (isPractice ? svgIcon('target', 16) + 'Continuar en práctica' : svgIcon('refresh', 16) + 'Jugar de Nuevo') +
             '</button>' +
+            shareButtonHtml +
+            '</div>' +
             '</div></section>';
 
         // Mismo motivo que en createBattleUI(): #victorySection acaba de
