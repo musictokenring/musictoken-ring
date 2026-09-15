@@ -1020,7 +1020,19 @@ const GameEngine = {
             
             if (attempts > maxAttempts) {
                 clearInterval(this.matchmakingInterval);
-                await this.leaveMatchmakingQueue();
+                const leaveResult = await this.leaveMatchmakingQueue();
+                // Ver el fix de la carrera en /api/matchmaking/leave: un
+                // rival nos pudo haber encontrado justo en este límite de
+                // 60s -- si ya existe un match real, jugarlo de verdad en
+                // vez de caer a una batalla falsa contra la CPU (eso es
+                // justo lo que perdía créditos reales sin que el jugador
+                // se enterara).
+                if (leaveResult && leaveResult.matched && leaveResult.matchId) {
+                    document.getElementById('waitingScreen').classList.add('hidden');
+                    this._pendingQuickSong = null;
+                    await this.startMatch(leaveResult.matchId);
+                    return;
+                }
                 document.getElementById('waitingScreen').classList.add('hidden');
                 const fallbackSong = this._pendingQuickSong;
                 this._pendingQuickSong = null;
@@ -1096,28 +1108,49 @@ const GameEngine = {
     // startQuickCpuFallback). Reembolsa la apuesta real descontada al
     // entrar (ver joinMatchmakingQueueSecure) -- antes no había nada que
     // reembolsar porque nunca se había descontado nada.
+    // Devuelve la respuesta del backend (no solo void) -- desde el fix de
+    // la carrera de matchmaking, este endpoint puede contestar
+    // { matched: true, matchId } en vez de reembolsar, si un rival nos
+    // encontró justo en el límite de tiempo (ver el comentario grande en
+    // /api/matchmaking/leave, backend/server-auto.js). Quien llama tiene
+    // que poder reaccionar a eso en vez de asumir siempre "no había
+    // nadie".
     async leaveMatchmakingQueue() {
         clearInterval(this.matchmakingInterval);
         const { data: { session } } = await supabaseClient.auth.getSession();
-        if (!session) return;
+        if (!session) return null;
         try {
             const backendUrl = window.CONFIG?.BACKEND_API || window.CreditsSystem?.backendUrl || 'https://musictoken-ring.onrender.com';
-            await fetch(`${backendUrl}/api/matchmaking/leave`, {
+            const resp = await fetch(`${backendUrl}/api/matchmaking/leave`, {
                 method: 'POST',
                 headers: await this.getBackendAuthHeaders(),
                 body: JSON.stringify({ walletAddress: this.connectedWallet || localStorage.getItem('mtr_wallet') || null })
             });
+            const data = await resp.json().catch(() => ({}));
             if (window.CreditsSystem) {
                 await window.CreditsSystem.loadBalance(this.connectedWallet || localStorage.getItem('mtr_wallet') || null, session.user.id);
             }
+            return data;
         } catch (error) {
             console.error('[leaveMatchmakingQueue] Error:', error);
+            return null;
         }
     },
 
     async cancelMatchmaking() {
-        await this.leaveMatchmakingQueue();
+        const leaveResult = await this.leaveMatchmakingQueue();
         this._pendingQuickSong = null;
+
+        // Mismo caso límite que en startMatchmakingPolling(): si justo
+        // en el momento de cancelar un rival ya nos había encontrado, ya
+        // hay un match real con plata real de los dos lados -- no se
+        // puede simplemente "cancelar", hay que jugarlo.
+        if (leaveResult && leaveResult.matched && leaveResult.matchId) {
+            document.getElementById('waitingScreen').classList.add('hidden');
+            showToast('¡Se encontró un rival justo ahora!', 'info');
+            await this.startMatch(leaveResult.matchId);
+            return;
+        }
 
         document.getElementById('waitingScreen').classList.add('hidden');
         document.getElementById('songSelection').classList.remove('hidden');

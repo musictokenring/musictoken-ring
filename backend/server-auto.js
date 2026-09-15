@@ -3684,6 +3684,41 @@ app.post('/api/matchmaking/leave', requireCreditMutationAuth, async (req, res) =
         }, req.authUser, walletAddress || null);
         const userId = resolved.userId;
 
+        // CRÍTICO -- encontrado en producción (usuario reportó perder
+        // créditos reales en una batalla que, para él, fue "contra la
+        // CPU"): condición de carrera real entre este endpoint (se llama
+        // al cumplirse el timeout de 60s de startMatchmakingPolling) y
+        // OTRO jugador formando un match real con este usuario en el
+        // mismo instante (ver createMatch() en game-engine.js, que llama
+        // a /api/matchmaking/clear-matched recién DESPUÉS de crear el
+        // match -- hay una ventana real donde el match ya existe pero la
+        // fila de la cola todavía no se limpió). Si eso ya pasó, el
+        // crédito de esta fila YA está comprometido en el pozo de ese
+        // match real -- reembolsarlo acá sería imprimir plata de la
+        // nada, y borrar la fila sin avisar dejaba al usuario pensando
+        // que entraba a una batalla amistosa gratis mientras una batalla
+        // REAL con su dinero corría sola del otro lado (y si la perdía,
+        // perdía créditos de verdad sin haber jugado un segundo de esa
+        // batalla). Por eso se chequea ANTES de tocar la cola.
+        const { data: justMatched } = await supabase
+            .from('matches')
+            .select('id, status')
+            .or(`player1_id.eq.${userId},player2_id.eq.${userId}`)
+            .in('status', ['ready', 'playing'])
+            .eq('match_type', 'quick')
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .maybeSingle();
+
+        if (justMatched) {
+            // Ya hay un match real -- limpiar la fila de la cola (ya
+            // cumplió su función) SIN reembolsar, y avisarle al cliente
+            // cuál es el match para que lo juegue de verdad en vez de
+            // caer a una batalla falsa contra la CPU.
+            await supabase.from('matchmaking_queue').delete().eq('user_id', userId);
+            return res.json({ ok: true, matched: true, matchId: justMatched.id });
+        }
+
         const { data: deleted, error: deleteError } = await supabase
             .from('matchmaking_queue')
             .delete()
