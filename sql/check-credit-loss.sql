@@ -1,23 +1,18 @@
--- Diagnóstico v3: buscar directo en player_battle_history (la tabla que
--- alimenta el perfil del jugador) en vez de reconstruir desde matches.
--- Email: homefix.creador@gmail.com
+-- Diagnóstico v4: la pérdida más reciente (14 sep) fue en un TORNEO
+-- EXPRESS (battle_mode='express'), no en Modo Rápido -- es otro sistema,
+-- con brackets y participantes CPU. Esto mira el torneo puntual.
 
-with me as (
-  select id from auth.users where email = 'homefix.creador@gmail.com'
-)
+-- El source_id de la fila más reciente en player_battle_history
+-- (14 sep 06:18, "You Give Love A Bad Name") es el id del torneo:
+select *
+from tournaments
+where id = '9cd13e87-9d9d-46e7-adc0-3f7bd99272be';
+
+-- Participantes de ESE torneo -- para ver quiénes eran (humanos o CPU,
+-- columna is_cpu) y en qué posición quedó cada uno.
 select
-  h.id,
-  h.battle_mode,
-  h.result,
-  h.credits_wagered,
-  h.credits_won,
-  h.song_name,
-  h.song_artist,
-  h.source_id,   -- este es el id real en la tabla "matches" para cruzar
-  h.played_at
-from player_battle_history h, me
-where h.user_id = me.id
-  and h.result = 'loss'
-  and h.credits_wagered > 0
-order by h.played_at desc
-limit 30;
+  id, user_id, song_name, song_artist, placement, eliminated,
+  is_cpu, display_name, bracket_slot, joined_at
+from tournament_participants
+where tournament_id = '9cd13e87-9d9d-46e7-adc0-3f7bd99272be'
+order by bracket_slot;
