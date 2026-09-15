@@ -3616,13 +3616,52 @@ const GameEngine = {
                 wrapText(cardData.scoreLine, W / 2, y + 34, 900, 52);
             }
 
-            // Pie de página / CTA.
+            // Pie de página / CTA -- QR real, no solo texto. Pedido
+            // explícito del usuario: que quien vea la Story pueda tocar
+            // para ir al sitio. Ninguna red social deja pegarle un link
+            // clicable de VERDAD a una imagen compartida desde afuera de
+            // su propia app (Instagram Stories solo soporta el sticker de
+            // link nativo desde adentro de la app de Instagram, con
+            // integración nativa -- no existe esa opción para una web
+            // compartiendo un archivo suelto) -- un QR es el equivalente
+            // universal: cualquier cámara de celular moderna lo detecta
+            // sola, sin apps ni permisos extra. Usa src/qrcode.js
+            // (Kazuhiko Arase, MIT, vendoreado -- ver la nota en
+            // index.html), con manejo de error propio para que si algo
+            // falla generándolo, la tarjeta se siga viendo bien sin él
+            // (mismo criterio que la tapa de la canción más arriba).
+            var qrSize = 210, qrY = H - 440;
+            var shareUrl = ((window.location && window.location.origin) || 'https://musictokenring.com') + '/?utm_source=share_card';
+            try {
+                if (window.qrcode) {
+                    var qr = window.qrcode(0, 'M'); // 0 = tamaño automático según el largo del texto
+                    qr.addData(shareUrl);
+                    qr.make();
+                    var moduleCount = qr.getModuleCount();
+                    var cell = qrSize / moduleCount;
+                    var pad = 22;
+                    ctx.fillStyle = '#ffffff';
+                    roundRectPath(W / 2 - qrSize / 2 - pad, qrY - pad, qrSize + pad * 2, qrSize + pad * 2, 16);
+                    ctx.fill();
+                    ctx.fillStyle = '#0a0118';
+                    for (var row = 0; row < moduleCount; row++) {
+                        for (var col = 0; col < moduleCount; col++) {
+                            if (qr.isDark(row, col)) {
+                                ctx.fillRect(W / 2 - qrSize / 2 + col * cell, qrY + row * cell, Math.ceil(cell), Math.ceil(cell));
+                            }
+                        }
+                    }
+                }
+            } catch (qrErr) {
+                console.warn('[buildResultShareCard] No se pudo generar el QR, la tarjeta sigue sin él:', qrErr && qrErr.message);
+            }
+
             ctx.fillStyle = '#64748b';
-            ctx.font = '500 32px system-ui, sans-serif';
-            ctx.fillText('Batallas reales de destreza musical', W / 2, H - 160);
+            ctx.font = '500 30px system-ui, sans-serif';
+            ctx.fillText('Escaneá para jugar', W / 2, qrY + qrSize + 60);
             ctx.fillStyle = '#e879f9';
-            ctx.font = '700 40px system-ui, sans-serif';
-            ctx.fillText((window.location && window.location.host) || 'musictokenring.com', W / 2, H - 100);
+            ctx.font = '700 38px system-ui, sans-serif';
+            ctx.fillText((window.location && window.location.host) || 'musictokenring.com', W / 2, qrY + qrSize + 106);
 
             return await new Promise(function (resolve) {
                 canvas.toBlob(function (blob) { resolve(blob); }, 'image/png');
@@ -3640,7 +3679,16 @@ const GameEngine = {
     async shareBattleResult(cardData) {
         var blob = null;
         try { blob = await this.buildResultShareCard(cardData); } catch (e) { console.error('[shareBattleResult] Error armando la tarjeta:', e); }
-        var caption = cardData.shareText || '¡Gané una batalla en MusicToken Ring! 🎧🏆';
+        // El link va DENTRO del texto (no en un campo `url` aparte de
+        // navigator.share) -- así queda garantizado visible/clicable en
+        // cualquier destino que muestre texto (WhatsApp, Mensajes,
+        // Twitter/X, email), sin arriesgar que algún navegador rechace
+        // share() por combinar files+url (pasa en algunas implementaciones).
+        // Para Instagram Stories/TikTok específicamente (que ignoran el
+        // texto y solo usan la imagen), está el QR dibujado en la propia
+        // tarjeta -- ver buildResultShareCard().
+        var shareUrl = ((window.location && window.location.origin) || 'https://musictokenring.com') + '/?utm_source=share_card';
+        var caption = (cardData.shareText || '¡Gané una batalla en MusicToken Ring! 🎧🏆') + ' ' + shareUrl;
 
         if (blob && window.File && navigator.share && navigator.canShare) {
             try {

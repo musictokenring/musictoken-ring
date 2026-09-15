@@ -3142,6 +3142,14 @@
     <script src="./src/claim-ui.js?v=v2.7" defer></script>
     <script src="./src/fan-plays-scoring.js?v=v1"></script>
     <script src="./src/fan-plays-minigame.js?v=v1"></script>
+    <!-- QR Code Generator for JavaScript (Kazuhiko Arase, MIT) -- vendoreado
+         tal cual, sin build step, para el QR clicable de la tarjeta de
+         "Compartir resultado" (ver buildResultShareCard en game-engine.js).
+         Ninguna de las plataformas de Stories deja incrustar un link
+         clicable de verdad en una imagen compartida por fuera de su propia
+         app nativa -- un QR es el equivalente universal (cámara del
+         celular lo detecta sola) que sí funciona sin integración nativa. -->
+    <script src="./src/qrcode.js?v=v1"></script>
     <script src="./game-engine.js?v=v3.21-audio-fix"></script>
     <script>window.MTR_INLINE_TOP_STREAMS_ACTIVE = true;</script>
     <!-- DEFINIR quickBet INMEDIATAMENTE - ANTES DE CUALQUIER OTRO SCRIPT -->
