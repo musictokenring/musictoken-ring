@@ -3,22 +3,21 @@
 -- vio ni jugó (le mostraba una batalla gratis contra la CPU mientras un
 -- match real, con su apuesta, se resolvía solo del lado del rival).
 --
--- Uso: reemplazá el email de abajo (el que usás para entrar a
--- MusicToken Ring) y corré esto en el SQL Editor de Supabase.
+-- Email ya cargado: homefix.creador@gmail.com
 
 -- PASO 1: confirmar que el email realmente tiene una cuenta.
--- Si esto da 0 filas, el email está mal o la cuenta usa otro método de
--- login (wallet conectada sin email, por ejemplo) -- en ese caso avisame
--- y lo resolvemos de otra forma.
+-- Si esto da 0 filas, la cuenta usa otro método de login (wallet
+-- conectada sin este email, por ejemplo) -- avisame y lo resolvemos
+-- por wallet en vez de por email (ver Paso 3 más abajo).
 select id, email, created_at
 from auth.users
-where email = 'TU_EMAIL_ACA@ejemplo.com';
+where email = 'homefix.creador@gmail.com';
 
 -- PASO 2: TODAS tus batallas recientes (cualquier modo, no solo
 -- "quick") -- por si el problema fue en otro lado o el match quedó
 -- guardado con un match_type distinto al esperado.
 with me as (
-  select id from auth.users where email = 'TU_EMAIL_ACA@ejemplo.com'
+  select id from auth.users where email = 'homefix.creador@gmail.com'
 )
 select
   m.id,
