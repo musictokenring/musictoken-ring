@@ -38,6 +38,7 @@ const { deductUnifiedBalance } = require('./unified-balance');
 // servidor recalcula EXACTAMENTE lo mismo que debería haber salido del
 // lado del cliente, en vez de confiar en un puntaje que mande él mismo.
 const FanPlaysScoring = require('../src/fan-plays-scoring.js');
+const { recordMatchBattles, bumpUserStats } = require('./player-battle-history');
 
 const LEGACY_CHAIN_DEPOSITS = process.env.ENABLE_LEGACY_CHAIN_DEPOSITS === 'true';
 
@@ -683,6 +684,168 @@ app.post('/api/user/deduct-credits', requireCreditMutationAuth, async (req, res)
 });
 
 /**
+ * Paga el pozo de un match ya terminado (status='finished' + winner) al
+ * ganador. Extraído tal cual de /api/matches/:matchId/award-winner para
+ * poder reusarlo también desde la resolución por abandono de las batallas
+ * verificadas (resolveFanPlaysTimeout, más abajo), donde puede no haber
+ * ningún cliente conectado para llamar al endpoint. Quien llama es
+ * responsable de verificar permisos; acá solo se paga, con el mismo
+ * guard de idempotencia (award_processed) de siempre.
+ * Devuelve { ok, ... } o { status, error }.
+ */
+async function awardMatchWinnerCore(match) {
+    const matchId = match.id;
+    // CRÍTICO -- encontrado revisando el flujo de "Reproducciones de
+    // Fan" (verificación server-side, dos jugadores reales llamando a
+    // este mismo endpoint): este endpoint no tenía NINGÚN seguro contra
+    // llamarse dos veces para el mismo match -- pagaba el pozo
+    // completo cada vez, sin marcar nunca "esto ya se pagó". Hasta
+    // ahora era inofensivo solo porque la carrera atómica del lado del
+    // cliente (ver endBattle()) aseguraba que un solo dispositivo lo
+    // llamara -- pero es una base frágil (un reintento de red, un bug,
+    // o el nuevo flujo de batallas verificadas donde AMBOS lados
+    // pueden llamarlo legítimamente) podía haber pagado doble en
+    // cualquier modo real. Mismo patrón de "carrera atómica" que ya
+    // usa el resto de la app: solo el primer llamado que gane este
+    // UPDATE sigue adelante y paga; cualquier otro devuelve
+    // alreadyProcessed sin tocar nada más.
+    const { data: claimedAward } = await supabase
+        .from('matches')
+        .update({ award_processed: true })
+        .eq('id', matchId)
+        .eq('award_processed', false)
+        .select('id')
+        .maybeSingle();
+    if (!claimedAward) {
+        const winnerUserIdAlready = match.winner === 1 ? match.player1_id : match.player2_id;
+        return { ok: true, alreadyProcessed: true, winnerUserId: winnerUserIdAlready };
+    }
+
+    const winnerUserId = match.winner === 1 ? match.player1_id : match.player2_id;
+    if (!winnerUserId) {
+        return { status: 400, error: 'Match sin ganador válido' };
+    }
+
+    const totalPot = parseFloat(match.total_pot || 0);
+    const BET_FEE_RATE = 0.02;
+    const platformFee = totalPot * BET_FEE_RATE;
+    const winnerPayout = totalPot - platformFee;
+
+    if (winnerPayout <= 0) {
+        // Pozo en 0 (ej. batalla amistosa CPU sin rival humano a tiempo,
+        // ver startQuickCpuFallback) -- nada que acreditar, no es un error.
+        return { ok: true, winnerUserId, credited: 0, platformFee: 0 };
+    }
+
+    // Partida de prueba (bono): el premio se paga en bonus_credits,
+    // JAMÁS en credits real -- por eso ni siquiera se resuelve con
+    // resolveCreditsUserId() (esa lógica es para cuentas reales con
+    // wallets vinculadas viejas; el sistema de bonos es nuevo, cada
+    // cuenta tiene un solo id). Vencimiento fresco de 3 días para que
+    // el ganador tenga tiempo de decidir si quiere recargar de verdad.
+    if (match.stake_type === 'bonus') {
+        const bonusExpiresAt = new Date(Date.now() + BONUS_INVITE_DEFAULT_EXPIRES_DAYS * 24 * 60 * 60 * 1000).toISOString();
+        const { error: bonusCreditError } = await supabase.rpc('increment_bonus_credits', {
+            user_id_param: winnerUserId,
+            credits_to_add: winnerPayout,
+            new_expires_at: bonusExpiresAt
+        });
+        if (bonusCreditError) {
+            console.error('[award-winner] increment_bonus_credits falló:', bonusCreditError);
+            return { status: 500, error: 'No se pudo acreditar el premio de prueba' };
+        }
+        console.log(`[award-winner] match ${matchId} (bonus): acreditados ${winnerPayout} créditos de prueba a ${winnerUserId}`);
+        return { ok: true, winnerUserId, credited: winnerPayout, platformFee, stakeType: 'bonus' };
+    }
+
+    const { data: winnerRow } = await supabase
+        .from('users')
+        .select('id, email, wallet_address')
+        .eq('id', winnerUserId)
+        .maybeSingle();
+
+    const resolved = await resolveCreditsUserId(
+        supabase,
+        {
+            getUserIdFromWallet: (addr) =>
+                walletLinkService ? walletLinkService.getUserIdFromWallet(addr) : null
+        },
+        { id: winnerUserId, email: winnerRow?.email || null },
+        winnerRow?.wallet_address || null
+    );
+    const targetUserId = resolved.userId;
+
+    const { error: creditError } = await supabase.rpc('increment_user_credits', {
+        user_id_param: targetUserId,
+        credits_to_add: winnerPayout
+    });
+
+    if (creditError) {
+        console.error('[award-winner] increment_user_credits falló:', creditError);
+        return { status: 500, error: 'No se pudo acreditar el premio' };
+    }
+
+    console.log(`[award-winner] match ${matchId}: acreditados ${winnerPayout} a ${targetUserId} (winnerUserId original: ${winnerUserId})`);
+
+    // FASE 1 de regalías de artista -- best-effort, nunca bloquea el
+    // premio real que ya se acreditó arriba. Si la canción ganadora
+    // está reclamada y VERIFICADA por un artista, se le suma acá su
+    // porcentaje del pozo a royalty_credits (acumulado, NO retirable
+    // todavía -- ver artist-royalties-system.sql). Nunca corre para
+    // partidas 'bonus' (pozo no es plata real).
+    let royaltyInfo = null;
+    try {
+        const winningSongId = match.winner === 1 ? match.player1_song_id : match.player2_song_id;
+        if (winningSongId) {
+            const { data: claimedSong } = await supabase
+                .from('artist_songs')
+                .select('id, artist_id, wins_count, total_royalties_earned')
+                .eq('song_id', winningSongId)
+                .eq('status', 'verified')
+                .maybeSingle();
+
+            if (claimedSong) {
+                const { data: artistRow } = await supabase
+                    .from('artists')
+                    .select('id, royalty_percent, royalty_credits')
+                    .eq('id', claimedSong.artist_id)
+                    .eq('verification_status', 'verified')
+                    .maybeSingle();
+
+                if (artistRow) {
+                    const royaltyAmount = totalPot * (parseFloat(artistRow.royalty_percent) / 100);
+                    if (royaltyAmount > 0) {
+                        await supabase.from('artists').update({
+                            royalty_credits: parseFloat(artistRow.royalty_credits) + royaltyAmount
+                        }).eq('id', artistRow.id);
+
+                        await supabase.from('artist_songs').update({
+                            wins_count: (claimedSong.wins_count || 0) + 1,
+                            total_royalties_earned: parseFloat(claimedSong.total_royalties_earned || 0) + royaltyAmount
+                        }).eq('id', claimedSong.id);
+
+                        await supabase.from('artist_royalty_ledger').insert([{
+                            artist_id: artistRow.id,
+                            artist_song_id: claimedSong.id,
+                            match_id: matchId,
+                            amount: royaltyAmount,
+                            total_pot: totalPot
+                        }]);
+
+                        royaltyInfo = { artistId: artistRow.id, amount: royaltyAmount };
+                        console.log(`[award-winner] 🎵 Regalía de impulso: ${royaltyAmount.toFixed(4)} al artista ${artistRow.id} (canción ${winningSongId}, match ${matchId})`);
+                    }
+                }
+            }
+        }
+    } catch (royaltyError) {
+        console.error('[award-winner] Error acreditando regalía de artista (no bloquea el premio):', royaltyError);
+    }
+
+    return { ok: true, winnerUserId: targetUserId, credited: winnerPayout, platformFee, royalty: royaltyInfo };
+}
+
+/**
  * Acredita el premio de una batalla al ganador -- reemplaza el RPC
  * increment_user_credits que game-engine.js llamaba DIRECTO desde el
  * cliente contra el id crudo de matches.player1_id/player2_id.
@@ -730,154 +893,9 @@ app.post('/api/matches/:matchId/award-winner', requireCreditMutationAuth, async 
             return res.status(403).json({ error: 'No participas en esta partida.' });
         }
 
-        // CRÍTICO -- encontrado revisando el flujo de "Reproducciones de
-        // Fan" (verificación server-side, dos jugadores reales llamando a
-        // este mismo endpoint): este endpoint no tenía NINGÚN seguro contra
-        // llamarse dos veces para el mismo match -- pagaba el pozo
-        // completo cada vez, sin marcar nunca "esto ya se pagó". Hasta
-        // ahora era inofensivo solo porque la carrera atómica del lado del
-        // cliente (ver endBattle()) aseguraba que un solo dispositivo lo
-        // llamara -- pero es una base frágil (un reintento de red, un bug,
-        // o el nuevo flujo de batallas verificadas donde AMBOS lados
-        // pueden llamarlo legítimamente) podía haber pagado doble en
-        // cualquier modo real. Mismo patrón de "carrera atómica" que ya
-        // usa el resto de la app: solo el primer llamado que gane este
-        // UPDATE sigue adelante y paga; cualquier otro devuelve
-        // alreadyProcessed sin tocar nada más.
-        const { data: claimedAward } = await supabase
-            .from('matches')
-            .update({ award_processed: true })
-            .eq('id', matchId)
-            .eq('award_processed', false)
-            .select('id')
-            .maybeSingle();
-        if (!claimedAward) {
-            const winnerUserIdAlready = match.winner === 1 ? match.player1_id : match.player2_id;
-            return res.json({ ok: true, alreadyProcessed: true, winnerUserId: winnerUserIdAlready });
-        }
-
-        const winnerUserId = match.winner === 1 ? match.player1_id : match.player2_id;
-        if (!winnerUserId) {
-            return res.status(400).json({ error: 'Match sin ganador válido' });
-        }
-
-        const totalPot = parseFloat(match.total_pot || 0);
-        const BET_FEE_RATE = 0.02;
-        const platformFee = totalPot * BET_FEE_RATE;
-        const winnerPayout = totalPot - platformFee;
-
-        if (winnerPayout <= 0) {
-            // Pozo en 0 (ej. batalla amistosa CPU sin rival humano a tiempo,
-            // ver startQuickCpuFallback) -- nada que acreditar, no es un error.
-            return res.json({ ok: true, winnerUserId, credited: 0, platformFee: 0 });
-        }
-
-        // Partida de prueba (bono): el premio se paga en bonus_credits,
-        // JAMÁS en credits real -- por eso ni siquiera se resuelve con
-        // resolveCreditsUserId() (esa lógica es para cuentas reales con
-        // wallets vinculadas viejas; el sistema de bonos es nuevo, cada
-        // cuenta tiene un solo id). Vencimiento fresco de 3 días para que
-        // el ganador tenga tiempo de decidir si quiere recargar de verdad.
-        if (match.stake_type === 'bonus') {
-            const bonusExpiresAt = new Date(Date.now() + BONUS_INVITE_DEFAULT_EXPIRES_DAYS * 24 * 60 * 60 * 1000).toISOString();
-            const { error: bonusCreditError } = await supabase.rpc('increment_bonus_credits', {
-                user_id_param: winnerUserId,
-                credits_to_add: winnerPayout,
-                new_expires_at: bonusExpiresAt
-            });
-            if (bonusCreditError) {
-                console.error('[award-winner] increment_bonus_credits falló:', bonusCreditError);
-                return res.status(500).json({ error: 'No se pudo acreditar el premio de prueba' });
-            }
-            console.log(`[award-winner] match ${matchId} (bonus): acreditados ${winnerPayout} créditos de prueba a ${winnerUserId}`);
-            return res.json({ ok: true, winnerUserId, credited: winnerPayout, platformFee, stakeType: 'bonus' });
-        }
-
-        const { data: winnerRow } = await supabase
-            .from('users')
-            .select('id, email, wallet_address')
-            .eq('id', winnerUserId)
-            .maybeSingle();
-
-        const resolved = await resolveCreditsUserId(
-            supabase,
-            {
-                getUserIdFromWallet: (addr) =>
-                    walletLinkService ? walletLinkService.getUserIdFromWallet(addr) : null
-            },
-            { id: winnerUserId, email: winnerRow?.email || null },
-            winnerRow?.wallet_address || null
-        );
-        const targetUserId = resolved.userId;
-
-        const { error: creditError } = await supabase.rpc('increment_user_credits', {
-            user_id_param: targetUserId,
-            credits_to_add: winnerPayout
-        });
-
-        if (creditError) {
-            console.error('[award-winner] increment_user_credits falló:', creditError);
-            return res.status(500).json({ error: 'No se pudo acreditar el premio' });
-        }
-
-        console.log(`[award-winner] match ${matchId}: acreditados ${winnerPayout} a ${targetUserId} (winnerUserId original: ${winnerUserId})`);
-
-        // FASE 1 de regalías de artista -- best-effort, nunca bloquea el
-        // premio real que ya se acreditó arriba. Si la canción ganadora
-        // está reclamada y VERIFICADA por un artista, se le suma acá su
-        // porcentaje del pozo a royalty_credits (acumulado, NO retirable
-        // todavía -- ver artist-royalties-system.sql). Nunca corre para
-        // partidas 'bonus' (pozo no es plata real).
-        let royaltyInfo = null;
-        try {
-            const winningSongId = match.winner === 1 ? match.player1_song_id : match.player2_song_id;
-            if (winningSongId) {
-                const { data: claimedSong } = await supabase
-                    .from('artist_songs')
-                    .select('id, artist_id, wins_count, total_royalties_earned')
-                    .eq('song_id', winningSongId)
-                    .eq('status', 'verified')
-                    .maybeSingle();
-
-                if (claimedSong) {
-                    const { data: artistRow } = await supabase
-                        .from('artists')
-                        .select('id, royalty_percent, royalty_credits')
-                        .eq('id', claimedSong.artist_id)
-                        .eq('verification_status', 'verified')
-                        .maybeSingle();
-
-                    if (artistRow) {
-                        const royaltyAmount = totalPot * (parseFloat(artistRow.royalty_percent) / 100);
-                        if (royaltyAmount > 0) {
-                            await supabase.from('artists').update({
-                                royalty_credits: parseFloat(artistRow.royalty_credits) + royaltyAmount
-                            }).eq('id', artistRow.id);
-
-                            await supabase.from('artist_songs').update({
-                                wins_count: (claimedSong.wins_count || 0) + 1,
-                                total_royalties_earned: parseFloat(claimedSong.total_royalties_earned || 0) + royaltyAmount
-                            }).eq('id', claimedSong.id);
-
-                            await supabase.from('artist_royalty_ledger').insert([{
-                                artist_id: artistRow.id,
-                                artist_song_id: claimedSong.id,
-                                match_id: matchId,
-                                amount: royaltyAmount,
-                                total_pot: totalPot
-                            }]);
-
-                            royaltyInfo = { artistId: artistRow.id, amount: royaltyAmount };
-                            console.log(`[award-winner] 🎵 Regalía de impulso: ${royaltyAmount.toFixed(4)} al artista ${artistRow.id} (canción ${winningSongId}, match ${matchId})`);
-                        }
-                    }
-                }
-            }
-        } catch (royaltyError) {
-            console.error('[award-winner] Error acreditando regalía de artista (no bloquea el premio):', royaltyError);
-        }
-
-        res.json({ ok: true, winnerUserId: targetUserId, credited: winnerPayout, platformFee, royalty: royaltyInfo });
+        const result = await awardMatchWinnerCore(match);
+        if (result.error) return res.status(result.status || 500).json({ error: result.error });
+        res.json(result);
     } catch (error) {
         console.error('[award-winner] Error:', error);
         res.status(500).json({ error: error.message });
@@ -4438,29 +4456,32 @@ async function resolveFanPlaysWinner(p1Score, p2Score, match) {
 app.get('/api/battles/:matchId/fanplay-seed', async (req, res) => {
     try {
         const { matchId } = req.params;
-        const { data: match } = await supabase.from('matches').select('id, fanplay_seed').eq('id', matchId).maybeSingle();
+        const { data: match } = await supabase.from('matches').select('id, fanplay_seed, fanplay_seed_issued_at').eq('id', matchId).maybeSingle();
         if (!match) return res.status(404).json({ error: 'Match no encontrado' });
 
         if (match.fanplay_seed != null) {
-            return res.json({ ok: true, seed: Number(match.fanplay_seed) });
+            return res.json({ ok: true, seed: Number(match.fanplay_seed), timeoutAt: fanPlaysTimeoutAt(match) });
         }
 
         // Carrera atómica: el primer pedido fija la semilla; cualquier
         // pedido posterior (el otro jugador pidiéndola también) recibe la
-        // MISMA semilla ya fijada, nunca una generada aparte.
+        // MISMA semilla ya fijada, nunca una generada aparte. La hora de
+        // emisión marca el arranque de la batalla -- desde ahí corre el
+        // plazo para que cada lado mande sus toques (ver
+        // resolveFanPlaysTimeout).
         const newSeed = Math.floor(Math.random() * 2147483647);
         const { data: claimed } = await supabase
             .from('matches')
-            .update({ fanplay_seed: newSeed })
+            .update({ fanplay_seed: newSeed, fanplay_seed_issued_at: new Date().toISOString() })
             .eq('id', matchId)
             .is('fanplay_seed', null)
-            .select('fanplay_seed')
+            .select('fanplay_seed, fanplay_seed_issued_at')
             .maybeSingle();
 
-        if (claimed) return res.json({ ok: true, seed: Number(claimed.fanplay_seed) });
+        if (claimed) return res.json({ ok: true, seed: Number(claimed.fanplay_seed), timeoutAt: fanPlaysTimeoutAt(claimed) });
 
-        const { data: fresh } = await supabase.from('matches').select('fanplay_seed').eq('id', matchId).single();
-        res.json({ ok: true, seed: Number(fresh.fanplay_seed) });
+        const { data: fresh } = await supabase.from('matches').select('fanplay_seed, fanplay_seed_issued_at').eq('id', matchId).single();
+        res.json({ ok: true, seed: Number(fresh.fanplay_seed), timeoutAt: fanPlaysTimeoutAt(fresh) });
     } catch (error) {
         console.error('[fanplay-seed] Error:', error);
         res.status(500).json({ error: error.message });
@@ -4500,6 +4521,19 @@ app.post('/api/battles/:matchId/submit-fanplay-score', requireCreditMutationAuth
         else return res.status(403).json({ error: 'No participás en esta batalla.' });
 
         const scoreCol = side === 1 ? 'player1_fanplay_score' : 'player2_fanplay_score';
+
+        // Ya resuelta (incluido por abandono o reembolso) -- no se anota
+        // nada más. Y pasado el plazo tampoco: si no, alguien podría
+        // "resucitar" una batalla que ya se dio por abandonada.
+        if (match.status === 'finished' || match.status === 'cancelled') {
+            return res.json({ ok: true, alreadyResolved: true, matchStatus: match.status, winner: match.winner, resolution: match.fanplay_timeout_resolution || null });
+        }
+        if (match[scoreCol] == null && isFanPlaysPastDeadline(match)) {
+            const timeout = await resolveFanPlaysTimeout(matchId);
+            if (timeout.error) return res.status(timeout.httpStatus || 500).json({ error: timeout.error });
+            return res.json({ ok: true, alreadyResolved: true, lateSubmission: true, ...timeout });
+        }
+
         if (match[scoreCol] != null) {
             // Ya había un puntaje registrado para este lado -- no se
             // sobreescribe (evita reintentos con toques distintos después
@@ -4527,7 +4561,7 @@ app.post('/api/battles/:matchId/submit-fanplay-score', requireCreditMutationAuth
 
         const otherScore = side === 1 ? claimed.player2_fanplay_score : claimed.player1_fanplay_score;
         if (otherScore == null) {
-            return res.json({ ok: true, score: result.average, waitingForOpponent: true });
+            return res.json({ ok: true, score: result.average, waitingForOpponent: true, timeoutAt: fanPlaysTimeoutAt(match) });
         }
         if (claimed.status === 'finished') {
             return res.json({ ok: true, score: result.average, alreadyResolved: true });
@@ -4563,6 +4597,281 @@ app.post('/api/battles/:matchId/submit-fanplay-score', requireCreditMutationAuth
         res.status(500).json({ error: error.message });
     }
 });
+
+// ==========================================
+// ABANDONO EN BATALLAS VERIFICADAS
+// ==========================================
+// Antes, si un lado nunca mandaba sus toques (cerró la app, se quedó sin
+// señal), el otro esperaba 2 minutos y recibía "contactá soporte" -- el
+// pozo quedaba congelado sin dueño. Reglas ahora, desde que se emite la
+// semilla (arranque de la batalla) hay FANPLAY_TIMEOUT_MS para mandar:
+//   - Solo un lado mandó  -> gana ese lado por abandono (cobra el pozo
+//     como cualquier victoria). Abandonar nunca conviene más que jugar:
+//     el que abandona pierde igual que si hubiera jugado y perdido.
+//   - Ningún lado mandó   -> se cancela y se devuelve a cada uno su
+//     apuesta completa (nadie jugó, nadie gana ni cobra comisión).
+//   - Los dos mandaron pero nadie cerró la batalla (caída justo en el
+//     medio) -> se resuelve con la fórmula normal.
+// Lo dispara el cliente que se quedó esperando (resolve-fanplay-timeout)
+// o, si ya no queda nadie conectado, el barrido periódico del servidor
+// (sweepFanPlaysTimeouts) -- el mismo barrido también paga batallas que
+// terminaron bien pero cuyos dos jugadores se fueron antes de cobrar.
+const FANPLAY_VERIFIED_MODES = ['private', 'quick', 'social'];
+const FANPLAY_TIMEOUT_MS = 4 * 60 * 1000;          // batalla de 60s + margen amplio para dispositivos lentos
+const FANPLAY_UNAWARDED_GRACE_MS = 2 * 60 * 1000;  // cuánto esperar a que un cliente cobre antes de cobrar el servidor
+
+function fanPlaysTimeoutAt(match) {
+    if (!match || !match.fanplay_seed_issued_at) return null;
+    return new Date(new Date(match.fanplay_seed_issued_at).getTime() + FANPLAY_TIMEOUT_MS).toISOString();
+}
+
+function isFanPlaysPastDeadline(match) {
+    const timeoutAt = fanPlaysTimeoutAt(match);
+    return timeoutAt != null && Date.now() >= new Date(timeoutAt).getTime();
+}
+
+// Devuelve a un lado su apuesta completa -- bono en bonus_credits, real
+// en credits (resolviendo la cuenta con saldo real, igual que award-winner).
+async function refundMatchBetInternal(match, side) {
+    const userId = side === 1 ? match.player1_id : match.player2_id;
+    const amount = parseFloat((side === 1 ? match.player1_bet : match.player2_bet) || 0);
+    if (!userId || !(amount > 0)) return { ok: true, skipped: true };
+
+    if (match.stake_type === 'bonus') {
+        const expiresAt = new Date(Date.now() + BONUS_INVITE_DEFAULT_EXPIRES_DAYS * 24 * 60 * 60 * 1000).toISOString();
+        const { error } = await supabase.rpc('increment_bonus_credits', {
+            user_id_param: userId,
+            credits_to_add: amount,
+            new_expires_at: expiresAt
+        });
+        return error ? { ok: false, userId, amount, error } : { ok: true, userId, amount };
+    }
+
+    const { data: userRow } = await supabase.from('users').select('id, email, wallet_address').eq('id', userId).maybeSingle();
+    const resolved = await resolveCreditsUserId(
+        supabase,
+        { getUserIdFromWallet: (addr) => walletLinkService ? walletLinkService.getUserIdFromWallet(addr) : null },
+        { id: userId, email: userRow?.email || null },
+        userRow?.wallet_address || null
+    );
+    const { error } = await supabase.rpc('increment_user_credits', {
+        user_id_param: resolved.userId,
+        credits_to_add: amount
+    });
+    return error ? { ok: false, userId: resolved.userId, amount, error } : { ok: true, userId: resolved.userId, amount };
+}
+
+// Mismo reparto que /api/vault/add-fee -- best-effort, nunca bloquea el premio.
+async function forwardBetFeeInternal(amount, matchId) {
+    try {
+        if (tradingFundService) {
+            try {
+                await tradingFundService.distributeFee(amount, 'bet', matchId);
+                return;
+            } catch (distributionError) {
+                console.error('[fanplay-timeout] Error distribuyendo fee, fallback al vault:', distributionError.message);
+            }
+        }
+        if (vaultService) await vaultService.addFee(amount, 'bet', null, matchId);
+    } catch (error) {
+        console.error('[fanplay-timeout] No se pudo enviar el fee al vault (no crítico):', error.message);
+    }
+}
+
+// Paga un match verificado ya terminado y hace, del lado del servidor, lo
+// que normalmente hace el cliente después de award-winner (historial,
+// estadísticas del ganador, fee al vault). Si un cliente ya cobró antes
+// (award_processed), no hace nada más.
+async function settleFinishedFanPlaysMatch(match) {
+    const award = await awardMatchWinnerCore(match);
+    if (award.error || award.alreadyProcessed) return award;
+
+    const credited = parseFloat(award.credited || 0);
+    const eventLabel = match.fanplay_timeout_resolution === 'forfeit'
+        ? `${String(match.match_type || 'quick').toUpperCase()} · Por abandono`
+        : undefined;
+    try {
+        await recordMatchBattles(supabase, match, match.winner, credited, { eventLabel });
+        const winnerUserId = match.winner === 1 ? match.player1_id : match.player2_id;
+        const winnerBet = parseFloat((match.winner === 1 ? match.player1_bet : match.player2_bet) || 0);
+        await bumpUserStats(supabase, winnerUserId, true, credited, winnerBet);
+    } catch (error) {
+        console.error('[fanplay-timeout] Error registrando historial/estadísticas (no bloquea el premio):', error.message);
+    }
+    if (match.stake_type !== 'bonus' && award.platformFee > 0) {
+        await forwardBetFeeInternal(award.platformFee, match.id);
+    }
+    return award;
+}
+
+/**
+ * Resuelve una batalla verificada cuyo plazo ya venció. Devuelve
+ * { ok, matchStatus, winner, resolution, timeoutAt } -- tooEarly: true si
+ * todavía no venció -- o { httpStatus, error }.
+ */
+async function resolveFanPlaysTimeout(matchId) {
+    const { data: match } = await supabase.from('matches').select('*').eq('id', matchId).maybeSingle();
+    if (!match) return { httpStatus: 404, error: 'Match no encontrado' };
+    const timeoutAt = fanPlaysTimeoutAt(match);
+
+    if (match.status === 'finished' || match.status === 'cancelled') {
+        return { ok: true, timeoutAt, matchStatus: match.status, winner: match.winner, resolution: match.fanplay_timeout_resolution || null };
+    }
+    if (!FANPLAY_VERIFIED_MODES.includes(match.match_type) || !match.fanplay_seed_issued_at) {
+        return { httpStatus: 400, error: 'Esta batalla no tiene plazo de abandono' };
+    }
+    if (!isFanPlaysPastDeadline(match)) {
+        return { ok: true, timeoutAt, matchStatus: match.status, tooEarly: true };
+    }
+
+    const s1 = match.player1_fanplay_score;
+    const s2 = match.player2_fanplay_score;
+    const has1 = s1 != null;
+    const has2 = s2 != null;
+
+    if (!has1 && !has2) {
+        // award_processed=true en el MISMO update atómico: así el reembolso
+        // corre una sola vez aunque el cliente y el barrido lleguen juntos,
+        // y ningún award-winner posterior puede pagar este match.
+        const { data: cancelled } = await supabase
+            .from('matches')
+            .update({ status: 'cancelled', fanplay_timeout_resolution: 'refund_both', award_processed: true })
+            .eq('id', matchId)
+            .not('status', 'in', '(finished,cancelled)')
+            .eq('award_processed', false)
+            .is('player1_fanplay_score', null)
+            .is('player2_fanplay_score', null)
+            .select('*')
+            .maybeSingle();
+        if (cancelled) {
+            for (const side of [1, 2]) {
+                const refund = await refundMatchBetInternal(cancelled, side);
+                if (!refund.ok) {
+                    console.error(`[fanplay-timeout] ❌ REEMBOLSO FALLÓ -- revisar a mano: match ${matchId}, jugador ${side} (${refund.userId}), ${refund.amount}:`, refund.error);
+                }
+            }
+            console.log(`[fanplay-timeout] match ${matchId}: ningún lado jugó, apuestas devueltas`);
+            return { ok: true, timeoutAt, matchStatus: 'cancelled', winner: null, resolution: 'refund_both' };
+        }
+        const { data: fresh } = await supabase.from('matches').select('status, winner, fanplay_timeout_resolution').eq('id', matchId).single();
+        return { ok: true, timeoutAt, matchStatus: fresh.status, winner: fresh.winner, resolution: fresh.fanplay_timeout_resolution || null };
+    }
+
+    let winner;
+    let resolution = null;
+    if (has1 && has2) {
+        const decision = await resolveFanPlaysWinner(Number(s1), Number(s2), match);
+        winner = decision.winner;
+    } else {
+        winner = has1 ? 1 : 2;
+        resolution = 'forfeit';
+    }
+
+    let finishQuery = supabase
+        .from('matches')
+        .update({
+            status: 'finished',
+            winner,
+            fanplay_timeout_resolution: resolution,
+            player1_final_health: Math.round(Number(s1 || 0)),
+            player2_final_health: Math.round(Number(s2 || 0)),
+            finished_at: new Date().toISOString()
+        })
+        .eq('id', matchId)
+        .not('status', 'in', '(finished,cancelled)');
+    // Por abandono: solo si el que faltaba SIGUE sin puntaje en este mismo
+    // instante (si llegó justo ahora, se reintenta con los dos puntajes).
+    if (resolution === 'forfeit') finishQuery = finishQuery.is(has1 ? 'player2_fanplay_score' : 'player1_fanplay_score', null);
+    const { data: finished } = await finishQuery.select('*').maybeSingle();
+
+    if (!finished) {
+        // Otro llamado lo resolvió primero -- devolver lo que quedó.
+        const { data: fresh } = await supabase.from('matches').select('status, winner, fanplay_timeout_resolution').eq('id', matchId).single();
+        return { ok: true, timeoutAt, matchStatus: fresh.status, winner: fresh.winner, resolution: fresh.fanplay_timeout_resolution || null };
+    }
+
+    console.log(`[fanplay-timeout] match ${matchId}: resuelto (${resolution || 'normal'}), gana lado ${winner}`);
+    const award = await settleFinishedFanPlaysMatch(finished);
+    if (award.error) console.error(`[fanplay-timeout] ❌ No se pudo pagar match ${matchId}:`, award.error);
+    return { ok: true, timeoutAt, matchStatus: 'finished', winner, resolution };
+}
+
+/**
+ * Lo llama el jugador que se quedó esperando al rival una vez vencido el
+ * plazo (timeoutAt, que ya recibió en fanplay-seed/submit-fanplay-score).
+ */
+app.post('/api/battles/:matchId/resolve-fanplay-timeout', requireCreditMutationAuth, async (req, res) => {
+    try {
+        if (!req.authUser) return res.status(401).json({ error: 'Inicia sesión primero.' });
+        const { matchId } = req.params;
+        const inMatch = await verifyUserInMatch(supabase, req.authUser, matchId);
+        if (!inMatch) return res.status(403).json({ error: 'No participás en esta batalla.' });
+
+        const result = await resolveFanPlaysTimeout(matchId);
+        if (result.error) return res.status(result.httpStatus || 500).json({ error: result.error });
+        res.json(result);
+    } catch (error) {
+        console.error('[resolve-fanplay-timeout] Error:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Barrido periódico -- cubre el caso en que NINGÚN cliente queda
+// conectado para disparar la resolución o el cobro. Solo mira matches con
+// fanplay_seed_issued_at (columna nueva): los matches viejos tienen
+// award_processed=false por el backfill aunque ya se hayan pagado, así
+// que nunca hay que "cobrar" nada anterior a esta columna.
+let fanPlaysSweepRunning = false;
+let fanPlaysSweepColumnMissingLogged = false;
+async function sweepFanPlaysTimeouts() {
+    if (fanPlaysSweepRunning) return;
+    fanPlaysSweepRunning = true;
+    try {
+        const timeoutCutoff = new Date(Date.now() - FANPLAY_TIMEOUT_MS).toISOString();
+        const { data: stale, error: staleError } = await supabase
+            .from('matches')
+            .select('id')
+            .in('match_type', FANPLAY_VERIFIED_MODES)
+            .not('fanplay_seed_issued_at', 'is', null)
+            .lt('fanplay_seed_issued_at', timeoutCutoff)
+            .not('status', 'in', '(finished,cancelled)')
+            .limit(25);
+        if (staleError) {
+            if (staleError.code === '42703') {
+                if (!fanPlaysSweepColumnMissingLogged) {
+                    console.warn('[fanplay-timeout] Falta correr sql/fanplay-timeout.sql en Supabase -- barrido desactivado hasta entonces.');
+                    fanPlaysSweepColumnMissingLogged = true;
+                }
+                return;
+            }
+            throw staleError;
+        }
+        for (const row of stale || []) {
+            await resolveFanPlaysTimeout(row.id);
+        }
+
+        const unpaidCutoff = new Date(Date.now() - FANPLAY_UNAWARDED_GRACE_MS).toISOString();
+        const { data: unpaid, error: unpaidError } = await supabase
+            .from('matches')
+            .select('*')
+            .in('match_type', FANPLAY_VERIFIED_MODES)
+            .not('fanplay_seed_issued_at', 'is', null)
+            .eq('status', 'finished')
+            .eq('award_processed', false)
+            .lt('finished_at', unpaidCutoff)
+            .limit(25);
+        if (unpaidError) throw unpaidError;
+        for (const match of unpaid || []) {
+            const award = await settleFinishedFanPlaysMatch(match);
+            if (award.error) console.error(`[fanplay-timeout] ❌ No se pudo pagar match ${match.id}:`, award.error);
+            else if (!award.alreadyProcessed) console.log(`[fanplay-timeout] match ${match.id}: pagado por el servidor (nadie cobró)`);
+        }
+    } catch (error) {
+        console.error('[fanplay-timeout] Error en el barrido:', error.message || error);
+    } finally {
+        fanPlaysSweepRunning = false;
+    }
+}
 
 /**
  * Crea un Desafío Social financiado con bonus_credits. A diferencia del
@@ -5114,6 +5423,8 @@ app.listen(PORT, async () => {
         console.error(`[server] Server will continue but some features may not work`);
         // No exit - allow server to run even if services fail
     }
+    // Abandono en batallas verificadas -- independiente de los demás servicios.
+    setInterval(sweepFanPlaysTimeouts, 60 * 1000);
 });
 
 module.exports = app;

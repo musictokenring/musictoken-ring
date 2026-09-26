@@ -49,7 +49,7 @@ async function bumpUserStats(supabase, userId, won, creditsWon, wagered) {
   await supabase.from('users').update(updates).eq('id', userId);
 }
 
-async function recordMatchBattles(supabase, match, winner, creditsWon) {
+async function recordMatchBattles(supabase, match, winner, creditsWon, opts = {}) {
   if (!match?.id || match.match_type === 'practice') return { ok: true, skipped: true };
 
   const p1Won = winner === 1;
@@ -57,6 +57,7 @@ async function recordMatchBattles(supabase, match, winner, creditsWon) {
   const mode = match.match_type || 'quick';
   const playedAt = match.finished_at || new Date().toISOString();
   const prize = parseFloat(creditsWon || 0);
+  const eventLabel = opts.eventLabel || String(mode).toUpperCase();
 
   const rows = [];
 
@@ -72,7 +73,7 @@ async function recordMatchBattles(supabase, match, winner, creditsWon) {
       song_artist: match.player1_song_artist || null,
       credits_wagered: parseFloat(match.player1_bet || 0),
       credits_won: p1Won ? prize : 0,
-      event_label: String(mode).toUpperCase(),
+      event_label: eventLabel,
       played_at: playedAt
     });
   }
@@ -89,7 +90,7 @@ async function recordMatchBattles(supabase, match, winner, creditsWon) {
       song_artist: match.player2_song_artist || null,
       credits_wagered: parseFloat(match.player2_bet || 0),
       credits_won: p2Won ? prize : 0,
-      event_label: String(mode).toUpperCase(),
+      event_label: eventLabel,
       played_at: playedAt
     });
   }

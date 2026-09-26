@@ -5572,6 +5572,7 @@ const GameEngine = {
             const data = await resp.json();
             if (!resp.ok || !data.ok) throw new Error(data.error || 'seed no disponible');
             seed = data.seed;
+            match._fanplayTimeoutAt = data.timeoutAt || null;
         } catch (e) {
             console.error('[runVerifiedFanPlaysBattle] No se pudo obtener la semilla verificable, usando el mecanismo clásico como respaldo:', e && e.message);
             return this.runBattleLegacy(match);
@@ -5644,17 +5645,29 @@ const GameEngine = {
         var statusEl = document.getElementById('battleStatusText');
         const backendUrl = window.CONFIG?.BACKEND_API || window.CreditsSystem?.backendUrl || 'https://musictoken-ring.onrender.com';
 
+        // Hasta 3 intentos: un corte de señal justo al terminar no puede
+        // costarle la batalla a quien sí jugó (los toques siguen en memoria).
         var result;
-        try {
-            const resp = await fetch(`${backendUrl}/api/battles/${match.id}/submit-fanplay-score`, {
-                method: 'POST',
-                headers: await this.getBackendAuthHeaders(),
-                body: JSON.stringify({ taps: rawTaps, durationMs: this.battleDuration * 1000 })
-            });
-            result = await resp.json().catch(() => ({}));
-        } catch (e) {
-            console.error('[submitVerifiedFanPlaysScore] Error mandando toques:', e);
-            if (statusEl) statusEl.innerHTML = '<div class="text-red-300 text-sm">No se pudo verificar tu resultado -- revisá tu conexión y contactá soporte si no se resuelve.</div>';
+        for (var attempt = 1; attempt <= 3; attempt++) {
+            try {
+                const resp = await fetch(`${backendUrl}/api/battles/${match.id}/submit-fanplay-score`, {
+                    method: 'POST',
+                    headers: await this.getBackendAuthHeaders(),
+                    body: JSON.stringify({ taps: rawTaps, durationMs: this.battleDuration * 1000 })
+                });
+                result = await resp.json().catch(() => ({}));
+                if (resp.status < 500) break;
+            } catch (e) {
+                console.error('[submitVerifiedFanPlaysScore] Error mandando toques (intento ' + attempt + '):', e);
+                result = null;
+            }
+            if (attempt < 3) {
+                if (statusEl) statusEl.innerHTML = '<div class="text-yellow-300 text-sm animate-pulse">Reintentando enviar tu resultado...</div>';
+                await new Promise(function (r) { setTimeout(r, attempt * 2000); });
+            }
+        }
+        if (!result) {
+            if (statusEl) statusEl.innerHTML = '<div class="text-red-300 text-sm">No se pudo enviar tu resultado -- revisá tu conexión. Si no se resuelve, la batalla se cierra sola en unos minutos y tu saldo se actualiza.</div>';
             return;
         }
 
@@ -5672,19 +5685,60 @@ const GameEngine = {
             const { data: fresh } = await supabaseClient.from('matches').select('*').eq('id', match.id).maybeSingle();
             finalMatch = fresh;
         } else {
-            // Sondeo hasta que el rival también mande los suyos -- igual
-            // criterio que el resto de la app para "esperar a que se
-            // resuelva del otro lado" (ver checkChallengeResultNow, etc.).
-            for (var i = 0; i < 40 && !finalMatch; i++) {
+            // Sondeo hasta que el rival también mande los suyos. Si se
+            // vence el plazo del servidor (timeoutAt, 4 min desde el
+            // arranque) sin que llegue, se le pide al backend que la
+            // resuelva por abandono -- gana quien sí jugó. Si esta pestaña
+            // se cierra antes, el barrido del servidor hace lo mismo solo.
+            var timeoutAtMs = Date.parse(result.timeoutAt || match._fanplayTimeoutAt || '') || (Date.now() + 4 * 60 * 1000);
+            var giveUpAtMs = timeoutAtMs + 90 * 1000;
+            while (!finalMatch && Date.now() < giveUpAtMs) {
                 await new Promise(function (r) { setTimeout(r, 3000); });
                 const { data: polled } = await supabaseClient.from('matches').select('*').eq('id', match.id).maybeSingle();
-                if (polled && polled.status === 'finished') finalMatch = polled;
+                if (polled && (polled.status === 'finished' || polled.status === 'cancelled')) { finalMatch = polled; break; }
+
+                var secsLeft = Math.ceil((timeoutAtMs - Date.now()) / 1000);
+                if (secsLeft > 0) {
+                    if (statusEl && secsLeft <= 150) {
+                        statusEl.innerHTML = '<div class="text-cyan-300 text-sm animate-pulse">Esperando el resultado del rival... si no termina en ' + secsLeft + 's, ganás por abandono.</div>';
+                    }
+                    continue;
+                }
+                try {
+                    const timeoutResp = await fetch(`${backendUrl}/api/battles/${match.id}/resolve-fanplay-timeout`, {
+                        method: 'POST',
+                        headers: await this.getBackendAuthHeaders()
+                    });
+                    const timeoutData = await timeoutResp.json().catch(() => ({}));
+                    if (timeoutData.ok && !timeoutData.tooEarly) {
+                        const { data: fresh } = await supabaseClient.from('matches').select('*').eq('id', match.id).maybeSingle();
+                        if (fresh && (fresh.status === 'finished' || fresh.status === 'cancelled')) finalMatch = fresh;
+                    }
+                } catch (e) {
+                    console.error('[submitVerifiedFanPlaysScore] Error resolviendo abandono:', e);
+                }
             }
             if (!finalMatch) {
-                if (statusEl) statusEl.innerHTML = '<div class="text-yellow-300 text-sm">El rival no terminó a tiempo -- contactá soporte con el código de esta sala si tu saldo no se actualiza.</div>';
+                if (statusEl) statusEl.innerHTML = '<div class="text-yellow-300 text-sm">El rival no terminó a tiempo. La batalla se cierra automáticamente en unos minutos y tu saldo se actualiza solo -- no hace falta que hagas nada.</div>';
                 return;
             }
         }
+
+        if (!finalMatch) {
+            if (statusEl) statusEl.innerHTML = '<div class="text-red-300 text-sm">No se pudo leer el resultado de la batalla -- recargá la página en un momento.</div>';
+            return;
+        }
+        if (finalMatch.status === 'cancelled') {
+            // Nadie llegó a mandar sus toques a tiempo: apuestas devueltas.
+            this.stopUserSong();
+            if (statusEl) statusEl.innerHTML = '<div class="text-yellow-300 text-sm">La batalla no llegó a completarse a tiempo -- se te devolvió la apuesta completa.</div>';
+            if (window.CreditsSystem) {
+                const { data: { session: mySession } } = await supabaseClient.auth.getSession();
+                await window.CreditsSystem.loadBalance(this.connectedWallet || localStorage.getItem('mtr_wallet') || null, mySession?.user?.id || null);
+            }
+            return;
+        }
+        var wonByForfeit = finalMatch.fanplay_timeout_resolution === 'forfeit';
 
         const winner = finalMatch.winner;
         const userWon = (isPlayer1 && winner === 1) || (!isPlayer1 && winner === 2);
@@ -5704,7 +5758,9 @@ const GameEngine = {
         // procesar el pago -- solo ESE hace el resto de los efectos
         // (match_wins, stats, fee al vault). El otro lado, si ganó, solo
         // refresca su propio saldo (que el primero ya acreditó).
-        await this.recordMatchBattleHistory(finalMatch, winner, payouts.winnerPayout);
+        // Por abandono, el servidor ya cobró y registró el historial con
+        // su etiqueta ("Por abandono") -- no pisarla desde acá.
+        if (!wonByForfeit) await this.recordMatchBattleHistory(finalMatch, winner, payouts.winnerPayout);
 
         var alreadyProcessed = false;
         if (winnerUserId) {
@@ -5731,6 +5787,9 @@ const GameEngine = {
             await window.CreditsSystem.loadBalance(walletAddress || null, mySession?.user?.id || null);
         }
 
+        if (wonByForfeit && typeof showToast === 'function') {
+            showToast(userWon ? 'Tu rival no terminó la batalla a tiempo: ganaste por abandono.' : 'No terminaste la batalla a tiempo: se dio por abandono.', userWon ? 'success' : 'error');
+        }
         this.showVictoryScreen(finalMatch, winner, userWon, payouts);
     },
 
