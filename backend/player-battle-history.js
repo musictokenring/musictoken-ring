@@ -108,10 +108,16 @@ async function recordTournamentBattles(supabase, tournament, bracket) {
 
   const winnerId = bracket.winnerParticipantId;
   const prizeAwarded = parseFloat(bracket.prizeAwarded || 0);
-  const entryFee = parseFloat(tournament.entry_fee || 0);
+  // Si el torneo devolvió la inscripción (menos de 2 humanos reales, o
+  // campeón descalificado por género), el jugador no perdió nada: registrar
+  // el entry fee como "apostado" mostraba una derrota con MTR perdidos que
+  // en realidad ya se habían reembolsado.
+  const refunded = Boolean(bracket.refundedNotEnoughHumans || bracket.genreDisqualified);
+  const entryFee = refunded ? 0 : parseFloat(tournament.entry_fee || 0);
   const mode = tournament.tournament_type || 'express';
   const playedAt = tournament.updated_at || new Date().toISOString();
-  const eventLabel = tournament.name || (mode === 'weekly' ? 'Grand Prix' : 'Express');
+  const baseLabel = tournament.name || (mode === 'weekly' ? 'Grand Prix' : 'Express');
+  const eventLabel = refunded ? baseLabel + ' · Inscripción devuelta' : baseLabel;
 
   const humans = bracket.participants.filter(function (p) {
     return p && !p.isCpu && p.userId && !isCpuUserId(p.userId);
