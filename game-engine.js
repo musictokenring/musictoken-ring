@@ -1539,6 +1539,18 @@ const GameEngine = {
     },
     
     async acceptSocialChallenge(challengeId, song, betAmount) {
+        // Un doble toque (o el link procesado dos veces) llamaba a esto dos
+        // veces seguidas y armaba DOS partidas para el mismo desafío.
+        if (this._acceptingChallengeId === challengeId) return;
+        this._acceptingChallengeId = challengeId;
+        try {
+            return await this._acceptSocialChallenge(challengeId, song, betAmount);
+        } finally {
+            this._acceptingChallengeId = null;
+        }
+    },
+
+    async _acceptSocialChallenge(challengeId, song, betAmount) {
         try {
             const { data: { session } } = await supabaseClient.auth.getSession();
             if (!session) {
@@ -1899,6 +1911,34 @@ const GameEngine = {
                 return;
             }
             
+            // Reservar el desafío en el backend ANTES de cobrar y crear la
+            // partida (ver /api/social-challenges/:id/claim): de dos
+            // aceptaciones simultáneas solo una lo gana, y el desafío deja
+            // de estar 'pending' (antes el UPDATE de acá abajo lo hacía el
+            // cliente y la RLS lo bloqueaba en silencio).
+            const claimBackendUrl = window.CONFIG?.BACKEND_API || window.CreditsSystem?.backendUrl || 'https://musictoken-ring.onrender.com';
+            let claimResp, claimData;
+            try {
+                claimResp = await fetch(`${claimBackendUrl}/api/social-challenges/${encodeURIComponent(challengeId)}/claim`, {
+                    method: 'POST',
+                    headers: await this.getBackendAuthHeaders(),
+                    body: JSON.stringify(accepterGenreCheck ? {
+                        genreConfidence: accepterGenreCheck.confidence,
+                        genreVerdict: accepterGenreCheck.verdict
+                    } : {})
+                });
+                claimData = await claimResp.json().catch(() => ({}));
+            } catch (claimError) {
+                showToast('No se pudo conectar con el servidor para aceptar el desafío. Probá de nuevo.', 'error');
+                return;
+            }
+            if (!claimResp.ok || !claimData.ok) {
+                showToast(claimData.error || (claimResp.status === 404
+                    ? 'El servidor se está actualizando. Probá de nuevo en un minuto.'
+                    : 'Este desafío ya no está disponible.'), 'error');
+                return;
+            }
+
             // Crear match
             const createdMatch = await this.createMatch(
                 'social',
@@ -1929,27 +1969,17 @@ const GameEngine = {
             );
             if (!createdMatch || !createdMatch.id) {
                 // createMatch ya mostró el error (y reembolsó si hacía falta).
+                // Liberar el desafío para que se pueda volver a aceptar.
+                try {
+                    await fetch(`${claimBackendUrl}/api/social-challenges/${encodeURIComponent(challengeId)}/release`, {
+                        method: 'POST',
+                        headers: await this.getBackendAuthHeaders(),
+                        body: '{}'
+                    });
+                } catch (releaseError) {
+                    console.warn('[acceptSocialChallenge] No se pudo liberar el desafío:', releaseError);
+                }
                 return;
-            }
-
-            // Actualizar estado del desafío
-            const acceptUpdate = {
-                status: 'accepted',
-                accepter_id: session.user.id,
-                accepted_at: new Date().toISOString()
-            };
-            if (accepterGenreCheck) {
-                acceptUpdate.accepter_genre_confidence = accepterGenreCheck.confidence;
-                acceptUpdate.accepter_genre_verdict = accepterGenreCheck.verdict;
-            }
-            let { error: acceptUpdateError } = await supabaseClient
-                .from('social_challenges')
-                .update(acceptUpdate)
-                .eq('id', challenge.id);
-            if (acceptUpdateError && accepterGenreCheck && String(acceptUpdateError.message || '').indexOf('genre') !== -1) {
-                delete acceptUpdate.accepter_genre_confidence;
-                delete acceptUpdate.accepter_genre_verdict;
-                await supabaseClient.from('social_challenges').update(acceptUpdate).eq('id', challenge.id);
             }
 
             // CRÍTICO: Recargar saldo DESPUÉS de crear el match para reflejar la deducción
@@ -5999,9 +6029,15 @@ const GameEngine = {
         if (this._battleInviteWatcher) return;
         var self = this;
         var check = async function () {
+            // En una batalla, su resultado o la arena de torneo -- no
+            // molestar (antes solo miraba battleArena y el aviso tapaba la
+            // pantalla de ¡VICTORIA!/Derrota).
+            var busy = ['battleArena', 'victorySection', 'tournamentArena'].some(function (id) {
+                var el = document.getElementById(id);
+                return el && !el.classList.contains('hidden');
+            });
+            if (busy) { self.hideBattleInvite(); return; }
             if (self._battleInviteUnsupported || document.hidden) return;
-            // Ya está en una batalla (o en su sala de espera) -- no molestar.
-            if (document.getElementById('battleArena')) return;
             try {
                 var found = await self.findBattleWaitingForMe();
                 if (found) self.showBattleInvite(found);
@@ -6038,12 +6074,14 @@ const GameEngine = {
         if (!modal) {
             modal = document.createElement('div');
             modal.id = 'battleInviteModal';
-            modal.className = 'fixed inset-0 z-[300] flex items-center justify-center bg-black/70 px-4';
+            // Estilos inline a propósito: el CSS de Tailwind es precompilado y
+            // no trae clases arbitrarias nuevas (quedaba transparente).
+            modal.style.cssText = 'position:fixed; inset:0; z-index:10000; display:flex; align-items:center; justify-content:center; padding:0 16px; background:rgba(0,0,0,0.78); backdrop-filter:blur(4px);';
             document.body.appendChild(modal);
         }
         modal.dataset.key = m.id + ':' + found.kind;
         modal.innerHTML =
-            '<div class="w-full max-w-sm rounded-2xl border border-cyan-500/40 bg-gray-950 p-5 text-center shadow-2xl">' +
+            '<div style="width:100%; max-width:24rem; border-radius:18px; border:1px solid rgba(34,211,238,0.4); background:#0b0f1a; padding:20px; text-align:center; box-shadow:0 25px 50px rgba(0,0,0,0.6);">' +
                 (oppImg ? '<img src="' + this.escapeHtmlText(oppImg) + '" alt="" class="w-20 h-20 rounded-full object-cover border-4 border-fuchsia-400 mx-auto mb-3">' : '') +
                 '<div class="text-white text-lg font-black">' + this.escapeHtmlText(title) + '</div>' +
                 '<div class="text-gray-400 text-sm mt-1">' + this.escapeHtmlText(sub) + '</div>' +

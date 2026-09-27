@@ -3600,6 +3600,107 @@ app.post('/api/social-challenges/create', requireCreditMutationAuth, async (req,
 });
 
 /**
+ * Aceptar un Desafío Social: marca el desafío como aceptado ANTES de que
+ * quien acepta pague y se cree la partida. Antes lo marcaba el cliente
+ * después, con un UPDATE directo que la RLS de social_challenges bloquea
+ * en silencio (solo el creador puede tocar su fila) -- el desafío quedaba
+ * 'pending' para siempre: se podía aceptar varias veces (cada partida
+ * contaba de nuevo la apuesta del creador, pagada una sola vez) y a los 7
+ * días "vencía" y le devolvía al creador una apuesta que ya se había
+ * jugado. Encontrado en vivo (2026-09-27, dos partidas para un desafío).
+ * El UPDATE condicionado a status='pending' es la carrera atómica: de dos
+ * aceptaciones simultáneas solo una lo gana.
+ */
+app.post('/api/social-challenges/:challengeId/claim', requireCreditMutationAuth, async (req, res) => {
+    try {
+        if (!req.authUser) return res.status(401).json({ error: 'Inicia sesión primero.' });
+        const { challengeId } = req.params;
+        const accepterId = req.authUser.id;
+
+        const { data: challenge } = await supabase.from('social_challenges').select('*').eq('challenge_id', challengeId).maybeSingle();
+        if (!challenge) return res.status(404).json({ error: 'Desafío no encontrado' });
+        if (challenge.challenger_id === accepterId) return res.status(400).json({ error: 'No puedes aceptar tu propio desafío' });
+        if (challenge.status !== 'pending') {
+            return res.status(409).json({ error: 'Este desafío ya no está disponible', status: challenge.status, alreadyMine: challenge.accepter_id === accepterId });
+        }
+        if (challenge.expires_at && new Date(challenge.expires_at).getTime() < Date.now()) {
+            return res.status(409).json({ error: 'Este desafío venció', status: 'expired' });
+        }
+
+        const update = { status: 'accepted', accepter_id: accepterId, accepted_at: new Date().toISOString() };
+        const { genreConfidence, genreVerdict } = req.body || {};
+        if (genreVerdict) {
+            update.accepter_genre_confidence = genreConfidence;
+            update.accepter_genre_verdict = genreVerdict;
+        }
+        let { data: claimed, error: claimError } = await supabase
+            .from('social_challenges')
+            .update(update)
+            .eq('challenge_id', challengeId)
+            .eq('status', 'pending')
+            .select('*')
+            .maybeSingle();
+        if (claimError && genreVerdict && String(claimError.message || '').indexOf('genre') !== -1) {
+            delete update.accepter_genre_confidence;
+            delete update.accepter_genre_verdict;
+            ({ data: claimed, error: claimError } = await supabase
+                .from('social_challenges')
+                .update(update)
+                .eq('challenge_id', challengeId)
+                .eq('status', 'pending')
+                .select('*')
+                .maybeSingle());
+        }
+        if (claimError) throw claimError;
+        if (!claimed) return res.status(409).json({ error: 'Otra persona aceptó este desafío justo antes' });
+
+        res.json({ ok: true, challenge: claimed });
+    } catch (error) {
+        console.error('[social-claim] Error:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+/**
+ * Deshace un claim si la partida no llegó a crearse (saldo insuficiente,
+ * error de red al crear el match). Solo quien lo aceptó, y solo si todavía
+ * no existe ninguna partida suya para este desafío.
+ */
+app.post('/api/social-challenges/:challengeId/release', requireCreditMutationAuth, async (req, res) => {
+    try {
+        if (!req.authUser) return res.status(401).json({ error: 'Inicia sesión primero.' });
+        const { challengeId } = req.params;
+        const accepterId = req.authUser.id;
+        const { data: challenge } = await supabase.from('social_challenges').select('*').eq('challenge_id', challengeId).maybeSingle();
+        if (!challenge || challenge.status !== 'accepted' || challenge.accepter_id !== accepterId) {
+            return res.status(409).json({ error: 'No hay nada que liberar' });
+        }
+        const { data: existing } = await supabase
+            .from('matches')
+            .select('id')
+            .eq('match_type', 'social')
+            .eq('player1_id', challenge.challenger_id)
+            .eq('player2_id', accepterId)
+            .gte('created_at', challenge.accepted_at)
+            .limit(1);
+        if (existing && existing.length) return res.status(409).json({ error: 'La partida ya existe' });
+
+        const { data: released } = await supabase
+            .from('social_challenges')
+            .update({ status: 'pending', accepter_id: null, accepted_at: null })
+            .eq('challenge_id', challengeId)
+            .eq('status', 'accepted')
+            .eq('accepter_id', accepterId)
+            .select('challenge_id')
+            .maybeSingle();
+        res.json({ ok: true, released: !!released });
+    } catch (error) {
+        console.error('[social-release] Error:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+/**
  * Modo Rápido: entrar a la cola de emparejamiento. Mismo problema que
  * social_challenges, encontrado auditando la mecánica de resolución de
  * batallas -- de hecho, PEOR: acá ni hace falta que nadie intente hacer
