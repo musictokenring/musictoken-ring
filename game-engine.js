@@ -6281,6 +6281,7 @@ const GameEngine = {
         if (!wonByForfeit) await this.recordMatchBattleHistory(finalMatch, winner, payouts.winnerPayout);
 
         var alreadyProcessed = false;
+        var netPlatformFee = payouts.platformFee;
         if (winnerUserId) {
             try {
                 const backendUrl = window.CONFIG?.BACKEND_API || window.CreditsSystem?.backendUrl || 'https://musictoken-ring.onrender.com';
@@ -6290,6 +6291,9 @@ const GameEngine = {
                 });
                 const awardData = await awardResp.json().catch(() => ({}));
                 alreadyProcessed = !!awardData.alreadyProcessed;
+                // Comisión neta de lo que el servidor destinó a regalías de
+                // artistas (ver awardMatchWinnerCore).
+                if (typeof awardData.platformFee === 'number') netPlatformFee = awardData.platformFee;
             } catch (e) {
                 console.error('[submitVerifiedFanPlaysScore] Error llamando a award-winner:', e);
             }
@@ -6297,7 +6301,7 @@ const GameEngine = {
 
         if (!alreadyProcessed) {
             if (winnerUserId) await this.updateUserStats(winnerUserId, true, payouts.winnerPayout, finalMatch.id);
-            await this.sendBetFeeToVault(payouts.platformFee, finalMatch.id);
+            await this.sendBetFeeToVault(netPlatformFee, finalMatch.id);
         }
         if (userWon && window.CreditsSystem) {
             const walletAddress = this.connectedWallet || localStorage.getItem('mtr_wallet');

@@ -193,7 +193,7 @@
     <div class="hero">
         <div class="hero-badge">${ICON_MIC}</div>
         <h1>Portal de <em>Artistas</em></h1>
-        <p>Registrá tu perfil, reclamá tus canciones, y ganá regalías de impulso cada vez que ganen una batalla real en MusicToken Ring.</p>
+        <p>Registrá tu perfil, reclamá tus canciones, y sumá regalías de impulso cada vez que un jugador las elija en una batalla real en MusicToken Ring, ganen o pierdan.</p>
     </div>
 
     <div id="loggedOutCard" class="card hidden" style="text-align:center;">
@@ -377,7 +377,7 @@
                     '<div class="info">' +
                         '<div class="name">' + escapeHtml(s.song_name) + '</div>' +
                         '<div class="meta">' + escapeHtml(s.song_artist) + '</div>' +
-                        '<div class="meta">' + I.svg('trophy', { size: 12 }) + '<span>' + s.wins_count + ' victoria(s)</span>' +
+                        '<div class="meta">' + I.svg('trophy', { size: 12 }) + '<span>' + (s.selections_count || 0) + ' vez/veces elegida · ' + s.wins_count + ' victoria(s)</span>' +
                             '<span class="pill ' + s.status + '" style="margin-left:0.4rem; padding:0.12rem 0.5rem 0.12rem 0.4rem;">' + statusPillHtml(s.status) + '</span></div>' +
                     '</div>' +
                     '<div class="earned">+' + Number(s.total_royalties_earned || 0).toFixed(2) + '</div>' +

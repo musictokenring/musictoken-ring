@@ -693,6 +693,32 @@ app.post('/api/user/deduct-credits', requireCreditMutationAuth, async (req, res)
  * guard de idempotencia (award_processed) de siempre.
  * Devuelve { ok, ... } o { status, error }.
  */
+// Suma la regalía al artista y a la canción. Usa el RPC atómico de
+// sql/artist-royalties-v2.sql si existe (dos batallas terminando a la vez
+// ya no se pisan el acumulado); si todavía no se corrió, cae al
+// leer-y-escribir de antes para no dejar de acreditar.
+async function creditArtistRoyalty(artistRow, claimedSong, amount, won) {
+    const { error: rpcError } = await supabase.rpc('increment_artist_royalty', {
+        artist_id_param: artistRow.id,
+        artist_song_id_param: claimedSong.id,
+        amount_param: amount,
+        won_param: !!won
+    });
+    if (!rpcError) return true;
+    if (rpcError.code !== 'PGRST202' && rpcError.code !== '42883') {
+        console.error('[award-winner] increment_artist_royalty falló:', rpcError);
+        return false;
+    }
+    await supabase.from('artists').update({
+        royalty_credits: parseFloat(artistRow.royalty_credits || 0) + amount
+    }).eq('id', artistRow.id);
+    await supabase.from('artist_songs').update({
+        wins_count: (claimedSong.wins_count || 0) + (won ? 1 : 0),
+        total_royalties_earned: parseFloat(claimedSong.total_royalties_earned || 0) + amount
+    }).eq('id', claimedSong.id);
+    return true;
+}
+
 async function awardMatchWinnerCore(match) {
     const matchId = match.id;
     // CRÍTICO -- encontrado revisando el flujo de "Reproducciones de
@@ -787,62 +813,70 @@ async function awardMatchWinnerCore(match) {
 
     console.log(`[award-winner] match ${matchId}: acreditados ${winnerPayout} a ${targetUserId} (winnerUserId original: ${winnerUserId})`);
 
-    // FASE 1 de regalías de artista -- best-effort, nunca bloquea el
-    // premio real que ya se acreditó arriba. Si la canción ganadora
-    // está reclamada y VERIFICADA por un artista, se le suma acá su
-    // porcentaje del pozo a royalty_credits (acumulado, NO retirable
-    // todavía -- ver artist-royalties-system.sql). Nunca corre para
-    // partidas 'bonus' (pozo no es plata real).
-    let royaltyInfo = null;
+    // Regalías de impulso a artistas -- best-effort, nunca bloquea el premio
+    // real que ya se acreditó arriba. Modelo (decidido 2026-09-27):
+    //  - Salen de la COMISIÓN de la plataforma, nunca del pozo ni por encima
+    //    de lo cobrado: ARTIST_FEE_SHARE de la comisión forma el fondo de
+    //    artistas de esta batalla. (Antes era 5% del POZO pagado aparte con
+    //    una comisión de 2% -- la plataforma perdía 3% en cada victoria de
+    //    una canción verificada, y a un artista le convenía jugar con su
+    //    propia canción.)
+    //  - Se paga por SELECCIÓN: el fondo se reparte 50/50 entre las dos
+    //    canciones elegidas, ganen o pierdan. Canción sin reclamar o sin
+    //    verificar -> su mitad queda para la plataforma.
+    //  - Nada si el artista es uno de los jugadores de la partida.
+    //  - Nunca en partidas 'bonus' (ya retornaron arriba) ni con pozo 0.
+    // Acumulado en artists.royalty_credits, NO retirable todavía (Fase 2).
+    const ARTIST_FEE_SHARE = 0.5;
+    const royaltyInfo = [];
+    let artistPaid = 0;
     try {
-        const winningSongId = match.winner === 1 ? match.player1_song_id : match.player2_song_id;
-        if (winningSongId) {
+        const perSong = (platformFee * ARTIST_FEE_SHARE) / 2;
+        const sides = [
+            { side: 1, songId: match.player1_song_id },
+            { side: 2, songId: match.player2_song_id }
+        ];
+        for (const entry of sides) {
+            if (!entry.songId || !(perSong > 0)) continue;
             const { data: claimedSong } = await supabase
                 .from('artist_songs')
                 .select('id, artist_id, wins_count, total_royalties_earned')
-                .eq('song_id', winningSongId)
+                .eq('song_id', entry.songId)
                 .eq('status', 'verified')
                 .maybeSingle();
-
-            if (claimedSong) {
-                const { data: artistRow } = await supabase
-                    .from('artists')
-                    .select('id, royalty_percent, royalty_credits')
-                    .eq('id', claimedSong.artist_id)
-                    .eq('verification_status', 'verified')
-                    .maybeSingle();
-
-                if (artistRow) {
-                    const royaltyAmount = totalPot * (parseFloat(artistRow.royalty_percent) / 100);
-                    if (royaltyAmount > 0) {
-                        await supabase.from('artists').update({
-                            royalty_credits: parseFloat(artistRow.royalty_credits) + royaltyAmount
-                        }).eq('id', artistRow.id);
-
-                        await supabase.from('artist_songs').update({
-                            wins_count: (claimedSong.wins_count || 0) + 1,
-                            total_royalties_earned: parseFloat(claimedSong.total_royalties_earned || 0) + royaltyAmount
-                        }).eq('id', claimedSong.id);
-
-                        await supabase.from('artist_royalty_ledger').insert([{
-                            artist_id: artistRow.id,
-                            artist_song_id: claimedSong.id,
-                            match_id: matchId,
-                            amount: royaltyAmount,
-                            total_pot: totalPot
-                        }]);
-
-                        royaltyInfo = { artistId: artistRow.id, amount: royaltyAmount };
-                        console.log(`[award-winner] 🎵 Regalía de impulso: ${royaltyAmount.toFixed(4)} al artista ${artistRow.id} (canción ${winningSongId}, match ${matchId})`);
-                    }
-                }
+            if (!claimedSong) continue;
+            const { data: artistRow } = await supabase
+                .from('artists')
+                .select('id, user_id, royalty_credits')
+                .eq('id', claimedSong.artist_id)
+                .eq('verification_status', 'verified')
+                .maybeSingle();
+            if (!artistRow) continue;
+            if (artistRow.user_id === match.player1_id || artistRow.user_id === match.player2_id) {
+                console.log(`[award-winner] Regalía omitida: el artista ${artistRow.id} jugó esta partida (match ${matchId})`);
+                continue;
             }
+            const won = match.winner === entry.side;
+            const credited = await creditArtistRoyalty(artistRow, claimedSong, perSong, won);
+            if (!credited) continue;
+            await supabase.from('artist_royalty_ledger').insert([{
+                artist_id: artistRow.id,
+                artist_song_id: claimedSong.id,
+                match_id: matchId,
+                amount: perSong,
+                total_pot: totalPot
+            }]);
+            artistPaid += perSong;
+            royaltyInfo.push({ artistId: artistRow.id, amount: perSong, won });
+            console.log(`[award-winner] 🎵 Regalía de impulso: ${perSong.toFixed(4)} al artista ${artistRow.id} (canción ${entry.songId} elegida${won ? ', ganó' : ''}, match ${matchId})`);
         }
     } catch (royaltyError) {
         console.error('[award-winner] Error acreditando regalía de artista (no bloquea el premio):', royaltyError);
     }
 
-    return { ok: true, winnerUserId: targetUserId, credited: winnerPayout, platformFee, royalty: royaltyInfo };
+    // platformFee neto de lo que se fue a artistas (lo que realmente le queda
+    // a la plataforma y se reenvía al vault en settleFinishedFanPlaysMatch).
+    return { ok: true, winnerUserId: targetUserId, credited: winnerPayout, platformFee: platformFee - artistPaid, artistPaid, royalty: royaltyInfo };
 }
 
 /**
