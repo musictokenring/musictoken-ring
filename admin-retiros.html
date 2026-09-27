@@ -549,6 +549,13 @@
                     '<div class="req-top"><span class="req-amount" style="font-size:1rem;">' + escapeHtml(a.display_name) + '</span>' +
                     '<span class="req-meta">' + new Date(a.created_at).toLocaleString('es-CO') + '</span></div>' +
                     '<div class="req-meta">Contacto: ' + escapeHtml(a.contact_email || '-') + '</div>' +
+                    // Inscripción v2: tipo, administrador de fondos (cuenta
+                    // maestra, a quien se le paga) e integrantes con reparto sugerido.
+                    '<div class="req-meta">' + (a.artist_type === 'agrupacion' ? ('Agrupación · ' + escapeHtml(a.group_kind || '')) : (a.artist_type === 'solista' ? 'Solista' : '(sin datos v2 todavía)')) + '</div>' +
+                    (a.fund_admin_name ? '<div class="req-meta">Administrador de fondos: <strong>' + escapeHtml(a.fund_admin_name) + '</strong> · ' + escapeHtml(a.fund_admin_document_type || '') + ' ' + escapeHtml(a.fund_admin_document_number || '') + (a.fund_admin_phone ? ' · ' + escapeHtml(a.fund_admin_phone) : '') + '</div>' : '') +
+                    ((a.members && a.members.length) ? '<div class="req-details">' + a.members.map(function (m) {
+                        return '<div class="copy-row"><span class="copy-label">' + escapeHtml(m.percent) + '%</span><span>' + escapeHtml(m.name) + ' · ' + escapeHtml((m.roles || []).join(', ')) + (m.email ? ' · ' + escapeHtml(m.email) : '') + '</span></div>';
+                    }).join('') + '</div>' : '') +
                     '<div class="req-details">' +
                         (a.spotify_url ? '<div class="copy-row"><span class="copy-label">Spotify:</span><a href="' + escapeHtml(a.spotify_url) + '" target="_blank" rel="noopener" style="color:#93c5fd; word-break:break-all;">' + escapeHtml(a.spotify_url) + '</a></div>' : '') +
                         (a.instagram_url ? '<div class="copy-row"><span class="copy-label">Instagram:</span><a href="' + escapeHtml(a.instagram_url) + '" target="_blank" rel="noopener" style="color:#93c5fd; word-break:break-all;">' + escapeHtml(a.instagram_url) + '</a></div>' : '') +

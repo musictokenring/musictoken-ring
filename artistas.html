@@ -224,11 +224,13 @@
         <input type="text" id="regSpotify" placeholder="https://open.spotify.com/artist/...">
         <label>Link de Instagram</label>
         <input type="text" id="regInstagram" placeholder="https://instagram.com/...">
+        <div id="regV2Form"></div>
         <button id="registerSubmitBtn" class="primary full" onclick="registerArtist()">Registrarme como artista</button>
         <p id="registerStatus" class="status-msg"></p>
         <p class="royalty-note" style="margin-top:1rem;">
             Tu perfil queda en revisión manual antes de contar para nada -- así evitamos que alguien se registre
-            con el nombre de otro artista. Un link de Spotify o Instagram real acelera la aprobación.
+            con el nombre de otro artista. Un link de Spotify o Instagram real acelera la aprobación. Las regalías no
+            retiradas vencen a los 6 meses de acreditadas.
         </p>
     </div>
 
@@ -250,6 +252,16 @@
         </div>
     </div>
 
+    <!-- Inscripción v2: tipo de proyecto, administrador de fondos e
+         integrantes con reparto sugerido (ver /api/artists/profile). -->
+    <div id="profileDetailsCard" class="card hidden">
+        <div class="card-head">
+            <span class="icn" id="profileDetailsIcn"></span>
+            <h2>Tu proyecto y su reparto</h2>
+        </div>
+        <div id="profileDetailsBody"></div>
+    </div>
+
     <!-- Fase 2: retiro de regalías en pesos (ver /api/artists/payout/* en
          backend/server-auto.js y sql/artist-payouts.sql). -->
     <div id="payoutCard" class="card hidden">
@@ -263,7 +275,7 @@
             <label>Monto a retirar (COP) <span class="req">*</span></label>
             <input type="number" id="payoutAmount" min="0" step="1000" inputmode="numeric">
 
-            <label>Titular de la cuenta (nombre completo) <span class="req">*</span></label>
+            <label>Titular: administrador de fondos</label>
             <input type="text" id="payoutLegalName" placeholder="Como figura en tu documento">
             <div style="display:grid; grid-template-columns:120px 1fr; gap:0.6rem;">
                 <div>
@@ -300,6 +312,8 @@
                 <p>3. De cada retiro se descuenta el gravamen a los movimientos financieros (4x1000) y, cuando la ley lo exija, la retención en la fuente correspondiente. El cumplimiento de tus propias obligaciones tributarias es tu responsabilidad.</p>
                 <p>4. Los retiros se pagan manualmente, en pesos colombianos, a la cuenta indicada, normalmente dentro de los 5 días hábiles siguientes a la solicitud. Hay un monto mínimo por retiro.</p>
                 <p>5. No se generan pagos cuando el propio artista juega la partida. MusicToken Ring puede modificar o terminar el programa avisando con antelación; lo ya acumulado hasta ese momento se respeta.</p>
+                <p>6. Cada proyecto (solista o agrupación) designa un administrador de fondos, única persona autorizada para retirar. Los retiros se pagan a su nombre y documento. El reparto entre integrantes declarado en la inscripción es una guía: el administrador declara estar autorizado por todos los integrantes y es el responsable de repartir lo recibido; MusicToken Ring no interviene en ese reparto.</p>
+                <p>7. Las regalías que no se retiren dentro de los 6 meses siguientes a su acreditación vencen y pasan a MusicToken Ring. El portal muestra con anticipación cuánto vence y cuándo.</p>
             </div>
 
             <button id="payoutSubmitBtn" class="primary full">Solicitar retiro</button>
@@ -449,6 +463,7 @@
         if (artist.verification_status === 'verified') {
             show('claimCard');
         }
+        renderProfileDetails(artist);
         loadPayoutInfo();
     }
 
@@ -467,7 +482,8 @@
                     displayName: displayName,
                     contactEmail: document.getElementById('regEmail').value.trim() || null,
                     spotifyUrl: document.getElementById('regSpotify').value.trim() || null,
-                    instagramUrl: document.getElementById('regInstagram').value.trim() || null
+                    instagramUrl: document.getElementById('regInstagram').value.trim() || null,
+                    ...collectArtistForm('reg')
                 })
             });
             var j = await r.json().catch(function () { return {}; });
@@ -475,6 +491,217 @@
             statusEl.innerHTML = I.svg('circleCheck', { size: 15 }) + '<span>¡Listo! Tu perfil quedó en revisión.</span>';
             statusEl.className = 'status-msg success';
             hide('registerCard');
+            await loadMyArtistProfile();
+        } catch (e) {
+            statusEl.innerHTML = I.svg('circleX', { size: 15 }) + '<span>Error de red: ' + escapeHtml(e.message) + '</span>';
+            statusEl.className = 'status-msg error';
+        }
+    }
+
+
+    // ==========================================================
+    // INSCRIPCIÓN v2: tipo, administrador de fondos, integrantes y reparto
+    // ==========================================================
+    // Mismo formulario para inscribirse y para editar el perfil. El reparto
+    // es SUGERIDO: el administrador de fondos (cuenta maestra) recibe todo y
+    // declara que lo reparte entre los integrantes.
+    var MEMBER_ROLES = [
+        { id: 'interprete', label: 'Intérprete' },
+        { id: 'musico', label: 'Músico' },
+        { id: 'compositor', label: 'Compositor/a' },
+        { id: 'productor', label: 'Productor/a' },
+        { id: 'otro', label: 'Otro' }
+    ];
+    var GROUP_KINDS = [
+        { id: 'duo', label: 'Dúo' }, { id: 'trio', label: 'Trío' }, { id: 'cuarteto', label: 'Cuarteto' },
+        { id: 'banda', label: 'Banda' }, { id: 'orquesta', label: 'Orquesta' }, { id: 'otro', label: 'Otra' }
+    ];
+    var DOC_TYPES = ['CC', 'CE', 'NIT', 'PAS', 'PPT'];
+
+    function artistFormHtml(p) {
+        return '' +
+            '<div class="royalty-eyebrow" style="margin:1.4rem 0 0.2rem; text-align:left;">1 · Tipo de proyecto</div>' +
+            '<div style="display:flex; gap:0.6rem; margin-top:0.5rem;">' +
+                '<label style="flex:1; margin:0; text-transform:none; letter-spacing:0; font-size:0.85rem; color:var(--text); border:1px solid var(--card-border); border-radius:12px; padding:0.7rem; cursor:pointer;"><input type="radio" name="' + p + 'Type" value="solista" style="width:auto;"> Solista</label>' +
+                '<label style="flex:1; margin:0; text-transform:none; letter-spacing:0; font-size:0.85rem; color:var(--text); border:1px solid var(--card-border); border-radius:12px; padding:0.7rem; cursor:pointer;"><input type="radio" name="' + p + 'Type" value="agrupacion" style="width:auto;"> Agrupación</label>' +
+            '</div>' +
+            '<div id="' + p + 'GroupKindWrap" class="hidden"><label>Tipo de agrupación <span class="req">*</span></label>' +
+                '<select id="' + p + 'GroupKind">' + GROUP_KINDS.map(function (g) { return '<option value="' + g.id + '">' + g.label + '</option>'; }).join('') + '</select></div>' +
+
+            '<div class="royalty-eyebrow" style="margin:1.6rem 0 0.2rem; text-align:left;">2 · Administrador de fondos (cuenta maestra)</div>' +
+            '<p class="royalty-note" style="text-align:left; margin:0.3rem 0 0;">Es la <strong>única persona autorizada para retirar</strong> las regalías del proyecto. Todos los retiros se pagan a su nombre y documento.</p>' +
+            '<label>Nombre completo <span class="req">*</span></label><input type="text" id="' + p + 'AdminName" placeholder="Como figura en su documento">' +
+            '<div style="display:grid; grid-template-columns:110px 1fr; gap:0.6rem;">' +
+                '<div><label>Documento <span class="req">*</span></label><select id="' + p + 'AdminDocType">' + DOC_TYPES.map(function (t) { return '<option>' + t + '</option>'; }).join('') + '</select></div>' +
+                '<div><label>Número <span class="req">*</span></label><input type="text" id="' + p + 'AdminDocNumber" inputmode="numeric"></div>' +
+            '</div>' +
+            '<label>Celular / WhatsApp</label><input type="tel" id="' + p + 'AdminPhone" placeholder="+57 300 000 0000">' +
+
+            '<div class="royalty-eyebrow" style="margin:1.6rem 0 0.2rem; text-align:left;">3 · Integrantes y reparto sugerido</div>' +
+            '<p class="royalty-note" style="text-align:left; margin:0.3rem 0 0;">Incluí a quienes participan en tus canciones: intérpretes, músicos, compositores y productores. El porcentaje es una <strong>guía</strong> para que el administrador reparta; tiene que sumar 100%.</p>' +
+            '<div id="' + p + 'Members" style="margin-top:0.7rem;"></div>' +
+            '<div style="display:flex; gap:0.5rem; flex-wrap:wrap; margin-top:0.6rem;">' +
+                '<button type="button" id="' + p + 'AddMember">+ Agregar integrante</button>' +
+                '<button type="button" id="' + p + 'EqualSplit">Repartir en partes iguales</button>' +
+                '<span id="' + p + 'Sum" style="margin-left:auto; align-self:center; font-size:0.82rem; font-weight:700;"></span>' +
+            '</div>' +
+
+            '<div class="royalty-eyebrow" style="margin:1.6rem 0 0.2rem; text-align:left;">4 · Declaración</div>' +
+            '<label style="text-transform:none; letter-spacing:0; font-size:0.8rem; font-weight:500; color:var(--text-muted); align-items:flex-start; margin-top:0.5rem;">' +
+                '<input type="checkbox" id="' + p + 'Declaration" style="width:auto; margin-top:0.15rem;">' +
+                '<span>Declaro que el administrador de fondos está autorizado por todos los integrantes para recibir las regalías del proyecto, que se compromete a repartirlas según lo acordado entre ellos, y que las regalías que no se retiren dentro de los 6 meses siguientes a su acreditación pasan a MusicToken Ring.</span>' +
+            '</label>';
+    }
+
+    function memberRowHtml(p, m) {
+        m = m || { name: '', roles: [], percent: 0, email: '' };
+        return '<div class="' + p + '-member" style="border:1px solid var(--card-border); border-radius:12px; padding:0.7rem; margin-bottom:0.5rem;">' +
+            '<div style="display:grid; grid-template-columns:1fr 90px 36px; gap:0.5rem; align-items:center;">' +
+                '<input type="text" class="m-name" placeholder="Nombre" value="' + escapeHtml(m.name) + '">' +
+                '<div style="position:relative;"><input type="number" class="m-percent" min="0" max="100" step="0.01" value="' + (m.percent || 0) + '" style="padding-right:1.6rem;"><span style="position:absolute; right:0.6rem; top:50%; transform:translateY(-50%); color:var(--text-muted); font-size:0.8rem;">%</span></div>' +
+                '<button type="button" class="m-remove" title="Quitar" style="padding:0.6rem 0;">✕</button>' +
+            '</div>' +
+            '<div style="display:flex; flex-wrap:wrap; gap:0.35rem 0.8rem; margin-top:0.55rem;">' +
+                MEMBER_ROLES.map(function (r) {
+                    return '<label style="margin:0; text-transform:none; letter-spacing:0; font-size:0.78rem; font-weight:500; color:var(--text-muted);"><input type="checkbox" class="m-role" value="' + r.id + '"' + ((m.roles || []).indexOf(r.id) !== -1 ? ' checked' : '') + ' style="width:auto;"> ' + r.label + '</label>';
+                }).join('') +
+            '</div>' +
+            '<input type="email" class="m-email" placeholder="Email (opcional, para avisarle)" value="' + escapeHtml(m.email || '') + '" style="margin-top:0.5rem;">' +
+        '</div>';
+    }
+
+    function refreshMemberSum(p) {
+        var total = 0;
+        document.querySelectorAll('#' + p + 'Members .m-percent').forEach(function (el) { total += parseFloat(el.value) || 0; });
+        total = Math.round(total * 100) / 100;
+        var el = document.getElementById(p + 'Sum');
+        if (!el) return;
+        var ok = Math.abs(total - 100) <= 0.05;
+        el.textContent = 'Total: ' + total + '%' + (ok ? ' ✓' : ' (debe sumar 100%)');
+        el.style.color = ok ? 'var(--green)' : 'var(--amber)';
+    }
+
+    function addMemberRow(p, m) {
+        var wrap = document.getElementById(p + 'Members');
+        wrap.insertAdjacentHTML('beforeend', memberRowHtml(p, m));
+        var row = wrap.lastElementChild;
+        row.querySelector('.m-remove').onclick = function () {
+            if (document.querySelectorAll('#' + p + 'Members .' + p + '-member').length <= 1) return;
+            row.remove();
+            refreshMemberSum(p);
+        };
+        row.querySelector('.m-percent').addEventListener('input', function () { refreshMemberSum(p); });
+        refreshMemberSum(p);
+    }
+
+    function setupArtistForm(p, existing) {
+        existing = existing || {};
+        var typeRadios = document.querySelectorAll('input[name="' + p + 'Type"]');
+        function onType() {
+            var t = (document.querySelector('input[name="' + p + 'Type"]:checked') || {}).value;
+            document.getElementById(p + 'GroupKindWrap').classList.toggle('hidden', t !== 'agrupacion');
+        }
+        typeRadios.forEach(function (r) { r.addEventListener('change', onType); });
+        var type = existing.artist_type || 'solista';
+        typeRadios.forEach(function (r) { r.checked = r.value === type; });
+        if (existing.group_kind) document.getElementById(p + 'GroupKind').value = existing.group_kind;
+        onType();
+
+        document.getElementById(p + 'AdminName').value = existing.fund_admin_name || '';
+        if (existing.fund_admin_document_type) document.getElementById(p + 'AdminDocType').value = existing.fund_admin_document_type;
+        document.getElementById(p + 'AdminDocNumber').value = existing.fund_admin_document_number || '';
+        document.getElementById(p + 'AdminPhone').value = existing.fund_admin_phone || '';
+
+        var members = (existing.members && existing.members.length) ? existing.members
+            : [{ name: existing.display_name || '', roles: ['interprete', 'compositor'], percent: 100, email: '' }];
+        document.getElementById(p + 'Members').innerHTML = '';
+        members.forEach(function (m) { addMemberRow(p, m); });
+
+        document.getElementById(p + 'AddMember').onclick = function () { addMemberRow(p, { name: '', roles: ['musico'], percent: 0 }); };
+        document.getElementById(p + 'EqualSplit').onclick = function () {
+            var inputs = document.querySelectorAll('#' + p + 'Members .m-percent');
+            var n = inputs.length;
+            var base = Math.floor((100 / n) * 100) / 100;
+            inputs.forEach(function (el, i) { el.value = i === n - 1 ? Math.round((100 - base * (n - 1)) * 100) / 100 : base; });
+            refreshMemberSum(p);
+        };
+    }
+
+    function collectArtistForm(p) {
+        return {
+            artistType: (document.querySelector('input[name="' + p + 'Type"]:checked') || {}).value || null,
+            groupKind: document.getElementById(p + 'GroupKind').value,
+            fundAdmin: {
+                name: document.getElementById(p + 'AdminName').value,
+                documentType: document.getElementById(p + 'AdminDocType').value,
+                documentNumber: document.getElementById(p + 'AdminDocNumber').value,
+                phone: document.getElementById(p + 'AdminPhone').value
+            },
+            fundAdminDeclaration: document.getElementById(p + 'Declaration').checked,
+            members: Array.prototype.map.call(document.querySelectorAll('#' + p + 'Members .' + p + '-member'), function (row) {
+                return {
+                    name: row.querySelector('.m-name').value,
+                    percent: parseFloat(row.querySelector('.m-percent').value) || 0,
+                    email: row.querySelector('.m-email').value,
+                    roles: Array.prototype.map.call(row.querySelectorAll('.m-role:checked'), function (c) { return c.value; })
+                };
+            })
+        };
+    }
+
+    // Resumen del perfil (solo lectura) + edición.
+    function renderProfileDetails(artist) {
+        var card = document.getElementById('profileDetailsCard');
+        var body = document.getElementById('profileDetailsBody');
+        var complete = !!artist.fund_admin_document_number;
+        var roleLabel = function (id) { var r = MEMBER_ROLES.filter(function (x) { return x.id === id; })[0]; return r ? r.label : id; };
+        if (!complete) {
+            body.innerHTML = '<p class="status-msg" style="color:var(--amber);">' + I.svg('warning', { size: 15 }) + '<span>Completá estos datos para poder retirar tus regalías: quién administra los fondos y quiénes integran el proyecto.</span></p>' +
+                '<div id="editFormWrap">' + artistFormHtml('edit') + '<button type="button" id="editSaveBtn" class="primary full">Guardar datos</button><p id="editStatus" class="status-msg"></p></div>';
+            setupArtistForm('edit', artist);
+            document.getElementById('editSaveBtn').onclick = saveProfileDetails;
+        } else {
+            var kind = artist.artist_type === 'agrupacion'
+                ? ('Agrupación · ' + ((GROUP_KINDS.filter(function (g) { return g.id === artist.group_kind; })[0] || {}).label || ''))
+                : 'Solista';
+            var doc = String(artist.fund_admin_document_number || '');
+            body.innerHTML =
+                '<div style="font-size:0.85rem; color:var(--text-muted);">' + escapeHtml(kind) + '</div>' +
+                '<div style="margin-top:0.6rem; font-size:0.85rem;">Administrador de fondos: <strong style="color:var(--text);">' + escapeHtml(artist.fund_admin_name) + '</strong> · ' + escapeHtml(artist.fund_admin_document_type) + ' •••' + escapeHtml(doc.slice(-4)) + '</div>' +
+                '<div style="margin-top:0.8rem;">' + (artist.members || []).map(function (m) {
+                    return '<div style="display:flex; justify-content:space-between; gap:0.6rem; padding:0.4rem 0; border-bottom:1px solid var(--card-border); font-size:0.84rem;">' +
+                        '<span><strong>' + escapeHtml(m.name) + '</strong> <span style="color:var(--text-muted);">· ' + (m.roles || []).map(roleLabel).join(', ') + '</span></span>' +
+                        '<span style="color:var(--gold); font-weight:700;">' + m.percent + '%</span></div>';
+                }).join('') + '</div>' +
+                '<p class="royalty-note" style="text-align:left; margin-top:0.6rem;">Reparto sugerido: el administrador recibe los retiros y los reparte según lo acordado.</p>' +
+                '<button type="button" id="editOpenBtn" style="margin-top:0.8rem;">Editar datos</button>' +
+                '<div id="editFormWrap" class="hidden">' + artistFormHtml('edit') + '<button type="button" id="editSaveBtn" class="primary full">Guardar cambios</button><p id="editStatus" class="status-msg"></p></div>';
+            setupArtistForm('edit', artist);
+            document.getElementById('editOpenBtn').onclick = function () {
+                document.getElementById('editFormWrap').classList.remove('hidden');
+                this.classList.add('hidden');
+            };
+            document.getElementById('editSaveBtn').onclick = saveProfileDetails;
+        }
+        show('profileDetailsCard');
+    }
+
+    async function saveProfileDetails() {
+        var statusEl = document.getElementById('editStatus');
+        statusEl.innerHTML = I.svg('clock', { size: 15 }) + '<span>Guardando...</span>';
+        statusEl.className = 'status-msg';
+        try {
+            var r = await fetch(BACKEND_API + '/api/artists/profile', {
+                method: 'POST',
+                headers: await authHeaders(),
+                body: JSON.stringify(collectArtistForm('edit'))
+            });
+            var j = await r.json().catch(function () { return {}; });
+            if (!r.ok || !j.ok) {
+                statusEl.innerHTML = I.svg('circleX', { size: 15 }) + '<span>' + escapeHtml(j.error || ('Error ' + r.status)) + '</span>';
+                statusEl.className = 'status-msg error';
+                return;
+            }
             await loadMyArtistProfile();
         } catch (e) {
             statusEl.innerHTML = I.svg('circleX', { size: 15 }) + '<span>Error de red: ' + escapeHtml(e.message) + '</span>';
@@ -752,6 +979,8 @@
                 lead.textContent = 'Podés retirar cuando tu perfil de artista esté verificado.';
             } else if (hasPending) {
                 lead.textContent = 'Tenés un retiro en proceso. Cuando se pague vas a poder pedir el siguiente.';
+            } else if (!j.fundAdmin) {
+                lead.textContent = 'Completá los datos del administrador de fondos (arriba, en "Tu proyecto y su reparto") para poder retirar.';
             } else if (j.balanceCopEstimate < s.minPayoutCop) {
                 lead.innerHTML = 'Acumulaste ≈ <strong>' + fmtCop(j.balanceCopEstimate) + '</strong>. Vas a poder retirar cuando llegues a ' + fmtCop(s.minPayoutCop) + '.';
             } else {
@@ -761,13 +990,22 @@
                 document.getElementById('payoutAmount').value = Math.floor(j.balanceCopEstimate / 1000) * 1000;
                 document.getElementById('payoutAmount').max = j.balanceCopEstimate;
                 document.getElementById('payoutDocType').innerHTML = j.documentTypes.map(function (t) { return '<option value="' + t + '">' + t + '</option>'; }).join('');
-                document.getElementById('payoutLegalName').value = j.payoutIdentity.legalName || '';
-                if (j.payoutIdentity.documentType) document.getElementById('payoutDocType').value = j.payoutIdentity.documentType;
-                document.getElementById('payoutDocNumber').value = j.payoutIdentity.documentNumber || '';
+                // Cuenta maestra: se paga siempre al administrador de fondos.
+                document.getElementById('payoutLegalName').value = j.fundAdmin.name;
+                document.getElementById('payoutDocType').value = j.fundAdmin.documentType;
+                document.getElementById('payoutDocNumber').value = j.fundAdmin.documentNumber;
+                ['payoutLegalName', 'payoutDocType', 'payoutDocNumber'].forEach(function (id) { document.getElementById(id).disabled = true; });
                 document.getElementById('payoutTermsVersion').textContent = s.termsVersion;
                 document.getElementById('payoutTerms').checked = !!j.termsAccepted;
                 renderPayoutMethodFields();
                 renderPayoutBreakdown();
+            }
+
+            if (j.expiry && j.expiry.next && j.balanceCredits > 0) {
+                var days = Math.ceil((Date.parse(j.expiry.next.expiresAt) - Date.now()) / 86400000);
+                lead.insertAdjacentHTML('beforeend', '<br><span style="color:' + (days <= 30 ? 'var(--amber)' : 'var(--text-muted)') + '; font-size:0.8rem;">' +
+                    '≈ ' + fmtCop(j.expiry.next.amountCop) + ' vencen el ' + new Date(j.expiry.next.expiresAt).toLocaleDateString('es-CO') +
+                    ' si no los retirás (las regalías vencen a los ' + j.expiry.months + ' meses).</span>');
             }
 
             var history = document.getElementById('payoutHistory');
@@ -832,6 +1070,13 @@
     }
 
     document.getElementById('payoutIcn').innerHTML = I.svg('cash', { size: 16 });
+    document.getElementById('profileDetailsIcn').innerHTML = I.svg('users', { size: 16 });
+    document.getElementById('regV2Form').innerHTML = artistFormHtml('reg');
+    setupArtistForm('reg', {});
+    document.getElementById('regDisplayName').addEventListener('input', function () {
+        var first = document.querySelector('#regMembers .m-name');
+        if (first && (!first.value || first.dataset.auto === '1')) { first.value = this.value; first.dataset.auto = '1'; }
+    });
     document.getElementById('payoutMethod').addEventListener('change', renderPayoutMethodFields);
     document.getElementById('payoutAmount').addEventListener('input', renderPayoutBreakdown);
     document.getElementById('payoutSubmitBtn').addEventListener('click', submitPayoutRequest);

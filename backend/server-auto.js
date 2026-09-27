@@ -5382,6 +5382,63 @@ app.post('/api/social-challenges/:challengeId/ensure-bonus-balance', requireCred
 // ============================================================
 
 /** Registra al usuario autenticado como artista (queda en 'pending' hasta revisión manual). */
+// Inscripción v2 (sql/artist-registration-v2.sql): solista o agrupación,
+// UN administrador de fondos (cuenta maestra, única que puede retirar) e
+// integrantes con roles y un reparto porcentual SUGERIDO (informativo: el
+// administrador recibe todo y declara que lo reparte). Valida y normaliza
+// lo que llega del formulario; devuelve { error } o { fields }.
+const ARTIST_GROUP_KINDS = ['duo', 'trio', 'cuarteto', 'banda', 'orquesta', 'otro'];
+const ARTIST_MEMBER_ROLES = ['interprete', 'musico', 'compositor', 'productor', 'otro'];
+function normalizeArtistProfileInput(body) {
+    const b = body || {};
+    const artistType = b.artistType === 'agrupacion' ? 'agrupacion' : (b.artistType === 'solista' ? 'solista' : null);
+    if (!artistType) return { error: 'Indicá si sos solista o agrupación.' };
+    const groupKind = artistType === 'agrupacion' ? String(b.groupKind || '').toLowerCase() : null;
+    if (artistType === 'agrupacion' && !ARTIST_GROUP_KINDS.includes(groupKind)) return { error: 'Indicá el tipo de agrupación.' };
+
+    const admin = b.fundAdmin || {};
+    const adminName = String(admin.name || '').trim().slice(0, 120);
+    const adminDocType = String(admin.documentType || '').trim().toUpperCase();
+    const adminDocNumber = String(admin.documentNumber || '').replace(/[^0-9A-Za-z-]/g, '').slice(0, 30);
+    const adminPhone = String(admin.phone || '').replace(/[^0-9+]/g, '').slice(0, 20);
+    if (adminName.length < 5) return { error: 'Escribí el nombre completo del administrador de fondos.' };
+    if (!ARTIST_DOCUMENT_TYPES.includes(adminDocType)) return { error: 'Tipo de documento del administrador inválido.' };
+    if (adminDocNumber.length < 5) return { error: 'Número de documento del administrador inválido.' };
+    if (b.fundAdminDeclaration !== true) return { error: 'El administrador de fondos tiene que aceptar la declaración.' };
+
+    const rawMembers = Array.isArray(b.members) ? b.members : [];
+    if (!rawMembers.length) return { error: 'Agregá al menos un integrante.' };
+    if (rawMembers.length > 60) return { error: 'Demasiados integrantes (máximo 60).' };
+    const members = [];
+    let total = 0;
+    for (const m of rawMembers) {
+        const name = String((m && m.name) || '').trim().slice(0, 80);
+        const roles = (Array.isArray(m && m.roles) ? m.roles : []).map(String).filter((r) => ARTIST_MEMBER_ROLES.includes(r));
+        const percent = Math.round(parseFloat(m && m.percent) * 100) / 100;
+        const email = String((m && m.email) || '').trim().slice(0, 120);
+        if (name.length < 2) return { error: 'Cada integrante necesita un nombre.' };
+        if (!roles.length) return { error: `Indicá el rol de ${name}.` };
+        if (!Number.isFinite(percent) || percent < 0 || percent > 100) return { error: `Porcentaje inválido para ${name}.` };
+        if (email && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return { error: `Email inválido para ${name}.` };
+        total += percent;
+        members.push({ name, roles, percent, email: email || null });
+    }
+    if (Math.abs(total - 100) > 0.05) return { error: `El reparto sugerido tiene que sumar 100% (hoy suma ${Math.round(total * 100) / 100}%).` };
+
+    return {
+        fields: {
+            artist_type: artistType,
+            group_kind: groupKind,
+            fund_admin_name: adminName,
+            fund_admin_document_type: adminDocType,
+            fund_admin_document_number: adminDocNumber,
+            fund_admin_phone: adminPhone || null,
+            fund_admin_declared_at: new Date().toISOString(),
+            members
+        }
+    };
+}
+
 app.post('/api/artists/register', requireCreditMutationAuth, async (req, res) => {
     try {
         if (!req.authUser) return res.status(401).json({ error: 'Inicia sesión primero.' });
@@ -5389,6 +5446,8 @@ app.post('/api/artists/register', requireCreditMutationAuth, async (req, res) =>
         if (!displayName || !String(displayName).trim()) {
             return res.status(400).json({ error: 'Falta el nombre artístico' });
         }
+        const profile = normalizeArtistProfileInput(req.body);
+        if (profile.error) return res.status(400).json({ error: profile.error });
 
         const { data: existing } = await supabase
             .from('artists')
@@ -5407,7 +5466,8 @@ app.post('/api/artists/register', requireCreditMutationAuth, async (req, res) =>
                 contact_email: contactEmail || req.authUser.email || null,
                 spotify_url: spotifyUrl || null,
                 instagram_url: instagramUrl || null,
-                verification_status: 'pending'
+                verification_status: 'pending',
+                ...profile.fields
             }])
             .select()
             .single();
@@ -5420,6 +5480,44 @@ app.post('/api/artists/register', requireCreditMutationAuth, async (req, res) =>
         res.json({ ok: true, artist });
     } catch (error) {
         console.error('[artists-register] Error:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+/**
+ * Editar los datos de inscripción v2 (tipo, administrador de fondos,
+ * integrantes y reparto sugerido). Los perfiles registrados antes de la v2
+ * lo usan para completarlos. Si cambia el administrador de fondos (quien
+ * cobra), se avisa al operador por Telegram para revisarlo antes del
+ * próximo pago.
+ */
+app.post('/api/artists/profile', requireCreditMutationAuth, async (req, res) => {
+    try {
+        if (!req.authUser) return res.status(401).json({ error: 'Inicia sesión primero.' });
+        const { data: artist } = await supabase.from('artists').select('*').eq('user_id', req.authUser.id).maybeSingle();
+        if (!artist) return res.status(404).json({ error: 'No tenés perfil de artista.' });
+        const profile = normalizeArtistProfileInput(req.body);
+        if (profile.error) return res.status(400).json({ error: profile.error });
+        const update = { ...profile.fields };
+        const { spotifyUrl, instagramUrl, contactEmail } = req.body || {};
+        if (spotifyUrl !== undefined) update.spotify_url = spotifyUrl || null;
+        if (instagramUrl !== undefined) update.instagram_url = instagramUrl || null;
+        if (contactEmail) update.contact_email = contactEmail;
+        const { data: updated, error } = await supabase.from('artists').update(update).eq('id', artist.id).select().single();
+        if (error) throw error;
+
+        const adminChanged = artist.fund_admin_document_number && artist.fund_admin_document_number !== update.fund_admin_document_number;
+        if (adminChanged && withdrawalService) {
+            withdrawalService._sendTelegram(
+                `⚠️ Cambió el ADMINISTRADOR DE FONDOS del artista ${artist.display_name}\n` +
+                `Antes: ${artist.fund_admin_name} (${artist.fund_admin_document_type} ${artist.fund_admin_document_number})\n` +
+                `Ahora: ${update.fund_admin_name} (${update.fund_admin_document_type} ${update.fund_admin_document_number})\n` +
+                `Revisalo antes de pagar el próximo retiro.`
+            ).catch((err) => console.error('[artists-profile] Telegram:', err.message));
+        }
+        res.json({ ok: true, artist: updated });
+    } catch (error) {
+        console.error('[artists-profile] Error:', error);
         res.status(500).json({ error: error.message });
     }
 });
@@ -5590,6 +5688,86 @@ app.post('/api/admin/artist-songs/:id/verify', requireInternalSecret, async (req
 // sql/artist-payouts.sql.
 const ARTIST_DOCUMENT_TYPES = ['CC', 'CE', 'NIT', 'PAS', 'PPT'];
 
+// Vencimiento: lo acumulado y no retirado en ARTIST_ROYALTY_EXPIRY_MONTHS
+// pasa a las ganancias de la plataforma. El reloj de cada acreditación
+// corre desde max(fecha de acreditación, entrada en vigor de la regla):
+// nada acumulado antes de que exista la regla vence retroactivamente.
+// FIFO: los retiros (pendientes o pagados) y lo ya vencido consumen
+// primero lo más viejo.
+const ARTIST_ROYALTY_EXPIRY_MONTHS = 6;
+const ARTIST_EXPIRY_EFFECTIVE_FROM = Date.parse('2026-09-28T00:00:00Z');
+
+function artistExpiryDateFor(createdAtMs) {
+    const d = new Date(Math.max(createdAtMs, ARTIST_EXPIRY_EFFECTIVE_FROM));
+    d.setUTCMonth(d.getUTCMonth() + ARTIST_ROYALTY_EXPIRY_MONTHS);
+    return d.getTime();
+}
+
+// ledger: [{amount, created_at}], consumedCredits: retiros + vencido.
+// Devuelve { expirableNow, upcoming: [{ expiresAt, amount }] } (upcoming
+// = lo que sigue vivo, ordenado por fecha de vencimiento).
+function computeArtistExpiry(ledger, consumedCredits, nowMs) {
+    let consumed = Math.max(0, consumedCredits);
+    let expirableNow = 0;
+    const upcoming = [];
+    const rows = (ledger || []).slice().sort((a, b) => Date.parse(a.created_at) - Date.parse(b.created_at));
+    for (const row of rows) {
+        let remaining = parseFloat(row.amount || 0);
+        if (consumed > 0) {
+            const take = Math.min(consumed, remaining);
+            remaining -= take;
+            consumed -= take;
+        }
+        if (remaining <= 1e-9) continue;
+        const expiresAt = artistExpiryDateFor(Date.parse(row.created_at));
+        if (expiresAt <= nowMs) expirableNow += remaining;
+        else upcoming.push({ expiresAt, amount: remaining });
+    }
+    return { expirableNow, upcoming };
+}
+
+async function loadArtistExpiryState(artistId) {
+    const [{ data: ledger }, { data: payouts }, { data: expirations }] = await Promise.all([
+        supabase.from('artist_royalty_ledger').select('amount, created_at').eq('artist_id', artistId),
+        supabase.from('artist_payout_requests').select('amount_credits, status').eq('artist_id', artistId),
+        supabase.from('artist_royalty_expirations').select('amount').eq('artist_id', artistId)
+    ]);
+    const withdrawn = (payouts || []).filter((x) => x.status !== 'rejected').reduce((a, x) => a + parseFloat(x.amount_credits || 0), 0);
+    const expired = (expirations || []).reduce((a, x) => a + parseFloat(x.amount || 0), 0);
+    return computeArtistExpiry(ledger || [], withdrawn + expired, Date.now());
+}
+
+let artistExpirySweepRunning = false;
+async function sweepArtistRoyaltyExpirations() {
+    if (artistExpirySweepRunning) return;
+    artistExpirySweepRunning = true;
+    try {
+        const { data: artists, error } = await supabase.from('artists').select('id, display_name, royalty_credits').gt('royalty_credits', 0);
+        if (error) { if (error.code !== '42P01' && error.code !== '42703') throw error; return; }
+        for (const artist of artists || []) {
+            const state = await loadArtistExpiryState(artist.id);
+            if (!(state.expirableNow > 1e-9)) continue;
+            const { data: expired, error: expireError } = await supabase.rpc('expire_artist_royalty', {
+                artist_id_param: artist.id,
+                amount_param: state.expirableNow
+            });
+            if (expireError) {
+                if (expireError.code !== 'PGRST202' && expireError.code !== '42883') console.error('[artist-expiry] Error:', artist.id, expireError);
+                continue;
+            }
+            const amount = parseFloat(expired || 0);
+            if (amount > 0) {
+                console.log(`[artist-expiry] ${amount.toFixed(4)} créditos de ${artist.display_name} vencieron (6 meses sin retirar) y pasan a la plataforma`);
+                await forwardBetFeeInternal(amount, null);
+            }
+        }
+    } catch (error) {
+        console.error('[artist-expiry] Error en el barrido:', error.message || error);
+    } finally {
+        artistExpirySweepRunning = false;
+    }
+}
+
 async function getArtistPayoutSettings() {
     const { data } = await supabase.from('artist_payout_settings').select('*').eq('id', 1).maybeSingle();
     return data || { min_payout_cop: 50000, withholding_percent: 0, gmf_rate: 0.004, terms_version: 'v1' };
@@ -5640,11 +5818,20 @@ app.get('/api/artists/payout/info', requireCreditMutationAuth, async (req, res) 
                 termsVersion: settings.terms_version
             },
             termsAccepted: artist.terms_accepted_version === settings.terms_version,
-            payoutIdentity: {
-                legalName: artist.payout_legal_name || '',
-                documentType: artist.payout_document_type || '',
-                documentNumber: artist.payout_document_number || ''
-            },
+            // Los retiros se pagan SIEMPRE al administrador de fondos.
+            fundAdmin: artist.fund_admin_document_number ? {
+                name: artist.fund_admin_name,
+                documentType: artist.fund_admin_document_type,
+                documentNumber: artist.fund_admin_document_number
+            } : null,
+            expiry: await loadArtistExpiryState(artist.id).then((st) => ({
+                months: ARTIST_ROYALTY_EXPIRY_MONTHS,
+                next: st.upcoming.length ? {
+                    expiresAt: new Date(st.upcoming[0].expiresAt).toISOString(),
+                    amountCredits: st.upcoming[0].amount,
+                    amountCop: Math.floor(st.upcoming[0].amount * copPerCredit)
+                } : null
+            })).catch(() => null),
             validPayoutMethods: VALID_PAYOUT_METHODS,
             documentTypes: ARTIST_DOCUMENT_TYPES,
             requests: requests || []
@@ -5669,12 +5856,15 @@ app.post('/api/artists/payout/request', claimRateLimiter, requireCreditMutationA
             return res.status(400).json({ error: 'Tenés que aceptar los términos vigentes del programa para retirar.' });
         }
 
-        const legalName = String(legal_name || '').trim();
-        const documentType = String(document_type || '').trim().toUpperCase();
-        const documentNumber = String(document_number || '').replace(/[^0-9A-Za-z-]/g, '');
-        if (legalName.length < 5) return res.status(400).json({ error: 'Escribí tu nombre completo (titular de la cuenta).' });
-        if (!ARTIST_DOCUMENT_TYPES.includes(documentType)) return res.status(400).json({ error: 'Tipo de documento inválido.' });
-        if (documentNumber.length < 5) return res.status(400).json({ error: 'Número de documento inválido.' });
+        // Cuenta maestra: el retiro se paga SIEMPRE a nombre del
+        // administrador de fondos declarado en la inscripción -- lo que
+        // mande el cliente en legal_name/document_* se ignora.
+        if (!artist.fund_admin_document_number || !artist.fund_admin_name) {
+            return res.status(400).json({ error: 'Completá los datos del administrador de fondos en tu perfil antes de retirar.' });
+        }
+        const legalName = artist.fund_admin_name;
+        const documentType = artist.fund_admin_document_type;
+        const documentNumber = artist.fund_admin_document_number;
 
         if (!VALID_PAYOUT_METHODS.includes(payout_method)) {
             return res.status(400).json({ error: `Método de pago inválido. Debe ser uno de: ${VALID_PAYOUT_METHODS.join(', ')}` });
@@ -5700,9 +5890,6 @@ app.post('/api/artists/payout/request', claimRateLimiter, requireCreditMutationA
         // Guardar identidad + aceptación de términos (el cliente no puede
         // tocar la tabla artists: no tiene política de UPDATE).
         await supabase.from('artists').update({
-            payout_legal_name: legalName,
-            payout_document_type: documentType,
-            payout_document_number: documentNumber,
             terms_accepted_version: settings.terms_version,
             terms_accepted_at: artist.terms_accepted_version === settings.terms_version ? artist.terms_accepted_at : new Date().toISOString()
         }).eq('id', artist.id);
@@ -6018,6 +6205,8 @@ app.listen(PORT, async () => {
     }
     // Abandono en batallas verificadas -- independiente de los demás servicios.
     setInterval(sweepFanPlaysTimeouts, 60 * 1000);
+    setInterval(sweepArtistRoyaltyExpirations, 6 * 60 * 60 * 1000);
+    setTimeout(sweepArtistRoyaltyExpirations, 5 * 60 * 1000);
 });
 
 module.exports = app;
