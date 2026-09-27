@@ -2309,7 +2309,7 @@
     <!-- ==================== MODALS ==================== -->
 
     <!-- Auth Modal -->
-    <div id="authModal" class="hidden fixed inset-0 z-[100] flex items-center justify-center p-4">
+    <div id="authModal" class="hidden fixed inset-0 z-[10000] flex items-center justify-center p-4">
         <div class="modal-overlay" onclick="closeAuthModal()"></div>
         <div class="modal-box">
             <button type="button" onclick="closeAuthModal()" class="absolute top-4 right-4 text-gray-400 hover:text-white text-2xl leading-none cursor-pointer">×</button>
@@ -10386,6 +10386,8 @@
         .mtr2-navitem { display:flex; flex-direction:column; align-items:center; justify-content:center; gap:5px; flex:1; min-height:52px; cursor:pointer; padding-top:4px; background:none; border:none; font-family:inherit; }
         .mtr2-navpill { width:44px; height:28px; border-radius:14px; display:flex; align-items:center; justify-content:center; }
         .mtr2-nav-brand { display:none; }
+        .mtr2-session-banner { display:none; align-items:center; gap:12px; border-radius:16px; padding:14px 16px; margin-bottom:16px; background:linear-gradient(120deg, rgba(251,146,60,0.18), rgba(8,15,26,0.9)); border:1.5px solid rgba(251,146,60,0.5); }
+        body.mtr2-no-session .mtr2-session-banner { display:flex; }
         /* Animación principal (video "Live Battles", 16:9) dentro de Jugar.
            Misma proporción que el video en todas las pantallas -- con una
            altura fija, en escritorio el recuadro quedaba mucho más ancho que
@@ -11017,7 +11019,53 @@
             // esperar hasta 1s al próximo tick del interval de abajo.
             window.mtr2Sync = mtr2Sync;
 
+            // Con una wallet vinculada guardada en este dispositivo,
+            // showLoginWall() oculta el muro de login aunque NO haya sesión de
+            // Supabase (venció, o se cerró en este navegador) -- la vista nueva
+            // quedaba mostrando "Jugador", guiones y 0 créditos, y nada que
+            // necesite sesión funcionaba (recargas, apuestas), sin explicar por
+            // qué. Confirmado en vivo en una PC. En ese caso se muestra un
+            // aviso claro con el botón para iniciar sesión, en las 4 pestañas.
+            function mtr2InsertSessionBanners() {
+                document.querySelectorAll('#mtr2Shell .mtr2-content').forEach(function (content) {
+                    if (content.querySelector('.mtr2-session-banner')) return;
+                    var banner = document.createElement('div');
+                    banner.className = 'mtr2-session-banner';
+                    banner.innerHTML =
+                        '<span style="color:#fdba74; flex-shrink:0; display:flex;">' + (window.MTRIcons ? window.MTRIcons.svg('warning', { size: 22 }) : '') + '</span>' +
+                        '<div style="flex:1; min-width:0;">' +
+                            '<div style="font-size:13.5px; font-weight:800; color:#fed7aa;">Tu sesión no está activa en este dispositivo</div>' +
+                            '<div style="font-size:11.5px; color:#d1d5db;">Iniciá sesión para ver tu saldo, jugar con créditos y recargar.</div>' +
+                        '</div>' +
+                        '<button type="button" style="flex-shrink:0; padding:9px 14px; border-radius:10px; border:none; cursor:pointer; font-family:inherit; font-size:12.5px; font-weight:800; color:#05060a; background:linear-gradient(90deg,#fb923c,#fdba74);">Iniciar sesión</button>';
+                    banner.querySelector('button').onclick = function () {
+                        var fn = typeof window.openAuthModal === 'function' ? window.openAuthModal : (typeof openAuthModal === 'function' ? openAuthModal : null);
+                        if (fn) fn();
+                    };
+                    content.insertBefore(banner, content.firstChild);
+                });
+            }
+
+            async function mtr2CheckSession() {
+                var client = window.supabaseClient;
+                if (!client || !client.auth) return;
+                var hasSession = false;
+                try {
+                    var res = await client.auth.getSession();
+                    hasSession = !!(res && res.data && res.data.session);
+                } catch (e) { return; }
+                document.body.classList.toggle('mtr2-no-session', !hasSession);
+            }
+
             function mtr2Init() {
+                mtr2InsertSessionBanners();
+                mtr2CheckSession();
+                setInterval(mtr2CheckSession, 5000);
+                try {
+                    if (window.supabaseClient && window.supabaseClient.auth) {
+                        window.supabaseClient.auth.onAuthStateChange(function () { setTimeout(mtr2CheckSession, 0); });
+                    }
+                } catch (e) { /* el intervalo de arriba igual lo detecta */ }
                 mtr2Sync();
                 window.mtr2SetCarteraTab('deposit');
                 window.addEventListener('resize', mtr2Sync);
