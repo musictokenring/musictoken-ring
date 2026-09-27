@@ -167,8 +167,9 @@
     <!-- ============ ARTISTAS ============ -->
     <div id="tab-artistas" class="tab-panel">
         <p class="empty" style="margin: 0 0 0.8rem;">
-            Fase 1: regalías de impulso acumuladas (NO retirables todavía). Revisión manual antes de que
-            cualquier artista o canción cuente para nada -- verificá el link de Spotify/Instagram antes de aprobar.
+            Regalías de impulso: la mitad de la comisión de cada batalla real, repartida entre las dos canciones
+            elegidas. Revisión manual antes de que cualquier artista o canción cuente para nada -- verificá el link de
+            Spotify/Instagram antes de aprobar. Fase 2: los artistas verificados pueden pedir retiro en pesos (abajo).
         </p>
         <button type="button" onclick="loadPendingArtists()">🔄 Actualizar</button>
         <div id="artistsStatus" class="empty" style="margin: 0.6rem 0;"></div>
@@ -178,6 +179,22 @@
 
         <h2>Canciones esperando verificación</h2>
         <div id="pendingSongsList"></div>
+
+        <h2>Retiros de artistas pendientes</h2>
+        <p class="empty" style="margin-top:-0.4rem;">Transferí el NETO a la cuenta indicada, emití el documento soporte y recién ahí marcá "Pagado". Rechazar devuelve el saldo a las regalías del artista.</p>
+        <div id="artistPayoutsList"></div>
+
+        <h2>Configuración de retiros de artistas</h2>
+        <div class="req-card" id="artistPayoutSettings">
+            <div class="req-meta">Cambiá la retención cuando tu contador defina el tratamiento. Subí la versión de términos cada vez que cambies el texto: los artistas deberán aceptarlos de nuevo.</div>
+            <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(160px, 1fr)); gap:0.6rem; margin-top:0.7rem;">
+                <label style="display:flex; flex-direction:column; gap:0.25rem; font-size:0.8rem;">Mínimo por retiro (COP)<input id="apsMin" type="number" min="0" step="1000"></label>
+                <label style="display:flex; flex-direction:column; gap:0.25rem; font-size:0.8rem;">Retención en la fuente (%)<input id="apsWithholding" type="number" min="0" max="50" step="0.1"></label>
+                <label style="display:flex; flex-direction:column; gap:0.25rem; font-size:0.8rem;">4x1000 trasladado (tasa)<input id="apsGmf" type="number" min="0" max="0.02" step="0.001"></label>
+                <label style="display:flex; flex-direction:column; gap:0.25rem; font-size:0.8rem;">Versión de términos<input id="apsTerms" type="text" maxlength="20"></label>
+            </div>
+            <div class="req-actions"><button class="paid" onclick="saveArtistPayoutSettings()">💾 Guardar configuración</button></div>
+        </div>
     </div>
 
 <script>
@@ -515,6 +532,7 @@
             var j = await r.json().catch(function () { return {}; });
             if (!r.ok || !j.ok) { document.getElementById('artistsStatus').textContent = 'Error: ' + (j.error || r.status); return; }
             renderPendingArtists(j.artists, j.songs);
+            loadArtistPayouts();
             document.getElementById('artistsStatus').textContent = j.artists.length + ' artista(s) y ' + j.songs.length + ' canción(es) esperando revisión.';
         } catch (e) {
             document.getElementById('artistsStatus').textContent = 'Error de red: ' + e.message;
@@ -560,6 +578,84 @@
                     '</div>' +
                 '</div>';
             }).join('');
+        }
+    }
+
+    // ---------- Retiros de artistas (Fase 2) ----------
+    function copFmt(n) { return '$' + Math.round(Number(n) || 0).toLocaleString('es-CO'); }
+
+    async function loadArtistPayouts() {
+        var secret = getSecret();
+        var listEl = document.getElementById('artistPayoutsList');
+        try {
+            var r = await fetch(BACKEND_API + '/api/admin/artist-payouts', { headers: { 'x-internal-secret': secret } });
+            var j = await r.json().catch(function () { return {}; });
+            if (!r.ok || !j.ok) { listEl.innerHTML = '<p class="empty">No disponible todavía (¿corriste sql/artist-payouts.sql y publicaste el backend?): ' + escapeHtml(j.error || r.status) + '</p>'; return; }
+            var st = j.settings || {};
+            document.getElementById('apsMin').value = st.min_payout_cop;
+            document.getElementById('apsWithholding').value = st.withholding_percent;
+            document.getElementById('apsGmf').value = st.gmf_rate;
+            document.getElementById('apsTerms').value = st.terms_version;
+            if (!j.requests.length) { listEl.innerHTML = '<p class="empty">No hay retiros de artistas pendientes.</p>'; return; }
+            listEl.innerHTML = j.requests.map(function (x) {
+                var d = x.payout_details || {};
+                var details = Object.keys(d).map(function (k) {
+                    return '<div class="copy-row"><span class="copy-label">' + escapeHtml(k) + ':</span><span>' + escapeHtml(d[k]) + '</span></div>';
+                }).join('');
+                return '<div class="req-card">' +
+                    '<div class="req-top"><span class="req-amount">' + copFmt(x.net_cop) + ' COP neto</span>' +
+                    '<span class="req-meta">' + new Date(x.created_at).toLocaleString('es-CO') + '</span></div>' +
+                    '<div class="req-meta">Artista: ' + escapeHtml((x.artists && x.artists.display_name) || x.artist_id) + ' · ' + escapeHtml((x.artists && x.artists.contact_email) || '') + '</div>' +
+                    '<div class="req-meta">Titular: <strong>' + escapeHtml(x.legal_name) + '</strong> · ' + escapeHtml(x.document_type) + ' ' + escapeHtml(x.document_number) + '</div>' +
+                    '<div class="req-meta">Bruto ' + copFmt(x.gross_cop) + ' − retención (' + x.withholding_percent + '%) ' + copFmt(x.withholding_cop) + ' − 4x1000 ' + copFmt(x.gmf_cop) + ' = <strong>' + copFmt(x.net_cop) + '</strong> · términos ' + escapeHtml(x.terms_version) + '</div>' +
+                    '<div class="req-details"><div class="copy-row"><span class="copy-label">Método:</span><span>' + escapeHtml(x.payout_method) + '</span></div>' + details + '</div>' +
+                    '<div class="req-actions">' +
+                        '<button class="paid" onclick="markArtistPayout(\'' + x.id + '\', true)">✅ Pagado</button>' +
+                        '<button class="reject" onclick="markArtistPayout(\'' + x.id + '\', false)">❌ Rechazar (devuelve saldo)</button>' +
+                    '</div>' +
+                '</div>';
+            }).join('');
+        } catch (e) {
+            listEl.innerHTML = '<p class="empty">Error de red: ' + escapeHtml(e.message) + '</p>';
+        }
+    }
+
+    async function markArtistPayout(id, paid) {
+        var note = window.prompt(paid ? 'Nota (ej. número de transferencia, opcional):' : 'Motivo del rechazo (lo ve el artista):', '');
+        if (note === null) return;
+        if (paid && !window.confirm('¿Confirmás que YA transferiste el neto a la cuenta indicada?')) return;
+        try {
+            var r = await fetch(BACKEND_API + '/api/admin/artist-payouts/' + id + (paid ? '/mark-paid' : '/reject'), {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'x-internal-secret': getSecret() },
+                body: JSON.stringify({ notes: note })
+            });
+            var j = await r.json().catch(function () { return {}; });
+            if (!r.ok || !j.ok) { window.alert('Error: ' + (j.error || r.status)); return; }
+            loadArtistPayouts();
+        } catch (e) {
+            window.alert('Error de red: ' + e.message);
+        }
+    }
+
+    async function saveArtistPayoutSettings() {
+        try {
+            var r = await fetch(BACKEND_API + '/api/admin/artist-payout-settings', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'x-internal-secret': getSecret() },
+                body: JSON.stringify({
+                    min_payout_cop: document.getElementById('apsMin').value,
+                    withholding_percent: document.getElementById('apsWithholding').value,
+                    gmf_rate: document.getElementById('apsGmf').value,
+                    terms_version: document.getElementById('apsTerms').value
+                })
+            });
+            var j = await r.json().catch(function () { return {}; });
+            if (!r.ok || !j.ok) { window.alert('Error: ' + (j.error || r.status)); return; }
+            window.alert('Configuración guardada.');
+            loadArtistPayouts();
+        } catch (e) {
+            window.alert('Error de red: ' + e.message);
         }
     }
 

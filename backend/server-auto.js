@@ -5577,6 +5577,273 @@ app.post('/api/admin/artist-songs/:id/verify', requireInternalSecret, async (req
     }
 });
 
+// ============================================================
+// FASE 2 DEL PROGRAMA DE ARTISTAS: RETIRO DE REGALÍAS
+// ============================================================
+// El artista retira en pesos lo acumulado en royalty_credits. Mismo
+// esquema que los retiros COP de jugadores (withdrawal-service.js):
+// descuento atómico al pedir (reserve_artist_royalty), aviso por
+// Telegram, pago manual del operador desde el panel, y devolución si se
+// rechaza. Retención y 4x1000 salen de artist_payout_settings (editable
+// desde el panel) -- la calificación tributaria la define el dueño con su
+// contador, el código solo aplica lo configurado. Requiere
+// sql/artist-payouts.sql.
+const ARTIST_DOCUMENT_TYPES = ['CC', 'CE', 'NIT', 'PAS', 'PPT'];
+
+async function getArtistPayoutSettings() {
+    const { data } = await supabase.from('artist_payout_settings').select('*').eq('id', 1).maybeSingle();
+    return data || { min_payout_cop: 50000, withholding_percent: 0, gmf_rate: 0.004, terms_version: 'v1' };
+}
+
+// Desglose de un retiro: bruto -> retención -> 4x1000 -> neto transferido.
+function computeArtistPayoutBreakdown(grossCop, settings) {
+    const gross = Math.round(grossCop);
+    const withholdingPercent = parseFloat(settings.withholding_percent || 0);
+    const withholdingCop = Math.round(gross * withholdingPercent / 100);
+    const gmfCop = Math.round((gross - withholdingCop) * parseFloat(settings.gmf_rate || 0));
+    return {
+        grossCop: gross,
+        withholdingPercent,
+        withholdingCop,
+        gmfCop,
+        netCop: gross - withholdingCop - gmfCop
+    };
+}
+
+app.get('/api/artists/payout/info', requireCreditMutationAuth, async (req, res) => {
+    try {
+        if (!req.authUser) return res.status(401).json({ error: 'Inicia sesión primero.' });
+        const { data: artist } = await supabase.from('artists').select('*').eq('user_id', req.authUser.id).maybeSingle();
+        if (!artist) return res.status(404).json({ error: 'No tenés perfil de artista.' });
+
+        const settings = await getArtistPayoutSettings();
+        const { getCopPerUsd } = require('./mercadopago-service');
+        const copPerCredit = await getCopPerUsd();
+        const balanceCredits = parseFloat(artist.royalty_credits || 0);
+        const { data: requests } = await supabase
+            .from('artist_payout_requests')
+            .select('id, gross_cop, withholding_cop, gmf_cop, net_cop, payout_method, status, admin_notes, created_at, processed_at')
+            .eq('artist_id', artist.id)
+            .order('created_at', { ascending: false })
+            .limit(20);
+
+        res.json({
+            ok: true,
+            verified: artist.verification_status === 'verified',
+            balanceCredits,
+            copPerCredit,
+            balanceCopEstimate: Math.floor(balanceCredits * copPerCredit),
+            settings: {
+                minPayoutCop: parseFloat(settings.min_payout_cop),
+                withholdingPercent: parseFloat(settings.withholding_percent),
+                gmfRate: parseFloat(settings.gmf_rate),
+                termsVersion: settings.terms_version
+            },
+            termsAccepted: artist.terms_accepted_version === settings.terms_version,
+            payoutIdentity: {
+                legalName: artist.payout_legal_name || '',
+                documentType: artist.payout_document_type || '',
+                documentNumber: artist.payout_document_number || ''
+            },
+            validPayoutMethods: VALID_PAYOUT_METHODS,
+            documentTypes: ARTIST_DOCUMENT_TYPES,
+            requests: requests || []
+        });
+    } catch (error) {
+        console.error('[artist-payout-info] Error:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+app.post('/api/artists/payout/request', claimRateLimiter, requireCreditMutationAuth, async (req, res) => {
+    try {
+        if (!req.authUser) return res.status(401).json({ error: 'Inicia sesión primero.' });
+        const { amount_cop, payout_method, payout_details, legal_name, document_type, document_number, accept_terms_version } = req.body || {};
+
+        const { data: artist } = await supabase.from('artists').select('*').eq('user_id', req.authUser.id).maybeSingle();
+        if (!artist) return res.status(404).json({ error: 'No tenés perfil de artista.' });
+        if (artist.verification_status !== 'verified') return res.status(403).json({ error: 'Tu perfil de artista todavía no está verificado.' });
+
+        const settings = await getArtistPayoutSettings();
+        if (accept_terms_version !== settings.terms_version) {
+            return res.status(400).json({ error: 'Tenés que aceptar los términos vigentes del programa para retirar.' });
+        }
+
+        const legalName = String(legal_name || '').trim();
+        const documentType = String(document_type || '').trim().toUpperCase();
+        const documentNumber = String(document_number || '').replace(/[^0-9A-Za-z-]/g, '');
+        if (legalName.length < 5) return res.status(400).json({ error: 'Escribí tu nombre completo (titular de la cuenta).' });
+        if (!ARTIST_DOCUMENT_TYPES.includes(documentType)) return res.status(400).json({ error: 'Tipo de documento inválido.' });
+        if (documentNumber.length < 5) return res.status(400).json({ error: 'Número de documento inválido.' });
+
+        if (!VALID_PAYOUT_METHODS.includes(payout_method)) {
+            return res.status(400).json({ error: `Método de pago inválido. Debe ser uno de: ${VALID_PAYOUT_METHODS.join(', ')}` });
+        }
+        if (!withdrawalService) return res.status(503).json({ error: 'Servicio de retiros no disponible' });
+        try {
+            withdrawalService._validatePayoutDetails(payout_method, payout_details);
+        } catch (validationError) {
+            return res.status(400).json({ error: validationError.message });
+        }
+
+        const grossCop = Math.round(parseFloat(amount_cop));
+        const minPayout = parseFloat(settings.min_payout_cop);
+        if (!Number.isFinite(grossCop) || grossCop < minPayout) {
+            return res.status(400).json({ error: `El mínimo para retirar es ${minPayout.toLocaleString('es-CO')} COP.` });
+        }
+
+        const { getCopPerUsd } = require('./mercadopago-service');
+        const copPerCredit = await getCopPerUsd();
+        const amountCredits = grossCop / copPerCredit;
+        const breakdown = computeArtistPayoutBreakdown(grossCop, settings);
+
+        // Guardar identidad + aceptación de términos (el cliente no puede
+        // tocar la tabla artists: no tiene política de UPDATE).
+        await supabase.from('artists').update({
+            payout_legal_name: legalName,
+            payout_document_type: documentType,
+            payout_document_number: documentNumber,
+            terms_accepted_version: settings.terms_version,
+            terms_accepted_at: artist.terms_accepted_version === settings.terms_version ? artist.terms_accepted_at : new Date().toISOString()
+        }).eq('id', artist.id);
+
+        const { error: reserveError } = await supabase.rpc('reserve_artist_royalty', {
+            artist_id_param: artist.id,
+            amount_param: amountCredits
+        });
+        if (reserveError) {
+            return res.status(400).json({ error: reserveError.message || 'No se pudo reservar el saldo de regalías.' });
+        }
+
+        const { data: request, error: insertError } = await supabase
+            .from('artist_payout_requests')
+            .insert([{
+                artist_id: artist.id,
+                amount_credits: amountCredits,
+                rate_used: copPerCredit,
+                gross_cop: breakdown.grossCop,
+                withholding_percent: breakdown.withholdingPercent,
+                withholding_cop: breakdown.withholdingCop,
+                gmf_cop: breakdown.gmfCop,
+                net_cop: breakdown.netCop,
+                payout_method,
+                payout_details: payout_details || {},
+                legal_name: legalName,
+                document_type: documentType,
+                document_number: documentNumber,
+                terms_version: settings.terms_version,
+                status: 'pending'
+            }])
+            .select()
+            .single();
+        if (insertError) {
+            await supabase.rpc('refund_artist_royalty', { artist_id_param: artist.id, amount_param: amountCredits });
+            console.error('[artist-payout-request] Insert falló, saldo devuelto:', insertError);
+            return res.status(500).json({ error: 'No se pudo registrar la solicitud. Tu saldo no fue descontado, probá de nuevo.' });
+        }
+
+        const detailLines = Object.entries(payout_details || {}).map(([k, v]) => `  • ${k}: ${v}`).join('\n');
+        withdrawalService._sendTelegram(
+            `🎵 Nuevo retiro de regalías de ARTISTA\n\n` +
+            `Artista: ${artist.display_name} (${req.authUser.email || artist.user_id})\n` +
+            `Titular: ${legalName} · ${documentType} ${documentNumber}\n` +
+            `Bruto: ${breakdown.grossCop.toLocaleString('es-CO')} COP\n` +
+            `Retención (${breakdown.withholdingPercent}%): ${breakdown.withholdingCop.toLocaleString('es-CO')} COP\n` +
+            `4x1000: ${breakdown.gmfCop.toLocaleString('es-CO')} COP\n` +
+            `NETO A TRANSFERIR: ${breakdown.netCop.toLocaleString('es-CO')} COP\n` +
+            `Método: ${payout_method}\nDatos:\n${detailLines}\n\n` +
+            `ID solicitud: ${request.id}\nRecordá emitir el documento soporte.`
+        ).catch((err) => console.error('[artist-payout-request] Telegram:', err.message));
+
+        res.json({ ok: true, request });
+    } catch (error) {
+        console.error('[artist-payout-request] Error:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+app.get('/api/admin/artist-payouts', requireInternalSecret, async (req, res) => {
+    try {
+        const { data, error } = await supabase
+            .from('artist_payout_requests')
+            .select('*, artists(display_name, contact_email)')
+            .eq('status', 'pending')
+            .order('created_at', { ascending: true });
+        if (error) throw error;
+        res.json({ ok: true, requests: data || [], settings: await getArtistPayoutSettings() });
+    } catch (error) {
+        console.error('[admin-artist-payouts] Error:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+app.post('/api/admin/artist-payouts/:id/mark-paid', requireInternalSecret, async (req, res) => {
+    try {
+        const { data, error } = await supabase
+            .from('artist_payout_requests')
+            .update({ status: 'paid', admin_notes: (req.body && req.body.notes) || null, processed_at: new Date().toISOString() })
+            .eq('id', req.params.id)
+            .eq('status', 'pending')
+            .select('*, artists(display_name)')
+            .maybeSingle();
+        if (error) throw error;
+        if (!data) return res.status(409).json({ error: 'Solicitud no encontrada o ya procesada' });
+        if (withdrawalService) {
+            withdrawalService._sendTelegram(`✅ Retiro de artista PAGADO\n${data.artists?.display_name || ''} · neto ${Number(data.net_cop).toLocaleString('es-CO')} COP\nID: ${data.id}`)
+                .catch((err) => console.error('[admin-artist-payout-paid] Telegram:', err.message));
+        }
+        res.json({ ok: true, request: data });
+    } catch (error) {
+        console.error('[admin-artist-payout-paid] Error:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+app.post('/api/admin/artist-payouts/:id/reject', requireInternalSecret, async (req, res) => {
+    try {
+        // Marcar primero (condicionado a 'pending'): así una doble llamada
+        // nunca devuelve el saldo dos veces.
+        const { data, error } = await supabase
+            .from('artist_payout_requests')
+            .update({ status: 'rejected', admin_notes: (req.body && req.body.notes) || null, processed_at: new Date().toISOString() })
+            .eq('id', req.params.id)
+            .eq('status', 'pending')
+            .select('*, artists(display_name)')
+            .maybeSingle();
+        if (error) throw error;
+        if (!data) return res.status(409).json({ error: 'Solicitud no encontrada o ya procesada' });
+        const { error: refundError } = await supabase.rpc('refund_artist_royalty', {
+            artist_id_param: data.artist_id,
+            amount_param: data.amount_credits
+        });
+        if (refundError) {
+            console.error('[admin-artist-payout-reject] ❌ No se pudo devolver el saldo -- revisar a mano:', data.id, refundError);
+            return res.status(500).json({ error: 'Se marcó como rechazada pero no se pudo devolver el saldo: ' + refundError.message });
+        }
+        res.json({ ok: true, request: data });
+    } catch (error) {
+        console.error('[admin-artist-payout-reject] Error:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+app.post('/api/admin/artist-payout-settings', requireInternalSecret, async (req, res) => {
+    try {
+        const body = req.body || {};
+        const update = { updated_at: new Date().toISOString() };
+        if (body.min_payout_cop != null) update.min_payout_cop = Math.max(0, parseFloat(body.min_payout_cop));
+        if (body.withholding_percent != null) update.withholding_percent = Math.min(50, Math.max(0, parseFloat(body.withholding_percent)));
+        if (body.gmf_rate != null) update.gmf_rate = Math.min(0.02, Math.max(0, parseFloat(body.gmf_rate)));
+        if (body.terms_version) update.terms_version = String(body.terms_version).trim().slice(0, 20);
+        const { data, error } = await supabase.from('artist_payout_settings').update(update).eq('id', 1).select('*').single();
+        if (error) throw error;
+        res.json({ ok: true, settings: data });
+    } catch (error) {
+        console.error('[admin-artist-payout-settings] Error:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
 try {
     const { registerPrizeRoutes } = require('./prize-api');
     registerPrizeRoutes(app, supabase);

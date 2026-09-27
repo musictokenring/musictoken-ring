@@ -92,13 +92,14 @@
     }
     label:first-of-type { margin-top: 0; }
     label .req { color: var(--gold); }
-    input, textarea {
+    input, textarea, select {
         width: 100%; padding: 0.75rem 0.9rem; border-radius: 12px;
         border: 1px solid rgba(255,255,255,0.09); background: rgba(0,0,0,0.28); color: var(--text);
         font-size: 0.9rem; font-family: inherit; transition: border-color 0.15s;
     }
     input::placeholder { color: var(--text-dim); }
-    input:focus, textarea:focus { outline: none; border-color: rgba(224,185,115,0.55); background: rgba(0,0,0,0.4); }
+    select option { background: #15131a; color: var(--text); }
+    input:focus, textarea:focus, select:focus { outline: none; border-color: rgba(224,185,115,0.55); background: rgba(0,0,0,0.4); }
 
     button {
         padding: 0.8rem 1.2rem; border-radius: 12px; border: 1px solid rgba(255,255,255,0.1);
@@ -249,6 +250,65 @@
         </div>
     </div>
 
+    <!-- Fase 2: retiro de regalías en pesos (ver /api/artists/payout/* en
+         backend/server-auto.js y sql/artist-payouts.sql). -->
+    <div id="payoutCard" class="card hidden">
+        <div class="card-head">
+            <span class="icn" id="payoutIcn"></span>
+            <h2>Retirar regalías</h2>
+        </div>
+        <p class="card-lead" id="payoutLead">Cargando...</p>
+
+        <div id="payoutForm" class="hidden">
+            <label>Monto a retirar (COP) <span class="req">*</span></label>
+            <input type="number" id="payoutAmount" min="0" step="1000" inputmode="numeric">
+
+            <label>Titular de la cuenta (nombre completo) <span class="req">*</span></label>
+            <input type="text" id="payoutLegalName" placeholder="Como figura en tu documento">
+            <div style="display:grid; grid-template-columns:120px 1fr; gap:0.6rem;">
+                <div>
+                    <label>Documento <span class="req">*</span></label>
+                    <select id="payoutDocType"></select>
+                </div>
+                <div>
+                    <label>Número <span class="req">*</span></label>
+                    <input type="text" id="payoutDocNumber" inputmode="numeric">
+                </div>
+            </div>
+
+            <label>Recibir el pago por <span class="req">*</span></label>
+            <select id="payoutMethod">
+                <option value="nequi">Nequi</option>
+                <option value="daviplata">Daviplata</option>
+                <option value="bre-b">Bre-B (llave)</option>
+                <option value="bancolombia">Bancolombia</option>
+                <option value="otro_banco">Otro banco</option>
+            </select>
+            <div id="payoutMethodFields"></div>
+
+            <div id="payoutBreakdown" style="margin-top:1.1rem; border:1px solid var(--card-border); border-radius:14px; padding:0.9rem 1rem; font-size:0.84rem;"></div>
+
+            <label style="margin-top:1.1rem; text-transform:none; letter-spacing:0; font-size:0.8rem; font-weight:500; color:var(--text-muted); align-items:flex-start;">
+                <input type="checkbox" id="payoutTerms" style="width:auto; margin-top:0.15rem;">
+                <span>Acepto los <a href="#" id="payoutTermsToggle" style="color:var(--gold); text-decoration:underline;">términos del programa de artistas</a> (versión <span id="payoutTermsVersion">-</span>).</span>
+            </label>
+            <div id="payoutTermsText" class="hidden" style="margin-top:0.6rem; font-size:0.78rem; line-height:1.55; color:var(--text-muted); border-left:2px solid var(--card-border-hover); padding-left:0.8rem;">
+                <!-- BORRADOR de términos: el dueño (abogado) debe revisarlos y
+                     subir terms_version en el panel admin cada vez que cambien. -->
+                <p>1. Los pagos de este programa son un incentivo comercial que MusicToken Ring reconoce a artistas verificados cuando un jugador elige una de sus canciones reclamadas en una batalla con dinero real. Su monto es variable, depende del uso real de la plataforma y no está garantizado.</p>
+                <p>2. Declarás que sos titular (o representante autorizado) de las canciones que reclamaste y de la cuenta donde recibís el pago. MusicToken Ring puede pedir prueba de titularidad y suspender pagos ante reclamos de terceros.</p>
+                <p>3. De cada retiro se descuenta el gravamen a los movimientos financieros (4x1000) y, cuando la ley lo exija, la retención en la fuente correspondiente. El cumplimiento de tus propias obligaciones tributarias es tu responsabilidad.</p>
+                <p>4. Los retiros se pagan manualmente, en pesos colombianos, a la cuenta indicada, normalmente dentro de los 5 días hábiles siguientes a la solicitud. Hay un monto mínimo por retiro.</p>
+                <p>5. No se generan pagos cuando el propio artista juega la partida. MusicToken Ring puede modificar o terminar el programa avisando con antelación; lo ya acumulado hasta ese momento se respeta.</p>
+            </div>
+
+            <button id="payoutSubmitBtn" class="primary full">Solicitar retiro</button>
+            <p id="payoutStatus" class="status-msg"></p>
+        </div>
+
+        <div id="payoutHistory"></div>
+    </div>
+
     <div id="songsCard" class="card hidden">
         <div class="card-head">
             <span class="icn">${ICON_DISC}</span>
@@ -389,6 +449,7 @@
         if (artist.verification_status === 'verified') {
             show('claimCard');
         }
+        loadPayoutInfo();
     }
 
     async function registerArtist() {
@@ -613,6 +674,171 @@
             return false;
         }
     }
+
+
+    // ==========================================================
+    // FASE 2: RETIRO DE REGALÍAS
+    // ==========================================================
+    var payoutInfo = null;
+    var PAYOUT_METHOD_LABELS = { nequi: 'Nequi', daviplata: 'Daviplata', 'bre-b': 'Bre-B', bancolombia: 'Bancolombia', otro_banco: 'Otro banco' };
+    var PAYOUT_STATUS_LABELS = { pending: 'En proceso', paid: 'Pagado', rejected: 'Rechazado' };
+
+    function fmtCop(n) { return '$' + Math.round(Number(n) || 0).toLocaleString('es-CO') + ' COP'; }
+
+    function renderPayoutMethodFields() {
+        var method = document.getElementById('payoutMethod').value;
+        var html = '';
+        if (method === 'nequi' || method === 'daviplata') {
+            html = '<label>Número de celular <span class="req">*</span></label><input type="tel" id="pf_telefono" inputmode="numeric" placeholder="3001234567">';
+        } else if (method === 'bre-b') {
+            html = '<label>Tipo de llave <span class="req">*</span></label>' +
+                '<select id="pf_tipo_llave"><option value="celular">Celular</option><option value="cedula">Cédula</option><option value="correo">Correo</option><option value="alfanumerica">Alfanumérica (@...)</option></select>' +
+                '<label>Llave <span class="req">*</span></label><input type="text" id="pf_llave">';
+        } else {
+            html = (method === 'otro_banco' ? '<label>Banco <span class="req">*</span></label><input type="text" id="pf_banco">' : '') +
+                '<label>Tipo de cuenta <span class="req">*</span></label>' +
+                '<select id="pf_tipo_cuenta"><option value="ahorros">Ahorros</option><option value="corriente">Corriente</option></select>' +
+                '<label>Número de cuenta <span class="req">*</span></label><input type="text" id="pf_numero_cuenta" inputmode="numeric">';
+        }
+        document.getElementById('payoutMethodFields').innerHTML = html;
+    }
+
+    function collectPayoutDetails() {
+        var method = document.getElementById('payoutMethod').value;
+        var val = function (id) { var el = document.getElementById(id); return el ? el.value.trim() : ''; };
+        if (method === 'nequi' || method === 'daviplata') return { telefono: val('pf_telefono').replace(/\D/g, '') };
+        if (method === 'bre-b') return { tipo_llave: val('pf_tipo_llave'), llave: val('pf_llave') };
+        var d = { tipo_cuenta: val('pf_tipo_cuenta'), numero_cuenta: val('pf_numero_cuenta') };
+        if (method === 'otro_banco') d.banco = val('pf_banco');
+        return d;
+    }
+
+    // Mismo cálculo que computeArtistPayoutBreakdown() en el backend (que
+    // es el que manda: esto es solo la vista previa).
+    function renderPayoutBreakdown() {
+        if (!payoutInfo) return;
+        var s = payoutInfo.settings;
+        var gross = Math.round(parseFloat(document.getElementById('payoutAmount').value) || 0);
+        var withholding = Math.round(gross * s.withholdingPercent / 100);
+        var gmf = Math.round((gross - withholding) * s.gmfRate);
+        var net = gross - withholding - gmf;
+        var row = function (label, value, strong) {
+            return '<div style="display:flex; justify-content:space-between; padding:0.2rem 0;' + (strong ? ' font-weight:800; color:var(--text); border-top:1px solid var(--card-border); margin-top:0.35rem; padding-top:0.55rem;' : ' color:var(--text-muted);') + '"><span>' + label + '</span><span>' + value + '</span></div>';
+        };
+        document.getElementById('payoutBreakdown').innerHTML =
+            row('Monto solicitado', fmtCop(gross)) +
+            row('Retención en la fuente (' + s.withholdingPercent + '%)', '− ' + fmtCop(withholding)) +
+            row('Gravamen 4x1000', '− ' + fmtCop(gmf)) +
+            row('Recibís', fmtCop(Math.max(0, net)), true);
+    }
+
+    async function loadPayoutInfo() {
+        try {
+            var r = await fetch(BACKEND_API + '/api/artists/payout/info', { headers: await authHeaders() });
+            var j = await r.json().catch(function () { return {}; });
+            if (!r.ok || !j.ok) {
+                // Backend o SQL de la Fase 2 todavía no desplegados: no mostrar nada.
+                return;
+            }
+            payoutInfo = j;
+            var s = j.settings;
+            var lead = document.getElementById('payoutLead');
+            var note = document.querySelector('#profileCard .royalty-note');
+            if (note) note.innerHTML = '<strong>Retirables en pesos</strong> · desde ' + fmtCop(s.minPayoutCop) + ' · ≈ ' + fmtCop(j.balanceCopEstimate) + ' hoy';
+            show('payoutCard');
+
+            var hasPending = (j.requests || []).some(function (x) { return x.status === 'pending'; });
+            if (!j.verified) {
+                lead.textContent = 'Podés retirar cuando tu perfil de artista esté verificado.';
+            } else if (hasPending) {
+                lead.textContent = 'Tenés un retiro en proceso. Cuando se pague vas a poder pedir el siguiente.';
+            } else if (j.balanceCopEstimate < s.minPayoutCop) {
+                lead.innerHTML = 'Acumulaste ≈ <strong>' + fmtCop(j.balanceCopEstimate) + '</strong>. Vas a poder retirar cuando llegues a ' + fmtCop(s.minPayoutCop) + '.';
+            } else {
+                lead.innerHTML = 'Tenés ≈ <strong>' + fmtCop(j.balanceCopEstimate) + '</strong> disponibles para retirar (mínimo ' + fmtCop(s.minPayoutCop) + ').';
+                var form = document.getElementById('payoutForm');
+                form.classList.remove('hidden');
+                document.getElementById('payoutAmount').value = Math.floor(j.balanceCopEstimate / 1000) * 1000;
+                document.getElementById('payoutAmount').max = j.balanceCopEstimate;
+                document.getElementById('payoutDocType').innerHTML = j.documentTypes.map(function (t) { return '<option value="' + t + '">' + t + '</option>'; }).join('');
+                document.getElementById('payoutLegalName').value = j.payoutIdentity.legalName || '';
+                if (j.payoutIdentity.documentType) document.getElementById('payoutDocType').value = j.payoutIdentity.documentType;
+                document.getElementById('payoutDocNumber').value = j.payoutIdentity.documentNumber || '';
+                document.getElementById('payoutTermsVersion').textContent = s.termsVersion;
+                document.getElementById('payoutTerms').checked = !!j.termsAccepted;
+                renderPayoutMethodFields();
+                renderPayoutBreakdown();
+            }
+
+            var history = document.getElementById('payoutHistory');
+            if (j.requests && j.requests.length) {
+                history.innerHTML = '<div class="divider"></div><div class="royalty-eyebrow" style="margin-bottom:0.5rem;">Tus retiros</div>' +
+                    j.requests.map(function (x) {
+                        var color = x.status === 'paid' ? 'var(--green)' : (x.status === 'rejected' ? 'var(--red)' : 'var(--amber)');
+                        return '<div style="display:flex; justify-content:space-between; gap:0.6rem; padding:0.45rem 0; font-size:0.82rem; border-bottom:1px solid var(--card-border);">' +
+                            '<span>' + new Date(x.created_at).toLocaleDateString('es-CO') + ' · ' + escapeHtml(PAYOUT_METHOD_LABELS[x.payout_method] || x.payout_method) + '</span>' +
+                            '<span><strong>' + fmtCop(x.net_cop) + '</strong> · <span style="color:' + color + ';">' + (PAYOUT_STATUS_LABELS[x.status] || x.status) + '</span></span>' +
+                        '</div>' + (x.status === 'rejected' && x.admin_notes ? '<div style="font-size:0.75rem; color:var(--text-muted); padding-bottom:0.4rem;">' + escapeHtml(x.admin_notes) + ' · el saldo volvió a tus regalías</div>' : '');
+                    }).join('');
+            } else {
+                history.innerHTML = '';
+            }
+        } catch (e) {
+            console.warn('[payout] No se pudo cargar la info de retiro:', e);
+        }
+    }
+
+    async function submitPayoutRequest() {
+        var statusEl = document.getElementById('payoutStatus');
+        var btn = document.getElementById('payoutSubmitBtn');
+        if (!document.getElementById('payoutTerms').checked) {
+            statusEl.innerHTML = I.svg('circleX', { size: 15 }) + '<span>Aceptá los términos del programa para continuar.</span>';
+            statusEl.className = 'status-msg error';
+            return;
+        }
+        btn.disabled = true;
+        statusEl.innerHTML = I.svg('clock', { size: 15 }) + '<span>Enviando solicitud...</span>';
+        statusEl.className = 'status-msg';
+        try {
+            var r = await fetch(BACKEND_API + '/api/artists/payout/request', {
+                method: 'POST',
+                headers: await authHeaders(),
+                body: JSON.stringify({
+                    amount_cop: parseFloat(document.getElementById('payoutAmount').value),
+                    payout_method: document.getElementById('payoutMethod').value,
+                    payout_details: collectPayoutDetails(),
+                    legal_name: document.getElementById('payoutLegalName').value,
+                    document_type: document.getElementById('payoutDocType').value,
+                    document_number: document.getElementById('payoutDocNumber').value,
+                    accept_terms_version: payoutInfo && payoutInfo.settings.termsVersion
+                })
+            });
+            var j = await r.json().catch(function () { return {}; });
+            if (!r.ok || !j.ok) {
+                statusEl.innerHTML = I.svg('circleX', { size: 15 }) + '<span>' + escapeHtml(j.error || ('Error ' + r.status)) + '</span>';
+                statusEl.className = 'status-msg error';
+                btn.disabled = false;
+                return;
+            }
+            statusEl.innerHTML = I.svg('circleCheck', { size: 15 }) + '<span>¡Solicitud enviada! Vas a recibir ' + fmtCop(j.request.net_cop) + ' en tu cuenta, normalmente dentro de 5 días hábiles.</span>';
+            statusEl.className = 'status-msg success';
+            document.getElementById('payoutForm').classList.add('hidden');
+            await loadMyArtistProfile();
+        } catch (e) {
+            statusEl.innerHTML = I.svg('circleX', { size: 15 }) + '<span>Error de red: ' + escapeHtml(e.message) + '</span>';
+            statusEl.className = 'status-msg error';
+            btn.disabled = false;
+        }
+    }
+
+    document.getElementById('payoutIcn').innerHTML = I.svg('cash', { size: 16 });
+    document.getElementById('payoutMethod').addEventListener('change', renderPayoutMethodFields);
+    document.getElementById('payoutAmount').addEventListener('input', renderPayoutBreakdown);
+    document.getElementById('payoutSubmitBtn').addEventListener('click', submitPayoutRequest);
+    document.getElementById('payoutTermsToggle').addEventListener('click', function (e) {
+        e.preventDefault();
+        document.getElementById('payoutTermsText').classList.toggle('hidden');
+    });
 
     document.querySelector('.back-link').innerHTML = I.svg('arrowLeft', { size: 14 }) + ' Volver a MusicToken Ring';
 
