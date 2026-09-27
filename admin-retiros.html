@@ -174,6 +174,10 @@
         <button type="button" onclick="loadPendingArtists()">🔄 Actualizar</button>
         <div id="artistsStatus" class="empty" style="margin: 0.6rem 0;"></div>
 
+        <h2>Verificaciones de identidad pendientes</h2>
+        <p class="empty" style="margin-top:-0.4rem;">Redes: abrí la publicación y confirmá que tiene el código, que etiqueta a la cuenta de MusicToken Ring y que es la cuenta oficial (la que enlaza su Spotify/Deezer). Documento: que el nombre coincida con el administrador de fondos y la selfie muestre el código. Al aprobar, confirmá el id de artista de Deezer: sus canciones se aprueban solas desde ahí.</p>
+        <div id="artistVerificationsList"></div>
+
         <h2>Artistas esperando verificación</h2>
         <div id="pendingArtistsList"></div>
 
@@ -192,6 +196,7 @@
                 <label style="display:flex; flex-direction:column; gap:0.25rem; font-size:0.8rem;">Retención en la fuente (%)<input id="apsWithholding" type="number" min="0" max="50" step="0.1"></label>
                 <label style="display:flex; flex-direction:column; gap:0.25rem; font-size:0.8rem;">4x1000 trasladado (tasa)<input id="apsGmf" type="number" min="0" max="0.02" step="0.001"></label>
                 <label style="display:flex; flex-direction:column; gap:0.25rem; font-size:0.8rem;">Versión de términos<input id="apsTerms" type="text" maxlength="20"></label>
+                <label style="display:flex; flex-direction:column; gap:0.25rem; font-size:0.8rem;">Cuenta a etiquetar (verificación)<input id="apsTag" type="text" maxlength="40" placeholder="@musictokenring"></label>
             </div>
             <div class="req-actions"><button class="paid" onclick="saveArtistPayoutSettings()">💾 Guardar configuración</button></div>
         </div>
@@ -533,6 +538,7 @@
             if (!r.ok || !j.ok) { document.getElementById('artistsStatus').textContent = 'Error: ' + (j.error || r.status); return; }
             renderPendingArtists(j.artists, j.songs);
             loadArtistPayouts();
+            loadArtistVerifications();
             document.getElementById('artistsStatus').textContent = j.artists.length + ' artista(s) y ' + j.songs.length + ' canción(es) esperando revisión.';
         } catch (e) {
             document.getElementById('artistsStatus').textContent = 'Error de red: ' + e.message;
@@ -603,6 +609,7 @@
             document.getElementById('apsWithholding').value = st.withholding_percent;
             document.getElementById('apsGmf').value = st.gmf_rate;
             document.getElementById('apsTerms').value = st.terms_version;
+            document.getElementById('apsTag').value = st.social_tag_handle || '@musictokenring';
             if (!j.requests.length) { listEl.innerHTML = '<p class="empty">No hay retiros de artistas pendientes.</p>'; return; }
             listEl.innerHTML = j.requests.map(function (x) {
                 var d = x.payout_details || {};
@@ -654,13 +661,72 @@
                     min_payout_cop: document.getElementById('apsMin').value,
                     withholding_percent: document.getElementById('apsWithholding').value,
                     gmf_rate: document.getElementById('apsGmf').value,
-                    terms_version: document.getElementById('apsTerms').value
+                    terms_version: document.getElementById('apsTerms').value,
+                    social_tag_handle: document.getElementById('apsTag').value
                 })
             });
             var j = await r.json().catch(function () { return {}; });
             if (!r.ok || !j.ok) { window.alert('Error: ' + (j.error || r.status)); return; }
             window.alert('Configuración guardada.');
             loadArtistPayouts();
+        } catch (e) {
+            window.alert('Error de red: ' + e.message);
+        }
+    }
+
+    // ---------- Verificaciones de identidad ----------
+    async function loadArtistVerifications() {
+        var listEl = document.getElementById('artistVerificationsList');
+        try {
+            var r = await fetch(BACKEND_API + '/api/admin/artist-verifications', { headers: { 'x-internal-secret': getSecret() } });
+            var j = await r.json().catch(function () { return {}; });
+            if (!r.ok || !j.ok) { listEl.innerHTML = '<p class="empty">No disponible todavía (¿corriste sql/artist-verification.sql y publicaste el backend?): ' + escapeHtml(j.error || r.status) + '</p>'; return; }
+            if (!j.verifications.length) { listEl.innerHTML = '<p class="empty">No hay verificaciones pendientes.</p>'; return; }
+            var kindLabels = { id_front: 'Documento (frente)', id_back: 'Documento (dorso)', selfie: 'Selfie con código', rights_proof: 'Prueba de derechos' };
+            listEl.innerHTML = j.verifications.map(function (v) {
+                var a = v.artists || {};
+                var link = function (u, label) { return '<div class="copy-row"><span class="copy-label">' + label + ':</span><a href="' + escapeHtml(u) + '" target="_blank" rel="noopener" style="color:#93c5fd; word-break:break-all;">' + escapeHtml(u) + '</a></div>'; };
+                var evidence = v.method === 'social'
+                    ? (v.post_urls || []).map(function (u, i) { return link(u, 'Publicación ' + (i + 1)); }).join('') + (v.profile_url ? link(v.profile_url, 'Perfil') : '') + '<div class="req-meta">' + (v.story_shared ? 'Dice que también compartió una historia.' : 'Sin historia.') + '</div>'
+                    : (v.files || []).map(function (f) { return f.url ? link(f.url, kindLabels[f.kind] || f.kind) : ''; }).join('') + '<div class="req-meta">Links válidos por 30 minutos. Autorización de datos: ' + escapeHtml(v.data_consent_version || '-') + '</div>';
+                var sug = v.deezerSuggestion;
+                return '<div class="req-card">' +
+                    '<div class="req-top"><span class="req-amount" style="font-size:1rem;">' + escapeHtml(a.display_name || v.artist_id) + '</span><span class="req-meta">' + (v.method === 'social' ? 'REDES' : 'DOCUMENTO') + ' · ' + new Date(v.submitted_at).toLocaleString('es-CO') + '</span></div>' +
+                    '<div class="req-meta">Código esperado: <strong style="font-family:monospace; font-size:1rem;">' + escapeHtml(v.code) + '</strong></div>' +
+                    (a.fund_admin_name ? '<div class="req-meta">Administrador de fondos: ' + escapeHtml(a.fund_admin_name) + ' · ' + escapeHtml(a.fund_admin_document_type || '') + ' ' + escapeHtml(a.fund_admin_document_number || '') + '</div>' : '') +
+                    (a.spotify_url ? link(a.spotify_url, 'Spotify declarado') : '') +
+                    '<div class="req-details">' + evidence + '</div>' +
+                    '<div style="display:flex; flex-wrap:wrap; gap:0.6rem; align-items:center; margin-top:0.6rem;">' +
+                        '<label style="font-size:0.8rem;">Id o link de artista en Deezer: <input id="dz_' + v.id + '" type="text" value="' + escapeHtml(sug ? sug.id : (a.deezer_artist_id || '')) + '" style="width:220px;"></label>' +
+                        (sug ? '<span class="req-meta">Sugerido: ' + escapeHtml(sug.name) + ' (según ' + sug.songs + ' canción/es reclamada/s)</span>' : '') +
+                        (v.method === 'social' ? '<label style="font-size:0.8rem;"><input id="badge_' + v.id + '" type="checkbox"> Tiene insignia verificada</label>' : '') +
+                    '</div>' +
+                    '<div class="req-actions">' +
+                        '<button class="paid" onclick="decideVerification(\'' + v.id + '\', true)">✅ Aprobar</button>' +
+                        '<button class="reject" onclick="decideVerification(\'' + v.id + '\', false)">❌ Rechazar</button>' +
+                    '</div>' +
+                '</div>';
+            }).join('');
+        } catch (e) {
+            listEl.innerHTML = '<p class="empty">Error de red: ' + escapeHtml(e.message) + '</p>';
+        }
+    }
+
+    async function decideVerification(id, approve) {
+        var note = approve ? '' : window.prompt('Motivo del rechazo (lo ve el artista):', 'No encontramos el código en la publicación');
+        if (!approve && note === null) return;
+        var dz = (document.getElementById('dz_' + id) || {}).value || '';
+        var badgeEl = document.getElementById('badge_' + id);
+        try {
+            var r = await fetch(BACKEND_API + '/api/admin/artist-verifications/' + id + '/decide', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'x-internal-secret': getSecret() },
+                body: JSON.stringify({ approve: approve, note: note, deezerArtistId: dz, hasBadge: badgeEl ? badgeEl.checked : null })
+            });
+            var j = await r.json().catch(function () { return {}; });
+            if (!r.ok || !j.ok) { window.alert('Error: ' + (j.error || r.status)); return; }
+            if (approve) window.alert('Artista verificado. Canciones aprobadas automáticamente: ' + (j.autoVerifiedSongs || 0));
+            loadPendingArtists();
         } catch (e) {
             window.alert('Error de red: ' + e.message);
         }

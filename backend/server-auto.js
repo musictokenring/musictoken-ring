@@ -5533,7 +5533,7 @@ app.post('/api/artists/claim-song', requireCreditMutationAuth, async (req, res) 
 
         const { data: artist } = await supabase
             .from('artists')
-            .select('id')
+            .select('id, verification_status, deezer_artist_id')
             .eq('user_id', req.authUser.id)
             .maybeSingle();
         if (!artist) {
@@ -5553,6 +5553,16 @@ app.post('/api/artists/claim-song', requireCreditMutationAuth, async (req, res) 
             });
         }
 
+        // Artista verificado con id de Deezer fijado: si la canción es suya
+        // en Deezer (consultado acá, no lo que diga el cliente) se aprueba
+        // sola; si es de otro artista queda para revisión manual -- así
+        // nadie puede cobrar por canciones ajenas.
+        let initialStatus = 'pending';
+        if (artist.verification_status === 'verified' && artist.deezer_artist_id) {
+            const track = await fetchDeezerTrackServer(songId);
+            if (deezerTrackBelongsTo(track, artist.deezer_artist_id)) initialStatus = 'verified';
+        }
+
         const { data: song, error } = await supabase
             .from('artist_songs')
             .insert([{
@@ -5561,7 +5571,7 @@ app.post('/api/artists/claim-song', requireCreditMutationAuth, async (req, res) 
                 song_name: String(songName).slice(0, 200),
                 song_artist: String(songArtist).slice(0, 200),
                 song_image: songImage || null,
-                status: 'pending'
+                status: initialStatus
             }])
             .select()
             .single();
@@ -6022,6 +6032,10 @@ app.post('/api/admin/artist-payout-settings', requireInternalSecret, async (req,
         if (body.withholding_percent != null) update.withholding_percent = Math.min(50, Math.max(0, parseFloat(body.withholding_percent)));
         if (body.gmf_rate != null) update.gmf_rate = Math.min(0.02, Math.max(0, parseFloat(body.gmf_rate)));
         if (body.terms_version) update.terms_version = String(body.terms_version).trim().slice(0, 20);
+        if (body.social_tag_handle) {
+            const handle = String(body.social_tag_handle).trim().replace(/^@?/, '@').replace(/[^@A-Za-z0-9._]/g, '').slice(0, 40);
+            if (handle.length > 2) update.social_tag_handle = handle;
+        }
         const { data, error } = await supabase.from('artist_payout_settings').update(update).eq('id', 1).select('*').single();
         if (error) throw error;
         res.json({ ok: true, settings: data });
@@ -6030,6 +6044,347 @@ app.post('/api/admin/artist-payout-settings', requireInternalSecret, async (req,
         res.status(500).json({ error: error.message });
     }
 });
+
+// ============================================================
+// VERIFICACIÓN DE IDENTIDAD DE ARTISTAS (sql/artist-verification.sql)
+// ============================================================
+// 'social': post permanente con el código + etiqueta a la cuenta de
+// MusicToken Ring (la historia suma, pero sola no alcanza porque se
+// borra). 'document': documento + selfie con el código + prueba de
+// derechos, a un bucket privado que solo el operador ve con links
+// temporales; se borran ARTIST_DOC_RETENTION_DAYS después de decidir.
+// Al aprobar se fija deezer_artist_id: las canciones de ese artista se
+// aprueban solas al reclamarlas (ver claim-song).
+const ARTIST_VERIFICATION_BUCKET = 'artist-verification';
+const ARTIST_DOC_RETENTION_DAYS = 30;
+const ARTIST_DOC_KINDS = { id_front: true, id_back: false, selfie: true, rights_proof: true }; // true = obligatorio
+const SOCIAL_POST_HOSTS = /^(www\.|m\.|web\.)?(instagram\.com|facebook\.com|fb\.watch|tiktok\.com|vm\.tiktok\.com)$/i;
+
+function newVerificationCode() {
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+    let code = 'MTR-';
+    for (let i = 0; i < 6; i++) code += chars.charAt(Math.floor(Math.random() * chars.length));
+    return code;
+}
+
+// Datos de una canción en Deezer, del lado del servidor (no se confía en
+// lo que diga el cliente sobre de quién es la canción).
+async function fetchDeezerTrackServer(songId) {
+    try {
+        const resp = await fetch(`https://api.deezer.com/track/${encodeURIComponent(songId)}`, { signal: AbortSignal.timeout(8000) });
+        const data = await resp.json();
+        if (!data || !data.id || data.error) return null;
+        return data;
+    } catch (e) {
+        return null;
+    }
+}
+
+function deezerTrackBelongsTo(track, deezerArtistId) {
+    if (!track || !deezerArtistId) return false;
+    const target = String(deezerArtistId);
+    if (track.artist && String(track.artist.id) === target) return true;
+    return (track.contributors || []).some((c) => String(c.id) === target);
+}
+
+async function getArtistForUser(authUser) {
+    const { data } = await supabase.from('artists').select('*').eq('user_id', authUser.id).maybeSingle();
+    return data;
+}
+
+app.get('/api/artists/verification', requireCreditMutationAuth, async (req, res) => {
+    try {
+        if (!req.authUser) return res.status(401).json({ error: 'Inicia sesión primero.' });
+        const artist = await getArtistForUser(req.authUser);
+        if (!artist) return res.status(404).json({ error: 'No tenés perfil de artista.' });
+        const settings = await getArtistPayoutSettings();
+        const { data: latest } = await supabase
+            .from('artist_verifications')
+            .select('id, method, code, status, post_urls, profile_url, story_shared, admin_note, created_at, submitted_at, decided_at, files')
+            .eq('artist_id', artist.id)
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .maybeSingle();
+        if (latest) latest.files = (latest.files || []).map((f) => ({ kind: f.kind }));
+        res.json({
+            ok: true,
+            verificationStatus: artist.verification_status,
+            tagHandle: settings.social_tag_handle || '@musictokenring',
+            dataConsentVersion: settings.data_consent_version || 'v1',
+            docKinds: ARTIST_DOC_KINDS,
+            latest: latest || null
+        });
+    } catch (error) {
+        console.error('[artist-verification] Error:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+app.post('/api/artists/verification/start', requireCreditMutationAuth, async (req, res) => {
+    try {
+        if (!req.authUser) return res.status(401).json({ error: 'Inicia sesión primero.' });
+        const method = req.body && req.body.method;
+        if (method !== 'social' && method !== 'document') return res.status(400).json({ error: 'Método inválido' });
+        const artist = await getArtistForUser(req.authUser);
+        if (!artist) return res.status(404).json({ error: 'No tenés perfil de artista.' });
+        if (artist.verification_status === 'verified') return res.status(400).json({ error: 'Tu perfil ya está verificado.' });
+
+        const { data: open } = await supabase
+            .from('artist_verifications')
+            .select('*')
+            .eq('artist_id', artist.id)
+            .in('status', ['awaiting', 'submitted'])
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .maybeSingle();
+        if (open && open.status === 'submitted') return res.status(409).json({ error: 'Ya enviaste una verificación: está en revisión.' });
+        if (open && open.method === method) return res.json({ ok: true, verification: { id: open.id, method: open.method, code: open.code, status: open.status } });
+        if (open) await supabase.from('artist_verifications').update({ status: 'rejected', admin_note: 'Reemplazada por otro método', decided_at: new Date().toISOString() }).eq('id', open.id);
+
+        const { data: created, error } = await supabase
+            .from('artist_verifications')
+            .insert([{ artist_id: artist.id, method, code: newVerificationCode(), status: 'awaiting' }])
+            .select('id, method, code, status')
+            .single();
+        if (error) throw error;
+        res.json({ ok: true, verification: created });
+    } catch (error) {
+        console.error('[artist-verification-start] Error:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+async function getAwaitingVerification(artistId, method) {
+    const { data } = await supabase
+        .from('artist_verifications')
+        .select('*')
+        .eq('artist_id', artistId)
+        .eq('method', method)
+        .eq('status', 'awaiting')
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+    return data;
+}
+
+app.post('/api/artists/verification/submit-social', requireCreditMutationAuth, async (req, res) => {
+    try {
+        if (!req.authUser) return res.status(401).json({ error: 'Inicia sesión primero.' });
+        const artist = await getArtistForUser(req.authUser);
+        if (!artist) return res.status(404).json({ error: 'No tenés perfil de artista.' });
+        const verification = await getAwaitingVerification(artist.id, 'social');
+        if (!verification) return res.status(400).json({ error: 'Generá tu código primero.' });
+
+        const { postUrls, profileUrl, storyShared } = req.body || {};
+        const urls = (Array.isArray(postUrls) ? postUrls : []).map((u) => String(u || '').trim()).filter(Boolean).slice(0, 3);
+        if (!urls.length) return res.status(400).json({ error: 'Pegá el link de tu publicación.' });
+        for (const u of urls.concat(profileUrl ? [String(profileUrl).trim()] : [])) {
+            let host;
+            try { host = new URL(u).hostname; } catch (e) { return res.status(400).json({ error: `Link inválido: ${u}` }); }
+            if (!SOCIAL_POST_HOSTS.test(host)) return res.status(400).json({ error: `Solo se aceptan links de Instagram, Facebook o TikTok (${host}).` });
+        }
+
+        const { data: updated, error } = await supabase
+            .from('artist_verifications')
+            .update({ status: 'submitted', post_urls: urls, profile_url: profileUrl ? String(profileUrl).trim() : null, story_shared: !!storyShared, submitted_at: new Date().toISOString() })
+            .eq('id', verification.id)
+            .eq('status', 'awaiting')
+            .select('id, code, status')
+            .maybeSingle();
+        if (error) throw error;
+        if (!updated) return res.status(409).json({ error: 'La verificación cambió de estado. Recargá la página.' });
+        if (withdrawalService) {
+            withdrawalService._sendTelegram(`🪪 Verificación de artista por REDES para revisar\n${artist.display_name}\nCódigo: ${verification.code}\nPost: ${urls.join(' , ')}${storyShared ? '\n(dice que también compartió una historia)' : ''}`)
+                .catch((err) => console.error('[artist-verification] Telegram:', err.message));
+        }
+        res.json({ ok: true, verification: updated });
+    } catch (error) {
+        console.error('[artist-verification-social] Error:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// URLs firmadas para subir cada documento directo al bucket privado.
+app.post('/api/artists/verification/upload-urls', requireCreditMutationAuth, async (req, res) => {
+    try {
+        if (!req.authUser) return res.status(401).json({ error: 'Inicia sesión primero.' });
+        const artist = await getArtistForUser(req.authUser);
+        if (!artist) return res.status(404).json({ error: 'No tenés perfil de artista.' });
+        const verification = await getAwaitingVerification(artist.id, 'document');
+        if (!verification) return res.status(400).json({ error: 'Generá tu código primero.' });
+        const kinds = (Array.isArray(req.body && req.body.kinds) ? req.body.kinds : []).filter((k) => k in ARTIST_DOC_KINDS);
+        const uploads = [];
+        for (const kind of kinds) {
+            const path = `${artist.id}/${verification.id}/${kind}-${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
+            const { data, error } = await supabase.storage.from(ARTIST_VERIFICATION_BUCKET).createSignedUploadUrl(path);
+            if (error) throw error;
+            uploads.push({ kind, path: data.path || path, token: data.token });
+        }
+        res.json({ ok: true, bucket: ARTIST_VERIFICATION_BUCKET, uploads });
+    } catch (error) {
+        console.error('[artist-verification-upload-urls] Error:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+app.post('/api/artists/verification/submit-document', requireCreditMutationAuth, async (req, res) => {
+    try {
+        if (!req.authUser) return res.status(401).json({ error: 'Inicia sesión primero.' });
+        const artist = await getArtistForUser(req.authUser);
+        if (!artist) return res.status(404).json({ error: 'No tenés perfil de artista.' });
+        const verification = await getAwaitingVerification(artist.id, 'document');
+        if (!verification) return res.status(400).json({ error: 'Generá tu código primero.' });
+        const settings = await getArtistPayoutSettings();
+        const { files, dataConsentVersion } = req.body || {};
+        if (dataConsentVersion !== (settings.data_consent_version || 'v1')) {
+            return res.status(400).json({ error: 'Tenés que autorizar el tratamiento de tus datos personales.' });
+        }
+        const prefix = `${artist.id}/${verification.id}/`;
+        const clean = (Array.isArray(files) ? files : [])
+            .filter((f) => f && f.kind in ARTIST_DOC_KINDS && typeof f.path === 'string' && f.path.startsWith(prefix))
+            .map((f) => ({ kind: f.kind, path: f.path }));
+        for (const [kind, required] of Object.entries(ARTIST_DOC_KINDS)) {
+            if (required && !clean.some((f) => f.kind === kind)) return res.status(400).json({ error: 'Faltan documentos obligatorios.' });
+        }
+        // Confirmar que los archivos existen de verdad en el bucket.
+        const { data: listed } = await supabase.storage.from(ARTIST_VERIFICATION_BUCKET).list(`${artist.id}/${verification.id}`);
+        const existing = new Set((listed || []).map((o) => `${prefix}${o.name}`));
+        if (clean.some((f) => !existing.has(f.path))) return res.status(400).json({ error: 'Algún archivo no terminó de subirse. Probá de nuevo.' });
+
+        const { data: updated, error } = await supabase
+            .from('artist_verifications')
+            .update({ status: 'submitted', files: clean, data_consent_version: dataConsentVersion, data_consent_at: new Date().toISOString(), submitted_at: new Date().toISOString() })
+            .eq('id', verification.id)
+            .eq('status', 'awaiting')
+            .select('id, code, status')
+            .maybeSingle();
+        if (error) throw error;
+        if (!updated) return res.status(409).json({ error: 'La verificación cambió de estado. Recargá la página.' });
+        if (withdrawalService) {
+            withdrawalService._sendTelegram(`🪪 Verificación de artista por DOCUMENTO para revisar\n${artist.display_name}\nCódigo: ${verification.code}\nRevisala en el panel (pestaña Artistas).`)
+                .catch((err) => console.error('[artist-verification] Telegram:', err.message));
+        }
+        res.json({ ok: true, verification: updated });
+    } catch (error) {
+        console.error('[artist-verification-document] Error:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Panel: verificaciones enviadas, con links temporales a los documentos
+// y una sugerencia de id de artista de Deezer según sus canciones.
+app.get('/api/admin/artist-verifications', requireInternalSecret, async (req, res) => {
+    try {
+        const { data: rows, error } = await supabase
+            .from('artist_verifications')
+            .select('*, artists(id, display_name, contact_email, spotify_url, instagram_url, deezer_artist_id, fund_admin_name, fund_admin_document_type, fund_admin_document_number)')
+            .eq('status', 'submitted')
+            .order('submitted_at', { ascending: true });
+        if (error) throw error;
+        const out = [];
+        for (const v of rows || []) {
+            const files = [];
+            for (const f of v.files || []) {
+                const { data } = await supabase.storage.from(ARTIST_VERIFICATION_BUCKET).createSignedUrl(f.path, 30 * 60);
+                files.push({ kind: f.kind, url: data ? data.signedUrl : null });
+            }
+            const { data: songs } = await supabase.from('artist_songs').select('song_id, song_artist').eq('artist_id', v.artist_id).limit(5);
+            const counts = {};
+            for (const s of songs || []) {
+                const track = await fetchDeezerTrackServer(s.song_id);
+                if (track && track.artist) {
+                    const key = `${track.artist.id}|${track.artist.name}`;
+                    counts[key] = (counts[key] || 0) + 1;
+                }
+            }
+            const best = Object.entries(counts).sort((a, b) => b[1] - a[1])[0];
+            out.push({
+                ...v,
+                files,
+                deezerSuggestion: best ? { id: best[0].split('|')[0], name: best[0].split('|').slice(1).join('|'), songs: best[1] } : null
+            });
+        }
+        res.json({ ok: true, verifications: out });
+    } catch (error) {
+        console.error('[admin-artist-verifications] Error:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+app.post('/api/admin/artist-verifications/:id/decide', requireInternalSecret, async (req, res) => {
+    try {
+        const { approve, note, deezerArtistId, hasBadge } = req.body || {};
+        const deezerId = deezerArtistId ? String(deezerArtistId).match(/(\d{3,})/) : null;
+        if (approve && !deezerId) return res.status(400).json({ error: 'Para aprobar, indicá el id de artista de Deezer (o su link).' });
+
+        const { data: v, error } = await supabase
+            .from('artist_verifications')
+            .update({ status: approve ? 'approved' : 'rejected', admin_note: note || null, has_badge: hasBadge == null ? null : !!hasBadge, decided_at: new Date().toISOString() })
+            .eq('id', req.params.id)
+            .eq('status', 'submitted')
+            .select('*')
+            .maybeSingle();
+        if (error) throw error;
+        if (!v) return res.status(409).json({ error: 'Verificación no encontrada o ya decidida' });
+
+        let autoVerifiedSongs = 0;
+        if (approve) {
+            await supabase.from('artists').update({
+                verification_status: 'verified',
+                verification_method: v.method,
+                verification_note: note || null,
+                verified_at: new Date().toISOString(),
+                deezer_artist_id: Number(deezerId[1])
+            }).eq('id', v.artist_id);
+            // Canciones ya reclamadas y pendientes: aprobar las que son de
+            // ese artista en Deezer (las demás siguen para revisión manual).
+            const { data: pendingSongs } = await supabase.from('artist_songs').select('id, song_id').eq('artist_id', v.artist_id).eq('status', 'pending');
+            for (const s of pendingSongs || []) {
+                const track = await fetchDeezerTrackServer(s.song_id);
+                if (deezerTrackBelongsTo(track, deezerId[1])) {
+                    await supabase.from('artist_songs').update({ status: 'verified' }).eq('id', s.id).eq('status', 'pending');
+                    autoVerifiedSongs++;
+                }
+            }
+        } else {
+            await supabase.from('artists').update({ verification_note: note || 'Verificación rechazada' }).eq('id', v.artist_id).neq('verification_status', 'verified');
+        }
+        res.json({ ok: true, verification: v, autoVerifiedSongs });
+    } catch (error) {
+        console.error('[admin-artist-verification-decide] Error:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Borrado de documentos ARTIST_DOC_RETENTION_DAYS después de decidir:
+// queda el registro de la verificación, no las imágenes.
+async function sweepArtistVerificationDocs() {
+    try {
+        const cutoff = new Date(Date.now() - ARTIST_DOC_RETENTION_DAYS * 24 * 60 * 60 * 1000).toISOString();
+        const { data: rows, error } = await supabase
+            .from('artist_verifications')
+            .select('id, files')
+            .eq('method', 'document')
+            .in('status', ['approved', 'rejected'])
+            .is('files_deleted_at', null)
+            .lt('decided_at', cutoff)
+            .limit(50);
+        if (error) { if (error.code !== '42P01') console.error('[artist-docs-sweep] Error:', error.message); return; }
+        for (const v of rows || []) {
+            const paths = (v.files || []).map((f) => f.path).filter(Boolean);
+            if (paths.length) {
+                const { error: removeError } = await supabase.storage.from(ARTIST_VERIFICATION_BUCKET).remove(paths);
+                if (removeError) { console.error('[artist-docs-sweep] No se pudo borrar:', v.id, removeError.message); continue; }
+            }
+            await supabase.from('artist_verifications')
+                .update({ files: (v.files || []).map((f) => ({ kind: f.kind, deleted: true })), files_deleted_at: new Date().toISOString() })
+                .eq('id', v.id);
+            console.log(`[artist-docs-sweep] Documentos de la verificación ${v.id} borrados (${ARTIST_DOC_RETENTION_DAYS} días desde la decisión)`);
+        }
+    } catch (error) {
+        console.error('[artist-docs-sweep] Error:', error.message || error);
+    }
+}
 
 try {
     const { registerPrizeRoutes } = require('./prize-api');
@@ -6206,6 +6561,8 @@ app.listen(PORT, async () => {
     // Abandono en batallas verificadas -- independiente de los demás servicios.
     setInterval(sweepFanPlaysTimeouts, 60 * 1000);
     setInterval(sweepArtistRoyaltyExpirations, 6 * 60 * 60 * 1000);
+    setInterval(sweepArtistVerificationDocs, 12 * 60 * 60 * 1000);
+    setTimeout(sweepArtistVerificationDocs, 10 * 60 * 1000);
     setTimeout(sweepArtistRoyaltyExpirations, 5 * 60 * 1000);
 });
 

@@ -252,6 +252,16 @@
         </div>
     </div>
 
+    <!-- Verificación de identidad (ver /api/artists/verification* en
+         backend/server-auto.js y sql/artist-verification.sql). -->
+    <div id="verificationCard" class="card hidden">
+        <div class="card-head">
+            <span class="icn" id="verificationIcn"></span>
+            <h2>Verificá tu identidad</h2>
+        </div>
+        <div id="verificationBody"></div>
+    </div>
+
     <!-- Inscripción v2: tipo de proyecto, administrador de fondos e
          integrantes con reparto sugerido (ver /api/artists/profile). -->
     <div id="profileDetailsCard" class="card hidden">
@@ -464,6 +474,7 @@
             show('claimCard');
         }
         renderProfileDetails(artist);
+        loadVerificationCard(artist);
         loadPayoutInfo();
     }
 
@@ -706,6 +717,191 @@
         } catch (e) {
             statusEl.innerHTML = I.svg('circleX', { size: 15 }) + '<span>Error de red: ' + escapeHtml(e.message) + '</span>';
             statusEl.className = 'status-msg error';
+        }
+    }
+
+
+    // ==========================================================
+    // VERIFICACIÓN DE IDENTIDAD
+    // ==========================================================
+    // Camino 1 (social): post permanente en la cuenta oficial con el código,
+    // etiquetando a MusicToken Ring; una historia con el mismo código suma.
+    // Camino 2 (documento): archivos a un bucket privado vía URL firmada.
+    var verificationInfo = null;
+    var DOC_KIND_LABELS = {
+        id_front: 'Documento de identidad (frente)',
+        id_back: 'Documento de identidad (dorso)',
+        selfie: 'Selfie sosteniendo tu documento y un papel con tu código',
+        rights_proof: 'Prueba de derechos: captura del panel de tu distribuidora (DistroKid, ONErpm, etc.) donde figuren tus canciones'
+    };
+
+    function vStatus(html, kind) {
+        var el = document.getElementById('verifStatus');
+        if (!el) return;
+        el.innerHTML = html;
+        el.className = 'status-msg' + (kind ? ' ' + kind : '');
+    }
+
+    async function loadVerificationCard(artist) {
+        if (artist.verification_status === 'verified') { hide('verificationCard'); return; }
+        try {
+            var r = await fetch(BACKEND_API + '/api/artists/verification', { headers: await authHeaders() });
+            var j = await r.json().catch(function () { return {}; });
+            if (!r.ok || !j.ok) return; // backend/SQL todavía no desplegados
+            verificationInfo = j;
+            renderVerificationCard();
+            show('verificationCard');
+        } catch (e) { /* noop */ }
+    }
+
+    function renderVerificationCard() {
+        var j = verificationInfo;
+        var body = document.getElementById('verificationBody');
+        var v = j.latest;
+        if (v && v.status === 'submitted') {
+            body.innerHTML = '<p class="status-msg" style="color:var(--amber);">' + I.svg('clock', { size: 15 }) + '<span>Recibimos tu verificación (' + (v.method === 'social' ? 'publicación en redes' : 'documento') + ', código <strong>' + escapeHtml(v.code) + '</strong>). La revisamos a mano, normalmente en 1 a 3 días hábiles.' + (v.method === 'social' ? ' No borres la publicación hasta que te confirmemos.' : '') + '</span></p>';
+            return;
+        }
+        var rejectedNote = (v && v.status === 'rejected' && v.admin_note && v.admin_note !== 'Reemplazada por otro método')
+            ? '<p class="status-msg error">' + I.svg('circleX', { size: 15 }) + '<span>Tu verificación anterior no se aprobó: ' + escapeHtml(v.admin_note) + '. Podés intentar de nuevo.</span></p>' : '';
+        var active = (v && v.status === 'awaiting') ? v : null;
+        body.innerHTML = rejectedNote +
+            '<p class="card-lead">Para cobrar regalías tenemos que confirmar que sos el artista real (así nadie puede hacerse pasar por vos). Elegí una forma:</p>' +
+            '<div style="display:flex; gap:0.6rem; flex-wrap:wrap;">' +
+                '<button type="button" id="verifSocialBtn" class="' + (active && active.method === 'social' ? 'primary' : '') + '" style="flex:1; min-width:200px;">Con una publicación en tus redes (recomendado)</button>' +
+                '<button type="button" id="verifDocBtn" class="' + (active && active.method === 'document' ? 'primary' : '') + '" style="flex:1; min-width:200px;">Con tu documento</button>' +
+            '</div>' +
+            '<div id="verifPanel" style="margin-top:1rem;"></div>' +
+            '<p id="verifStatus" class="status-msg"></p>';
+        document.getElementById('verifSocialBtn').onclick = function () { startVerification('social'); };
+        document.getElementById('verifDocBtn').onclick = function () { startVerification('document'); };
+        if (active) renderVerifPanel(active);
+    }
+
+    async function startVerification(method) {
+        vStatus(I.svg('clock', { size: 15 }) + '<span>Preparando tu código...</span>');
+        try {
+            var r = await fetch(BACKEND_API + '/api/artists/verification/start', { method: 'POST', headers: await authHeaders(), body: JSON.stringify({ method: method }) });
+            var j = await r.json().catch(function () { return {}; });
+            if (!r.ok || !j.ok) { vStatus(I.svg('circleX', { size: 15 }) + '<span>' + escapeHtml(j.error || ('Error ' + r.status)) + '</span>', 'error'); return; }
+            verificationInfo.latest = j.verification;
+            renderVerificationCard();
+        } catch (e) {
+            vStatus(I.svg('circleX', { size: 15 }) + '<span>Error de red: ' + escapeHtml(e.message) + '</span>', 'error');
+        }
+    }
+
+    function codeBoxHtml(code) {
+        return '<div style="text-align:center; margin:0.6rem 0 1rem;"><div class="royalty-eyebrow">Tu código</div>' +
+            '<div style="font-family:ui-monospace,monospace; font-size:1.6rem; font-weight:800; letter-spacing:0.08em; color:var(--gold);">' + escapeHtml(code) + '</div></div>';
+    }
+
+    function renderVerifPanel(v) {
+        var panel = document.getElementById('verifPanel');
+        var tag = verificationInfo.tagHandle || '@musictokenring';
+        if (v.method === 'social') {
+            var caption = 'Me uno al programa de artistas de MusicToken Ring 🎵 Código de verificación: ' + v.code + ' ' + tag;
+            panel.innerHTML = codeBoxHtml(v.code) +
+                '<ol style="font-size:0.84rem; color:var(--text-muted); line-height:1.6; padding-left:1.1rem; margin:0;">' +
+                    '<li>Hacé una <strong>publicación</strong> (foto o video, no solo historia) en tu cuenta <strong>oficial</strong> de Instagram, Facebook o TikTok, idealmente la que aparece en tu perfil de Spotify o Deezer.</li>' +
+                    '<li>En el texto poné tu código y <strong>etiquetá a ' + escapeHtml(tag) + '</strong>. Podés copiar este texto:</li>' +
+                '</ol>' +
+                '<div style="display:flex; gap:0.5rem; margin:0.6rem 0;"><input type="text" readonly id="verifCaption" value="' + escapeHtml(caption) + '"><button type="button" id="verifCopyBtn">Copiar</button></div>' +
+                '<ol start="3" style="font-size:0.84rem; color:var(--text-muted); line-height:1.6; padding-left:1.1rem; margin:0;">' +
+                    '<li>Recomendado: compartí también una <strong>historia</strong> con el mismo código y la etiqueta (acelera la revisión).</li>' +
+                    '<li><strong>No borres la publicación</strong>: queda como prueba permanente de que la cuenta es tuya. Podés fijarla en tu perfil.</li>' +
+                '</ol>' +
+                '<label>Link de la publicación <span class="req">*</span></label><input type="url" id="verifPost1" placeholder="https://www.instagram.com/p/...">' +
+                '<label>Otro link (opcional, ej. la misma publicación en Facebook o TikTok)</label><input type="url" id="verifPost2">' +
+                '<label>Link de tu perfil oficial</label><input type="url" id="verifProfile" placeholder="https://www.instagram.com/tuartista">' +
+                '<label style="text-transform:none; letter-spacing:0; font-size:0.8rem; font-weight:500; color:var(--text-muted);"><input type="checkbox" id="verifStory" style="width:auto;"> También compartí una historia con el código</label>' +
+                '<button type="button" id="verifSubmitSocial" class="primary full">Ya lo publiqué, enviar a revisión</button>';
+            document.getElementById('verifCopyBtn').onclick = function () {
+                var inp = document.getElementById('verifCaption');
+                inp.select();
+                try { navigator.clipboard.writeText(inp.value); } catch (e) { document.execCommand('copy'); }
+                this.textContent = '¡Copiado!';
+            };
+            document.getElementById('verifSubmitSocial').onclick = submitSocialVerification;
+        } else {
+            var kinds = verificationInfo.docKinds || {};
+            panel.innerHTML = codeBoxHtml(v.code) +
+                '<p class="royalty-note" style="text-align:left;">Escribí el código en un papel para la selfie. Formatos: JPG, PNG, WEBP, HEIC o PDF, hasta 8 MB cada uno. Los archivos quedan en un almacenamiento privado: solo el equipo de verificación los ve, y se borran 30 días después de decidir.</p>' +
+                Object.keys(DOC_KIND_LABELS).map(function (k) {
+                    return '<label>' + DOC_KIND_LABELS[k] + (kinds[k] ? ' <span class="req">*</span>' : ' (opcional)') + '</label>' +
+                        '<input type="file" id="verifFile_' + k + '" accept="image/jpeg,image/png,image/webp,image/heic,application/pdf">';
+                }).join('') +
+                '<label style="text-transform:none; letter-spacing:0; font-size:0.78rem; font-weight:500; color:var(--text-muted); align-items:flex-start; margin-top:1rem;">' +
+                    '<input type="checkbox" id="verifConsent" style="width:auto; margin-top:0.15rem;">' +
+                    '<span>Autorizo a MusicToken Ring a tratar mis datos personales y la imagen de mi documento con la única finalidad de verificar mi identidad y mi titularidad sobre las canciones reclamadas, conforme a la Ley 1581 de 2012. Entiendo que los archivos se eliminan 30 días después de la decisión y que puedo conocer, actualizar y rectificar mis datos escribiendo al correo de la plataforma.</span>' +
+                '</label>' +
+                '<button type="button" id="verifSubmitDoc" class="primary full">Subir y enviar a revisión</button>';
+            document.getElementById('verifSubmitDoc').onclick = submitDocumentVerification;
+        }
+    }
+
+    async function submitSocialVerification() {
+        var btn = document.getElementById('verifSubmitSocial');
+        btn.disabled = true;
+        vStatus(I.svg('clock', { size: 15 }) + '<span>Enviando...</span>');
+        try {
+            var posts = [document.getElementById('verifPost1').value.trim(), document.getElementById('verifPost2').value.trim()].filter(Boolean);
+            var r = await fetch(BACKEND_API + '/api/artists/verification/submit-social', {
+                method: 'POST', headers: await authHeaders(),
+                body: JSON.stringify({ postUrls: posts, profileUrl: document.getElementById('verifProfile').value.trim() || null, storyShared: document.getElementById('verifStory').checked })
+            });
+            var j = await r.json().catch(function () { return {}; });
+            if (!r.ok || !j.ok) { vStatus(I.svg('circleX', { size: 15 }) + '<span>' + escapeHtml(j.error || ('Error ' + r.status)) + '</span>', 'error'); btn.disabled = false; return; }
+            verificationInfo.latest = Object.assign({}, verificationInfo.latest, { status: 'submitted', method: 'social', code: j.verification.code });
+            renderVerificationCard();
+        } catch (e) {
+            vStatus(I.svg('circleX', { size: 15 }) + '<span>Error de red: ' + escapeHtml(e.message) + '</span>', 'error');
+            btn.disabled = false;
+        }
+    }
+
+    async function submitDocumentVerification() {
+        var btn = document.getElementById('verifSubmitDoc');
+        var kinds = verificationInfo.docKinds || {};
+        var chosen = {};
+        for (var k in DOC_KIND_LABELS) {
+            var f = document.getElementById('verifFile_' + k).files[0];
+            if (f) {
+                if (f.size > 8 * 1024 * 1024) { vStatus(I.svg('circleX', { size: 15 }) + '<span>"' + escapeHtml(f.name) + '" pesa más de 8 MB.</span>', 'error'); return; }
+                chosen[k] = f;
+            } else if (kinds[k]) {
+                vStatus(I.svg('circleX', { size: 15 }) + '<span>Falta: ' + escapeHtml(DOC_KIND_LABELS[k]) + '.</span>', 'error'); return;
+            }
+        }
+        if (!document.getElementById('verifConsent').checked) {
+            vStatus(I.svg('circleX', { size: 15 }) + '<span>Tenés que autorizar el tratamiento de tus datos para continuar.</span>', 'error'); return;
+        }
+        btn.disabled = true;
+        try {
+            vStatus(I.svg('clock', { size: 15 }) + '<span>Preparando la subida segura...</span>');
+            var r = await fetch(BACKEND_API + '/api/artists/verification/upload-urls', { method: 'POST', headers: await authHeaders(), body: JSON.stringify({ kinds: Object.keys(chosen) }) });
+            var j = await r.json().catch(function () { return {}; });
+            if (!r.ok || !j.ok) throw new Error(j.error || ('Error ' + r.status));
+            var uploaded = [];
+            for (var i = 0; i < j.uploads.length; i++) {
+                var u = j.uploads[i];
+                vStatus(I.svg('clock', { size: 15 }) + '<span>Subiendo ' + (i + 1) + ' de ' + j.uploads.length + '...</span>');
+                var up = await supa.storage.from(j.bucket).uploadToSignedUrl(u.path, u.token, chosen[u.kind], { contentType: chosen[u.kind].type || 'application/octet-stream' });
+                if (up.error) throw new Error('No se pudo subir ' + DOC_KIND_LABELS[u.kind] + ': ' + up.error.message);
+                uploaded.push({ kind: u.kind, path: u.path });
+            }
+            vStatus(I.svg('clock', { size: 15 }) + '<span>Enviando a revisión...</span>');
+            var r2 = await fetch(BACKEND_API + '/api/artists/verification/submit-document', {
+                method: 'POST', headers: await authHeaders(),
+                body: JSON.stringify({ files: uploaded, dataConsentVersion: verificationInfo.dataConsentVersion })
+            });
+            var j2 = await r2.json().catch(function () { return {}; });
+            if (!r2.ok || !j2.ok) throw new Error(j2.error || ('Error ' + r2.status));
+            verificationInfo.latest = Object.assign({}, verificationInfo.latest, { status: 'submitted', method: 'document', code: j2.verification.code });
+            renderVerificationCard();
+        } catch (e) {
+            vStatus(I.svg('circleX', { size: 15 }) + '<span>' + escapeHtml(e.message) + '</span>', 'error');
+            btn.disabled = false;
         }
     }
 
@@ -1071,6 +1267,7 @@
 
     document.getElementById('payoutIcn').innerHTML = I.svg('cash', { size: 16 });
     document.getElementById('profileDetailsIcn').innerHTML = I.svg('users', { size: 16 });
+    document.getElementById('verificationIcn').innerHTML = I.svg('shieldCheck', { size: 16 });
     document.getElementById('regV2Form').innerHTML = artistFormHtml('reg');
     setupArtistForm('reg', {});
     document.getElementById('regDisplayName').addEventListener('input', function () {
