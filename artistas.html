@@ -264,7 +264,7 @@
         </div>
         <p class="card-lead">Buscá tu canción exactamente como aparece en las batallas -- usamos el mismo catálogo de Deezer.</p>
         <div class="search-row">
-            <input type="text" id="claimSearchInput" placeholder="Nombre de la canción o artista" onkeydown="if(event.key==='Enter') searchSongToClaim();">
+            <input type="text" id="claimSearchInput" placeholder="Tu nombre de artista, una canción, o un link de Deezer" onkeydown="if(event.key==='Enter') searchSongToClaim();">
             <button id="searchSubmitBtn" onclick="searchSongToClaim()">Buscar</button>
         </div>
         <div id="claimSearchResults" style="margin-top:0.9rem;"></div>
@@ -422,61 +422,167 @@
     }
 
     var claimedSongCache = {};
-    function searchSongToClaim() {
+
+    // Deezer no manda CORS, así que se consulta por JSONP (igual que antes).
+    function deezerJsonp(path) {
+        return new Promise(function (resolve, reject) {
+            var callbackName = 'deezerCb_' + Date.now() + '_' + Math.floor(Math.random() * 1e6);
+            var script = document.createElement('script');
+            var timeoutId = setTimeout(function () { cleanup(); reject(new Error('timeout')); }, 10000);
+            function cleanup() {
+                clearTimeout(timeoutId);
+                delete window[callbackName];
+                if (script.parentNode) script.parentNode.removeChild(script);
+            }
+            window[callbackName] = function (data) { cleanup(); resolve(data || {}); };
+            script.onerror = function () { cleanup(); reject(new Error('network')); };
+            script.src = 'https://api.deezer.com' + path + (path.indexOf('?') === -1 ? '?' : '&') + 'output=jsonp&callback=' + callbackName;
+            document.head.appendChild(script);
+        });
+    }
+
+    function trackRowHtml(t) {
+        claimedSongCache[t.id] = t;
+        return '<div class="search-result">' +
+            '<img src="' + escapeHtml(t.album && t.album.cover_small) + '" alt="">' +
+            '<div class="info">' +
+                '<div class="name">' + escapeHtml(t.title) + '</div>' +
+                '<div class="artist">' + escapeHtml(t.artist && t.artist.name) + (t.album && t.album.title ? ' · ' + escapeHtml(t.album.title) : '') + '</div>' +
+            '</div>' +
+            '<button onclick="claimSong(' + t.id + ')">' + I.svg('check', { size: 14 }) + 'Reclamar</button>' +
+        '</div>';
+    }
+
+    function sectionTitle(text) {
+        return '<p style="font-size:0.72rem; letter-spacing:0.08em; text-transform:uppercase; color:var(--text-muted); margin:0.9rem 0 0.4rem;">' + text + '</p>';
+    }
+
+    // Tres formas de encontrar una canción. La búsqueda general de Deezer
+    // ordena por popularidad: la canción de un artista emergente queda
+    // enterrada detrás de otras famosas con el mismo título (visto en vivo:
+    // "En el Bar" de Nando Cohen no salía ni buscando su nombre). Por eso:
+    //  1) link o id de Deezer (canción o artista) pegado directo;
+    //  2) buscar ARTISTAS y, al elegir uno, listar su catálogo completo;
+    //  3) canciones por título (25 resultados, antes 10).
+    async function searchSongToClaim() {
         var query = document.getElementById('claimSearchInput').value.trim();
         var resultsDiv = document.getElementById('claimSearchResults');
         if (!query) return;
         resultsDiv.innerHTML = '<p class="empty">' + I.svg('disc', { size: 22, className: 'spin' }) + 'Buscando...</p>';
 
-        var callbackName = 'deezerArtistCallback_' + Date.now();
-        var timeoutId = null;
-        window[callbackName] = function (data) {
-            if (timeoutId) clearTimeout(timeoutId);
-            delete window[callbackName];
-            var scriptEl = document.getElementById(callbackName);
-            if (scriptEl) scriptEl.remove();
+        try {
+            var artistLink = query.match(/deezer\.[a-z.]+\/(?:[a-z]{2}\/)?artist\/(\d+)/i);
+            if (artistLink) return loadArtistCatalog(artistLink[1]);
+            var trackLink = query.match(/deezer\.[a-z.]+\/(?:[a-z]{2}\/)?track\/(\d+)/i) || query.match(/^(\d{5,})$/);
+            if (trackLink) {
+                var one = await deezerJsonp('/track/' + trackLink[1]);
+                if (!one || !one.id) { resultsDiv.innerHTML = '<p class="empty">' + I.svg('search', { size: 22 }) + 'No se encontró esa canción en Deezer.</p>'; return; }
+                resultsDiv.innerHTML = trackRowHtml(one);
+                return;
+            }
 
-            var tracks = (data && data.data) || [];
-            if (!tracks.length) {
+            var both = await Promise.all([
+                deezerJsonp('/search/artist?q=' + encodeURIComponent(query) + '&limit=5').catch(function () { return {}; }),
+                deezerJsonp('/search?q=' + encodeURIComponent(query) + '&limit=25').catch(function () { return {}; })
+            ]);
+            var artists = (both[0].data || []);
+            var tracks = (both[1].data || []);
+            if (!artists.length && !tracks.length) {
                 resultsDiv.innerHTML = '<p class="empty">' + I.svg('search', { size: 22 }) + 'No se encontraron resultados.</p>';
                 return;
             }
-            resultsDiv.innerHTML = tracks.slice(0, 10).map(function (t) {
-                claimedSongCache[t.id] = t;
-                return '<div class="search-result">' +
-                    '<img src="' + escapeHtml(t.album && t.album.cover_small) + '" alt="">' +
-                    '<div class="info">' +
-                        '<div class="name">' + escapeHtml(t.title) + '</div>' +
-                        '<div class="artist">' + escapeHtml(t.artist && t.artist.name) + '</div>' +
-                    '</div>' +
-                    '<button onclick="claimSong(' + t.id + ')">' + I.svg('check', { size: 14 }) + 'Reclamar</button>' +
-                '</div>';
-            }).join('');
-        };
-
-        var script = document.createElement('script');
-        script.id = callbackName;
-        script.src = 'https://api.deezer.com/search?q=' + encodeURIComponent(query) + '&limit=10&output=jsonp&callback=' + callbackName;
-        script.onerror = function () {
-            if (timeoutId) clearTimeout(timeoutId);
-            delete window[callbackName];
-            resultsDiv.innerHTML = '<p class="status-msg error">' + I.svg('circleX', { size: 15 }) + '<span>Error en la búsqueda.</span></p>';
-        };
-        document.head.appendChild(script);
-        timeoutId = setTimeout(function () {
-            delete window[callbackName];
-            var scriptEl = document.getElementById(callbackName);
-            if (scriptEl) scriptEl.remove();
-            resultsDiv.innerHTML = '<p class="status-msg error">' + I.svg('clock', { size: 15 }) + '<span>La búsqueda tardó demasiado.</span></p>';
-        }, 8000);
+            var html = '';
+            if (artists.length) {
+                html += sectionTitle('Artistas · tocá el tuyo para ver todas tus canciones');
+                html += artists.map(function (a) {
+                    return '<div class="search-result">' +
+                        '<img src="' + escapeHtml(a.picture_small) + '" alt="" style="border-radius:50%;">' +
+                        '<div class="info">' +
+                            '<div class="name">' + escapeHtml(a.name) + '</div>' +
+                            '<div class="artist">' + (a.nb_album || 0) + ' álbum(es) · ' + (a.nb_fan || 0) + ' fans</div>' +
+                        '</div>' +
+                        '<button onclick="loadArtistCatalog(' + a.id + ')">' + I.svg('disc', { size: 14 }) + 'Ver canciones</button>' +
+                    '</div>';
+                }).join('');
+            }
+            if (tracks.length) {
+                html += sectionTitle('Canciones');
+                html += tracks.map(trackRowHtml).join('');
+            }
+            resultsDiv.innerHTML = html;
+        } catch (e) {
+            resultsDiv.innerHTML = '<p class="status-msg error">' + I.svg('circleX', { size: 15 }) + '<span>Error en la búsqueda. Probá de nuevo.</span></p>';
+        }
     }
 
-    async function claimSong(songId) {
-        var track = claimedSongCache[songId];
-        if (!track) return;
+    // Catálogo completo de un artista: todos sus álbumes/singles y las
+    // canciones de cada uno (así aparecen también las versiones con otro id,
+    // ej. el single y el álbum).
+    async function loadArtistCatalog(artistId) {
+        var resultsDiv = document.getElementById('claimSearchResults');
+        resultsDiv.innerHTML = '<p class="empty">' + I.svg('disc', { size: 22, className: 'spin' }) + 'Cargando el catálogo...</p>';
+        try {
+            var artist = await deezerJsonp('/artist/' + artistId);
+            var albumsResp = await deezerJsonp('/artist/' + artistId + '/albums?limit=100');
+            var albums = albumsResp.data || [];
+            var perAlbum = await Promise.all(albums.map(function (al) {
+                return deezerJsonp('/album/' + al.id + '/tracks?limit=200').then(function (r) {
+                    return (r.data || []).map(function (t) {
+                        t.album = { title: al.title, cover_small: al.cover_small, cover_medium: al.cover_medium };
+                        return t;
+                    });
+                }).catch(function () { return []; });
+            }));
+            var seen = {};
+            var tracks = [];
+            perAlbum.forEach(function (list) {
+                list.forEach(function (t) {
+                    if (seen[t.id]) return;
+                    // Solo canciones donde este artista es el principal (en
+                    // compilados de otros sellos puede venir otro artista).
+                    if (t.artist && String(t.artist.id) !== String(artistId)) return;
+                    seen[t.id] = true;
+                    tracks.push(t);
+                });
+            });
+            if (!tracks.length) {
+                resultsDiv.innerHTML = '<p class="empty">' + I.svg('search', { size: 22 }) + 'Este artista no tiene canciones disponibles en Deezer.</p>';
+                return;
+            }
+            var ids = tracks.map(function (t) { return t.id; });
+            resultsDiv.innerHTML =
+                sectionTitle(escapeHtml(artist.name || 'Artista') + ' · ' + tracks.length + ' canción(es) en Deezer') +
+                '<button onclick="claimAllSongs([' + ids.join(',') + '])" style="width:100%; margin-bottom:0.6rem;">' + I.svg('check', { size: 14 }) + 'Reclamar todas (' + tracks.length + ')</button>' +
+                tracks.map(trackRowHtml).join('');
+        } catch (e) {
+            resultsDiv.innerHTML = '<p class="status-msg error">' + I.svg('circleX', { size: 15 }) + '<span>No se pudo cargar el catálogo. Probá de nuevo.</span></p>';
+        }
+    }
+
+    async function claimAllSongs(ids) {
         var statusEl = document.getElementById('claimStatus');
-        statusEl.innerHTML = I.svg('clock', { size: 15 }) + '<span>Reclamando...</span>';
-        statusEl.className = 'status-msg';
+        var okCount = 0, skipped = 0;
+        for (var i = 0; i < ids.length; i++) {
+            statusEl.innerHTML = I.svg('clock', { size: 15 }) + '<span>Reclamando ' + (i + 1) + ' de ' + ids.length + '...</span>';
+            statusEl.className = 'status-msg';
+            var result = await claimSong(ids[i], { silent: true });
+            if (result) okCount++; else skipped++;
+        }
+        statusEl.innerHTML = I.svg('circleCheck', { size: 15 }) + '<span>' + okCount + ' canción(es) reclamada(s)' + (skipped ? ' · ' + skipped + ' ya estaban reclamadas o no se pudieron reclamar' : '') + '. Quedan en revisión antes de contar para regalías.</span>';
+        statusEl.className = 'status-msg success';
+        document.getElementById('claimSearchResults').innerHTML = '';
+        await loadMyArtistProfile();
+    }
+
+    async function claimSong(songId, opts) {
+        opts = opts || {};
+        var track = claimedSongCache[songId];
+        if (!track) return false;
+        var statusEl = document.getElementById('claimStatus');
+        if (!opts.silent) {
+            statusEl.innerHTML = I.svg('clock', { size: 15 }) + '<span>Reclamando...</span>';
+            statusEl.className = 'status-msg';
+        }
         try {
             var r = await fetch(BACKEND_API + '/api/artists/claim-song', {
                 method: 'POST',
@@ -489,15 +595,22 @@
                 })
             });
             var j = await r.json().catch(function () { return {}; });
-            if (!r.ok || !j.ok) { statusEl.innerHTML = I.svg('circleX', { size: 15 }) + '<span>Error: ' + escapeHtml(j.error || r.status) + '</span>'; statusEl.className = 'status-msg error'; return; }
+            if (!r.ok || !j.ok) {
+                if (opts.silent) return false;
+                statusEl.innerHTML = I.svg('circleX', { size: 15 }) + '<span>Error: ' + escapeHtml(j.error || r.status) + '</span>'; statusEl.className = 'status-msg error'; return false;
+            }
+            if (opts.silent) return true;
             statusEl.innerHTML = I.svg('circleCheck', { size: 15 }) + '<span>¡Reclamada! Queda en revisión antes de contar para regalías.</span>';
             statusEl.className = 'status-msg success';
             document.getElementById('claimSearchResults').innerHTML = '';
             document.getElementById('claimSearchInput').value = '';
             await loadMyArtistProfile();
+            return true;
         } catch (e) {
+            if (opts.silent) return false;
             statusEl.innerHTML = I.svg('circleX', { size: 15 }) + '<span>Error de red: ' + escapeHtml(e.message) + '</span>';
             statusEl.className = 'status-msg error';
+            return false;
         }
     }
 
