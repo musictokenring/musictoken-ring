@@ -1146,7 +1146,12 @@
                     <button type="button" class="mtr2-cta" style="color:#05060a; background:linear-gradient(90deg,#00f0ff,#22d3ee);" onclick="selectMode('quick')">JUGAR AHORA</button>
                 </div>
 
-                <div class="mtr2-mode cursor-pointer transition-all duration-300" style="order:3; background:linear-gradient(135deg, rgba(255,46,196,0.20), rgba(8,15,26,0.95)); border:1.5px solid rgba(255,46,196,0.5); box-shadow:0 0 22px rgba(255,46,196,0.15);" onclick="selectMode('private')">
+                <!-- Sala Privada OCULTA (2026-09-27, decisión del dueño): se superponía con
+                     Desafío Social (los dos son "1 vs 1 con un amigo por link/código") y
+                     confundía; casi sin uso real. El flujo sigue vivo por dentro: los links
+                     ?room= siguen funcionando y quien tenga una sala abierta puede
+                     cancelarla desde la campana. Para volver a mostrarla, sacar display:none. -->
+                <div class="mtr2-mode cursor-pointer transition-all duration-300" style="display:none; order:3; background:linear-gradient(135deg, rgba(255,46,196,0.20), rgba(8,15,26,0.95)); border:1.5px solid rgba(255,46,196,0.5); box-shadow:0 0 22px rgba(255,46,196,0.15);" onclick="selectMode('private')">
                     <div style="display:flex; align-items:center; gap:12px; margin-bottom:10px;">
                         <div style="width:44px; height:44px; border-radius:12px; background:linear-gradient(135deg,#ff2ec4,#a21caf); display:flex; align-items:center; justify-content:center; flex-shrink:0; box-shadow:0 0 16px rgba(255,46,196,0.5);"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#05060a" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V7a4 4 0 018 0v4"/></svg></div>
                         <div style="flex:1; min-width:0;"><h3 class="mtr2-h" style="margin:0; font-size:17px; font-weight:700; color:#fff;">Sala Privada</h3><p style="margin:0; font-size:12.5px; color:#9ca3af;">Invita a tus amigos. Personaliza reglas y apuestas.</p></div>
@@ -10400,6 +10405,8 @@
             #mtr2HeroSlot #battle-animation { margin-bottom:20px !important; }
             .mtr2-topbar, .mtr2-content { max-width:760px; margin-left:auto; margin-right:auto; }
             .mtr2-modes { display:grid !important; grid-template-columns:repeat(2, minmax(0, 1fr)); }
+            /* 3 modos visibles (Sala Privada oculta): el último ocupa la fila entera. */
+            .mtr2-modes > .mtr2-mode:last-of-type { grid-column:1 / -1; }
         }
 
         /* Escritorio (>=1024px): las mismas 4 secciones, pero el menú pasa
@@ -10430,7 +10437,8 @@
             .mtr2-content.mtr2-narrow { max-width:720px; }
             /* El logo ya está arriba de la barra lateral. */
             .mtr2-topbar .mtr2-logo-dot, .mtr2-topbar .mtr2-logo-dot + span { display:none; }
-            .mtr2-modes { gap:16px !important; }
+            .mtr2-modes { gap:16px !important; grid-template-columns:repeat(3, minmax(0, 1fr)); }
+            .mtr2-modes > .mtr2-mode:last-of-type { grid-column:auto; }
             #mtr2HeroSlot #battle-animation { max-width:860px !important; }
         }
     </style>
@@ -10522,7 +10530,8 @@
                         <button type="button" class="mtr2-cta" style="color:#05060a; background:linear-gradient(90deg,#fb923c,#fdba74);" onclick="selectMode('social')">DESAFIAR</button>
                     </div>
 
-                    <div class="mtr2-mode" style="background:linear-gradient(135deg, rgba(255,46,196,0.20), rgba(8,15,26,0.95)); border:1.5px solid rgba(255,46,196,0.5); box-shadow:0 0 22px rgba(255,46,196,0.15);">
+                    <!-- Sala Privada oculta -- ver el comentario en #modeSelector. -->
+                    <div class="mtr2-mode" style="display:none; background:linear-gradient(135deg, rgba(255,46,196,0.20), rgba(8,15,26,0.95)); border:1.5px solid rgba(255,46,196,0.5); box-shadow:0 0 22px rgba(255,46,196,0.15);">
                         <div style="display:flex; align-items:center; gap:12px; margin-bottom:10px;">
                             <div style="width:44px; height:44px; border-radius:12px; background:linear-gradient(135deg,#ff2ec4,#a21caf); display:flex; align-items:center; justify-content:center; flex-shrink:0; box-shadow:0 0 16px rgba(255,46,196,0.5);"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#05060a" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V7a4 4 0 018 0v4"/></svg></div>
                             <div style="flex:1; min-width:0;"><h3 class="mtr2-h" style="margin:0; font-size:16px; font-weight:700; color:#fff;">Sala Privada</h3><p style="margin:0; font-size:12px; color:#9ca3af;">Invita a tus amigos. Personaliza reglas y apuestas.</p></div>
