@@ -350,7 +350,7 @@
         /**
          * @param {HTMLElement} containerEl
          * @param {number} durationSec
-         * @param {function} onTick - (liveAvg0to100, roundsResolved) => void
+         * @param {function} onTick - (liveAvg0to100, roundsResolved, perfectCount) => void
          * @param {function} onFinish - (finalAvg0to100, roundsResolved, rawTaps, totalRounds) => void
          * @param {number} [seed] - semilla determinística; si no se pasa, se genera una local (solo válido para Modo Práctica, sin verificación server-side posible)
          */
@@ -368,6 +368,7 @@
             let lastTapAt = -Infinity;
             let resolvedRounds = new Array(totalRounds).fill(null);
             let finished = false;
+            let perfectCount = 0;
 
             containerEl.style.position = containerEl.style.position || 'relative';
             containerEl.innerHTML = starDefsSvg() +
@@ -611,6 +612,7 @@
                 if (resolvedRounds[roundIndex] > 0) {
                     spawnFlash(track, indicatorPct, perfect);
                     if (perfect) {
+                        perfectCount++;
                         spawnComicBurst(track, indicatorPct);
                         spawnMtrCoin();
                         appendCoinDot(myCoinsEl, myCoinsCountEl);
@@ -629,7 +631,7 @@
                 if (roundCountEl) roundCountEl.textContent = hitCount + '/' + totalRounds + ' rondas';
 
                 var liveSum = resolvedRounds.reduce(function (a, s) { return a + (s || 0); }, 0);
-                if (typeof onTick === 'function') onTick(Math.round((liveSum / totalRounds) * 10) / 10, hitCount);
+                if (typeof onTick === 'function') onTick(Math.round((liveSum / totalRounds) * 10) / 10, hitCount, perfectCount);
             }
 
             track.addEventListener('mousedown', handleTap);

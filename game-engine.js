@@ -166,6 +166,7 @@ const GameEngine = {
                 await this.loadGameConfig();
                 this.loadStoredWallet();
                 this.setupRealtimeSubscriptions();
+                this.startBattleInviteWatcher();
                 this.scheduleEloRefresh();
                 this.bindAudioUnlockGestures();
 
@@ -1463,7 +1464,8 @@ const GameEngine = {
             <div class="text-center mb-6">
                 <div class="flex justify-center mb-4">${window.MTRIcons ? window.MTRIcons.badge('swords', {color:'orange', badgeSize:72, size:36}) : ''}</div>
                 <h2 class="text-2xl font-bold text-white mb-2">Desafío Creado</h2>
-                <p class="text-gray-400 text-sm mb-4">Comparte este link con tu amigo para que acepte tu desafío</p>
+                <p class="text-gray-400 text-sm mb-2">Comparte este link con tu amigo para que acepte tu desafío</p>
+                <p class="text-cyan-300 text-xs mb-4">La batalla es en vivo: cuando lo acepte, te avisamos acá y tenés 5 minutos para entrar a jugar contra él al mismo tiempo. Si no entra nadie, se devuelven las apuestas.</p>
             </div>
             
             <div class="mb-6 p-4 rounded-xl bg-black/40 border border-white/10">
@@ -1898,7 +1900,7 @@ const GameEngine = {
             }
             
             // Crear match
-            await this.createMatch(
+            const createdMatch = await this.createMatch(
                 'social',
                 challenge.challenger_id,
                 session.user.id,
@@ -1917,9 +1919,18 @@ const GameEngine = {
                     song_preview: song.preview
                 },
                 challenge.bet_amount,
-                normalizedBet,
-                isBonusChallenge ? 'bonus' : 'real'
+                // createMatch le cobra a quien acepta bet1 (= el monto del
+                // desafío), así que su apuesta registrada es esa misma --
+                // antes quedaba normalizedBet, que podía ser mayor a lo
+                // cobrado e inflar el pozo sin respaldo.
+                challenge.bet_amount,
+                isBonusChallenge ? 'bonus' : 'real',
+                { autoStart: false }
             );
+            if (!createdMatch || !createdMatch.id) {
+                // createMatch ya mostró el error (y reembolsó si hacía falta).
+                return;
+            }
 
             // Actualizar estado del desafío
             const acceptUpdate = {
@@ -1965,16 +1976,15 @@ const GameEngine = {
                 window.history.replaceState({}, '', url);
             }
             
-            showToast('¡Desafío aceptado! Iniciando partida...', 'success');
+            showToast('¡Desafío aceptado! Esperando que el retador entre a la batalla...', 'success');
             
-            // CRÍTICO: Iniciar el juego después de aceptar el desafío
-            // El match ya fue creado por createMatch, ahora necesitamos iniciar la batalla
+            // Entrar a la batalla UNA sola vez (antes createMatch ya la
+            // arrancaba y acá se arrancaba de nuevo: dos cronómetros y el
+            // mini-juego reiniciado). startMatch abre la sala de espera; la
+            // batalla arranca para los dos cuando el creador entra.
             if (this.currentMatch && this.currentMatch.id) {
                 console.log('[acceptSocialChallenge] 🎮 Iniciando batalla con match:', this.currentMatch.id);
                 try {
-                    // Esperar un momento para asegurar que todo esté sincronizado
-                    await new Promise(resolve => setTimeout(resolve, 500));
-                    
                     // CRÍTICO: Usar startMatch que es el método estándar para iniciar un match
                     if (typeof this.startMatch === 'function') {
                         console.log('[acceptSocialChallenge] ✅ Llamando startMatch con ID:', this.currentMatch.id);
@@ -2214,7 +2224,7 @@ const GameEngine = {
                     try {
                         const { data: matches } = await supabaseClient
                             .from('matches')
-                            .select('id, winner, player1_id, player2_id, player2_song_name, player2_song_artist, player2_song_image, player1_final_health, player2_final_health, total_pot, created_at')
+                            .select('id, status, winner, player1_id, player2_id, player2_song_name, player2_song_artist, player2_song_image, player1_final_health, player2_final_health, total_pot, created_at, fanplay_seed_issued_at, fanplay_timeout_resolution, player1_fanplay_score')
                             .eq('match_type', 'social')
                             .eq('player1_id', c.challenger_id)
                             .eq('player2_id', c.accepter_id)
@@ -2232,7 +2242,8 @@ const GameEngine = {
                 return {
                     challenge: c,
                     match: match,
-                    finished: !!(match && match.winner != null)
+                    finished: !!(match && (match.winner != null || match.status === 'cancelled')),
+                    cancelled: !!(match && match.status === 'cancelled')
                 };
             });
         } catch (e) {
@@ -4426,7 +4437,10 @@ const GameEngine = {
     // CREAR Y EMPEZAR PARTIDA
     // ==========================================
     
-    async createMatch(type, player1Id, player2Id, song1, song2Data, bet1, bet2, stakeType = 'real') {
+    // opts.autoStart=false: solo crea el match (y lo devuelve) sin entrar a
+    // la batalla -- lo usa acceptSocialChallenge() para marcar el desafío
+    // como aceptado ANTES de entrar, así el creador se entera al instante.
+    async createMatch(type, player1Id, player2Id, song1, song2Data, bet1, bet2, stakeType = 'real', opts = {}) {
         try {
             let deductionSuccess;
 
@@ -4652,6 +4666,10 @@ const GameEngine = {
                 }
             }
             
+            if (opts.autoStart === false) {
+                this.currentMatch = match;
+                return match;
+            }
             await this.startMatch(match.id);
             
         } catch (error) {
@@ -4675,16 +4693,30 @@ const GameEngine = {
                 .eq('id', matchId)
                 .single();
             
+            if (!match) {
+                showToast('No se encontró la batalla.', 'error');
+                return;
+            }
+            // Un botón viejo (campana, aviso) puede apuntar a una batalla que
+            // ya terminó o se canceló con reembolso -- nunca "revivirla".
+            if (match.status === 'finished' || match.status === 'cancelled') {
+                showToast(match.status === 'cancelled'
+                    ? 'Esa batalla se canceló y las apuestas ya se devolvieron.'
+                    : 'Esa batalla ya terminó. Revisá tu historial para ver el resultado.', 'info');
+                return;
+            }
+
             this.currentMatch = match;
-            
+
             // Actualizar estado
             await supabaseClient
                 .from('matches')
-                .update({ 
+                .update({
                     status: 'playing',
                     started_at: new Date().toISOString()
                 })
-                .eq('id', matchId);
+                .eq('id', matchId)
+                .not('status', 'in', '(finished,cancelled)');
             
             // Crear HTML de batalla
             this.createBattleUI(match);
@@ -4767,11 +4799,20 @@ const GameEngine = {
     // que alguien que ni siquiera está jugando (quien creó un Desafío
     // Social) pueda mirar en vivo. Puramente aditivo y de mejor esfuerzo --
     // ningún error acá debe poder afectar la batalla real ni su resultado.
-    beginBattleBroadcast(match) {
+    // onRemoteTick (opcional): en las batallas verificadas cada jugador
+    // transmite su propio puntaje en vivo por este mismo canal y escucha el
+    // del rival -- así los dos ven la batalla real del otro, no una barra
+    // inventada.
+    beginBattleBroadcast(match, onRemoteTick) {
         this.endBattleBroadcast();
         if (!match || !match.id) return;
         try {
             const channel = supabaseClient.channel('mtr-battle-' + match.id);
+            if (typeof onRemoteTick === 'function') {
+                channel.on('broadcast', { event: 'tick' }, function (payload) {
+                    onRemoteTick(payload && payload.payload);
+                });
+            }
             channel.subscribe();
             this._battleBroadcastChannel = channel;
             this._battleBroadcastMatchId = match.id;
@@ -5560,23 +5601,23 @@ const GameEngine = {
 
         const userSong = isPlayer1 ? match.player1_song_preview : match.player2_song_preview;
         this.playUserSong(userSong);
-        this.beginBattleBroadcast(match);
 
-        // Semilla determinística del backend -- si por algún motivo no se
-        // puede conseguir (backend caído, etc.), se cae al mecanismo
-        // clásico en vez de dejar la batalla trabada sin forma de jugarse.
-        var seed;
-        try {
-            const backendUrl = window.CONFIG?.BACKEND_API || window.CreditsSystem?.backendUrl || 'https://musictoken-ring.onrender.com';
-            const resp = await fetch(`${backendUrl}/api/battles/${match.id}/fanplay-seed`);
-            const data = await resp.json();
-            if (!resp.ok || !data.ok) throw new Error(data.error || 'seed no disponible');
-            seed = data.seed;
-            match._fanplayTimeoutAt = data.timeoutAt || null;
-        } catch (e) {
-            console.error('[runVerifiedFanPlaysBattle] No se pudo obtener la semilla verificable, usando el mecanismo clásico como respaldo:', e && e.message);
+        var gameArea = document.getElementById('fanPlaysGameArea');
+        var statusEl = document.getElementById('battleStatusText');
+        if (!gameArea || !window.FanPlaysMinigame) {
+            console.error('[runVerifiedFanPlaysBattle] Falta el mini-juego, usando el mecanismo clásico como respaldo.');
             return this.runBattleLegacy(match);
         }
+
+        // Sala de espera: la batalla arranca recién cuando los DOS están
+        // conectados, a una hora común que fija el servidor -- así nadie
+        // juega solo mientras el otro ni se enteró (ver lobby-ready en
+        // server-auto.js). null = se canceló o se salió de la pantalla.
+        var start = await this.waitInBattleLobby(match, mySide);
+        if (!start) return;
+        if (start.legacy) return this.runBattleLegacy(match);
+        var seed = start.seed;
+        match._fanplayTimeoutAt = start.timeoutAt || null;
 
         // Popularidad de Deezer SOLO para el visual en vivo de esta
         // pantalla -- el servidor la recalcula de forma independiente al
@@ -5587,52 +5628,477 @@ const GameEngine = {
         catch (e) { oracleStats = { player1Projected: 500000, player2Projected: 500000 }; }
         var totalBase = (oracleStats.player1Projected || 0) + (oracleStats.player2Projected || 0);
         var rawSplit1 = totalBase > 0 ? (oracleStats.player1Projected / totalBase) * 100 : 50;
-        var tilt = Math.max(-10, Math.min(10, rawSplit1 - 50));
-        var myStartHealth = mySide === 1 ? (50 + tilt) : (50 - tilt);
+        var tilt1 = Math.max(-10, Math.min(10, rawSplit1 - 50));
 
-        var gameArea = document.getElementById('fanPlaysGameArea');
-        var statusEl = document.getElementById('battleStatusText');
-        var timeLeft = this.battleDuration;
+        // Estado en vivo de los dos lados. El del rival llega por el canal
+        // Realtime de la batalla (cada dispositivo transmite el suyo) -- es
+        // solo para mostrar: el ganador lo decide el servidor con los toques.
+        var live = {
+            mine: { avg: 0, rounds: 0, perfects: 0, done: false },
+            opp: { avg: null, rounds: 0, perfects: 0, done: false, lastSeenAt: 0 },
+            shownOppPerfects: 0,
+            timeLeft: this.battleDuration
+        };
 
-        var timerInterval = setInterval(function () {
-            timeLeft--;
-            var timerEl = document.getElementById('battleTimer');
-            if (timerEl) timerEl.textContent = Math.max(0, timeLeft);
-            if (window.GameEngine) window.GameEngine.updateHeaderBattleTimerBadge(timeLeft);
-            if (statusEl) {
-                statusEl.innerHTML = timeLeft <= 5
-                    ? '<span class="text-red-400 font-bold animate-pulse">' + svgIcon('bolt', 14) + 'FINAL ÉPICO</span>'
-                    : '<span class="text-cyan-400">' + svgIcon('music', 14) + 'Sumá reproducciones tocando en el momento justo</span>';
+        function healthOfPlayer1() {
+            var avg1 = mySide === 1 ? live.mine.avg : live.opp.avg;
+            var avg2 = mySide === 1 ? live.opp.avg : live.mine.avg;
+            if (avg1 == null) avg1 = 50;
+            if (avg2 == null) avg2 = 50;
+            return Math.max(5, Math.min(95, 50 + tilt1 + (avg1 - avg2) / 2));
+        }
+
+        function rivalStatusHtml() {
+            if (live.opp.done) return '<div class="text-[11px] text-fuchsia-300 mt-1">Tu rival ya terminó sus rondas</div>';
+            var seenAgo = live.opp.lastSeenAt ? (Date.now() - live.opp.lastSeenAt) / 1000 : Infinity;
+            if (seenAgo <= 6) return '<div class="text-[11px] text-emerald-300 mt-1">' + svgIcon('bolt', 11) + 'Rival conectado · jugando en vivo</div>';
+            return '<div class="text-[11px] text-yellow-300 mt-1">Sin señal del rival' + (isFinite(seenAgo) ? (' hace ' + Math.round(seenAgo) + 's') : '') + ' · su resultado igual cuenta cuando termine</div>';
+        }
+
+        function renderLive() {
+            var h1 = healthOfPlayer1();
+            var h2 = 100 - h1;
+            var el;
+            if ((el = document.getElementById('health1Fill'))) el.style.width = h1 + '%';
+            if ((el = document.getElementById('health1Text'))) el.textContent = Math.round(h1) + '%';
+            if ((el = document.getElementById('health2Fill'))) el.style.width = h2 + '%';
+            if ((el = document.getElementById('health2Text'))) el.textContent = Math.round(h2) + '%';
+            var p1 = mySide === 1 ? live.mine : live.opp;
+            var p2 = mySide === 1 ? live.opp : live.mine;
+            if ((el = document.getElementById('plays1'))) el.textContent = Math.round((p1.avg || 0) * p1.rounds).toLocaleString('es-ES');
+            if ((el = document.getElementById('plays2'))) el.textContent = Math.round((p2.avg || 0) * p2.rounds).toLocaleString('es-ES');
+            while (live.shownOppPerfects < live.opp.perfects) {
+                live.shownOppPerfects++;
+                window.FanPlaysMinigame.markOpponentPerfect(gameArea);
             }
+        }
+
+        function broadcastMine() {
+            var h1 = healthOfPlayer1();
+            self.sendBattleBroadcastTick(match.id, {
+                side: mySide,
+                avg: live.mine.avg,
+                rounds: live.mine.rounds,
+                perfects: live.mine.perfects,
+                done: live.mine.done,
+                // Mismos campos que ya lee el espectador de la campana
+                // (openBattleSpectator en index.html).
+                health1: h1,
+                health2: 100 - h1,
+                timeLeft: Math.max(0, live.timeLeft),
+                finished: false
+            });
+        }
+
+        this.beginBattleBroadcast(match, function (tick) {
+            if (!tick || tick.side === mySide) return;
+            live.opp.avg = typeof tick.avg === 'number' ? tick.avg : live.opp.avg;
+            live.opp.rounds = tick.rounds || 0;
+            live.opp.perfects = tick.perfects || 0;
+            live.opp.done = !!tick.done;
+            live.opp.lastSeenAt = Date.now();
+            renderLive();
+        });
+        this._liveBattleRender = renderLive;
+
+        // Cuenta regresiva común hasta la hora de arranque del servidor.
+        await this.runBattleCountdown(gameArea, start.startLocalMs, broadcastMine);
+        if (!document.getElementById('battleArena')) { this.endBattleBroadcast(); return; }
+
+        var battleStartedAt = Date.now();
+        var timerInterval = setInterval(function () {
+            live.timeLeft = self.battleDuration - Math.floor((Date.now() - battleStartedAt) / 1000);
+            var timerEl = document.getElementById('battleTimer');
+            if (timerEl) timerEl.textContent = Math.max(0, live.timeLeft);
+            if (window.GameEngine) window.GameEngine.updateHeaderBattleTimerBadge(live.timeLeft);
+            if (statusEl && !live.mine.done) {
+                statusEl.innerHTML = (live.timeLeft <= 5
+                    ? '<span class="text-red-400 font-bold animate-pulse">' + svgIcon('bolt', 14) + 'FINAL ÉPICO</span>'
+                    : '<span class="text-cyan-400">' + svgIcon('music', 14) + 'Sumá reproducciones tocando en el momento justo</span>') + rivalStatusHtml();
+            }
+            broadcastMine();
         }, 1000);
 
-        function updateMyHealthDisplay(liveAvg, roundsResolved) {
-            var health = Math.max(5, Math.min(95, myStartHealth + (liveAvg - 50) / 2));
-            var mineFillId = mySide === 1 ? 'health1Fill' : 'health2Fill';
-            var mineTextId = mySide === 1 ? 'health1Text' : 'health2Text';
-            var theirsFillId = mySide === 1 ? 'health2Fill' : 'health1Fill';
-            var theirsTextId = mySide === 1 ? 'health2Text' : 'health1Text';
-            var hf = document.getElementById(mineFillId), ht = document.getElementById(mineTextId);
-            var hf2 = document.getElementById(theirsFillId), ht2 = document.getElementById(theirsTextId);
-            if (hf) hf.style.width = health + '%';
-            if (ht) ht.textContent = Math.round(health) + '%';
-            if (hf2) hf2.style.width = (100 - health) + '%';
-            if (ht2) ht2.textContent = Math.round(100 - health) + '%';
-            var minePlaysId = mySide === 1 ? 'plays1' : 'plays2';
-            var minePlaysEl = document.getElementById(minePlaysId);
-            if (minePlaysEl) minePlaysEl.textContent = Math.round(liveAvg * roundsResolved).toLocaleString('es-ES');
-        }
-
-        if (!gameArea || !window.FanPlaysMinigame) {
+        renderLive();
+        window.FanPlaysMinigame.start(gameArea, this.battleDuration, function (liveAvg, roundsResolved, perfectCount) {
+            live.mine.avg = liveAvg;
+            live.mine.rounds = roundsResolved;
+            live.mine.perfects = perfectCount || 0;
+            renderLive();
+            broadcastMine();
+        }, async function (finalAvg, roundsHit, rawTaps) {
             clearInterval(timerInterval);
-            console.error('[runVerifiedFanPlaysBattle] Falta el mini-juego, usando el mecanismo clásico como respaldo.');
-            return this.runBattleLegacy(match);
-        }
-
-        window.FanPlaysMinigame.start(gameArea, this.battleDuration, updateMyHealthDisplay, async function (finalAvg, roundsHit, rawTaps) {
-            clearInterval(timerInterval);
-            await self.submitVerifiedFanPlaysScore(match, mySide, rawTaps, isPlayer1);
+            live.mine.avg = finalAvg;
+            live.mine.rounds = roundsHit;
+            live.mine.done = true;
+            renderLive();
+            broadcastMine();
+            try {
+                await self.submitVerifiedFanPlaysScore(match, mySide, rawTaps, isPlayer1);
+            } finally {
+                self._liveBattleRender = null;
+                self.endBattleBroadcast();
+            }
         }, seed);
+    },
+
+    // Sala de espera de una batalla verificada. Avisa al servidor que este
+    // jugador está conectado y sondea cada 1.5s hasta que el servidor
+    // arranca la batalla (los dos conectados). Devuelve
+    // { seed, timeoutAt, startLocalMs } -- startLocalMs ya corregido por la
+    // diferencia de reloj con el servidor, para que los dos dispositivos
+    // arranquen en el mismo instante -- o null si se canceló / el jugador
+    // salió, o { legacy: true } si el backend todavía no tiene sala de
+    // espera (en ese caso se usa la semilla vieja de /fanplay-seed).
+    async waitInBattleLobby(match, mySide) {
+        var self = this;
+        const backendUrl = window.CONFIG?.BACKEND_API || window.CreditsSystem?.backendUrl || 'https://musictoken-ring.onrender.com';
+        var gameArea = document.getElementById('fanPlaysGameArea');
+        var statusEl = document.getElementById('battleStatusText');
+        var oppSongName = mySide === 1 ? match.player2_song_name : match.player1_song_name;
+        var oppSongArtist = mySide === 1 ? match.player2_song_artist : match.player1_song_artist;
+        this._lobbyLeftMatchId = null;
+
+        if (gameArea) {
+            gameArea.innerHTML =
+                '<div id="battleLobby" class="rounded-2xl border border-cyan-500/30 bg-cyan-500/5 p-4 text-center">' +
+                    '<div class="text-xs uppercase tracking-widest text-cyan-300 mb-1">Sala de espera</div>' +
+                    '<div id="battleLobbyTitle" class="text-white font-bold text-base">Conectando con tu rival...</div>' +
+                    '<div id="battleLobbySub" class="text-gray-400 text-xs mt-1">La batalla arranca en vivo, para los dos al mismo tiempo, apenas tu rival (' +
+                        this.escapeHtmlText((oppSongArtist || oppSongName || 'tu rival')) + ') esté conectado.</div>' +
+                    '<div id="battleLobbyExpiry" class="text-gray-500 text-[11px] mt-2"></div>' +
+                    '<button type="button" id="battleLobbyLeaveBtn" class="mt-3 px-4 py-2 rounded-xl text-xs font-bold bg-white/5 border border-white/15 text-gray-300 hover:bg-white/10 transition cursor-pointer">Cancelar y recuperar mi apuesta</button>' +
+                '</div>';
+            var leaveBtn = document.getElementById('battleLobbyLeaveBtn');
+            if (leaveBtn) leaveBtn.onclick = function () { self.leaveBattleLobby(match.id); };
+        }
+        if (statusEl) statusEl.innerHTML = '';
+
+        function setLobbyText(title, sub, expiry) {
+            var t = document.getElementById('battleLobbyTitle');
+            var s = document.getElementById('battleLobbySub');
+            var x = document.getElementById('battleLobbyExpiry');
+            if (t && title != null) t.textContent = title;
+            if (s && sub != null) s.textContent = sub;
+            if (x && expiry != null) x.textContent = expiry;
+        }
+
+        var networkFailures = 0;
+        var walletAddress = this.connectedWallet || localStorage.getItem('mtr_wallet') || null;
+        while (true) {
+            // El jugador salió de la pantalla de batalla (volvió al inicio,
+            // entró a otra) -- dejar de sondear sin cancelar nada: puede
+            // volver desde el aviso "tu rival te espera".
+            var arena = document.getElementById('battleArena');
+            if (!arena || (this.currentMatch && this.currentMatch.id !== match.id)) return null;
+            if (this._lobbyLeftMatchId === match.id) return null;
+
+            var resp, data, midLocal;
+            try {
+                var t0 = Date.now();
+                resp = await fetch(`${backendUrl}/api/battles/${match.id}/lobby-ready`, {
+                    method: 'POST',
+                    headers: await this.getBackendAuthHeaders(),
+                    body: JSON.stringify({ walletAddress })
+                });
+                midLocal = (t0 + Date.now()) / 2;
+                data = await resp.json().catch(() => ({}));
+            } catch (e) {
+                networkFailures++;
+                setLobbyText('Reconectando...', 'Se cortó la conexión con el servidor, reintentando.', null);
+                await new Promise(function (r) { setTimeout(r, Math.min(5000, 1500 * networkFailures)); });
+                continue;
+            }
+            networkFailures = 0;
+            if (this._lobbyLeftMatchId === match.id) return null;
+
+            // 404 sin cuerpo JSON = la ruta todavía no existe (Vercel publicó
+            // el cliente antes de que Render termine de desplegar).
+            if (resp.status === 501 || data.lobbyUnsupported || (resp.status === 404 && !data.error)) {
+                // Backend sin sala de espera todavía -- comportamiento viejo.
+                try {
+                    const seedResp = await fetch(`${backendUrl}/api/battles/${match.id}/fanplay-seed`);
+                    const seedData = await seedResp.json();
+                    if (!seedResp.ok || !seedData.ok) throw new Error(seedData.error || 'seed no disponible');
+                    return { seed: seedData.seed, timeoutAt: seedData.timeoutAt || null, startLocalMs: Date.now() };
+                } catch (e) {
+                    console.error('[waitInBattleLobby] Sin sala de espera ni semilla, usando el mecanismo clásico:', e && e.message);
+                    return { legacy: true };
+                }
+            }
+            if (!resp.ok) {
+                if (resp.status >= 500) {
+                    setLobbyText('Reconectando...', 'El servidor no respondió, reintentando.', null);
+                    await new Promise(function (r) { setTimeout(r, 2500); });
+                    continue;
+                }
+                setLobbyText('No se pudo entrar a la batalla', data.error || 'Error desconocido', '');
+                return null;
+            }
+
+            var clockOffset = (Date.parse(data.serverNow) || midLocal) - midLocal; // servidor - local
+            if (data.matchStatus === 'cancelled') {
+                this.showLobbyCancelled(data.resolution);
+                return null;
+            }
+            if (data.matchStatus === 'finished') {
+                setLobbyText('Esta batalla ya terminó', 'Revisá tu historial para ver el resultado.', '');
+                return null;
+            }
+            if (data.started) {
+                var startsAtServer = Date.parse(data.startsAt || data.serverNow);
+                return { seed: data.seed, timeoutAt: data.timeoutAt || null, startLocalMs: startsAtServer - clockOffset };
+            }
+
+            var expiresInSec = data.lobbyExpiresAt ? Math.max(0, Math.ceil((Date.parse(data.lobbyExpiresAt) - clockOffset - Date.now()) / 1000)) : null;
+            var expiryText = expiresInSec != null
+                ? ('Si tu rival no entra en ' + Math.floor(expiresInSec / 60) + ':' + String(expiresInSec % 60).padStart(2, '0') + ', se cancela y se devuelven las apuestas.')
+                : '';
+            if (data.opponentReady) setLobbyText('¡Tu rival ya está conectado!', 'Arrancando la batalla...', '');
+            else setLobbyText('Esperando que tu rival entre...', 'Le avisamos en la app. La batalla arranca en vivo para los dos al mismo tiempo apenas se conecte -- no cierres esta pantalla.', expiryText);
+
+            await new Promise(function (r) { setTimeout(r, 1500); });
+        }
+    },
+
+    // Cuenta regresiva hasta startLocalMs (hora de arranque ya pasada a
+    // reloj local). Transmite mientras tanto para que el rival vea que
+    // este lado sigue conectado.
+    async runBattleCountdown(gameArea, startLocalMs, onEachSecond) {
+        var remainingMs = startLocalMs - Date.now();
+        if (remainingMs <= 0) return;
+        while (remainingMs > 0) {
+            if (!document.getElementById('battleArena')) return;
+            var secs = Math.ceil(remainingMs / 1000);
+            if (gameArea) {
+                gameArea.innerHTML =
+                    '<div class="rounded-2xl border border-fuchsia-500/30 bg-fuchsia-500/5 p-6 text-center">' +
+                        '<div class="text-xs uppercase tracking-widest text-fuchsia-300 mb-1">Los dos están conectados</div>' +
+                        '<div class="text-6xl font-black text-white tabular-nums">' + secs + '</div>' +
+                        '<div class="text-gray-400 text-xs mt-1">Preparate: tocá cuando la estrella entre en la zona</div>' +
+                    '</div>';
+            }
+            if (typeof onEachSecond === 'function') onEachSecond();
+            await new Promise(function (r) { setTimeout(r, Math.min(1000, remainingMs - (secs - 1) * 1000 + 5)); });
+            remainingMs = startLocalMs - Date.now();
+        }
+    },
+
+    async leaveBattleLobby(matchId) {
+        this._lobbyLeftMatchId = matchId;
+        var btn = document.getElementById('battleLobbyLeaveBtn');
+        if (btn) { btn.disabled = true; btn.textContent = 'Cancelando...'; }
+        const backendUrl = window.CONFIG?.BACKEND_API || window.CreditsSystem?.backendUrl || 'https://musictoken-ring.onrender.com';
+        try {
+            const resp = await fetch(`${backendUrl}/api/battles/${matchId}/lobby-leave`, {
+                method: 'POST',
+                headers: await this.getBackendAuthHeaders(),
+                body: JSON.stringify({ walletAddress: this.connectedWallet || localStorage.getItem('mtr_wallet') || null })
+            });
+            const data = await resp.json().catch(() => ({}));
+            if (data.cancelled) {
+                this.showLobbyCancelled('lobby_left');
+                return;
+            }
+            if (data.started) {
+                // Justo arrancó -- ya no se puede salir sin perder por abandono.
+                this._lobbyLeftMatchId = null;
+                showToast('La batalla ya arrancó -- jugala para no perder por abandono.', 'warning');
+                this.startMatch(matchId);
+                return;
+            }
+            showToast(data.error || 'No se pudo cancelar la batalla.', 'error');
+        } catch (e) {
+            showToast('No se pudo cancelar la batalla. Revisá tu conexión.', 'error');
+        }
+        this._lobbyLeftMatchId = null;
+        if (btn) { btn.disabled = false; btn.textContent = 'Cancelar y recuperar mi apuesta'; }
+    },
+
+    async showLobbyCancelled(resolution) {
+        this.stopUserSong();
+        var msg = resolution === 'lobby_timeout'
+            ? 'Tu rival no entró a tiempo, así que la batalla no se jugó.'
+            : 'La batalla se canceló antes de arrancar.';
+        var gameArea = document.getElementById('fanPlaysGameArea');
+        if (gameArea) {
+            gameArea.innerHTML =
+                '<div class="rounded-2xl border border-white/10 bg-white/5 p-5 text-center">' +
+                    '<div class="text-white font-bold">' + msg + '</div>' +
+                    '<div class="text-gray-400 text-sm mt-1">Se devolvió la apuesta completa a los dos jugadores.</div>' +
+                    '<button type="button" onclick="location.reload()" class="mt-4 px-5 py-2 rounded-xl text-sm font-bold bg-gradient-to-r from-cyan-500 to-fuchsia-500 text-white cursor-pointer">Volver al inicio</button>' +
+                '</div>';
+        }
+        var statusEl = document.getElementById('battleStatusText');
+        if (statusEl) statusEl.innerHTML = '';
+        if (window.CreditsSystem) {
+            try {
+                const { data: { session: mySession } } = await supabaseClient.auth.getSession();
+                await window.CreditsSystem.loadBalance(this.connectedWallet || localStorage.getItem('mtr_wallet') || null, mySession?.user?.id || null);
+            } catch (e) { /* el saldo se actualiza en la próxima carga */ }
+        }
+    },
+
+    escapeHtmlText(text) {
+        return String(text == null ? '' : text).replace(/[&<>"']/g, function (c) {
+            return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+        });
+    },
+
+    // ==========================================
+    // AVISO "TU RIVAL TE ESPERA"
+    // ==========================================
+    // Busca una batalla verificada tuya cuya sala de espera ya abrió el
+    // rival (o vos mismo, si recargaste la página) y que todavía no
+    // arrancó -- es lo que hace que quien CREÓ un Desafío Social se entere
+    // al instante de que lo aceptaron y entre a jugar, en vez de quedar
+    // afuera. También cubre una batalla ya arrancada donde todavía no
+    // mandaste tus toques y queda tiempo para jugarla.
+    async findBattleWaitingForMe() {
+        const { data: { session } } = await supabaseClient.auth.getSession();
+        if (!session) return null;
+        const me = session.user.id;
+        const since = new Date(Date.now() - 30 * 60 * 1000).toISOString();
+        const { data, error } = await supabaseClient
+            .from('matches')
+            .select('id, match_type, status, player1_id, player2_id, player1_ready_at, player2_ready_at, fanplay_seed, fanplay_seed_issued_at, player1_fanplay_score, player2_fanplay_score, player1_song_name, player1_song_artist, player1_song_image, player2_song_name, player2_song_artist, player2_song_image, total_pot, stake_type, created_at')
+            .or(`player1_id.eq.${me},player2_id.eq.${me}`)
+            .in('match_type', ['social', 'private', 'quick'])
+            .not('status', 'in', '(finished,cancelled)')
+            .gte('created_at', since)
+            .order('created_at', { ascending: false })
+            .limit(5);
+        if (error) {
+            // Columnas de la sala de espera todavía no creadas -- no hay nada
+            // que buscar; se deja de sondear hasta recargar.
+            if (error.code === '42703') this._battleInviteUnsupported = true;
+            return null;
+        }
+        const LOBBY_MS = 5 * 60 * 1000;
+        const PLAY_WINDOW_MS = 4 * 60 * 1000 - 75 * 1000; // plazo de abandono menos lo que dura jugar
+        const now = Date.now();
+        for (const m of data || []) {
+            if (!m.player2_id) continue;
+            const mySide = m.player1_id === me ? 1 : 2;
+            const myReady = mySide === 1 ? m.player1_ready_at : m.player2_ready_at;
+            const oppReady = mySide === 1 ? m.player2_ready_at : m.player1_ready_at;
+            const myScore = mySide === 1 ? m.player1_fanplay_score : m.player2_fanplay_score;
+            if (m.fanplay_seed == null) {
+                const opened = [m.player1_ready_at, m.player2_ready_at].filter(Boolean).map((t) => Date.parse(t));
+                if (!opened.length || now - Math.min(...opened) > LOBBY_MS) continue;
+                return { match: m, mySide, kind: oppReady && !myReady ? 'opponent_waiting' : 'lobby_open' };
+            }
+            if (myScore == null && m.fanplay_seed_issued_at && now - Date.parse(m.fanplay_seed_issued_at) < PLAY_WINDOW_MS) {
+                return { match: m, mySide, kind: 'in_progress' };
+            }
+        }
+        return null;
+    },
+
+    startBattleInviteWatcher() {
+        if (this._battleInviteWatcher) return;
+        var self = this;
+        var check = async function () {
+            if (self._battleInviteUnsupported || document.hidden) return;
+            // Ya está en una batalla (o en su sala de espera) -- no molestar.
+            if (document.getElementById('battleArena')) return;
+            try {
+                var found = await self.findBattleWaitingForMe();
+                if (found) self.showBattleInvite(found);
+                else self.hideBattleInvite();
+            } catch (e) { /* mejor esfuerzo -- se reintenta en el próximo ciclo */ }
+        };
+        this._battleInviteWatcher = setInterval(check, 4000);
+        setTimeout(check, 2500);
+        document.addEventListener('visibilitychange', function () { if (!document.hidden) check(); });
+    },
+
+    showBattleInvite(found) {
+        var m = found.match;
+        if (this._dismissedBattleInvite === m.id + ':' + found.kind) return;
+        var oppName = found.mySide === 1 ? (m.player2_song_artist || m.player2_song_name) : (m.player1_song_artist || m.player1_song_name);
+        var oppImg = found.mySide === 1 ? m.player2_song_image : m.player1_song_image;
+        var title, sub, cta;
+        if (found.kind === 'opponent_waiting') {
+            title = m.match_type === 'social' ? '¡Aceptaron tu desafío!' : '¡Tu rival te está esperando!';
+            sub = (oppName || 'Tu rival') + ' ya está en la sala. La batalla arranca en vivo apenas entres.';
+            cta = 'Entrar a la batalla';
+        } else if (found.kind === 'in_progress') {
+            title = 'Tu batalla está en curso';
+            sub = 'Todavía no jugaste tus rondas. Entrá ya o perdés por abandono.';
+            cta = 'Jugar ahora';
+        } else {
+            title = 'Tenés una sala de espera abierta';
+            sub = 'Estás esperando a ' + (oppName || 'tu rival') + '. Volvé para no perderte el arranque.';
+            cta = 'Volver a la sala';
+        }
+
+        var modal = document.getElementById('battleInviteModal');
+        var isNew = !modal || modal.dataset.key !== m.id + ':' + found.kind;
+        if (!modal) {
+            modal = document.createElement('div');
+            modal.id = 'battleInviteModal';
+            modal.className = 'fixed inset-0 z-[300] flex items-center justify-center bg-black/70 px-4';
+            document.body.appendChild(modal);
+        }
+        modal.dataset.key = m.id + ':' + found.kind;
+        modal.innerHTML =
+            '<div class="w-full max-w-sm rounded-2xl border border-cyan-500/40 bg-gray-950 p-5 text-center shadow-2xl">' +
+                (oppImg ? '<img src="' + this.escapeHtmlText(oppImg) + '" alt="" class="w-20 h-20 rounded-full object-cover border-4 border-fuchsia-400 mx-auto mb-3">' : '') +
+                '<div class="text-white text-lg font-black">' + this.escapeHtmlText(title) + '</div>' +
+                '<div class="text-gray-400 text-sm mt-1">' + this.escapeHtmlText(sub) + '</div>' +
+                '<div class="text-gray-500 text-xs mt-2">Pozo: ' + (Number(m.total_pot) || 0) + ' ' + (m.stake_type === 'bonus' ? 'créditos de prueba' : 'créditos') + '</div>' +
+                '<button type="button" id="battleInviteJoinBtn" class="mt-4 w-full px-5 py-3 rounded-xl text-base font-black bg-gradient-to-r from-cyan-500 to-fuchsia-500 text-white cursor-pointer">' + this.escapeHtmlText(cta) + '</button>' +
+                (found.kind !== 'in_progress'
+                    ? '<button type="button" id="battleInviteDeclineBtn" class="mt-2 w-full px-5 py-2 rounded-xl text-xs font-bold bg-white/5 border border-white/10 text-gray-300 hover:bg-white/10 cursor-pointer">No puedo jugar ahora (se devuelven las apuestas)</button>'
+                    : '') +
+                '<button type="button" id="battleInviteLaterBtn" class="mt-2 w-full px-5 py-2 rounded-xl text-xs font-bold text-gray-400 hover:text-gray-200 cursor-pointer">Ahora no</button>' +
+            '</div>';
+        var self = this;
+        document.getElementById('battleInviteJoinBtn').onclick = function () {
+            self.hideBattleInvite();
+            self.startMatch(m.id);
+        };
+        var declineBtn = document.getElementById('battleInviteDeclineBtn');
+        if (declineBtn) declineBtn.onclick = async function () {
+            declineBtn.disabled = true;
+            declineBtn.textContent = 'Cancelando...';
+            const backendUrl = window.CONFIG?.BACKEND_API || window.CreditsSystem?.backendUrl || 'https://musictoken-ring.onrender.com';
+            try {
+                const resp = await fetch(`${backendUrl}/api/battles/${m.id}/lobby-leave`, {
+                    method: 'POST',
+                    headers: await self.getBackendAuthHeaders(),
+                    body: JSON.stringify({ walletAddress: self.connectedWallet || localStorage.getItem('mtr_wallet') || null })
+                });
+                const data = await resp.json().catch(() => ({}));
+                if (data.cancelled) {
+                    self.hideBattleInvite();
+                    showToast('Batalla cancelada. Se devolvieron las apuestas a los dos.', 'success');
+                    if (window.CreditsSystem) {
+                        const { data: { session: s } } = await supabaseClient.auth.getSession();
+                        window.CreditsSystem.loadBalance(self.connectedWallet || localStorage.getItem('mtr_wallet') || null, s?.user?.id || null);
+                    }
+                    return;
+                }
+                showToast(data.started ? 'La batalla ya arrancó -- entrá a jugarla.' : (data.error || 'No se pudo cancelar.'), 'warning');
+            } catch (e) {
+                showToast('No se pudo cancelar. Revisá tu conexión.', 'error');
+            }
+            declineBtn.disabled = false;
+            declineBtn.textContent = 'No puedo jugar ahora (se devuelven las apuestas)';
+        };
+        document.getElementById('battleInviteLaterBtn').onclick = function () {
+            self._dismissedBattleInvite = m.id + ':' + found.kind;
+            self.hideBattleInvite();
+        };
+        if (isNew) {
+            try { if (navigator.vibrate) navigator.vibrate([200, 100, 200]); } catch (e) { /* noop */ }
+        }
+    },
+
+    hideBattleInvite() {
+        var modal = document.getElementById('battleInviteModal');
+        if (modal) modal.remove();
     },
 
     // Manda los toques crudos al backend, espera (si hace falta) a que el
@@ -5817,7 +6283,14 @@ const GameEngine = {
         // clásico) -- son brackets multi-ronda, no un 1 vs 1 simple.
         var fanPlaysRealModes = match.match_type === 'private' || match.match_type === 'quick' || match.match_type === 'social';
         if (fanPlaysRealModes && match.is_cpu_fallback !== true && window.FanPlaysMinigame && window.FanPlaysScoring) {
-            return this.runVerifiedFanPlaysBattle(match);
+            // Sin await a propósito: ahora incluye la sala de espera (puede
+            // durar minutos) y quien llama -- startMatch() desde
+            // createMatch(), el matchmaking de Modo Rápido -- sigue con su
+            // propio flujo apenas la batalla queda armada en pantalla.
+            this.runVerifiedFanPlaysBattle(match).catch(function (e) {
+                console.error('[runBattle] Error en la batalla verificada:', e);
+            });
+            return;
         }
         return this.runBattleLegacy(match);
     },

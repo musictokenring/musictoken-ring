@@ -2754,7 +2754,12 @@
                 var opponentLabel = m ? (m.player2_song_artist || m.player2_song_name || 'tu rival') : 'tu rival';
 
                 var iconName, colorKey, title, sub;
-                if (entry.finished) {
+                if (entry.cancelled) {
+                    iconName = 'circleX';
+                    colorKey = 'gray';
+                    title = 'La batalla no se jugó';
+                    sub = 'vs ' + opponentLabel + ' · ' + (m.fanplay_timeout_resolution === 'lobby_timeout' ? 'nadie entró a tiempo' : 'se canceló antes de arrancar') + ' · apuestas devueltas';
+                } else if (entry.finished) {
                     iconName = iWon ? 'trophy' : 'circleX';
                     colorKey = iWon ? 'green' : 'red';
                     title = iWon ? '¡Ganaste tu desafío!' : 'Perdiste tu desafío';
@@ -2765,8 +2770,13 @@
                 } else if (c.status === 'accepted') {
                     iconName = 'swords';
                     colorKey = 'orange';
-                    title = 'Aceptaron tu desafío';
-                    sub = 'vs ' + opponentLabel + ' · la batalla está en curso';
+                    if (m && !m.fanplay_seed_issued_at) {
+                        title = '¡Aceptaron tu desafío!';
+                        sub = 'vs ' + opponentLabel + ' · tu rival te espera para arrancar en vivo';
+                    } else {
+                        title = 'Aceptaron tu desafío';
+                        sub = 'vs ' + opponentLabel + ' · la batalla está en curso';
+                    }
                 } else if (c.status === 'pending') {
                     iconName = 'clock';
                     colorKey = 'cyan';
@@ -2782,7 +2792,13 @@
                 var badgeHtml = window.MTRIcons ? window.MTRIcons.badge(iconName, { color: colorKey, badgeSize: 40, size: 20 }) : '';
 
                 var actionHtml;
-                if (!entry.finished && c.status === 'accepted') {
+                var mustPlay = !entry.finished && c.status === 'accepted' && m && m.id && m.player1_fanplay_score == null;
+                if (mustPlay) {
+                    // Quien creó el desafío JUEGA la batalla (antes solo podía
+                    // mirarla y perdía por abandono) -- entra a la sala de
+                    // espera, o a jugar sus rondas si ya arrancó.
+                    actionHtml = '<button type="button" class="flex-shrink-0 px-2.5 py-1.5 rounded-lg text-[11px] font-bold bg-gradient-to-r from-cyan-500 to-fuchsia-500 text-white hover:opacity-90 transition cursor-pointer" onclick="window.closeChallengeNotifications(); window.GameEngine.startMatch(\'' + m.id + '\');">' + (window.MTRIcons ? window.MTRIcons.svg('swords', { size: 12, className: 'inline-block align-[-1px] mr-1' }) : '') + (m.fanplay_seed_issued_at ? 'Jugar ahora' : 'Entrar a la batalla') + '</button>';
+                } else if (!entry.finished && c.status === 'accepted') {
                     actionHtml = m && m.id
                         ? '<button type="button" class="flex-shrink-0 px-2.5 py-1.5 rounded-lg text-[11px] font-bold bg-orange-500/15 border border-orange-500/30 text-orange-300 hover:bg-orange-500/25 transition cursor-pointer" onclick="window.openBattleSpectator(\'' + c.challenge_id + '\')">' + (window.MTRIcons ? window.MTRIcons.svg('eye', { size: 12, className: 'inline-block align-[-1px] mr-1' }) : '') + 'Ver en vivo</button>'
                         : '<button type="button" class="flex-shrink-0 px-2.5 py-1.5 rounded-lg text-[11px] font-bold bg-orange-500/15 border border-orange-500/30 text-orange-300 hover:bg-orange-500/25 transition cursor-pointer" onclick="window.checkChallengeResultNow(\'' + c.challenge_id + '\', this)">Ver estado</button>';
@@ -3143,7 +3159,7 @@
     <script src="./src/tournament-bracket.js?v=v2.19-arena-scroll"></script>
     <script src="./src/claim-ui.js?v=v2.7" defer></script>
     <script src="./src/fan-plays-scoring.js?v=v1"></script>
-    <script src="./src/fan-plays-minigame.js?v=v1"></script>
+    <script src="./src/fan-plays-minigame.js?v=v2"></script>
     <!-- QR Code Generator for JavaScript (Kazuhiko Arase, MIT) -- vendoreado
          tal cual, sin build step, para el QR clicable de la tarjeta de
          "Compartir resultado" (ver buildResultShareCard en game-engine.js).
@@ -3152,7 +3168,7 @@
          app nativa -- un QR es el equivalente universal (cámara del
          celular lo detecta sola) que sí funciona sin integración nativa. -->
     <script src="./src/qrcode.js?v=v1"></script>
-    <script src="./game-engine.js?v=v3.21-audio-fix"></script>
+    <script src="./game-engine.js?v=v3.22-battle-lobby"></script>
     <script>window.MTR_INLINE_TOP_STREAMS_ACTIVE = true;</script>
     <!-- DEFINIR quickBet INMEDIATAMENTE - ANTES DE CUALQUIER OTRO SCRIPT -->
     <script>

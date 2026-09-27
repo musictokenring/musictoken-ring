@@ -4456,11 +4456,21 @@ async function resolveFanPlaysWinner(p1Score, p2Score, match) {
 app.get('/api/battles/:matchId/fanplay-seed', async (req, res) => {
     try {
         const { matchId } = req.params;
-        const { data: match } = await supabase.from('matches').select('id, fanplay_seed, fanplay_seed_issued_at').eq('id', matchId).maybeSingle();
+        let { data: match, error: matchError } = await supabase.from('matches').select('id, fanplay_seed, fanplay_seed_issued_at, player1_ready_at, player2_ready_at').eq('id', matchId).maybeSingle();
+        if (matchError && matchError.code === '42703') {
+            // sql/battle-lobby.sql todavía no corrió -- sin sala de espera.
+            ({ data: match } = await supabase.from('matches').select('id, fanplay_seed, fanplay_seed_issued_at').eq('id', matchId).maybeSingle());
+        }
         if (!match) return res.status(404).json({ error: 'Match no encontrado' });
 
         if (match.fanplay_seed != null) {
             return res.json({ ok: true, seed: Number(match.fanplay_seed), timeoutAt: fanPlaysTimeoutAt(match) });
+        }
+        // Batalla con sala de espera: la semilla la emite /lobby-ready recién
+        // cuando los DOS están conectados. Si la emitiera acá, un cliente
+        // viejo en caché arrancaría solo y el otro perdería por abandono.
+        if (match.player1_ready_at || match.player2_ready_at) {
+            return res.status(409).json({ error: 'La batalla arranca cuando los dos jugadores estén conectados.', waitingForLobby: true });
         }
 
         // Carrera atómica: el primer pedido fija la semilla; cualquier
@@ -4704,6 +4714,31 @@ async function settleFinishedFanPlaysMatch(match) {
     return award;
 }
 
+// Cancela un match sin ganador y devuelve a cada lado su apuesta completa.
+// award_processed=true en el MISMO update atómico: así el reembolso corre
+// una sola vez aunque el cliente y el barrido lleguen juntos, y ningún
+// award-winner posterior puede pagar este match. `narrow` agrega las
+// condiciones propias de cada caso (ej. "nadie mandó toques"). Devuelve la
+// fila cancelada, o null si otro llamado ya la resolvió.
+async function cancelMatchAndRefundBoth(matchId, resolution, narrow) {
+    let query = supabase
+        .from('matches')
+        .update({ status: 'cancelled', fanplay_timeout_resolution: resolution, award_processed: true })
+        .eq('id', matchId)
+        .not('status', 'in', '(finished,cancelled)')
+        .eq('award_processed', false);
+    if (narrow) query = narrow(query);
+    const { data: cancelled } = await query.select('*').maybeSingle();
+    if (!cancelled) return null;
+    for (const side of [1, 2]) {
+        const refund = await refundMatchBetInternal(cancelled, side);
+        if (!refund.ok) {
+            console.error(`[fanplay-timeout] ❌ REEMBOLSO FALLÓ -- revisar a mano: match ${matchId}, jugador ${side} (${refund.userId}), ${refund.amount}:`, refund.error);
+        }
+    }
+    return cancelled;
+}
+
 /**
  * Resuelve una batalla verificada cuyo plazo ya venció. Devuelve
  * { ok, matchStatus, winner, resolution, timeoutAt } -- tooEarly: true si
@@ -4730,26 +4765,10 @@ async function resolveFanPlaysTimeout(matchId) {
     const has2 = s2 != null;
 
     if (!has1 && !has2) {
-        // award_processed=true en el MISMO update atómico: así el reembolso
-        // corre una sola vez aunque el cliente y el barrido lleguen juntos,
-        // y ningún award-winner posterior puede pagar este match.
-        const { data: cancelled } = await supabase
-            .from('matches')
-            .update({ status: 'cancelled', fanplay_timeout_resolution: 'refund_both', award_processed: true })
-            .eq('id', matchId)
-            .not('status', 'in', '(finished,cancelled)')
-            .eq('award_processed', false)
+        const cancelled = await cancelMatchAndRefundBoth(matchId, 'refund_both', (q) => q
             .is('player1_fanplay_score', null)
-            .is('player2_fanplay_score', null)
-            .select('*')
-            .maybeSingle();
+            .is('player2_fanplay_score', null));
         if (cancelled) {
-            for (const side of [1, 2]) {
-                const refund = await refundMatchBetInternal(cancelled, side);
-                if (!refund.ok) {
-                    console.error(`[fanplay-timeout] ❌ REEMBOLSO FALLÓ -- revisar a mano: match ${matchId}, jugador ${side} (${refund.userId}), ${refund.amount}:`, refund.error);
-                }
-            }
             console.log(`[fanplay-timeout] match ${matchId}: ningún lado jugó, apuestas devueltas`);
             return { ok: true, timeoutAt, matchStatus: 'cancelled', winner: null, resolution: 'refund_both' };
         }
@@ -4816,6 +4835,160 @@ app.post('/api/battles/:matchId/resolve-fanplay-timeout', requireCreditMutationA
     }
 });
 
+// ==========================================
+// SALA DE ESPERA DE BATALLAS VERIFICADAS
+// ==========================================
+// Antes cada dispositivo arrancaba la batalla por su cuenta apenas entraba:
+// en un Desafío Social quien aceptaba jugaba solo (el creador ni se
+// enteraba) y ganaba por abandono. Ahora la batalla arranca en el servidor
+// recién cuando los DOS avisaron que están conectados, a una hora común
+// (battle_starts_at) para que jueguen las mismas rondas al mismo tiempo.
+// Si el rival no entra en LOBBY_TIMEOUT_MS, se cancela y se devuelve cada
+// apuesta -- nadie gana sin haber jugado. Requiere sql/battle-lobby.sql.
+const LOBBY_TIMEOUT_MS = 5 * 60 * 1000;
+const LOBBY_COUNTDOWN_MS = 5 * 1000;
+
+async function matchSideForUser(authUser, match, walletAddress) {
+    if (match.player1_id === authUser.id) return 1;
+    if (match.player2_id === authUser.id) return 2;
+    const publicUserId = await resolvePublicUserId(supabase, authUser);
+    if (match.player1_id === publicUserId) return 1;
+    if (match.player2_id === publicUserId) return 2;
+    const resolved = await resolveCreditsUserId(supabase, {
+        getUserIdFromWallet: (addr) => walletLinkService ? walletLinkService.getUserIdFromWallet(addr) : null
+    }, authUser, walletAddress || null);
+    if (match.player1_id === resolved.userId) return 1;
+    if (match.player2_id === resolved.userId) return 2;
+    return null;
+}
+
+function lobbyStateFor(match, side) {
+    const startsAt = match.battle_starts_at || null;
+    const opponentReadyAt = side === 1 ? match.player2_ready_at : match.player1_ready_at;
+    const myReadyAt = side === 1 ? match.player1_ready_at : match.player2_ready_at;
+    const lobbyOpenedAt = [match.player1_ready_at, match.player2_ready_at].filter(Boolean).map((t) => new Date(t).getTime());
+    return {
+        ok: true,
+        serverNow: new Date().toISOString(),
+        side,
+        matchStatus: match.status,
+        resolution: match.fanplay_timeout_resolution || null,
+        opponentReady: !!opponentReadyAt,
+        myReady: !!myReadyAt,
+        started: match.fanplay_seed != null,
+        seed: match.fanplay_seed != null ? Number(match.fanplay_seed) : null,
+        startsAt,
+        timeoutAt: fanPlaysTimeoutAt(match),
+        lobbyExpiresAt: lobbyOpenedAt.length
+            ? new Date(Math.min(...lobbyOpenedAt) + LOBBY_TIMEOUT_MS).toISOString()
+            : null
+    };
+}
+
+/**
+ * "Estoy conectado" -- el cliente lo llama al entrar a la sala de espera y
+ * después cada ~1.5s (sirve de sondeo del estado). Cuando los dos lados ya
+ * avisaron, el primer llamado que gana la carrera atómica emite la semilla
+ * y fija la hora de arranque común; el resto recibe esa misma.
+ */
+app.post('/api/battles/:matchId/lobby-ready', requireCreditMutationAuth, async (req, res) => {
+    try {
+        if (!req.authUser) return res.status(401).json({ error: 'Inicia sesión primero.' });
+        const { matchId } = req.params;
+        const { data: match, error: matchError } = await supabase.from('matches').select('*').eq('id', matchId).maybeSingle();
+        if (matchError) throw matchError;
+        if (!match) return res.status(404).json({ error: 'Match no encontrado' });
+        if (!('player1_ready_at' in match)) {
+            return res.status(501).json({ error: 'Sala de espera no disponible todavía', lobbyUnsupported: true });
+        }
+        if (!FANPLAY_VERIFIED_MODES.includes(match.match_type) || !match.player2_id) {
+            return res.status(400).json({ error: 'Esta batalla no usa sala de espera' });
+        }
+
+        const side = await matchSideForUser(req.authUser, match, req.body && req.body.walletAddress);
+        if (!side) return res.status(403).json({ error: 'No participás en esta batalla.' });
+
+        if (match.status === 'finished' || match.status === 'cancelled' || match.fanplay_seed != null) {
+            return res.json(lobbyStateFor(match, side));
+        }
+
+        const myCol = side === 1 ? 'player1_ready_at' : 'player2_ready_at';
+        let current = match;
+        if (!match[myCol]) {
+            const { data: marked } = await supabase
+                .from('matches')
+                .update({ [myCol]: new Date().toISOString() })
+                .eq('id', matchId)
+                .is(myCol, null)
+                .select('*')
+                .maybeSingle();
+            if (marked) current = marked;
+            else ({ data: current } = await supabase.from('matches').select('*').eq('id', matchId).single());
+        }
+
+        if (current.player1_ready_at && current.player2_ready_at && current.fanplay_seed == null
+            && current.status !== 'finished' && current.status !== 'cancelled') {
+            // El plazo de abandono (4 min) corre desde la hora de arranque,
+            // no desde ahora: la cuenta regresiva no se descuenta del juego.
+            const startsAt = new Date(Date.now() + LOBBY_COUNTDOWN_MS).toISOString();
+            const { data: started } = await supabase
+                .from('matches')
+                .update({
+                    fanplay_seed: Math.floor(Math.random() * 2147483647),
+                    fanplay_seed_issued_at: startsAt,
+                    battle_starts_at: startsAt,
+                    status: 'playing'
+                })
+                .eq('id', matchId)
+                .is('fanplay_seed', null)
+                .not('status', 'in', '(finished,cancelled)')
+                .select('*')
+                .maybeSingle();
+            if (started) {
+                console.log(`[lobby] match ${matchId}: los dos conectados, arranca ${startsAt}`);
+                current = started;
+            } else {
+                ({ data: current } = await supabase.from('matches').select('*').eq('id', matchId).single());
+            }
+        }
+
+        res.json(lobbyStateFor(current, side));
+    } catch (error) {
+        console.error('[lobby-ready] Error:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+/**
+ * Salir de la sala de espera antes de que arranque la batalla: se cancela y
+ * se devuelve cada apuesta (nadie jugó). Una vez emitida la semilla ya no
+ * se puede -- desde ahí rige el plazo de abandono normal.
+ */
+app.post('/api/battles/:matchId/lobby-leave', requireCreditMutationAuth, async (req, res) => {
+    try {
+        if (!req.authUser) return res.status(401).json({ error: 'Inicia sesión primero.' });
+        const { matchId } = req.params;
+        const { data: match } = await supabase.from('matches').select('*').eq('id', matchId).maybeSingle();
+        if (!match) return res.status(404).json({ error: 'Match no encontrado' });
+        if (!FANPLAY_VERIFIED_MODES.includes(match.match_type)) {
+            return res.status(400).json({ error: 'Esta batalla no usa sala de espera' });
+        }
+        const side = await matchSideForUser(req.authUser, match, req.body && req.body.walletAddress);
+        if (!side) return res.status(403).json({ error: 'No participás en esta batalla.' });
+
+        const cancelled = await cancelMatchAndRefundBoth(matchId, 'lobby_left', (q) => q.is('fanplay_seed', null));
+        if (cancelled) {
+            console.log(`[lobby] match ${matchId}: el jugador ${side} salió antes de arrancar, apuestas devueltas`);
+            return res.json({ ok: true, cancelled: true });
+        }
+        const { data: fresh } = await supabase.from('matches').select('*').eq('id', matchId).single();
+        res.json({ ok: true, cancelled: fresh.status === 'cancelled', ...lobbyStateFor(fresh, side) });
+    } catch (error) {
+        console.error('[lobby-leave] Error:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
 // Barrido periódico -- cubre el caso en que NINGÚN cliente queda
 // conectado para disparar la resolución o el cobro. Solo mira matches con
 // fanplay_seed_issued_at (columna nueva): los matches viejos tienen
@@ -4848,6 +5021,24 @@ async function sweepFanPlaysTimeouts() {
         }
         for (const row of stale || []) {
             await resolveFanPlaysTimeout(row.id);
+        }
+
+        // Salas de espera donde el rival nunca entró: se cancela y se
+        // devuelve todo. Solo mira matches con *_ready_at (columnas nuevas),
+        // así nunca toca batallas anteriores a la sala de espera.
+        const lobbyCutoff = new Date(Date.now() - LOBBY_TIMEOUT_MS).toISOString();
+        const { data: abandonedLobbies, error: lobbyError } = await supabase
+            .from('matches')
+            .select('id')
+            .in('match_type', FANPLAY_VERIFIED_MODES)
+            .is('fanplay_seed', null)
+            .not('status', 'in', '(finished,cancelled)')
+            .or(`player1_ready_at.lt."${lobbyCutoff}",player2_ready_at.lt."${lobbyCutoff}"`)
+            .limit(25);
+        if (lobbyError && lobbyError.code !== '42703' && lobbyError.code !== 'PGRST100') throw lobbyError;
+        for (const row of abandonedLobbies || []) {
+            const cancelled = await cancelMatchAndRefundBoth(row.id, 'lobby_timeout', (q) => q.is('fanplay_seed', null));
+            if (cancelled) console.log(`[lobby] match ${row.id}: el rival no entró a tiempo, apuestas devueltas`);
         }
 
         const unpaidCutoff = new Date(Date.now() - FANPLAY_UNAWARDED_GRACE_MS).toISOString();
