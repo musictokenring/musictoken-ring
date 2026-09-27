@@ -5630,7 +5630,6 @@ const GameEngine = {
         const mySide = isPlayer1 ? 1 : 2;
 
         const userSong = isPlayer1 ? match.player1_song_preview : match.player2_song_preview;
-        this.playUserSong(userSong);
 
         var gameArea = document.getElementById('fanPlaysGameArea');
         var statusEl = document.getElementById('battleStatusText');
@@ -5638,6 +5637,27 @@ const GameEngine = {
             console.error('[runVerifiedFanPlaysBattle] Falta el mini-juego, usando el mecanismo clásico como respaldo.');
             return this.runBattleLegacy(match);
         }
+
+        // La canción se prepara en silencio ya (así el navegador no la
+        // bloquea más tarde por falta de un toque del usuario) y suena
+        // recién cuando arranca la batalla -- antes sonaba desde la sala de
+        // espera y la pantalla de juego aparecía segundos después.
+        this.primeUserSong(userSong);
+
+        // Popularidad de Deezer SOLO para el visual en vivo de esta
+        // pantalla -- el servidor la recalcula de forma independiente al
+        // resolver (resolveFanPlaysWinner en server-auto.js), esto de acá
+        // nunca decide nada por sí solo. Se pide YA, en paralelo con la sala
+        // de espera: antes se pedía después de que el servidor fijaba la
+        // hora de arranque, y si Deezer tardaba más que la cuenta regresiva
+        // la batalla aparecía tarde (y desfasada entre los dos jugadores).
+        var tilt1 = 0;
+        var oracleReady = this.fetchOracleStats(match).then(function (oracleStats) {
+            var totalBase = (oracleStats.player1Projected || 0) + (oracleStats.player2Projected || 0);
+            var rawSplit1 = totalBase > 0 ? (oracleStats.player1Projected / totalBase) * 100 : 50;
+            tilt1 = Math.max(-10, Math.min(10, rawSplit1 - 50));
+            if (self._liveBattleRender) self._liveBattleRender();
+        }).catch(function () { /* barras parejas (tilt 0) */ });
 
         // Sala de espera: la batalla arranca recién cuando los DOS están
         // conectados, a una hora común que fija el servidor -- así nadie
@@ -5648,17 +5668,8 @@ const GameEngine = {
         if (start.legacy) return this.runBattleLegacy(match);
         var seed = start.seed;
         match._fanplayTimeoutAt = start.timeoutAt || null;
-
-        // Popularidad de Deezer SOLO para el visual en vivo de esta
-        // pantalla -- el servidor la recalcula de forma independiente al
-        // resolver (resolveFanPlaysWinner en server-auto.js), esto de acá
-        // nunca decide nada por sí solo.
-        var oracleStats;
-        try { oracleStats = await this.fetchOracleStats(match); }
-        catch (e) { oracleStats = { player1Projected: 500000, player2Projected: 500000 }; }
-        var totalBase = (oracleStats.player1Projected || 0) + (oracleStats.player2Projected || 0);
-        var rawSplit1 = totalBase > 0 ? (oracleStats.player1Projected / totalBase) * 100 : 50;
-        var tilt1 = Math.max(-10, Math.min(10, rawSplit1 - 50));
+        // Esperar a Deezer como mucho hasta la hora de arranque -- nunca más.
+        await Promise.race([oracleReady, new Promise(function (r) { setTimeout(r, Math.max(0, start.startLocalMs - Date.now() - 400)); })]);
 
         // Estado en vivo de los dos lados. El del rival llega por el canal
         // Realtime de la batalla (cada dispositivo transmite el suyo) -- es
@@ -5734,6 +5745,9 @@ const GameEngine = {
         // Cuenta regresiva común hasta la hora de arranque del servidor.
         await this.runBattleCountdown(gameArea, start.startLocalMs, broadcastMine);
         if (!document.getElementById('battleArena')) { this.endBattleBroadcast(); return; }
+
+        if (this.userAudio) { try { this.userAudio.currentTime = 0; } catch (e) { /* noop */ } }
+        this.playUserSong(userSong);
 
         var battleStartedAt = Date.now();
         var timerInterval = setInterval(function () {
@@ -7222,6 +7236,27 @@ const GameEngine = {
         if (this.userAudio) {
             this.userAudio.pause();
         }
+    },
+
+    // Carga la canción y la "arranca" en silencio para que después
+    // playUserSong() pueda hacerla sonar sin que el navegador la bloquee
+    // (iOS/Chrome exigen que la reproducción venga de un toque del usuario;
+    // un elemento que ya está reproduciendo, aunque sea muteado, queda
+    // habilitado). Ver runVerifiedFanPlaysBattle.
+    primeUserSong(url) {
+        if (!url) return;
+        this._lastPreviewUrl = url;
+        var el = this.ensureUserAudio();
+        if (!el.src || el.src.indexOf(url) === -1) {
+            el.pause();
+            el.src = url;
+        }
+        el.loop = true;
+        el.muted = true;
+        try {
+            var p = el.play();
+            if (p && typeof p.catch === 'function') p.catch(function () { /* se reintenta en playUserSong */ });
+        } catch (e) { /* noop */ }
     },
 
     stopVictorySong() {
