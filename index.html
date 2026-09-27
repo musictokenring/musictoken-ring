@@ -10298,9 +10298,9 @@
              de batallas" abre el profileModal real (mismos datos); "Mis
              retiros COP" abre el withdrawalCopModal real (mismo historial).
 
-         Solo mobile (<640px): en desktop el media query de abajo fuerza a
-         #mtr2Shell a quedar oculto pase lo que pase, y el layout viejo
-         sigue exactamente igual que hoy. -->
+         Mobile y tablet: menú en barra de abajo. Escritorio (>=1024px): el
+         mismo menú como barra lateral izquierda (ver media queries al final
+         de mtr2-styles). -->
     <style id="mtr2-styles">
         #mtr2Shell { display:none; }
         body.mtr2-active #mtr2Shell { display:block; }
@@ -10344,19 +10344,6 @@
         body.mtr2-focus-active #cashoutSection,
         body.mtr2-focus-active #vaultInfoSection,
         body.mtr2-focus-active #contactSection { display:none !important; }
-        @media (min-width:640px) {
-            #mtr2Shell { display:none !important; }
-            #mtr2Nav { display:none !important; }
-            body.mtr2-active > header,
-            body.mtr2-active > main,
-            body.mtr2-active > footer { display:block !important; }
-            body.mtr2-focus-active #streamDashboard,
-            body.mtr2-focus-active #depositSectionMain,
-            body.mtr2-focus-active #loginWall,
-            body.mtr2-focus-active #cashoutSection,
-            body.mtr2-focus-active #vaultInfoSection,
-            body.mtr2-focus-active #contactSection { display:block !important; }
-        }
 
         #mtr2Shell { position:fixed; inset:0; z-index:400; font-family:'Inter',system-ui,sans-serif; }
         #mtr2Shell ::-webkit-scrollbar { display:none; }
@@ -10398,6 +10385,45 @@
 
         .mtr2-navitem { display:flex; flex-direction:column; align-items:center; justify-content:center; gap:5px; flex:1; min-height:52px; cursor:pointer; padding-top:4px; background:none; border:none; font-family:inherit; }
         .mtr2-navpill { width:44px; height:28px; border-radius:14px; display:flex; align-items:center; justify-content:center; }
+        .mtr2-nav-brand { display:none; }
+
+        /* Tablet (640-1023px): mismo shell que mobile, con el contenido
+           centrado en vez de estirado de borde a borde. */
+        @media (min-width:640px) {
+            .mtr2-topbar, .mtr2-content { max-width:760px; margin-left:auto; margin-right:auto; }
+            .mtr2-modes { display:grid !important; grid-template-columns:repeat(2, minmax(0, 1fr)); }
+        }
+
+        /* Escritorio (>=1024px): las mismas 4 secciones, pero el menú pasa
+           de barra de abajo a barra lateral izquierda -- una barra inferior
+           en una pantalla ancha queda perdida y deja todo el alto vacío.
+           Los !important pisan el estilo inline de #mtr2Nav (pensado para
+           mobile). body recibe el mismo corrimiento para que los pasos que
+           usan el layout viejo (elegir canción, buscando rival, sala
+           privada) no queden tapados por la barra. */
+        @media (min-width:1024px) {
+            #mtr2Shell { left:232px; }
+            #mtr2Nav {
+                top:0 !important; bottom:0 !important; right:auto !important; width:232px;
+                flex-direction:column; justify-content:flex-start !important; gap:4px;
+                padding:20px 14px !important; border-top:none !important;
+                border-right:1px solid rgba(255,255,255,0.07);
+            }
+            .mtr2-nav-brand { display:flex; align-items:center; gap:10px; padding:4px 10px 24px; }
+            .mtr2-navitem { flex:0 0 auto; flex-direction:row; justify-content:flex-start; gap:12px; min-height:48px; padding:6px 10px; border-radius:14px; }
+            .mtr2-navitem:hover { background:rgba(255,255,255,0.04); }
+            .mtr2-navitem span { font-size:14.5px !important; }
+            .mtr2-navpill { width:40px; height:36px; border-radius:12px; }
+            body.mtr2-nav-active { padding-left:232px; }
+            body.mtr2-nav-active > main { padding-bottom:5rem !important; }
+            .mtr2-topbar, .mtr2-content { max-width:1080px; }
+            .mtr2-topbar { padding:22px 32px 14px; }
+            .mtr2-content { padding:0 32px 48px; }
+            .mtr2-content.mtr2-narrow { max-width:720px; }
+            /* El logo ya está arriba de la barra lateral. */
+            .mtr2-topbar .mtr2-logo-dot, .mtr2-topbar .mtr2-logo-dot + span { display:none; }
+            .mtr2-modes { gap:16px !important; }
+        }
     </style>
 
     <div id="mtr2Shell">
@@ -10461,7 +10487,7 @@
                      Rápido al final -- antes iba Rápido/Privada/Social/
                      Práctica. Solo cambia el orden visual; cada tarjeta
                      sigue llamando exactamente el mismo selectMode(...). -->
-                <div style="display:flex; flex-direction:column; gap:12px;">
+                <div class="mtr2-modes" style="display:flex; flex-direction:column; gap:12px;">
                     <div class="mtr2-mode" style="background:linear-gradient(135deg, rgba(52,211,153,0.18), rgba(8,15,26,0.95)); border:1.5px solid rgba(52,211,153,0.45); box-shadow:0 0 22px rgba(52,211,153,0.12);">
                         <div style="display:flex; align-items:center; gap:12px; margin-bottom:10px;">
                             <div style="width:44px; height:44px; border-radius:12px; background:linear-gradient(135deg,#34d399,#059669); display:flex; align-items:center; justify-content:center; flex-shrink:0; box-shadow:0 0 16px rgba(52,211,153,0.5);"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#05060a" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3.2"/></svg></div>
@@ -10537,7 +10563,7 @@
                     <span class="mtr2-h" style="font-size:16px; font-weight:700; color:#00f0ff;">MusicToken Ring</span>
                 </div>
             </div>
-            <div class="mtr2-content">
+            <div class="mtr2-content mtr2-narrow">
                 <h1 class="mtr2-h" style="margin:0 0 14px; font-size:22px; font-weight:700; color:#fff;">Cartera</h1>
 
                 <div class="mtr2-card" style="border:1.5px solid rgba(255,46,196,0.4); box-shadow:0 0 24px rgba(255,46,196,0.15); padding:20px; margin-bottom:16px; background:linear-gradient(135deg, rgba(255,46,196,0.14), rgba(8,15,26,0.95));">
@@ -10594,7 +10620,7 @@
                     <span class="mtr2-h" style="font-size:16px; font-weight:700; color:#00f0ff;">MusicToken Ring</span>
                 </div>
             </div>
-            <div class="mtr2-content">
+            <div class="mtr2-content mtr2-narrow">
                 <div style="display:flex; flex-direction:column; align-items:center; text-align:center; margin-bottom:18px; padding-top:6px;">
                     <div id="mtr2ProfileAvatar" style="width:72px; height:72px; border-radius:50%; background:linear-gradient(135deg,#00f0ff,#0891b2); display:flex; align-items:center; justify-content:center; font-size:26px; font-weight:800; color:#05060a; box-shadow:0 0 24px rgba(0,240,255,0.45); border:3px solid rgba(0,240,255,0.3); margin-bottom:10px;">?</div>
                     <div class="mtr2-h" id="mtr2ProfileName" style="font-size:17px; font-weight:700; color:#fff; margin-bottom:4px;">Jugador</div>
@@ -10659,6 +10685,10 @@
          momentos realmente "enfocados" (batalla en vivo, resultado, arena de
          torneo automática). -->
     <nav id="mtr2Nav" style="position:fixed; left:0; right:0; bottom:0; z-index:410; background:rgba(5,6,10,0.95); backdrop-filter:blur(18px); border-top:1px solid rgba(255,255,255,0.07); align-items:stretch; justify-content:space-around; padding:6px 4px calc(env(safe-area-inset-bottom, 0px) + 12px); box-sizing:border-box;">
+        <div class="mtr2-nav-brand">
+            <div class="mtr2-logo-dot"></div>
+            <span class="mtr2-h" style="font-size:17px; font-weight:700; color:#00f0ff;">MusicToken Ring</span>
+        </div>
         <button type="button" class="mtr2-navitem" data-mtr2-tab="jugar" onclick="mtr2NavTap('jugar')">
             <div class="mtr2-navpill"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="8" width="20" height="10" rx="5"/><path d="M7 13h.01M9 11v4M15.5 11.5h.01M17.5 13.5h.01"/></svg></div>
             <span style="font-size:10.5px;">Jugar</span>
@@ -10819,7 +10849,7 @@
                 if (rowLabel) rowLabel.textContent = connected ? 'Wallet conectada' : 'Conectar wallet';
             }
 
-            // El shell solo se activa en mobile, con sesión iniciada, y
+            // El shell se activa (en cualquier ancho) con sesión iniciada, y
             // cuando NO hay un modo/partida en curso -- ahí se cede el paso
             // al layout viejo (intacto) hasta que ese flujo termine.
             //
@@ -10846,7 +10876,6 @@
             // invisible detrás del shell.
             var MTR2_IN_PROGRESS_IDS = ['songSelection', 'waitingScreen', 'roomScreen', 'joinRoomPreview', 'tournamentArena', 'battleArena', 'victorySection', 'socialChallengeShare'];
             function mtr2ShouldBeActive() {
-                if (window.innerWidth >= 640) return false;
                 var loginWall = document.getElementById('loginWall');
                 if (!loginWall || !loginWall.classList.contains('hidden')) return false;
                 for (var i = 0; i < MTR2_IN_PROGRESS_IDS.length; i++) {
@@ -10866,7 +10895,6 @@
             // que nunca parezca que "la app entera se rompió".
             var MTR2_NAV_HIDDEN_IDS = ['battleArena', 'victorySection', 'tournamentArena'];
             function mtr2ShouldNavBeVisible() {
-                if (window.innerWidth >= 640) return false;
                 var loginWall = document.getElementById('loginWall');
                 if (!loginWall || !loginWall.classList.contains('hidden')) return false;
                 for (var i = 0; i < MTR2_NAV_HIDDEN_IDS.length; i++) {
@@ -10883,7 +10911,6 @@
             // diferencia de mtr2ShouldNavBeVisible(), esta devuelve true
             // (ocultar) precisamente cuando ESTAMOS en uno de esos momentos.
             function mtr2ShouldFocusMain() {
-                if (window.innerWidth >= 640) return false;
                 var loginWall = document.getElementById('loginWall');
                 if (!loginWall || !loginWall.classList.contains('hidden')) return false;
                 for (var i = 0; i < MTR2_NAV_HIDDEN_IDS.length; i++) {
