@@ -24,7 +24,7 @@ from social_challenges c
 join matches m
   on m.match_type = 'social'
  and m.player1_id = c.challenger_id
- and m.player1_song_id = c.challenger_song_id
+ and m.player1_song_id::text = c.challenger_song_id::text
  and m.player1_bet = c.bet_amount
  and m.created_at >= c.created_at
  and m.created_at <= coalesce(c.expires_at, c.created_at + interval '7 days')
@@ -48,7 +48,7 @@ from (
     join matches m2
       on m2.match_type = 'social'
      and m2.player1_id = c2.challenger_id
-     and m2.player1_song_id = c2.challenger_song_id
+     and m2.player1_song_id::text = c2.challenger_song_id::text
      and m2.player1_bet = c2.bet_amount
      and m2.created_at >= c2.created_at
      and m2.created_at <= coalesce(c2.expires_at, c2.created_at + interval '7 days')
