@@ -10352,7 +10352,7 @@
         .mtr2-view { position:absolute; inset:0; overflow-y:auto; background:#05060a; -webkit-overflow-scrolling:touch; }
         .mtr2-view-hidden { display:none; }
         .mtr2-topbar { display:flex; align-items:center; justify-content:space-between; gap:8px; padding:14px 16px 12px; position:sticky; top:0; z-index:2; background:linear-gradient(#05060a 60%, transparent); }
-        .mtr2-logo-dot { width:28px; height:28px; border-radius:8px; background:linear-gradient(135deg,#00f0ff,#0891b2); flex-shrink:0; box-shadow:0 0 14px rgba(0,240,255,0.5); }
+        .mtr2-logo-dot { width:28px; height:28px; border-radius:50%; background:url('https://pink-blank-vicuna-260.mypinata.cloud/ipfs/bafybeiah2fffgw6y6aomfx5b5pgav7wedo3qdtqxqteg2glvmgzs6fpivu') center/cover no-repeat, linear-gradient(135deg,#00f0ff,#0891b2); flex-shrink:0; box-shadow:0 0 14px rgba(0,240,255,0.5); border:1.5px solid rgba(0,240,255,0.35); }
         .mtr2-content { padding:0 16px calc(92px + env(safe-area-inset-bottom, 0px)); }
         .mtr2-mode { border-radius:20px; padding:18px; position:relative; overflow:hidden; }
         .mtr2-chip { font-size:10.5px; font-weight:700; padding:4px 10px; border-radius:999px; display:inline-flex; align-items:center; gap:4px; }
@@ -10386,15 +10386,14 @@
         .mtr2-navitem { display:flex; flex-direction:column; align-items:center; justify-content:center; gap:5px; flex:1; min-height:52px; cursor:pointer; padding-top:4px; background:none; border:none; font-family:inherit; }
         .mtr2-navpill { width:44px; height:28px; border-radius:14px; display:flex; align-items:center; justify-content:center; }
         .mtr2-nav-brand { display:none; }
-        /* Animación principal (video "Live Battles") dentro de Jugar: solo
-           desde tablet -- en mobile ocupaba media pantalla y ya se ocultaba. */
-        #mtr2HeroSlot { display:none; }
-        #mtr2HeroSlot #battle-animation { margin:0 0 20px !important; max-width:none !important; height:300px !important; }
+        /* Animación principal (video "Live Battles") dentro de Jugar. En
+           mobile más baja (en el layout viejo ocupaba media pantalla). */
+        #mtr2HeroSlot #battle-animation { margin:0 0 16px !important; max-width:none !important; height:190px !important; }
 
         /* Tablet (640-1023px): mismo shell que mobile, con el contenido
            centrado en vez de estirado de borde a borde. */
         @media (min-width:640px) {
-            #mtr2HeroSlot { display:block; }
+            #mtr2HeroSlot #battle-animation { height:300px !important; margin-bottom:20px !important; }
             .mtr2-topbar, .mtr2-content { max-width:760px; margin-left:auto; margin-right:auto; }
             .mtr2-modes { display:grid !important; grid-template-columns:repeat(2, minmax(0, 1fr)); }
         }
