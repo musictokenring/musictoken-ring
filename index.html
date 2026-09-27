@@ -10386,14 +10386,16 @@
         .mtr2-navitem { display:flex; flex-direction:column; align-items:center; justify-content:center; gap:5px; flex:1; min-height:52px; cursor:pointer; padding-top:4px; background:none; border:none; font-family:inherit; }
         .mtr2-navpill { width:44px; height:28px; border-radius:14px; display:flex; align-items:center; justify-content:center; }
         .mtr2-nav-brand { display:none; }
-        /* Animación principal (video "Live Battles") dentro de Jugar. En
-           mobile más baja (en el layout viejo ocupaba media pantalla). */
-        #mtr2HeroSlot #battle-animation { margin:0 0 16px !important; max-width:none !important; height:190px !important; }
+        /* Animación principal (video "Live Battles", 16:9) dentro de Jugar.
+           Misma proporción que el video en todas las pantallas -- con una
+           altura fija, en escritorio el recuadro quedaba mucho más ancho que
+           el video y object-cover le recortaba arriba y abajo. */
+        #mtr2HeroSlot #battle-animation { margin:0 auto 16px !important; max-width:none !important; height:auto !important; aspect-ratio:16 / 9; }
 
         /* Tablet (640-1023px): mismo shell que mobile, con el contenido
            centrado en vez de estirado de borde a borde. */
         @media (min-width:640px) {
-            #mtr2HeroSlot #battle-animation { height:300px !important; margin-bottom:20px !important; }
+            #mtr2HeroSlot #battle-animation { margin-bottom:20px !important; }
             .mtr2-topbar, .mtr2-content { max-width:760px; margin-left:auto; margin-right:auto; }
             .mtr2-modes { display:grid !important; grid-template-columns:repeat(2, minmax(0, 1fr)); }
         }
@@ -10427,7 +10429,7 @@
             /* El logo ya está arriba de la barra lateral. */
             .mtr2-topbar .mtr2-logo-dot, .mtr2-topbar .mtr2-logo-dot + span { display:none; }
             .mtr2-modes { gap:16px !important; }
-            #mtr2HeroSlot #battle-animation { height:360px !important; }
+            #mtr2HeroSlot #battle-animation { max-width:860px !important; }
         }
     </style>
 
