@@ -123,9 +123,9 @@ function initSupabaseClient() {
         return null;
     }
     
-    const SUPABASE_URL = 'https://bscmgcnynbxalcuwdqlm.supabase.co';
+    const SUPABASE_URL = 'https://auth.musictokenring.xyz';
     const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJzY21nY255bmJ4YWxjdXdkcWxtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzA0NTYwOTUsImV4cCI6MjA4NjAzMjA5NX0.1iasFQ5H0GmrFqi6poWNE1aZOtbmQuB113RCyg2BBK4';
-    window.supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    window.supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, { auth: { storageKey: 'sb-bscmgcnynbxalcuwdqlm-auth-token' } });
     return window.supabaseClient;
 }
 

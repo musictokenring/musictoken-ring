@@ -296,7 +296,9 @@
 
     <script>
         const CONFIG = {
-            SUPABASE_URL: 'https://bscmgcnynbxalcuwdqlm.supabase.co',
+            // Dominio propio de Supabase (CNAME a bscmgcnynbxalcuwdqlm.supabase.co): Google muestra este nombre al iniciar sesión.
+            // storageKey fijo en createClient conserva las sesiones guardadas con el dominio viejo.
+            SUPABASE_URL: 'https://auth.musictokenring.xyz',
             SUPABASE_ANON_KEY: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJzY21nY255bmJ4YWxjdXdkcWxtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzA0NTYwOTUsImV4cCI6MjA4NjAzMjA5NX0.1iasFQ5H0GmrFqi6poWNE1aZOtbmQuB113RCyg2BBK4',
             BATTLE_DURATION: 60,
             BACKEND_API: 'https://musictoken-ring.onrender.com',
@@ -4032,7 +4034,7 @@
 
         // Inicializar cliente de Supabase si no existe (usar solo window para evitar conflictos)
         if (typeof window.supabaseClient === 'undefined' && typeof supabase !== 'undefined') {
-            window.supabaseClient = supabase.createClient(CONFIG.SUPABASE_URL, CONFIG.SUPABASE_ANON_KEY);
+            window.supabaseClient = supabase.createClient(CONFIG.SUPABASE_URL, CONFIG.SUPABASE_ANON_KEY, { auth: { storageKey: 'sb-bscmgcnynbxalcuwdqlm-auth-token' } });
         }
 
         // DEFINIR isWalletBrowser ANTES de loginWithGoogle para evitar ReferenceError
@@ -4144,7 +4146,7 @@
             try {
                 // Asegurar que supabaseClient existe (usar solo window para evitar conflictos)
                 if (typeof window.supabaseClient === 'undefined' && typeof supabase !== 'undefined') {
-                    window.supabaseClient = supabase.createClient(CONFIG.SUPABASE_URL, CONFIG.SUPABASE_ANON_KEY);
+                    window.supabaseClient = supabase.createClient(CONFIG.SUPABASE_URL, CONFIG.SUPABASE_ANON_KEY, { auth: { storageKey: 'sb-bscmgcnynbxalcuwdqlm-auth-token' } });
                 }
                 // Usar window.supabaseClient directamente
                 if (!window.supabaseClient) {

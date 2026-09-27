@@ -313,10 +313,10 @@
     }
 
     var CONFIG = window.CONFIG || {};
-    var SUPABASE_URL = CONFIG.SUPABASE_URL || 'https://bscmgcnynbxalcuwdqlm.supabase.co';
+    var SUPABASE_URL = CONFIG.SUPABASE_URL || 'https://auth.musictokenring.xyz';
     var SUPABASE_ANON_KEY = CONFIG.SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJzY21nY255bmJ4YWxjdXdkcWxtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzA0NTYwOTUsImV4cCI6MjA4NjAzMjA5NX0.1iasFQ5H0GmrFqi6poWNE1aZOtbmQuB113RCyg2BBK4';
     var BACKEND_API = (CONFIG.BACKEND_API) || 'https://musictoken-ring.onrender.com';
-    var supa = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    var supa = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, { auth: { storageKey: 'sb-bscmgcnynbxalcuwdqlm-auth-token' } });
 
     async function authHeaders() {
         var { data: { session } } = await supa.auth.getSession();

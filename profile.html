@@ -132,14 +132,16 @@
     <!-- Scripts -->
     <script>
         const CONFIG = {
-            SUPABASE_URL: 'https://bscmgcnynbxalcuwdqlm.supabase.co',
+            // Dominio propio de Supabase (CNAME a bscmgcnynbxalcuwdqlm.supabase.co): Google muestra este nombre al iniciar sesión.
+            // storageKey fijo en createClient conserva las sesiones guardadas con el dominio viejo.
+            SUPABASE_URL: 'https://auth.musictokenring.xyz',
             SUPABASE_ANON_KEY: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJzY21nY255bmJ4YWxjdXdkcWxtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzA0NTYwOTUsImV4cCI6MjA4NjAzMjA5NX0.1iasFQ5H0GmrFqi6poWNE1aZOtbmQuB113RCyg2BBK4'
         };
 
         // Initialize Supabase
         let supabaseClient;
         if (typeof window.supabaseClient === 'undefined') {
-            supabaseClient = window.supabase.createClient(CONFIG.SUPABASE_URL, CONFIG.SUPABASE_ANON_KEY);
+            supabaseClient = window.supabase.createClient(CONFIG.SUPABASE_URL, CONFIG.SUPABASE_ANON_KEY, { auth: { storageKey: 'sb-bscmgcnynbxalcuwdqlm-auth-token' } });
             window.supabaseClient = supabaseClient;
         } else {
             supabaseClient = window.supabaseClient;
