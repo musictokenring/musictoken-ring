@@ -377,7 +377,7 @@
                     '<div class="info">' +
                         '<div class="name">' + escapeHtml(s.song_name) + '</div>' +
                         '<div class="meta">' + escapeHtml(s.song_artist) + '</div>' +
-                        '<div class="meta">' + I.svg('trophy', { size: 12 }) + '<span>' + (s.selections_count || 0) + ' vez/veces elegida · ' + s.wins_count + ' victoria(s)</span>' +
+                        '<div class="meta">' + I.svg('trophy', { size: 12 }) + '<span>' + (s.selections_count || 0) + ((s.selections_count || 0) === 1 ? ' vez elegida · ' : ' veces elegida · ') + s.wins_count + (s.wins_count === 1 ? ' victoria' : ' victorias') + '</span>' +
                             '<span class="pill ' + s.status + '" style="margin-left:0.4rem; padding:0.12rem 0.5rem 0.12rem 0.4rem;">' + statusPillHtml(s.status) + '</span></div>' +
                     '</div>' +
                     '<div class="earned">+' + Number(s.total_royalties_earned || 0).toFixed(2) + '</div>' +
