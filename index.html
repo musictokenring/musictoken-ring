@@ -234,6 +234,13 @@
     <link rel="stylesheet" href="./tailwind.css">
 
     <link rel="icon" type="image/png" href="https://pink-blank-vicuna-260.mypinata.cloud/ipfs/bafybeie24pisqmw6teijdng4flzjwumgwpesilowjxq3kww3p7kxlmuywm">
+    <!-- Instalable como app (necesario para notificaciones push en iPhone). -->
+    <link rel="manifest" href="/manifest.json">
+    <link rel="apple-touch-icon" href="/assets/icons/apple-touch-icon.png">
+    <meta name="theme-color" content="#05060a">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-title" content="MusicToken">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 
     <!-- Script ULTRA-TEMPRANO - Debe ejecutarse ANTES que cualquier otro script -->
     <script>
@@ -3165,6 +3172,7 @@
     <script src="./src/claim-ui.js?v=v2.7" defer></script>
     <script src="./src/fan-plays-scoring.js?v=v1"></script>
     <script src="./src/fan-plays-minigame.js?v=v2"></script>
+    <script src="./src/push-notifications.js?v=v1"></script>
     <!-- QR Code Generator for JavaScript (Kazuhiko Arase, MIT) -- vendoreado
          tal cual, sin build step, para el QR clicable de la tarjeta de
          "Compartir resultado" (ver buildResultShareCard en game-engine.js).
@@ -3173,7 +3181,7 @@
          app nativa -- un QR es el equivalente universal (cámara del
          celular lo detecta sola) que sí funciona sin integración nativa. -->
     <script src="./src/qrcode.js?v=v1"></script>
-    <script src="./game-engine.js?v=v3.25-artist-royalty"></script>
+    <script src="./game-engine.js?v=v3.26-social-extras-push"></script>
     <script>window.MTR_INLINE_TOP_STREAMS_ACTIVE = true;</script>
     <!-- DEFINIR quickBet INMEDIATAMENTE - ANTES DE CUALQUIER OTRO SCRIPT -->
     <script>
@@ -5974,6 +5982,10 @@
                 // (solo al CREAR -- el género ya lo fijó el creador, quien
                 // acepta no elige otro) + botón
                 buttonsDiv.innerHTML = '';
+                // Avatar (crear y aceptar): se ve en la batalla, igual que en Sala Privada.
+                var avatarWrap = document.createElement('div');
+                avatarWrap.innerHTML = avatarPickerHtml();
+                buttonsDiv.appendChild(avatarWrap.firstElementChild);
                 if (!finalIsAccepting) {
                     var genreWrap = document.createElement('div');
                     genreWrap.innerHTML = socialGenreSelectHtml();
@@ -10685,7 +10697,13 @@
                         <span style="flex:1; font-size:13.5px; font-weight:600; color:#e5e7eb;">Mis retiros en pesos (COP)</span>
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#4b5563" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg>
                     </button>
+                    <button type="button" class="mtr2-row" onclick="window.mtr2TogglePush && window.mtr2TogglePush()">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;"><path d="M10 5a2 2 0 1 1 4 0a7 7 0 0 1 4 6v3a4 4 0 0 0 2 3h-16a4 4 0 0 0 2 -3v-3a7 7 0 0 1 4 -6"/><path d="M9 17v1a3 3 0 0 0 6 0v-1"/></svg>
+                        <span style="flex:1; font-size:13.5px; font-weight:600; color:#e5e7eb;">Notificaciones</span>
+                        <span id="mtr2PushStatus" style="font-size:12px; font-weight:700; color:#9ca3af;">…</span>
+                    </button>
                 </div>
+                <div id="mtr2PushHelp"></div>
 
                 <button type="button" onclick="if(typeof logout==='function') logout()" style="display:block; width:100%; margin-top:14px; text-align:center; font-size:13px; font-weight:700; color:#f87171; padding:10px; background:none; border:none; cursor:pointer; font-family:inherit;">Cerrar sesión</button>
             </div>
@@ -11066,7 +11084,36 @@
                 document.body.classList.toggle('mtr2-no-session', !hasSession);
             }
 
+            // Fila "Notificaciones" de Perfil: muestra el estado y lo
+            // activa/desactiva (ver src/push-notifications.js).
+            async function mtr2RefreshPushStatus() {
+                var el = document.getElementById('mtr2PushStatus');
+                if (!el || !window.MTRPush) return;
+                var sup = window.MTRPush.support();
+                if (sup === 'unsupported') { el.textContent = 'No disponible'; return; }
+                if (sup === 'ios-install') { el.textContent = 'Instalá la app'; return; }
+                var on = await window.MTRPush.isEnabled();
+                el.textContent = on ? 'Activadas' : 'Desactivadas';
+                el.style.color = on ? '#6ee7b7' : '#9ca3af';
+            }
+            window.mtr2TogglePush = async function () {
+                if (!window.MTRPush) return;
+                var help = document.getElementById('mtr2PushHelp');
+                var sup = window.MTRPush.support();
+                if (sup !== 'ok') { if (help) help.innerHTML = window.MTRPush.promptHtml('profile'); return; }
+                var on = await window.MTRPush.isEnabled();
+                if (on) {
+                    await window.MTRPush.disable();
+                    if (typeof showToast === 'function') showToast('Notificaciones desactivadas', 'info');
+                } else {
+                    var r = await window.MTRPush.enable();
+                    if (typeof showToast === 'function') showToast(r.ok ? 'Notificaciones activadas' : r.error, r.ok ? 'success' : 'error');
+                }
+                mtr2RefreshPushStatus();
+            };
+
             function mtr2Init() {
+                mtr2RefreshPushStatus();
                 mtr2InsertSessionBanners();
                 mtr2CheckSession();
                 setInterval(mtr2CheckSession, 5000);

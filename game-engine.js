@@ -1052,12 +1052,20 @@ const GameEngine = {
             
             const { data: { session } } = await supabaseClient.auth.getSession();
             
-            // Verificar si se creó un match
+            // Verificar si se creó un match. Antes buscaba solo status
+            // 'ready', pero quien nos encuentra lo pasa a 'playing' menos de
+            // un segundo después (startMatch) -- si el sondeo caía justo
+            // después, no lo veíamos y el rival quedaba hasta 60s solo en la
+            // sala de espera. Acotado a Modo Rápido de los últimos 2 minutos
+            // para no engancharnos a una partida vieja trabada.
+            const recentCutoff = new Date(Date.now() - 2 * 60 * 1000).toISOString();
             const { data: matches } = await supabaseClient
                 .from('matches')
                 .select('*')
                 .or(`player1_id.eq.${session.user.id},player2_id.eq.${session.user.id}`)
-                .eq('status', 'ready')
+                .eq('match_type', 'quick')
+                .in('status', ['ready', 'playing'])
+                .gte('created_at', recentCutoff)
                 .order('created_at', { ascending: false })
                 .limit(1);
             
@@ -1303,6 +1311,7 @@ const GameEngine = {
                         song: { id: song.id, name: song.name, artist: song.artist, image: song.image, preview: song.preview },
                         betAmount: normalizedBet,
                         genreId, genreLabel,
+                        avatar: window.__myAvatar || null,
                         walletAddress: this.connectedWallet || localStorage.getItem('mtr_wallet') || null
                     })
                 });
@@ -1389,6 +1398,7 @@ const GameEngine = {
                     song: { id: song.id, name: song.name, artist: song.artist, image: song.image, preview: song.preview },
                     betAmount: normalizedBet,
                     genreId, genreLabel,
+                    avatar: window.__myAvatar || null,
                     walletAddress: this.connectedWallet || localStorage.getItem('mtr_wallet') || null
                 })
             });
@@ -1466,6 +1476,7 @@ const GameEngine = {
                 <h2 class="text-2xl font-bold text-white mb-2">Desafío Creado</h2>
                 <p class="text-gray-400 text-sm mb-2">Comparte este link con tu amigo para que acepte tu desafío</p>
                 <p class="text-cyan-300 text-xs mb-4">La batalla es en vivo: cuando lo acepte, te avisamos acá y tenés 5 minutos para entrar a jugar contra él al mismo tiempo. Si no entra nadie, se devuelven las apuestas.</p>
+                <div id="socialPushPromptSlot"></div>
             </div>
             
             <div class="mb-6 p-4 rounded-xl bg-black/40 border border-white/10">
@@ -1526,6 +1537,14 @@ const GameEngine = {
         `;
 
         shareContainer.classList.remove('hidden');
+        // Ofrecer notificaciones push (si todavía no están activas): así el
+        // creador se entera cuando acepten aunque cierre la página.
+        if (window.MTRPush) {
+            window.MTRPush.isEnabled().then(function (on) {
+                var slot = document.getElementById('socialPushPromptSlot');
+                if (slot && !on) slot.innerHTML = window.MTRPush.promptHtml('challenge');
+            }).catch(function () {});
+        }
         // Igual que battleArena/victorySection: este elemento no existe al
         // cargar la página (se crea recién acá), así que el
         // MutationObserver del shell mobile no lo detecta solo -- sin este
@@ -1965,7 +1984,7 @@ const GameEngine = {
                 // cobrado e inflar el pozo sin respaldo.
                 challenge.bet_amount,
                 isBonusChallenge ? 'bonus' : 'real',
-                { autoStart: false }
+                { autoStart: false, avatars: { player1: challenge.challenger_avatar || null, player2: window.__myAvatar || null } }
             );
             if (!createdMatch || !createdMatch.id) {
                 // createMatch ya mostró el error (y reembolsó si hacía falta).
@@ -4627,9 +4646,7 @@ const GameEngine = {
                 return;
             }
             
-            const { data: match, error: matchError } = await supabaseClient
-                .from('matches')
-                .insert([{
+            const matchRow = {
                     match_type: type,
                     player1_id: player1Id,
                     player2_id: player2Id,
@@ -4648,9 +4665,25 @@ const GameEngine = {
                     total_pot: bet1 + bet2,
                     status: 'ready',
                     stake_type: stakeType
-                }])
+            };
+            // Avatares (Desafío Social): si la migración 025 todavía no corrió
+            // en esta base, reintentar sin ellos en vez de romper la partida.
+            if (opts.avatars && opts.avatars.player1) matchRow.player1_avatar = opts.avatars.player1;
+            if (opts.avatars && opts.avatars.player2) matchRow.player2_avatar = opts.avatars.player2;
+            let { data: match, error: matchError } = await supabaseClient
+                .from('matches')
+                .insert([matchRow])
                 .select()
                 .single();
+            if (matchError && (matchRow.player1_avatar || matchRow.player2_avatar) && String(matchError.message || '').indexOf('avatar') !== -1) {
+                delete matchRow.player1_avatar;
+                delete matchRow.player2_avatar;
+                ({ data: match, error: matchError } = await supabaseClient
+                    .from('matches')
+                    .insert([matchRow])
+                    .select()
+                    .single());
+            }
             
             // CRÍTICO: Verificar que el match se creó correctamente
             if (matchError || !match || !match.id) {
@@ -4711,6 +4744,14 @@ const GameEngine = {
     },
     
     async startMatch(matchId) {
+        // Entrar a una batalla (desde el sondeo de la cola, el aviso "tu
+        // rival te espera" o la campana) corta la búsqueda de Modo Rápido:
+        // si no, el sondeo podía encontrar la misma partida y arrancarla de
+        // nuevo encima.
+        if (this.matchmakingInterval) {
+            clearInterval(this.matchmakingInterval);
+            this.matchmakingInterval = null;
+        }
         try {
             // Ocultar todas las pantallas
             document.getElementById('songSelection')?.classList.add('hidden');
@@ -4776,7 +4817,7 @@ const GameEngine = {
             try { supabaseClient.removeChannel(this._privateReactionsChannel); } catch (e) { /* noop */ }
             this._privateReactionsChannel = null;
         }
-        if (!match || match.match_type !== 'private' || !match.id) return;
+        if (!match || (match.match_type !== 'private' && match.match_type !== 'social') || !match.id) return;
 
         const channel = supabaseClient.channel('private-reactions-' + match.id);
         channel
@@ -4946,8 +4987,10 @@ const GameEngine = {
         // sueltos de antes, mismo criterio de "nada de texto plano" para
         // cualquier modo, no solo Sala Privada.
         const isPrivateMatch = match.match_type === 'private';
-        const fighter1IconName = (isPrivateMatch && match.player1_avatar) ? match.player1_avatar : 'music';
-        const fighter2IconName = (isPrivateMatch && match.player2_avatar) ? match.player2_avatar : 'music';
+        // Avatares y reacciones rápidas: Sala Privada y Desafío Social.
+        const hasSocialExtras = isPrivateMatch || match.match_type === 'social';
+        const fighter1IconName = (hasSocialExtras && match.player1_avatar) ? match.player1_avatar : 'music';
+        const fighter2IconName = (hasSocialExtras && match.player2_avatar) ? match.player2_avatar : 'music';
         const fighter1Badge = window.MTRIcons ? window.MTRIcons.svg(fighter1IconName, { size: 12 }) : '';
         const fighter2Badge = window.MTRIcons ? window.MTRIcons.svg(fighter2IconName, { size: 12 }) : '';
 
@@ -5065,7 +5108,7 @@ const GameEngine = {
             <div id="fanPlaysGameArea" class="max-w-md mx-auto mb-4"></div>
             <div id="battleStatusText" class="text-center py-4 px-4 mb-4"></div>
             <div id="hostCommentary" class="hidden max-w-3xl mx-auto text-center text-xs sm:text-sm text-amber-300/90 italic px-4 mb-4"></div>
-            ${isPrivateMatch ? `
+            ${hasSocialExtras ? `
             <div class="max-w-3xl mx-auto flex items-center justify-center gap-2 mb-2">
                 <button type="button" class="w-10 h-10 rounded-full bg-white/5 border border-white/10 hover:bg-white/10 text-lg transition cursor-pointer" onclick="GameEngine.sendPrivateReaction('🔥')">🔥</button>
                 <button type="button" class="w-10 h-10 rounded-full bg-white/5 border border-white/10 hover:bg-white/10 text-lg transition cursor-pointer" onclick="GameEngine.sendPrivateReaction('😅')">😅</button>
@@ -5116,7 +5159,7 @@ const GameEngine = {
             console.log('[createBattleUI] ✅ battleArena visible');
             this.bindBattleArenaAudio(addedArena);
             this.setupFanBetPanel(match);
-            if (isPrivateMatch) this.setupPrivateReactionsChannel(match);
+            if (hasSocialExtras) this.setupPrivateReactionsChannel(match);
 
             triggerHostNarration(
                 match.id || match.match_id,

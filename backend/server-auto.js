@@ -3544,6 +3544,9 @@ app.post('/api/user/refund-bonus-credits', requireCreditMutationAuth, async (req
  * Mismo patrón que ya se usó hoy para el equivalente con bono
  * (/api/social-challenges/bonus/create).
  */
+// Mismo set que MTR_AVATARS en index.html (Sala Privada).
+const SOCIAL_AVATARS = ['music', 'mic', 'headphones', 'disc', 'flame', 'bolt', 'crown', 'rocket', 'star', 'diamond', 'trophy', 'sparkles'];
+
 app.post('/api/social-challenges/create', requireCreditMutationAuth, async (req, res) => {
     try {
         if (!req.authUser) return res.status(401).json({ error: 'Inicia sesión primero.' });
@@ -3593,12 +3596,25 @@ app.post('/api/social-challenges/create', requireCreditMutationAuth, async (req,
             challengeRow.genre_id = genreId;
             challengeRow.genre_label = genreLabel || genreId;
         }
+        // Avatar del creador (mismo set de íconos que Sala Privada); pasa a
+        // la partida cuando alguien acepta. Opcional: si la columna no existe
+        // todavía (sql/social-avatars.sql), se reintenta sin él más abajo.
+        const challengerAvatar = SOCIAL_AVATARS.includes(req.body && req.body.avatar) ? req.body.avatar : null;
+        if (challengerAvatar) challengeRow.challenger_avatar = challengerAvatar;
 
         let { data: challenge, error: insertError } = await supabase
             .from('social_challenges')
             .insert([challengeRow])
             .select()
             .single();
+        if (insertError && challengeRow.challenger_avatar && String(insertError.message || '').indexOf('challenger_avatar') !== -1) {
+            delete challengeRow.challenger_avatar;
+            ({ data: challenge, error: insertError } = await supabase
+                .from('social_challenges')
+                .insert([challengeRow])
+                .select()
+                .single());
+        }
 
         // Igual que createSocialChallenge() en game-engine.js: si la
         // migración de género todavía no corrió, reintentar sin esas
@@ -4972,6 +4988,40 @@ app.post('/api/battles/:matchId/resolve-fanplay-timeout', requireCreditMutationA
 });
 
 // ==========================================
+// NOTIFICACIONES PUSH WEB (backend/push-service.js)
+// ==========================================
+// Avisos con el sitio cerrado -- hoy: "tu rival te espera en la sala".
+const { PushService } = require('./push-service');
+const pushService = new PushService(supabase);
+
+app.get('/api/push/public-key', async (req, res) => {
+    const key = await pushService.getPublicKey();
+    if (!key) return res.status(503).json({ error: 'Notificaciones no disponibles todavía' });
+    res.json({ ok: true, publicKey: key });
+});
+
+app.get('/api/push/status', requireCreditMutationAuth, async (req, res) => {
+    if (!req.authUser) return res.status(401).json({ error: 'Inicia sesión primero.' });
+    res.json({ ok: true, subscribed: await pushService.hasSubscription(req.authUser.id) });
+});
+
+app.post('/api/push/subscribe', requireCreditMutationAuth, async (req, res) => {
+    try {
+        if (!req.authUser) return res.status(401).json({ error: 'Inicia sesión primero.' });
+        await pushService.subscribe(req.authUser.id, req.body && req.body.subscription, req.headers['user-agent']);
+        res.json({ ok: true });
+    } catch (error) {
+        res.status(400).json({ error: error.message });
+    }
+});
+
+app.post('/api/push/unsubscribe', requireCreditMutationAuth, async (req, res) => {
+    if (!req.authUser) return res.status(401).json({ error: 'Inicia sesión primero.' });
+    if (req.body && req.body.endpoint) await pushService.unsubscribe(req.authUser.id, req.body.endpoint);
+    res.json({ ok: true });
+});
+
+// ==========================================
 // SALA DE ESPERA DE BATALLAS VERIFICADAS
 // ==========================================
 // Antes cada dispositivo arrancaba la batalla por su cuenta apenas entraba:
@@ -5060,6 +5110,22 @@ app.post('/api/battles/:matchId/lobby-ready', requireCreditMutationAuth, async (
                 .maybeSingle();
             if (marked) current = marked;
             else ({ data: current } = await supabase.from('matches').select('*').eq('id', matchId).single());
+
+            // Primer lado en entrar: avisar al rival por push (sitio cerrado
+            // incluido). Solo una vez -- 'marked' existe únicamente en la
+            // transición real de "no listo" a "listo".
+            const opponentReadyCol = side === 1 ? 'player2_ready_at' : 'player1_ready_at';
+            if (marked && !current[opponentReadyCol]) {
+                const opponentId = side === 1 ? current.player2_id : current.player1_id;
+                const isSocialAccept = current.match_type === 'social' && side === 2;
+                const mySongArtist = side === 1 ? current.player1_song_artist : current.player2_song_artist;
+                pushService.sendToUser(opponentId, {
+                    title: isSocialAccept ? '¡Aceptaron tu desafío! 🎵' : '¡Tu rival te está esperando! 🎵',
+                    body: (mySongArtist ? `${mySongArtist} ya está en la sala. ` : '') + 'Entrá ahora: la batalla arranca en vivo apenas llegues (tenés 5 minutos).',
+                    url: 'https://www.musictokenring.xyz/?battle=' + encodeURIComponent(matchId),
+                    tag: 'lobby-' + matchId
+                }).catch(() => {});
+            }
         }
 
         if (current.player1_ready_at && current.player2_ready_at && current.fanplay_seed == null
@@ -5257,12 +5323,25 @@ app.post('/api/social-challenges/bonus/create', requireCreditMutationAuth, async
             challengeRow.genre_id = genreId;
             challengeRow.genre_label = genreLabel || genreId;
         }
+        // Avatar del creador (mismo set de íconos que Sala Privada); pasa a
+        // la partida cuando alguien acepta. Opcional: si la columna no existe
+        // todavía (sql/social-avatars.sql), se reintenta sin él más abajo.
+        const challengerAvatar = SOCIAL_AVATARS.includes(req.body && req.body.avatar) ? req.body.avatar : null;
+        if (challengerAvatar) challengeRow.challenger_avatar = challengerAvatar;
 
         let { data: challenge, error: insertError } = await supabase
             .from('social_challenges')
             .insert([challengeRow])
             .select()
             .single();
+        if (insertError && challengeRow.challenger_avatar && String(insertError.message || '').indexOf('challenger_avatar') !== -1) {
+            delete challengeRow.challenger_avatar;
+            ({ data: challenge, error: insertError } = await supabase
+                .from('social_challenges')
+                .insert([challengeRow])
+                .select()
+                .single());
+        }
 
         // Igual que createSocialChallenge() en game-engine.js: si la
         // migración de género todavía no corrió, reintentar sin esas
