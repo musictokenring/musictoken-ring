@@ -824,7 +824,12 @@ async function awardMatchWinnerCore(match) {
     //  - Se paga por SELECCIÓN: el fondo se reparte 50/50 entre las dos
     //    canciones elegidas, ganen o pierdan. Canción sin reclamar o sin
     //    verificar -> su mitad queda para la plataforma.
-    //  - Nada si el artista es uno de los jugadores de la partida.
+    //  - También cuenta cuando el propio artista juega con su canción
+    //    (decidido 2026-09-28: el artista es su primer fan y jugar su música
+    //    es marketing que trae tráfico). No abre farmeo rentable: lo máximo
+    //    que vuelve a artistas es ARTIST_FEE_SHARE de la comisión, así que
+    //    jugar solo para generar regalías siempre cuesta más de lo que rinde.
+    //    Invariante a mantener: regalía por partida <= comisión.
     //  - Nunca en partidas 'bonus' (ya retornaron arriba) ni con pozo 0.
     // Acumulado en artists.royalty_credits, NO retirable todavía (Fase 2).
     const ARTIST_FEE_SHARE = 0.5;
@@ -852,10 +857,6 @@ async function awardMatchWinnerCore(match) {
                 .eq('verification_status', 'verified')
                 .maybeSingle();
             if (!artistRow) continue;
-            if (artistRow.user_id === match.player1_id || artistRow.user_id === match.player2_id) {
-                console.log(`[award-winner] Regalía omitida: el artista ${artistRow.id} jugó esta partida (match ${matchId})`);
-                continue;
-            }
             const won = match.winner === entry.side;
             const credited = await creditArtistRoyalty(artistRow, claimedSong, perSong, won);
             if (!credited) continue;
