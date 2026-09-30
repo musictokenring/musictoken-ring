@@ -418,12 +418,28 @@
         walletEl.textContent = 'Cargando...';
         try {
             var j = await cryptoCall('/api/admin/withdrawals/crypto');
-            var w = j.wallet || {};
-            walletEl.innerHTML = !w.configured
-                ? 'Wallet de pagos automáticos: <strong>no configurada</strong> (todo se paga manual).'
-                : w.error
-                    ? 'Wallet de pagos: error leyendo saldo (' + escapeHtml(w.error) + ')'
-                    : 'Wallet de pagos (Base) <code>' + escapeHtml(w.address) + '</code>: <strong>' + Number(w.usdc).toFixed(2) + ' USDC</strong> · ' + Number(w.eth).toFixed(5) + ' ETH para gas · pago automático hasta ' + (j.limits ? j.limits.autoMax : '?') + ' USD/día por usuario a direcciones ya pagadas antes.';
+            var rails = j.rails || {};
+            var np = rails.nowpayments || {};
+            var hw = rails.hotWallet || {};
+            var npLine;
+            if (!np.configured) {
+                npLine = 'NOWPayments: <strong>no configurado</strong> (faltan NOWPAYMENTS_API_KEY / EMAIL / PASSWORD).';
+            } else {
+                var bal = np.balance || {};
+                var coins = Object.keys(bal).map(function (k) {
+                    var v = bal[k]; var amt = (v && typeof v === 'object') ? v.amount : v;
+                    return escapeHtml(k) + ': ' + escapeHtml(amt);
+                });
+                npLine = 'NOWPayments: <strong>configurado</strong> · 2FA ' + (np.auto2fa ? '<strong>automático</strong>' : '<strong>manual</strong> (pegás el código que llega a tu email)') +
+                    ' · monedas usadas: ' + escapeHtml(np.tickers ? (np.tickers.base_usdc + ' / ' + np.tickers.tron_usdt) : '?') +
+                    (np.error ? '<br>Error leyendo saldo: ' + escapeHtml(np.error) : '<br>Saldo en custodia: ' + (coins.length ? coins.join(' · ') : 'vacío'));
+            }
+            var hwLine = !hw.configured
+                ? 'Wallet propia en Base: no configurada.'
+                : hw.error ? 'Wallet propia en Base: error (' + escapeHtml(hw.error) + ')'
+                : 'Wallet propia en Base <code>' + escapeHtml(hw.address) + '</code>: ' + Number(hw.usdc).toFixed(2) + ' USDC · ' + Number(hw.eth).toFixed(5) + ' ETH';
+            walletEl.innerHTML = npLine + '<br>' + hwLine + '<br>Pago automático hasta ' + (j.limits ? j.limits.autoMax : '?') + ' USD/día por usuario, solo a direcciones ya pagadas antes.';
+            var canAuto = !!(np.configured || hw.configured);
             var rows = j.requests || [];
             if (!rows.length) { listEl.innerHTML = '<p class="empty">No hay retiros cripto todavía.</p>'; return; }
             listEl.innerHTML = rows.map(function (r) {
@@ -433,11 +449,14 @@
                 var actions = '';
                 if (r.status === 'pending_review') {
                     actions =
-                        (r.network === 'base_usdc' ? '<button class="paid" onclick="cryptoApprove(\'' + r.id + '\')">🚀 Aprobar y pagar (wallet de pagos)</button>' : '') +
+                        (canAuto ? '<button class="paid" onclick="cryptoApprove(\'' + r.id + '\')">🚀 Aprobar y pagar</button>' : '') +
                         '<button class="paid" onclick="cryptoMarkPaid(\'' + r.id + '\')">✅ Pagué por fuera (pegar tx hash)</button>' +
                         '<button class="reject" onclick="cryptoReject(\'' + r.id + '\')">❌ Rechazar (devuelve saldo)</button>';
                 } else if (r.status === 'processing') {
-                    actions = '<button class="paid" onclick="cryptoMarkPaid(\'' + r.id + '\')">✅ Confirmar pagado (tx hash)</button>';
+                    actions = (r.payout_method === 'nowpayments'
+                        ? '<button class="paid" onclick="cryptoVerify2fa(\'' + r.id + '\')">🔐 Pegar código 2FA de NOWPayments</button>'
+                        : '') +
+                        '<button class="paid" onclick="cryptoMarkPaid(\'' + r.id + '\')">✅ Confirmar pagado (tx hash)</button>';
                 }
                 return '' +
                     '<div class="req-card">' +
@@ -463,12 +482,24 @@
     }
 
     async function cryptoApprove(id) {
-        if (!window.confirm('Se envía el USDC desde la wallet de pagos a la dirección del usuario. ¿Confirmás?')) return;
+        if (!window.confirm('Se envía el pago a la dirección del usuario (por NOWPayments si está configurado, si no desde la wallet propia en Base). ¿Confirmás?')) return;
         try {
             var j = await cryptoCall('/api/admin/withdrawals/crypto/' + id + '/approve', {});
-            setStatus(j.ok ? 'Pago enviado ✅' : ('No se pagó: ' + (j.error || '')));
+            setStatus(j.pending2fa ? 'Pago creado en NOWPayments: pegá el código 2FA que te llegó al email (vence en 1 hora)' : (j.ok ? 'Pago enviado ✅' : ('No se pagó: ' + (j.error || ''))));
         } catch (e) {
             setStatus('No se pagó: ' + e.message);
+        }
+        loadCrypto();
+    }
+
+    async function cryptoVerify2fa(id) {
+        var code = window.prompt('Código 2FA que te llegó de NOWPayments (6 dígitos):', '');
+        if (!code) return;
+        try {
+            await cryptoCall('/api/admin/withdrawals/crypto/' + id + '/verify-2fa', { code: code.trim() });
+            setStatus('Código aceptado: NOWPayments está enviando el pago ✅');
+        } catch (e) {
+            setStatus('Código rechazado: ' + e.message);
         }
         loadCrypto();
     }

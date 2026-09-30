@@ -40,6 +40,10 @@ create table if not exists withdrawal_requests_crypto (
     processed_at timestamptz
 );
 
+-- id del payout en NOWPayments (vía de pago 1). Agregado después de la
+-- primera versión: correr también si la tabla ya existía.
+alter table withdrawal_requests_crypto add column if not exists payout_id text;
+
 create index if not exists idx_wrc_user_created on withdrawal_requests_crypto (user_id, created_at desc);
 create index if not exists idx_wrc_status on withdrawal_requests_crypto (status, created_at);
 

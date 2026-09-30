@@ -402,7 +402,15 @@ async function initializeServices() {
 
         try {
             cryptoWithdrawalService = new CryptoWithdrawalService(supabase);
-            console.log('[server] ✅ Crypto withdrawal service initialized', cryptoWithdrawalService.hotWallet ? '(pagos automáticos disponibles)' : '(solo manual)');
+            console.log('[server] ✅ Crypto withdrawal service initialized', {
+                nowpayments: cryptoWithdrawalService.npConfigured(),
+                nowpayments2faAuto: cryptoWithdrawalService.npAuto2fa(),
+                hotWallet: !!cryptoWithdrawalService.hotWallet
+            });
+            // Estado de los payouts de NOWPayments en curso (pagado / fallido -> reembolso).
+            setInterval(() => {
+                cryptoWithdrawalService.syncNowPaymentsPayouts().catch((e) => console.warn('[crypto-withdrawal] sync:', e.message));
+            }, 90 * 1000);
         } catch (cwError) {
             console.error('[server] ⚠️ Error initializing crypto withdrawal service:', cwError.message);
         }
@@ -3223,11 +3231,11 @@ app.get('/api/withdrawals/crypto/mine', requireCreditMutationAuth, async (req, r
 app.get('/api/admin/withdrawals/crypto', requireInternalSecret, async (req, res) => {
     try {
         if (!cryptoWithdrawalService) return res.status(503).json({ ok: false, error: 'Servicio no disponible' });
-        const [requests, wallet] = await Promise.all([
+        const [requests, rails] = await Promise.all([
             cryptoWithdrawalService.listForAdmin(),
-            cryptoWithdrawalService.hotWalletStatus().catch((e) => ({ configured: true, error: e.message }))
+            cryptoWithdrawalService.railsStatus()
         ]);
-        res.json({ ok: true, requests, wallet, limits: CryptoWithdrawalService.limits() });
+        res.json({ ok: true, requests, rails, limits: CryptoWithdrawalService.limits() });
     } catch (e) {
         res.status(500).json({ ok: false, error: e.message });
     }
@@ -3237,6 +3245,15 @@ app.post('/api/admin/withdrawals/crypto/:id/approve', requireInternalSecret, asy
     try {
         const result = await cryptoWithdrawalService.executePayout(req.params.id);
         res.status(result.ok ? 200 : 400).json(result);
+    } catch (e) {
+        res.status(400).json({ ok: false, error: e.message });
+    }
+});
+
+app.post('/api/admin/withdrawals/crypto/:id/verify-2fa', requireInternalSecret, async (req, res) => {
+    try {
+        await cryptoWithdrawalService.verifyNowPayments2fa(req.params.id, req.body?.code);
+        res.json({ ok: true });
     } catch (e) {
         res.status(400).json({ ok: false, error: e.message });
     }
