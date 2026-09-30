@@ -106,7 +106,32 @@ async function readUnifiedTotal(supabase, userId) {
 }
 
 /**
+ * ¿La wallet ya pertenece a la cuenta de la sesión? Solo cuenta lo que está
+ * guardado en la base (user_wallets o la propia fila de users), nunca lo que
+ * diga el cliente: la walletAddress del body es pública (cualquiera conoce la
+ * de otro jugador) y antes bastaba mandarla para que el backend eligiera la
+ * cuenta de esa wallet para descontar, apostar o retirar (2026-09-29).
+ */
+async function walletBelongsToSession(supabase, ownIds, normalizedWallet) {
+  const { data: link } = await supabase
+    .from('user_wallets')
+    .select('user_id')
+    .eq('wallet_address', normalizedWallet)
+    .maybeSingle();
+  if (link?.user_id && ownIds.includes(link.user_id)) return true;
+
+  const { data: walletUser } = await supabase
+    .from('users')
+    .select('id')
+    .ilike('wallet_address', normalizedWallet)
+    .maybeSingle();
+  return !!(walletUser?.id && ownIds.includes(walletUser.id));
+}
+
+/**
  * Elige el userId con mayor saldo jugable entre sesión Supabase y wallet vinculada.
+ * La wallet solo suma candidatos si ya está vinculada a esta misma cuenta
+ * (walletBelongsToSession); una wallet ajena se ignora.
  */
 async function resolveCreditsUserId(supabase, walletLinkAdapter, authUser, walletAddress) {
   const candidates = new Set();
@@ -118,7 +143,7 @@ async function resolveCreditsUserId(supabase, walletLinkAdapter, authUser, walle
     ? walletAddress.toLowerCase()
     : null;
 
-  if (normalized) {
+  if (normalized && await walletBelongsToSession(supabase, [publicId, authUser.id], normalized)) {
     const { data: byWallet } = await supabase
       .from('users')
       .select('id')
@@ -185,6 +210,12 @@ async function verifyUserCanMutateCredits(
   if (walletAddress && userId && /^0x[a-fA-F0-9]{40}$/.test(walletAddress)) {
     const normalized = walletAddress.toLowerCase();
 
+    // La wallet del body la elige el cliente: sin este chequeo, mandar la
+    // wallet de OTRO jugador junto con su userId autorizaba mutar su saldo.
+    if (!await walletBelongsToSession(supabase, [publicUserId, authUser.id], normalized)) {
+      return false;
+    }
+
     // CRITICO: la wallet debe resolver directo al userId que se esta mutando.
     // NO exigimos ademas que esa wallet este vinculada a publicUserId (el id
     // de auth crudo) -- eso es precisamente lo que NUNCA es cierto en cuentas
@@ -206,6 +237,11 @@ async function verifyUserCanMutateCredits(
       .maybeSingle();
 
     if (walletUser?.id === userId) return true;
+
+    // La wallet es propia pero el userId no es ni la sesión ni la cuenta de
+    // esa wallet: antes caía al userOwnsWallet de abajo, que devolvía true
+    // sin mirar userId -> se podía mutar cualquier userId con la wallet propia.
+    return false;
   }
 
   if (walletAddress) {
@@ -351,5 +387,6 @@ module.exports = {
   readUnifiedTotal,
   authorizeTournamentJoin,
   verifyUserCanMutateCredits,
-  verifyUserInMatch
+  verifyUserInMatch,
+  walletBelongsToSession
 };

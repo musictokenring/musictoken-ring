@@ -240,4 +240,4 @@ function registerSiweRoutes(app, walletLinkService) {
   });
 }
 
-module.exports = { registerSiweRoutes, buildSiweMessage };
+module.exports = { registerSiweRoutes, buildSiweMessage, checkPendingSignature };

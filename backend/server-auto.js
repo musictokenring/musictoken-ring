@@ -29,7 +29,8 @@ const {
     resolvePublicUserId,
     resolveCreditsUserId,
     verifyUserInMatch,
-    authorizeTournamentJoin
+    authorizeTournamentJoin,
+    walletBelongsToSession
 } = require('./auth-middleware');
 const { startTournamentScheduler } = require('./tournament-scheduler');
 const { deductUnifiedBalance } = require('./unified-balance');
@@ -2011,6 +2012,32 @@ app.post('/api/user/link-wallet', async (req, res) => {
             return res.status(503).json({ error: 'Wallet link service not available' });
         }
 
+        // CRÍTICO (2026-09-29): antes cualquiera con sesión podía mandar la
+        // wallet de OTRO jugador y syncWalletOnLogin fusionaba el saldo de esa
+        // cuenta en la suya (y lo borraba de la víctima). Ahora: si la wallet
+        // ya es de esta cuenta no se toca nada; si no, hace falta la misma
+        // firma que /api/auth/wallet/link (nonce de /api/auth/wallet/nonce).
+        const normalizedWallet = walletAddress.toLowerCase();
+        const publicUserId = await resolvePublicUserId(supabase, authUser);
+        if (await walletBelongsToSession(supabase, [publicUserId, authUser.id], normalizedWallet)) {
+            return res.json({
+                success: true,
+                alreadyLinked: true,
+                message: 'Wallet already linked to your account'
+            });
+        }
+        if (!req.body.signature) {
+            return res.status(428).json({
+                error: 'Firmá con tu wallet para confirmar que es tuya',
+                code: 'SIGNATURE_REQUIRED'
+            });
+        }
+        const { checkPendingSignature } = require('./siwe-auth');
+        const signatureCheck = await checkPendingSignature(normalizedWallet, req.body.signature);
+        if (!signatureCheck.ok) {
+            return res.status(signatureCheck.status).json({ error: signatureCheck.error, code: 'SIGNATURE_INVALID' });
+        }
+
         // 🔗 NUEVO: Sync wallet-only operations if user did operations before logging in
         const { syncWalletOnLogin } = require('./sync-wallet-on-login');
         try {
@@ -2772,17 +2799,9 @@ async function handleTournamentJoinRequest(req, res, tournamentId, genreId) {
     const walletAddress = (req.body?.walletAddress || '').trim() || null;
     const participantUserId = await resolvePublicUserId(supabase, req.authUser);
 
-    if (walletLinkService && walletAddress && /^0x[a-fA-F0-9]{40}$/.test(walletAddress)) {
-        try {
-            await walletLinkService.linkWallet(participantUserId, walletAddress, {
-                ip: req.ip || req.headers['x-forwarded-for'] || 'unknown',
-                userAgent: req.headers['user-agent'] || 'unknown',
-                linkedVia: 'tournament_join'
-            });
-        } catch (linkErr) {
-            console.warn('[tournament] wallet link on join:', linkErr.message);
-        }
-    }
+    // Acá antes se vinculaba la wallet del body a la cuenta sin firma. Ya no:
+    // una wallet solo se vincula probando que es propia (firma), si no
+    // cualquiera podía apropiarse de una wallet ajena todavía sin vincular.
 
     const resolved = await resolveCreditsUserId(supabase, {
         getUserIdFromWallet: (addr) =>

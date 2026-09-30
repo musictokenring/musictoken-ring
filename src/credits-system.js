@@ -1106,6 +1106,12 @@
                         console.log('[credits-system] linkWalletToUser: Wallet already linked (OK)');
                         return true;
                     }
+                    // Vincular una wallet nueva exige firma (ver /api/auth/wallet/link,
+                    // "vincular wallet de retiro"); este auto-vínculo silencioso no la pide.
+                    if (response.status === 428) {
+                        console.log('[credits-system] linkWalletToUser: requiere firma, se omite el auto-vínculo');
+                        return false;
+                    }
                     console.error('[credits-system] linkWalletToUser: Error linking wallet:', errorData);
                     return false;
                 }
