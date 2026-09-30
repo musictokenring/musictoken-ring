@@ -13,7 +13,7 @@
  *        servidor lo genera solo (automático); sin él, NOWPayments manda el
  *        código al email del dueño y se pega en admin-retiros.html (1 hora,
  *        si no NOWPayments lo rechaza y el saldo se devuelve).
- *     2. Wallet de pagos propia en Base (ADMIN_WALLET_PRIVATE_KEY): solo USDC.
+ *     2. Wallet de pagos propia en Base (CRYPTO_PAYOUT_PRIVATE_KEY, clave nueva): solo USDC.
  * - Pago automático SOLO si: monto <= límite automático, dentro del tope de
  *   24h, la dirección ya recibió un pago anterior de esta misma cuenta y hay
  *   una vía automática disponible. Todo lo demás queda "pending_review".
@@ -100,7 +100,11 @@ class CryptoWithdrawalService {
             token: null,
             tokenExpiresAt: 0
         };
-        const pk = process.env.ADMIN_WALLET_PRIVATE_KEY;
+        // NUNCA ADMIN_WALLET_PRIVATE_KEY: esa cuenta (0x7537…2253) está
+        // comprometida -- delegada por EIP-7702 a un contrato del atacante,
+        // que barre todo lo que entra (98M MTR robados el 2026-09-21). La
+        // wallet de pagos en Base solo se activa con una clave NUEVA y propia.
+        const pk = process.env.CRYPTO_PAYOUT_PRIVATE_KEY;
         if (pk) {
             try {
                 const account = privateKeyToAccount(pk.startsWith('0x') ? pk : `0x${pk}`);
