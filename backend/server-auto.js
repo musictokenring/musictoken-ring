@@ -913,7 +913,7 @@ app.post('/api/matches/:matchId/award-winner', requireCreditMutationAuth, async 
 
         const { data: match, error: matchError } = await supabase
             .from('matches')
-            .select('id, status, winner, player1_id, player2_id, total_pot, match_type, stake_type, player1_song_id, player2_song_id')
+            .select('id, status, winner, player1_id, player2_id, total_pot, match_type, stake_type, player1_song_id, player2_song_id, player1_bet, player2_bet, player1_song_name, player1_song_artist, player2_song_name, player2_song_artist, finished_at')
             .eq('id', matchId)
             .maybeSingle();
 
@@ -931,6 +931,19 @@ app.post('/api/matches/:matchId/award-winner', requireCreditMutationAuth, async 
 
         const result = await awardMatchWinnerCore(match);
         if (result.error) return res.status(result.status || 500).json({ error: result.error });
+
+        // Historial del perfil (los dos jugadores), una sola vez: solo quien
+        // ganó la carrera del pago. Antes lo escribía el navegador, pero la
+        // RLS de player_battle_history solo deja insertar la fila PROPIA y el
+        // upsert mandaba las dos -> fallaba entero y las batallas sociales
+        // nunca aparecían (perfil con 0 victorias pese a haber ganado).
+        if (!result.alreadyProcessed) {
+            try {
+                await recordMatchBattles(supabase, match, match.winner, parseFloat(result.credited || 0));
+            } catch (historyError) {
+                console.error('[award-winner] Historial no registrado (no bloquea el premio):', historyError.message);
+            }
+        }
         res.json(result);
     } catch (error) {
         console.error('[award-winner] Error:', error);

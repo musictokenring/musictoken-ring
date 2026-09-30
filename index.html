@@ -2778,7 +2778,13 @@
                     var winnings = (window.GameEngine && typeof window.GameEngine.calculateMatchPayouts === 'function')
                         ? Math.round(window.GameEngine.calculateMatchPayouts(m.total_pot || 0).winnerPayout)
                         : 0;
-                    sub = 'vs ' + opponentLabel + (iWon ? (' · +' + winnings + ' créditos') : ' · sin cambios en tu saldo');
+                    // La apuesta se descuenta al crear el reto: al perder no se
+                    // resta nada más, pero decir "sin cambios" sonaba a que no
+                    // se perdió nada.
+                    var lostBet = Number((c && c.bet_amount) || (m && m.player1_bet) || 0);
+                    sub = 'vs ' + opponentLabel + (iWon
+                        ? (' · +' + winnings + ' créditos')
+                        : (lostBet > 0 ? ' · perdiste tu apuesta de ' + lostBet + (lostBet === 1 ? ' crédito' : ' créditos') : ''));
                 } else if (c.status === 'accepted') {
                     iconName = 'swords';
                     colorKey = 'orange';
