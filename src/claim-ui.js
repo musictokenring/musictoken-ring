@@ -21,6 +21,9 @@
             
             // Verificar autenticación periódicamente
             setInterval(() => this.checkAuthAndUpdateUI(), 10000);
+
+            this.loadHistory();
+            setInterval(() => this.loadHistory(), 30000);
         },
 
         /**
@@ -104,7 +107,7 @@
                 cashoutSection.innerHTML = `
                     <div class="max-w-2xl mx-auto p-6 sm:p-8 rounded-2xl border border-fuchsia-500/30 bg-gradient-to-br from-gray-900/80 to-purple-950/30 neon-border-magenta">
                         <h3 class="text-xl font-bold text-fuchsia-400 neon-text-magenta mb-2 flex items-center gap-2">${window.MTRIcons ? window.MTRIcons.inline('cash', {color:'magenta', glow:false, style:'margin:0'}) : ''}Reclamar Premios</h3>
-                        <p class="text-gray-400 text-sm mb-6">Elegí cómo retirar tus créditos ganados: en dólares/cripto a tu wallet vía <strong class="text-gray-300">NOWPayments</strong>, o en pesos colombianos vía <strong class="text-gray-300">Mercado Pago</strong>.</p>
+                        <p class="text-gray-400 text-sm mb-6">Elegí cómo retirar tus créditos: en <strong class="text-gray-300">cripto</strong> (USDC o USDT, desde cualquier país) o en <strong class="text-gray-300">pesos colombianos</strong> por Mercado Pago.</p>
 
                         <div id="claimAuthWarning" class="hidden p-4 rounded-lg bg-yellow-500/10 border border-yellow-500/20 mb-4">
                             <div class="text-sm text-yellow-400 flex items-center gap-2">
@@ -118,18 +121,32 @@
                             <div id="availableUsdcDisplay" class="text-sm text-gray-400 mt-1">≈ $0 USD nominal</div>
                         </div>
 
-                        <!-- Opción 1: USD / cripto vía NOWPayments -->
+                        <!-- Opción 1: cripto a una dirección pegada (sin conectar wallet).
+                             Backend: /api/withdrawals/crypto/request -- reserva
+                             atómica del saldo; primera vez a una dirección o
+                             montos altos los confirma el operador. -->
                         <div class="mb-4 p-4 rounded-xl border border-cyan-500/30 bg-cyan-500/5">
-                            <p class="text-xs font-bold uppercase tracking-wide text-cyan-300 mb-3 flex items-center gap-1.5">${window.MTRIcons ? window.MTRIcons.inline('coin', {color:'cyan', glow:false, style:'margin:0'}) : ''}Retirar en USD / cripto · NOWPayments</p>
+                            <p class="text-xs font-bold uppercase tracking-wide text-cyan-300 mb-3 flex items-center gap-1.5">${window.MTRIcons ? window.MTRIcons.inline('coin', {color:'cyan', glow:false, style:'margin:0'}) : ''}Retirar en cripto · USDC o USDT</p>
+                            <label class="block text-[11px] font-semibold text-gray-400 mb-1" for="cwNetwork">Red</label>
+                            <select id="cwNetwork" onchange="ClaimUI.updateQuote()" class="w-full mb-3 px-3 py-3 rounded-lg bg-black/40 border border-white/10 text-white text-sm focus:outline-none focus:border-cyan-500/50">
+                                <option value="base_usdc">USDC en Base (recomendado, comisión de red mínima)</option>
+                                <option value="tron_usdt">USDT en TRON (TRC-20)</option>
+                            </select>
+                            <label class="block text-[11px] font-semibold text-gray-400 mb-1" for="cwAddress">Dirección de destino</label>
+                            <input id="cwAddress" type="text" autocomplete="off" spellcheck="false" oninput="ClaimUI.updateQuote()" placeholder="0x… (Base)"
+                                   class="w-full mb-3 px-4 py-3 rounded-lg bg-black/40 border border-white/10 text-white placeholder-gray-500 text-sm font-mono focus:outline-none focus:border-cyan-500/50">
+                            <label class="block text-[11px] font-semibold text-gray-400 mb-1" for="claimCreditsAmount">Créditos a retirar</label>
                             <div class="flex flex-col sm:flex-row gap-3">
-                                <input id="claimCreditsAmount" type="number" min="5" placeholder="Mínimo 5 créditos (~$5)"
+                                <input id="claimCreditsAmount" type="number" min="5" step="0.01" inputmode="decimal" oninput="ClaimUI.updateQuote()" placeholder="Mínimo 5"
                                        class="flex-1 px-4 py-3 rounded-lg bg-black/40 border border-white/10 text-white placeholder-gray-500 text-sm focus:outline-none focus:border-cyan-500/50 focus:ring-1 focus:ring-cyan-500/20 transition">
-                                <button type="button" onclick="ClaimUI.processClaim()"
+                                <button type="button" id="cwSubmitBtn" onclick="ClaimUI.processClaim()"
                                         class="px-6 py-3 rounded-lg text-sm font-bold bg-gradient-to-r from-cyan-500 to-blue-600 text-white hover:opacity-90 transition-all shadow-lg shadow-cyan-500/30 cursor-pointer whitespace-nowrap flex items-center justify-center gap-1.5">
-                                    ${window.MTRIcons ? window.MTRIcons.svg('cash', {size:16}) : ''} Reclamar fondos
+                                    ${window.MTRIcons ? window.MTRIcons.svg('send', {size:16}) : ''} Retirar
                                 </button>
                             </div>
-                            <p class="text-[11px] text-gray-500 mt-2">Si es tu primera vez, te va a pedir confirmar con una sola firma en tu wallet a dónde mandar el pago. No cuesta gas ni autoriza ningún movimiento de fondos.</p>
+                            <p id="cwQuote" class="text-xs text-gray-400 mt-2"></p>
+                            <p class="text-[11px] text-gray-500 mt-2">No hace falta conectar ninguna wallet: pegá la dirección de tu wallet o de tu cuenta en un exchange (Binance, etc.) <strong class="text-gray-400">en la misma red que elegiste</strong>. La primera vez a una dirección nueva la confirma nuestro equipo antes de enviar.</p>
+                            <div id="cwHistory" class="mt-3"></div>
                         </div>
 
                         <!-- Opción 2: pesos colombianos vía Mercado Pago -->
@@ -188,121 +205,153 @@
             }
         },
 
+        backendUrl() {
+            return window.CONFIG?.BACKEND_API || window.CreditsSystem?.backendUrl || 'https://musictoken-ring.onrender.com';
+        },
+
+        async sessionToken() {
+            try {
+                const client = window.supabaseClient || (typeof supabaseClient !== 'undefined' ? supabaseClient : null);
+                const { data: { session } } = await client.auth.getSession();
+                return session?.access_token || null;
+            } catch (e) {
+                return null;
+            }
+        },
+
+        addressLooksValid(network, address) {
+            return network === 'tron_usdt'
+                ? /^T[1-9A-HJ-NP-Za-km-z]{33}$/.test(address)
+                : /^0x[a-fA-F0-9]{40}$/.test(address);
+        },
+
+        netAmount(amount) {
+            const fee = Math.floor(amount * 0.05 * 100) / 100;
+            return { fee, net: Math.floor((amount - fee) * 100) / 100 };
+        },
+
+        /** Valida en vivo red/dirección/monto y muestra cuánto llega neto. */
+        updateQuote() {
+            const network = document.getElementById('cwNetwork')?.value || 'base_usdc';
+            const addrEl = document.getElementById('cwAddress');
+            const quoteEl = document.getElementById('cwQuote');
+            if (addrEl) addrEl.placeholder = network === 'tron_usdt' ? 'T… (TRON)' : '0x… (Base)';
+            if (!quoteEl) return;
+            const address = (addrEl?.value || '').trim();
+            const amount = parseFloat(document.getElementById('claimCreditsAmount')?.value || 0);
+            if (address && !this.addressLooksValid(network, address)) {
+                quoteEl.innerHTML = '<span class="text-red-400">' + (network === 'tron_usdt'
+                    ? 'Esa dirección no es de TRON (empieza con T y tiene 34 caracteres).'
+                    : 'Esa dirección no es de Base (empieza con 0x y tiene 42 caracteres).') + '</span>';
+                return;
+            }
+            if (!(amount > 0)) { quoteEl.textContent = ''; return; }
+            const { fee, net } = this.netAmount(amount);
+            const coin = network === 'tron_usdt' ? 'USDT' : 'USDC';
+            quoteEl.innerHTML = amount < 5
+                ? '<span class="text-yellow-400">El mínimo es 5 créditos.</span>'
+                : 'Recibís <strong class="text-white">' + net.toFixed(2) + ' ' + coin + '</strong> (comisión 5%: ' + fee.toFixed(2) + ')';
+        },
+
         /**
-         * Process claim
+         * Retiro cripto: sesión obligatoria, dirección pegada (sin conectar
+         * wallet) y confirmación explícita. El backend reserva el saldo de
+         * forma atómica (/api/withdrawals/crypto/request).
          */
         async processClaim() {
+            const btn = document.getElementById('cwSubmitBtn');
             try {
-                // 🔒 SEGURIDAD: Verificar autenticación o wallet vinculada antes de procesar claim
-                let isAuthenticated = false;
-                let hasLinkedWallet = false;
-                
-                // 1. Verificar sesión Supabase
-                if (typeof supabaseClient !== 'undefined') {
-                    try {
-                        const { data: { session } } = await supabaseClient.auth.getSession();
-                        isAuthenticated = !!session;
-                    } catch (authError) {
-                        console.error('[claim-ui] Error verificando autenticación:', authError);
-                    }
+                const token = await this.sessionToken();
+                if (!token) {
+                    if (typeof showToast === 'function') showToast('Iniciá sesión para retirar', 'error');
+                    if (typeof window.openAuthModal === 'function') window.openAuthModal();
+                    return;
                 }
-                
-                // 2. Verificar wallet vinculada si no hay sesión (para navegadores internos)
-                if (!isAuthenticated) {
-                    const connectedAddress = window.connectedAddress || localStorage.getItem('mtr_wallet');
-                    if (connectedAddress) {
-                        try {
-                            const backendUrl = window.CONFIG?.BACKEND_API || window.CreditsSystem?.backendUrl || 'https://musictoken-ring.onrender.com';
-                            const walletResponse = await fetch(`${backendUrl}/api/user/wallet/${connectedAddress}`);
-                            if (walletResponse.ok) {
-                                const walletData = await walletResponse.json();
-                                if (walletData.linked && walletData.userId) {
-                                    hasLinkedWallet = true;
-                                    console.log('[claim-ui] ✅ Wallet vinculada, procesando claim');
-                                }
-                            }
-                        } catch (walletError) {
-                            console.warn('[claim-ui] Error verificando wallet link:', walletError);
-                        }
-                    }
+                const network = document.getElementById('cwNetwork')?.value || 'base_usdc';
+                const address = (document.getElementById('cwAddress')?.value || '').trim();
+                const amount = parseFloat(document.getElementById('claimCreditsAmount')?.value || 0);
+                if (!this.addressLooksValid(network, address)) {
+                    this.updateQuote();
+                    if (typeof showToast === 'function') showToast('Revisá la dirección de destino', 'error');
+                    return;
                 }
-                
-                // 3. Bloquear si no hay autenticación ni wallet vinculada
-                if (!isAuthenticated && !hasLinkedWallet) {
-                    if (typeof showToast === 'function') {
-                        showToast('Debes iniciar sesión o vincular tu wallet para reclamar créditos', 'error');
-                    }
-                    console.warn('[claim-ui] Intento de claim sin autenticación ni wallet vinculada bloqueado');
+                if (!(amount >= 5)) {
+                    if (typeof showToast === 'function') showToast('El mínimo de retiro es 5 créditos', 'error');
                     return;
                 }
 
-                const input = document.getElementById('claimCreditsAmount');
-                const credits = parseFloat(input?.value || 0);
-                let walletAddress = window.connectedAddress || localStorage.getItem('mtr_wallet');
+                const { net } = this.netAmount(amount);
+                const coin = network === 'tron_usdt' ? 'USDT (red TRON)' : 'USDC (red Base)';
+                const ok = window.confirm(
+                    'Confirmá tu retiro\n\n' +
+                    'Recibís: ' + net.toFixed(2) + ' ' + coin + '\n' +
+                    'A: ' + address + '\n\n' +
+                    'Revisá que la dirección sea de esa red: un envío a una red equivocada no se puede recuperar.'
+                );
+                if (!ok) return;
 
-                // Antes esto exigía haber pasado por la conexión completa de
-                // WalletConnect (QR, pareo, a veces poco confiable en mobile
-                // -- ver memoria de sesión). Lo único que hace falta acá es
-                // SABER a qué dirección mandar el retiro, no una sesión de
-                // wallet persistente. Si ya hay login (isAuthenticated), se
-                // ofrece vincular con una sola firma (linkWalletForPayout,
-                // sin gas, sin QR) cuando hay window.ethereum disponible; si
-                // no, se cae al flujo de WalletConnect existente como
-                // respaldo -- no se saca esa opción, solo deja de ser la
-                // única.
-                if (!walletAddress && isAuthenticated) {
-                    if (window.ethereum && typeof window.linkWalletForPayout === 'function') {
-                        const linkResult = await window.linkWalletForPayout();
-                        if (linkResult.ok) {
-                            walletAddress = linkResult.address;
-                        } else if (linkResult.error === 'cancelled') {
-                            return;
-                        }
-                    }
-                    if (!walletAddress && typeof window.connectWallet === 'function') {
-                        if (typeof showToast === 'function') {
-                            showToast('Conectá tu wallet para indicar dónde recibir el retiro', 'info');
-                        }
-                        await window.connectWallet();
-                        walletAddress = window.connectedAddress || localStorage.getItem('mtr_wallet');
-                    }
+                if (btn) { btn.disabled = true; btn.style.opacity = '0.6'; }
+                const resp = await fetch(this.backendUrl() + '/api/withdrawals/crypto/request', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+                    body: JSON.stringify({ amount, network, address })
+                });
+                const data = await resp.json().catch(() => ({}));
+                if (!resp.ok || !data.ok) throw new Error(data.error || ('HTTP ' + resp.status));
+
+                const r = data.request || {};
+                const msg = r.status === 'paid'
+                    ? 'Retiro enviado: ' + Number(r.payout_amount).toFixed(2) + ' ' + (network === 'tron_usdt' ? 'USDT' : 'USDC') + '.'
+                    : 'Retiro recibido. Lo revisamos y lo enviamos a la brevedad; el saldo ya quedó reservado.';
+                this.showClaimStatus(msg, 'success');
+                if (typeof showToast === 'function') showToast(msg, 'success');
+                document.getElementById('claimCreditsAmount').value = '';
+                this.updateQuote();
+                if (window.CreditsSystem && typeof window.CreditsSystem.loadBalance === 'function') {
+                    Promise.resolve(window.CreditsSystem.loadBalance(null)).catch(() => {});
                 }
-
-                if (!walletAddress) {
-                    if (typeof showToast === 'function') {
-                        showToast('Necesitamos una wallet para saber dónde enviar tu retiro. Conectala o vinculala primero.', 'error');
-                    }
-                    return;
-                }
-
-                const minClaim = 5; // Mínimo para reclamar (mismo que apuesta mínima)
-                if (!credits || credits < minClaim) {
-                    if (typeof showToast === 'function') {
-                        showToast(`Mínimo ${minClaim} créditos para reclamar`, 'error');
-                    }
-                    return;
-                }
-
-                if (!window.CreditsSystem) {
-                    if (typeof showToast === 'function') {
-                        showToast('Sistema de créditos no disponible', 'error');
-                    }
-                    return;
-                }
-
-                const result = await window.CreditsSystem.claimCredits(credits, walletAddress);
-
-                if (result) {
-                    this.showClaimStatus(`✅ ${result.usdcAmount} USD enviados a tu wallet. Tx: ${result.txHash.slice(0, 10)}...`, 'success');
-                    input.value = '';
-                    this.updateDisplay();
-                }
-
+                this.loadHistory();
             } catch (error) {
-                console.error('[claim-ui] Error processing claim:', error);
-                if (typeof showToast === 'function') {
-                    showToast(`Error: ${error.message}`, 'error');
-                }
+                console.error('[claim-ui] Error en retiro cripto:', error);
+                this.showClaimStatus('No se pudo crear el retiro: ' + error.message, 'error');
+                if (typeof showToast === 'function') showToast('Error: ' + error.message, 'error');
+            } finally {
+                if (btn) { btn.disabled = false; btn.style.opacity = ''; }
+            }
+        },
+
+        /** Últimos retiros cripto del usuario, con su estado y la transacción. */
+        async loadHistory() {
+            const box = document.getElementById('cwHistory');
+            if (!box) return;
+            const token = await this.sessionToken();
+            if (!token) { box.innerHTML = ''; return; }
+            try {
+                const resp = await fetch(this.backendUrl() + '/api/withdrawals/crypto/mine', { headers: { 'Authorization': 'Bearer ' + token } });
+                const data = await resp.json().catch(() => ({}));
+                const rows = (data && data.requests) || [];
+                if (!rows.length) { box.innerHTML = ''; return; }
+                const label = {
+                    pending_review: ['En revisión', 'text-yellow-300'],
+                    processing: ['Enviando', 'text-cyan-300'],
+                    paid: ['Pagado', 'text-green-400'],
+                    failed: ['Falló · saldo devuelto', 'text-red-400'],
+                    rejected: ['Rechazado · saldo devuelto', 'text-red-400']
+                };
+                const esc = (t) => String(t == null ? '' : t).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+                box.innerHTML = '<p class="text-[11px] font-bold uppercase tracking-wide text-gray-500 mb-2">Tus retiros cripto</p>' + rows.slice(0, 5).map((r) => {
+                    const st = label[r.status] || [esc(r.status), 'text-gray-400'];
+                    const coin = r.network === 'tron_usdt' ? 'USDT' : 'USDC';
+                    const link = r.tx_hash
+                        ? ' · <a class="underline text-cyan-400" target="_blank" rel="noopener" href="' + (r.network === 'tron_usdt' ? 'https://tronscan.org/#/transaction/' : 'https://basescan.org/tx/') + encodeURIComponent(r.tx_hash) + '">ver tx</a>'
+                        : '';
+                    const addr = esc(r.address);
+                    return '<div class="flex items-center justify-between gap-2 text-xs py-1.5 border-b border-white/5">' +
+                        '<span class="text-gray-300">' + Number(r.payout_amount).toFixed(2) + ' ' + coin + ' <span class="text-gray-500 font-mono">' + addr.slice(0, 6) + '…' + addr.slice(-4) + '</span></span>' +
+                        '<span class="' + st[1] + ' whitespace-nowrap">' + st[0] + link + '</span></div>';
+                }).join('');
+            } catch (e) {
+                box.innerHTML = '';
             }
         },
 

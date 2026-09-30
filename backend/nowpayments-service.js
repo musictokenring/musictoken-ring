@@ -463,22 +463,37 @@ const DEPOSIT_FEE_RATE = 0.05;
 // Credit rate: 95% of deposit (after 5% fee)
 const CREDIT_RATE = 0.95;
 
+function sortKeysDeep(value) {
+    if (Array.isArray(value)) return value.map(sortKeysDeep);
+    if (value && typeof value === 'object') {
+        return Object.keys(value).sort().reduce((acc, k) => { acc[k] = sortKeysDeep(value[k]); return acc; }, {});
+    }
+    return value;
+}
+
 class NOWPaymentsService {
     constructor() {
         this.tradingFundService = new TradingFundService();
     }
 
+    /**
+     * Monto del depósito EN USD. Antes tomaba primero actually_paid / pay_amount,
+     * que están en la cripto con la que se pagó (0.0003 BTC por una factura de
+     * $20 acreditaba 0.0003 créditos). La factura se crea en USD
+     * (price_amount/price_currency) y con estado finished se pagó completa.
+     */
     normalizeIncomingAmount(data) {
-        const candidates = [
-            data.actually_paid,
-            data.pay_amount,
-            data.price_amount,
-            data.outcome_amount
-        ];
-        for (const c of candidates) {
-            const n = parseFloat(c);
-            if (Number.isFinite(n) && n > 0) return n;
-        }
+        const priceCurrency = String(data.price_currency || '').toLowerCase();
+        const payCurrency = String(data.pay_currency || '').toLowerCase();
+        const isUsdLike = (c) => /^(usd|usdt|usdc)/.test(c);
+        const num = (v) => { const n = parseFloat(v); return Number.isFinite(n) && n > 0 ? n : 0; };
+
+        if (isUsdLike(priceCurrency) && num(data.price_amount)) return num(data.price_amount);
+        if (num(data.actually_paid_at_fiat)) return num(data.actually_paid_at_fiat);
+        if (isUsdLike(payCurrency) && num(data.actually_paid)) return num(data.actually_paid);
+        console.error('[nowpayments] No se pudo determinar el monto en USD del pago', {
+            payment_id: data.payment_id, price_currency: data.price_currency, pay_currency: data.pay_currency
+        });
         return 0;
     }
 
@@ -660,16 +675,21 @@ class NOWPaymentsService {
             return false;
         }
 
-        const hmac = crypto.createHmac('sha512', NOWPAYMENTS_IPN_SECRET);
-        hmac.update(typeof payload === 'string' ? payload : String(payload));
-        const expectedHex = hmac.digest('hex');
-        const sig = String(signature).trim();
-        const a = Buffer.from(sig, 'hex');
-        const b = Buffer.from(expectedHex, 'hex');
-        if (a.length !== b.length || a.length === 0) {
-            return false;
-        }
-        return crypto.timingSafeEqual(a, b);
+        // NOWPayments firma el JSON con las claves ORDENADAS alfabéticamente
+        // (doc oficial de IPN), no necesariamente el body tal como llega. Se
+        // acepta cualquiera de las dos formas; ambas exigen el secreto.
+        const raw = typeof payload === 'string' ? payload : String(payload);
+        const candidates = [raw];
+        try {
+            candidates.push(JSON.stringify(sortKeysDeep(JSON.parse(raw))));
+        } catch (_e) { /* body no es JSON: solo se prueba el crudo */ }
+
+        const sigBuf = Buffer.from(String(signature).trim(), 'hex');
+        if (sigBuf.length === 0) return false;
+        return candidates.some((text) => {
+            const expected = Buffer.from(crypto.createHmac('sha512', NOWPAYMENTS_IPN_SECRET).update(text).digest('hex'), 'hex');
+            return expected.length === sigBuf.length && crypto.timingSafeEqual(expected, sigBuf);
+        });
     }
 
     /**
@@ -816,14 +836,7 @@ class NOWPaymentsService {
             // historial de pagos de NOWPayments contra la tabla `deposits`
             // para encontrar e indemnizar manualmente a quien haya pagado
             // mientras este bug estuvo activo.
-            const { error: creditError } = await supabase.rpc('increment_user_credits', {
-                user_id_param: userId,
-                credits_to_add: creditsAwarded
-            });
-
-            if (creditError) {
-                throw new Error(`Failed to award credits: ${creditError.message}`);
-            }
+            // (acreditación movida a DESPUÉS del insert de abajo)
 
             // Record deposit.
             // CRÍTICO: wallet_address, fee_amount, vault_fee, trading_fund_fee,
@@ -855,8 +868,28 @@ class NOWPaymentsService {
                 .select()
                 .single();
 
+            // Idempotencia real: NOWPayments manda 'confirmed' y 'finished' casi
+            // juntos. Antes se chequeaba "¿ya existe?" y se acreditaba ANTES de
+            // insertar, así que dos avisos simultáneos pasaban los dos y
+            // acreditaban doble. Ahora primero se inserta (tx_hash es UNIQUE):
+            // solo el que gana el insert acredita.
             if (depositError) {
+                if (depositError.code === '23505') {
+                    console.log('[nowpayments] Depósito ya registrado por otro aviso:', paymentData.payment_id);
+                    return { processed: false, reason: 'Already processed' };
+                }
                 throw new Error(`Failed to record deposit: ${depositError.message}`);
+            }
+
+            const { error: creditError } = await supabase.rpc('increment_user_credits', {
+                user_id_param: userId,
+                credits_to_add: creditsAwarded
+            });
+            if (creditError) {
+                // Queda registrado como 'failed' para acreditarlo a mano: el
+                // pago existe y no se puede reintentar solo (NOWPayments recibe 200).
+                await supabase.from('deposits').update({ status: 'failed' }).eq('id', deposit.id);
+                throw new Error(`Failed to award credits: ${creditError.message}`);
             }
 
             // Update vault balance (DB tracking).

@@ -105,6 +105,7 @@
 
     <div class="tabs">
         <button type="button" class="tab-btn active" data-tab="retiros" onclick="switchTab('retiros')">Retiros</button>
+        <button type="button" class="tab-btn" data-tab="cripto" onclick="switchTab('cripto')">Retiros cripto</button>
         <button type="button" class="tab-btn" data-tab="contabilidad" onclick="switchTab('contabilidad')">Contabilidad</button>
         <button type="button" class="tab-btn" data-tab="bonos" onclick="switchTab('bonos')">Bonos</button>
         <button type="button" class="tab-btn" data-tab="artistas" onclick="switchTab('artistas')">Artistas</button>
@@ -113,6 +114,13 @@
     <!-- ============ RETIROS ============ -->
     <div id="tab-retiros" class="tab-panel active">
         <div id="list"></div>
+    </div>
+
+    <!-- ============ RETIROS CRIPTO ============ -->
+    <div id="tab-cripto" class="tab-panel">
+        <button type="button" onclick="loadCrypto()">🔄 Actualizar</button>
+        <div id="cryptoWallet" class="empty" style="margin: 0.6rem 0;"></div>
+        <div id="cryptoList"></div>
     </div>
 
     <!-- ============ CONTABILIDAD ============ -->
@@ -224,6 +232,7 @@
     function switchTab(name) {
         document.querySelectorAll('.tab-btn').forEach(function (b) { b.classList.toggle('active', b.getAttribute('data-tab') === name); });
         document.querySelectorAll('.tab-panel').forEach(function (p) { p.classList.toggle('active', p.id === 'tab-' + name); });
+        if (name === 'cripto' && getSecret()) loadCrypto();
         if (name === 'contabilidad' && getSecret()) loadAccounting();
         if (name === 'bonos' && getSecret()) loadBonusList();
         if (name === 'artistas' && getSecret()) loadPendingArtists();
@@ -384,6 +393,109 @@
         } catch (e) {
             setStatus('Error de red: ' + e.message);
         }
+    }
+
+    // ============ RETIROS CRIPTO ============
+    // Estados: pending_review (esperando tu decisión), processing (enviando),
+    // paid, failed/rejected (saldo ya devuelto al usuario).
+    var CRYPTO_STATUS = { pending_review: '⏳ En revisión', processing: '🔄 Enviando', paid: '✅ Pagado', failed: '⚠️ Falló (saldo devuelto)', rejected: '❌ Rechazado (saldo devuelto)' };
+
+    async function cryptoCall(path, body) {
+        var r = await fetch(BACKEND_API + path, {
+            method: body ? 'POST' : 'GET',
+            headers: { 'Content-Type': 'application/json', 'x-internal-secret': getSecret() },
+            body: body ? JSON.stringify(body) : undefined
+        });
+        var j = await r.json().catch(function () { return {}; });
+        if (!r.ok || (j.ok === false)) throw new Error(j.error || ('HTTP ' + r.status));
+        return j;
+    }
+
+    async function loadCrypto() {
+        if (!getSecret()) return;
+        var walletEl = document.getElementById('cryptoWallet');
+        var listEl = document.getElementById('cryptoList');
+        walletEl.textContent = 'Cargando...';
+        try {
+            var j = await cryptoCall('/api/admin/withdrawals/crypto');
+            var w = j.wallet || {};
+            walletEl.innerHTML = !w.configured
+                ? 'Wallet de pagos automáticos: <strong>no configurada</strong> (todo se paga manual).'
+                : w.error
+                    ? 'Wallet de pagos: error leyendo saldo (' + escapeHtml(w.error) + ')'
+                    : 'Wallet de pagos (Base) <code>' + escapeHtml(w.address) + '</code>: <strong>' + Number(w.usdc).toFixed(2) + ' USDC</strong> · ' + Number(w.eth).toFixed(5) + ' ETH para gas · pago automático hasta ' + (j.limits ? j.limits.autoMax : '?') + ' USD/día por usuario a direcciones ya pagadas antes.';
+            var rows = j.requests || [];
+            if (!rows.length) { listEl.innerHTML = '<p class="empty">No hay retiros cripto todavía.</p>'; return; }
+            listEl.innerHTML = rows.map(function (r) {
+                var email = (r.users && r.users.email) || r.user_id;
+                var coin = r.network === 'tron_usdt' ? 'USDT · TRON' : 'USDC · Base';
+                var explorer = r.network === 'tron_usdt' ? 'https://tronscan.org/#/transaction/' : 'https://basescan.org/tx/';
+                var actions = '';
+                if (r.status === 'pending_review') {
+                    actions =
+                        (r.network === 'base_usdc' ? '<button class="paid" onclick="cryptoApprove(\'' + r.id + '\')">🚀 Aprobar y pagar (wallet de pagos)</button>' : '') +
+                        '<button class="paid" onclick="cryptoMarkPaid(\'' + r.id + '\')">✅ Pagué por fuera (pegar tx hash)</button>' +
+                        '<button class="reject" onclick="cryptoReject(\'' + r.id + '\')">❌ Rechazar (devuelve saldo)</button>';
+                } else if (r.status === 'processing') {
+                    actions = '<button class="paid" onclick="cryptoMarkPaid(\'' + r.id + '\')">✅ Confirmar pagado (tx hash)</button>';
+                }
+                return '' +
+                    '<div class="req-card">' +
+                        '<div class="req-top">' +
+                            '<span class="req-amount">' + Number(r.payout_amount).toFixed(2) + ' ' + coin + '</span>' +
+                            '<span class="req-meta">' + new Date(r.created_at).toLocaleString('es-CO') + '</span>' +
+                        '</div>' +
+                        '<div class="req-meta">' + (CRYPTO_STATUS[r.status] || escapeHtml(r.status)) + ' · Usuario: ' + escapeHtml(email) +
+                            ' · descuenta ' + Number(r.amount_credits).toFixed(2) + ' créditos (comisión ' + Number(r.fee_credits).toFixed(2) + ')</div>' +
+                        (r.review_reason ? '<div class="req-meta">Motivo de revisión: ' + escapeHtml(r.review_reason) + '</div>' : '') +
+                        (r.error ? '<div class="req-meta" style="color:#f87171;">' + escapeHtml(r.error) + '</div>' : '') +
+                        '<div class="req-details">' +
+                            copyRow('Dirección (' + coin + ')', r.address) +
+                            copyRow('Monto a enviar', Number(r.payout_amount).toFixed(2)) +
+                            (r.tx_hash ? '<div class="req-meta">Tx: <a target="_blank" rel="noopener" href="' + explorer + encodeURIComponent(r.tx_hash) + '">' + escapeHtml(r.tx_hash.slice(0, 18)) + '…</a></div>' : '') +
+                        '</div>' +
+                        (actions ? '<div class="req-actions">' + actions + '</div>' : '') +
+                    '</div>';
+            }).join('');
+        } catch (e) {
+            walletEl.textContent = 'Error: ' + e.message;
+        }
+    }
+
+    async function cryptoApprove(id) {
+        if (!window.confirm('Se envía el USDC desde la wallet de pagos a la dirección del usuario. ¿Confirmás?')) return;
+        try {
+            var j = await cryptoCall('/api/admin/withdrawals/crypto/' + id + '/approve', {});
+            setStatus(j.ok ? 'Pago enviado ✅' : ('No se pagó: ' + (j.error || '')));
+        } catch (e) {
+            setStatus('No se pagó: ' + e.message);
+        }
+        loadCrypto();
+    }
+
+    async function cryptoMarkPaid(id) {
+        var hash = window.prompt('Pegá el hash de la transacción con la que pagaste:', '');
+        if (!hash) return;
+        var notes = window.prompt('Nota opcional:', '') || '';
+        try {
+            await cryptoCall('/api/admin/withdrawals/crypto/' + id + '/mark-paid', { txHash: hash.trim(), notes: notes });
+            setStatus('Marcado como pagado ✅');
+        } catch (e) {
+            setStatus('Error: ' + e.message);
+        }
+        loadCrypto();
+    }
+
+    async function cryptoReject(id) {
+        var notes = window.prompt('Motivo del rechazo (se le devuelve el saldo al usuario):', '') || '';
+        if (!window.confirm('¿Rechazar este retiro? Se le devuelve el saldo al usuario.')) return;
+        try {
+            await cryptoCall('/api/admin/withdrawals/crypto/' + id + '/reject', { notes: notes });
+            setStatus('Rechazado, saldo devuelto');
+        } catch (e) {
+            setStatus('Error: ' + e.message);
+        }
+        loadCrypto();
     }
 
     // ============ CONTABILIDAD ============

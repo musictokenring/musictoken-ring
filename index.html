@@ -1075,7 +1075,7 @@
                     <button
                         onclick="if(typeof openAuthModal === 'function') { openAuthModal(); } else if(typeof window.openAuthModal === 'function') { window.openAuthModal(); }"
                         class="px-4 py-2 rounded-lg bg-yellow-500/20 border border-yellow-500/30 text-yellow-300 hover:bg-yellow-500/30 transition cursor-pointer">
-                        Iniciar Sesión o Conectar Wallet
+                        Iniciar sesión
                     </button>
                 </div>
 
@@ -3175,7 +3175,7 @@
     <!-- Ramp Network removido - ya no se usa -->
     <script src="./src/tournament-hub.js?v=v2.9-cpu-slot-fix"></script>
     <script src="./src/tournament-bracket.js?v=v2.19-arena-scroll"></script>
-    <script src="./src/claim-ui.js?v=v2.7" defer></script>
+    <script src="./src/claim-ui.js?v=v3.0-crypto-address" defer></script>
     <script src="./src/fan-plays-scoring.js?v=v1"></script>
     <script src="./src/fan-plays-minigame.js?v=v2"></script>
     <script src="./src/push-notifications.js?v=v1"></script>
@@ -10412,6 +10412,15 @@
         .mtr2-session-banner { display:none; align-items:center; gap:12px; border-radius:16px; padding:14px 16px; margin-bottom:16px; background:linear-gradient(120deg, rgba(251,146,60,0.18), rgba(8,15,26,0.9)); border:1.5px solid rgba(251,146,60,0.5); }
         body.mtr2-no-session .mtr2-session-banner { display:flex; }
 
+        /* "Conectar wallet" (WalletConnect) fuera de la interfaz desde
+           2026-09-29: en celular no es confiable (el sistema pausa el
+           navegador al saltar a la app de la wallet) y nada de la app lo
+           necesita: se entra con Google/email, se recarga con tarjeta/pesos/
+           cripto por factura y se retira pegando una dirección. Quien abre
+           el sitio DENTRO de una wallet (window.ethereum) sigue teniendo
+           "Entrar con tu wallet" (firma, sin saltos entre apps). */
+        #walletConnectBtn, #connectWalletOnboardingBtn { display:none !important; }
+
         /* MODO VISITANTE (sin cuenta): antes el shell solo se activaba con
            sesión, así que quien llegaba por primera vez veía el layout viejo
            (una página larga con todo apilado, sin menú). Ahora ve las mismas
@@ -10526,8 +10535,8 @@
                         <button type="button" onclick="mtr2GuestSignup()" style="color:#05060a; background:linear-gradient(90deg,#00f0ff,#22d3ee); box-shadow:0 0 22px rgba(0,240,255,0.4);">
                             <span data-mtr-icon="mail" data-mtr-plain data-mtr-size="18"></span>Crear cuenta gratis
                         </button>
-                        <button type="button" onclick="mtr2GuestWallet()" style="color:#f5d0fe; background:rgba(255,46,196,0.12); border:1.5px solid rgba(255,46,196,0.45);">
-                            <span data-mtr-icon="link" data-mtr-plain data-mtr-size="18"></span>Conectar wallet
+                        <button type="button" id="mtr2GuestWalletBtn" onclick="mtr2GuestWallet()" style="display:none; color:#f5d0fe; background:rgba(255,46,196,0.12); border:1.5px solid rgba(255,46,196,0.45);">
+                            <span data-mtr-icon="wallet" data-mtr-plain data-mtr-size="18"></span>Entrar con tu wallet
                         </button>
                     </div>
                     <div class="mtr2-welcome-perks">
@@ -10715,7 +10724,7 @@
                 <div style="display:flex; flex-direction:column; align-items:center; text-align:center; margin-bottom:18px; padding-top:6px;">
                     <div id="mtr2ProfileAvatar" style="width:72px; height:72px; border-radius:50%; background:linear-gradient(135deg,#00f0ff,#0891b2); display:flex; align-items:center; justify-content:center; font-size:26px; font-weight:800; color:#05060a; box-shadow:0 0 24px rgba(0,240,255,0.45); border:3px solid rgba(0,240,255,0.3); margin-bottom:10px;">?</div>
                     <div class="mtr2-h" id="mtr2ProfileName" style="font-size:17px; font-weight:700; color:#fff; margin-bottom:4px;">Jugador</div>
-                    <div id="mtr2ProfileWalletStatus" class="mtr2-auth-only" style="font-size:11px; font-weight:700; color:#9ca3af; background:rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.1); border-radius:999px; padding:4px 10px; cursor:pointer;">Wallet no conectada</div>
+                    <div id="mtr2ProfileWalletStatus" class="mtr2-auth-only" style="display:none !important; font-size:11px; font-weight:700; color:#9ca3af; background:rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.1); border-radius:999px; padding:4px 10px; cursor:pointer;">Wallet no conectada</div>
                 </div>
 
                 <!-- Visitante: qué gana creando la cuenta, en vez de un perfil vacío. -->
@@ -10758,9 +10767,9 @@
                         <span style="flex:1; font-size:13.5px; font-weight:600; color:#e5e7eb;">Historial de batallas</span>
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#4b5563" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg>
                     </button>
-                    <button type="button" class="mtr2-row" onclick="mtr2WalletRowClick()">
+                    <button type="button" class="mtr2-row" onclick="mtr2NavTap('cartera'); mtr2SetCarteraTab('withdraw');">
                         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;"><rect x="3" y="6" width="18" height="13" rx="2"/><path d="M3 10h18"/></svg>
-                        <span style="flex:1; font-size:13.5px; font-weight:600; color:#e5e7eb;" id="mtr2WalletRowLabel">Conectar wallet</span>
+                        <span style="flex:1; font-size:13.5px; font-weight:600; color:#e5e7eb;">Retirar a cripto (USDC / USDT)</span>
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#4b5563" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg>
                     </button>
                     <button type="button" class="mtr2-row" onclick="if(typeof window.openWithdrawalCopModal==='function') window.openWithdrawalCopModal()">
@@ -11151,9 +11160,11 @@
             };
             // Wallet: reusa el botón real del #loginWall (ya tiene todo el
             // flujo de conexión enganchado), sin duplicar lógica.
+            // Solo se muestra dentro del navegador de una wallet (MetaMask,
+            // Trust...): ahí entra con una firma, sin WalletConnect.
             window.mtr2GuestWallet = function () {
-                var btn = document.getElementById('connectWalletOnboardingBtn') || document.getElementById('walletConnectBtn');
-                if (btn) btn.click(); else window.mtr2GuestSignup();
+                if (window.ethereum && typeof window.signInWithWallet === 'function') window.signInWithWallet();
+                else window.mtr2GuestSignup();
             };
             // Sin cuenta, elegir un modo o un método de recarga llevaba a
             // pantallas que después fallaban al apostar/pagar. Para un
@@ -11234,6 +11245,8 @@
             };
 
             function mtr2Init() {
+                var walletEntry = document.getElementById('mtr2GuestWalletBtn');
+                if (walletEntry && window.ethereum) walletEntry.style.display = '';
                 mtr2RefreshPushStatus();
                 mtr2InsertSessionBanners();
                 mtr2CheckSession();

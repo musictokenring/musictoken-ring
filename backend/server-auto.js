@@ -19,6 +19,7 @@ const { TradingFundService } = require('./trading-fund-service');
 const { NOWPaymentsService } = require('./nowpayments-service');
 const { MercadoPagoService } = require('./mercadopago-service');
 const { WithdrawalService, MIN_WITHDRAWAL_COP, VALID_PAYOUT_METHODS } = require('./withdrawal-service');
+const { CryptoWithdrawalService } = require('./crypto-withdrawal-service');
 const { requireEvmPlatformWallet, getNowPaymentsSettlementAddress, isEvmAddress, resolveEvmPlatformWallet } = require('./platform-addresses');
 const { createClient } = require('@supabase/supabase-js');
 const {
@@ -115,7 +116,12 @@ const corsOptions = {
 };
 
 app.use(cors(corsOptions));
-app.use(express.json());
+// rawBody: la firma del IPN de NOWPayments se calcula sobre el body. Este
+// parser global corre ANTES del express.raw de /webhook/nowpayments, así que
+// ahí req.body ya llegaba como objeto y req.body.toString() daba
+// "[object Object]": la firma NUNCA coincidía y todo depósito cripto se
+// rechazaba con 401 (2026-09-29).
+app.use(express.json({ verify: (req, res, buf) => { req.rawBody = buf; } }));
 
 // GET en IPN: el navegador no debe usar esta URL como checkout (solo POST firmado por NOWPayments).
 app.get('/webhook/nowpayments', (req, res) => {
@@ -213,6 +219,7 @@ let tradingFundService;
 let nowPaymentsService;
 let mercadoPagoService;
 let withdrawalService;
+let cryptoWithdrawalService;
 let tournamentScheduler;
 
 // 🔒 SEGURIDAD: Validar variables de entorno críticas
@@ -391,6 +398,13 @@ async function initializeServices() {
             console.log('[server] ✅ Withdrawal service (retiros manuales COP) initialized');
         } catch (wsError) {
             console.error('[server] ⚠️ Error initializing withdrawal service:', wsError.message);
+        }
+
+        try {
+            cryptoWithdrawalService = new CryptoWithdrawalService(supabase);
+            console.log('[server] ✅ Crypto withdrawal service initialized', cryptoWithdrawalService.hotWallet ? '(pagos automáticos disponibles)' : '(solo manual)');
+        } catch (cwError) {
+            console.error('[server] ⚠️ Error initializing crypto withdrawal service:', cwError.message);
         }
 
         try {
@@ -1027,95 +1041,15 @@ app.post('/api/user/refund-credits', requireCreditMutationAuth, async (req, res)
  * Claim credits (liquidación a wallet según claim-service)
  */
 // 🔒 SEGURIDAD: Aplicar rate limiting al endpoint de claims
-app.post('/api/claim', claimRateLimiter, async (req, res) => {
-    // Verificar que claimService esté inicializado
-    if (!claimService) {
-        return res.status(503).json({ 
-            error: 'Claim service not available',
-            message: 'El servicio de claims no está disponible. Verifica que ADMIN_WALLET_PRIVATE_KEY esté configurado en Render.'
-        });
-    }
-    try {
-        const { userId, credits, walletAddress } = req.body;
-
-        if (!userId || !credits || !walletAddress) {
-            return res.status(400).json({ error: 'Missing required parameters' });
-        }
-
-        // 🔒 SEGURIDAD: Validar formato de wallet address
-        if (!/^0x[a-fA-F0-9]{40}$/.test(walletAddress)) {
-            console.error(`[SECURITY] Invalid wallet address format: ${walletAddress}`);
-            return res.status(400).json({ error: 'Invalid wallet address format' });
-        }
-
-        // 🔒 SEGURIDAD CRÍTICA: Verificar que la wallet pertenece al usuario
-        const { data: user, error: userError } = await supabase
-            .from('users')
-            .select('id, wallet_address')
-            .eq('id', userId)
-            .single();
-
-        if (userError || !user) {
-            console.error(`[SECURITY] User not found: ${userId}`, userError);
-            return res.status(404).json({ error: 'User not found' });
-        }
-
-        // 🔒 SEGURIDAD CRÍTICA: Verificar que la wallet del claim coincide con la wallet del usuario
-        if (user.wallet_address.toLowerCase() !== walletAddress.toLowerCase()) {
-            // Registrar alerta de seguridad
-            console.error(`[SECURITY ALERT] 🔴 Wallet mismatch detected:`);
-            console.error(`  User ID: ${userId}`);
-            console.error(`  User's wallet: ${user.wallet_address}`);
-            console.error(`  Claimed wallet: ${walletAddress}`);
-            console.error(`  IP: ${req.ip || req.headers['x-forwarded-for'] || 'unknown'}`);
-            console.error(`  User-Agent: ${req.headers['user-agent'] || 'unknown'}`);
-            
-            // Registrar en base de datos para auditoría
-            try {
-                await supabase.from('security_alerts').insert([{
-                    alert_type: 'WALLET_MISMATCH',
-                    severity: 'high',
-                    details: JSON.stringify({
-                        userId: userId,
-                        userWallet: user.wallet_address,
-                        claimedWallet: walletAddress,
-                        ip: req.ip || req.headers['x-forwarded-for'] || 'unknown',
-                        userAgent: req.headers['user-agent'] || 'unknown',
-                        timestamp: new Date().toISOString()
-                    }),
-                    created_at: new Date().toISOString()
-                }]);
-            } catch (alertError) {
-                console.error('[SECURITY] Error logging security alert:', alertError);
-            }
-            
-            return res.status(403).json({ 
-                error: 'Wallet address does not match user account',
-                security_alert: true 
-            });
-        }
-
-        const MIN_CLAIM_AMOUNT = 1; // Mínimo para reclamar (mismo que apuesta mínima)
-        if (credits < MIN_CLAIM_AMOUNT) {
-            return res.status(400).json({ error: `Minimum claim: ${MIN_CLAIM_AMOUNT} credits` });
-        }
-
-        // 🔒 SEGURIDAD: Registrar intento de claim antes de procesar
-        console.log(`[SECURITY] Claim request validated: User ${userId}, Wallet ${walletAddress}, Credits ${credits}`);
-
-        const result = await claimService.processClaim(userId, credits, walletAddress, {
-            ip: req.ip || req.headers['x-forwarded-for'] || 'unknown',
-            userAgent: req.headers['user-agent'] || 'unknown'
-        });
-
-        res.json({
-            success: true,
-            ...result
-        });
-    } catch (error) {
-        console.error('[server] Error processing claim:', error);
-        res.status(500).json({ error: error.message });
-    }
+// /api/claim VIEJO -- cerrado 2026-09-29. No pedía sesión (cualquiera podía
+// disparar el retiro de otro userId) y pagaba ANTES de descontar el saldo
+// (dos pedidos simultáneos cobraban dos veces). Reemplazado por
+// /api/withdrawals/crypto/request (crypto-withdrawal-service.js).
+app.post('/api/claim', (req, res) => {
+    res.status(410).json({
+        error: 'Endpoint retirado',
+        message: 'Usá /api/withdrawals/crypto/request (retiro cripto con reserva atómica del saldo).'
+    });
 });
 
 /**
@@ -3039,7 +2973,9 @@ app.post('/webhook/nowpayments', express.raw({ type: 'application/json' }), asyn
             return res.status(503).json({ error: 'NOWPayments service unavailable' });
         }
         const signature = req.headers['x-nowpayments-sig'];
-        const rawBody = req.body.toString();
+        const rawBody = req.rawBody
+            ? req.rawBody.toString('utf8')
+            : (Buffer.isBuffer(req.body) ? req.body.toString('utf8') : JSON.stringify(req.body || {}));
 
         if (!signature) {
             console.error('[nowpayments-webhook] Missing signature header');
@@ -3240,6 +3176,90 @@ app.get('/api/withdrawals/cop/mine', requireCreditMutationAuth, async (req, res)
 
 // Panel de administración (solo el operador, protegido con BACKEND_INTERNAL_SECRET —
 // misma clave que ya se usa para llamadas backend-to-backend, ver auth-middleware.js).
+// ============================================================
+// RETIROS CRIPTO (crypto-withdrawal-service.js, sql/crypto-withdrawals.sql)
+// ============================================================
+app.get('/api/withdrawals/crypto/config', (req, res) => {
+    res.json({
+        ok: true,
+        available: !!cryptoWithdrawalService,
+        networks: CryptoWithdrawalService.networks(),
+        limits: CryptoWithdrawalService.limits()
+    });
+});
+
+app.post('/api/withdrawals/crypto/request', claimRateLimiter, requireCreditMutationAuth, async (req, res) => {
+    try {
+        if (!cryptoWithdrawalService) return res.status(503).json({ ok: false, error: 'Retiros cripto no disponibles' });
+        if (!req.authUser) return res.status(401).json({ ok: false, error: 'Iniciá sesión para retirar' });
+        const { amount, network, address } = req.body || {};
+        // Solo la cuenta de la sesión: ninguna wallet del body decide de dónde sale el saldo.
+        const resolved = await resolveCreditsUserId(supabase, {
+            getUserIdFromWallet: (addr) => walletLinkService ? walletLinkService.getUserIdFromWallet(addr) : null
+        }, req.authUser, null);
+        const request = await cryptoWithdrawalService.requestWithdrawal({
+            userId: resolved.userId, amount, network, address
+        });
+        res.json({ ok: true, request });
+    } catch (e) {
+        console.error('[withdrawals-crypto-request]', e.message);
+        res.status(400).json({ ok: false, error: e.message || 'No se pudo crear el retiro' });
+    }
+});
+
+app.get('/api/withdrawals/crypto/mine', requireCreditMutationAuth, async (req, res) => {
+    try {
+        if (!cryptoWithdrawalService) return res.json({ ok: true, requests: [] });
+        const resolved = await resolveCreditsUserId(supabase, {
+            getUserIdFromWallet: (addr) => walletLinkService ? walletLinkService.getUserIdFromWallet(addr) : null
+        }, req.authUser, null);
+        const requests = await cryptoWithdrawalService.listMine(resolved.userId);
+        res.json({ ok: true, requests });
+    } catch (e) {
+        res.status(500).json({ ok: false, error: e.message });
+    }
+});
+
+app.get('/api/admin/withdrawals/crypto', requireInternalSecret, async (req, res) => {
+    try {
+        if (!cryptoWithdrawalService) return res.status(503).json({ ok: false, error: 'Servicio no disponible' });
+        const [requests, wallet] = await Promise.all([
+            cryptoWithdrawalService.listForAdmin(),
+            cryptoWithdrawalService.hotWalletStatus().catch((e) => ({ configured: true, error: e.message }))
+        ]);
+        res.json({ ok: true, requests, wallet, limits: CryptoWithdrawalService.limits() });
+    } catch (e) {
+        res.status(500).json({ ok: false, error: e.message });
+    }
+});
+
+app.post('/api/admin/withdrawals/crypto/:id/approve', requireInternalSecret, async (req, res) => {
+    try {
+        const result = await cryptoWithdrawalService.executePayout(req.params.id);
+        res.status(result.ok ? 200 : 400).json(result);
+    } catch (e) {
+        res.status(400).json({ ok: false, error: e.message });
+    }
+});
+
+app.post('/api/admin/withdrawals/crypto/:id/mark-paid', requireInternalSecret, async (req, res) => {
+    try {
+        const request = await cryptoWithdrawalService.markPaidManually(req.params.id, req.body?.txHash, req.body?.notes);
+        res.json({ ok: true, request });
+    } catch (e) {
+        res.status(400).json({ ok: false, error: e.message });
+    }
+});
+
+app.post('/api/admin/withdrawals/crypto/:id/reject', requireInternalSecret, async (req, res) => {
+    try {
+        const request = await cryptoWithdrawalService.reject(req.params.id, req.body?.notes);
+        res.json({ ok: true, request });
+    } catch (e) {
+        res.status(400).json({ ok: false, error: e.message });
+    }
+});
+
 app.get('/api/admin/withdrawals/cop', requireInternalSecret, async (req, res) => {
     try {
         if (!withdrawalService) {
