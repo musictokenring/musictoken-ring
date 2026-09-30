@@ -1261,7 +1261,7 @@
         </section>
 
         <!-- Modal confirmación abandono torneo -->
-        <div id="tournamentAbandonModal" class="hidden fixed inset-0 z-[110] flex items-center justify-center p-4">
+        <div id="tournamentAbandonModal" class="hidden fixed inset-0 z-[10000] flex items-center justify-center p-4">
             <div class="absolute inset-0 bg-black/75 backdrop-blur-sm"></div>
             <div class="relative max-w-md w-full rounded-2xl border border-red-500/30 bg-gray-950 p-6 shadow-2xl shadow-red-900/20">
                 <h3 class="text-xl font-bold text-white mb-2">¿Abandonar la partida?</h3>
@@ -2506,7 +2506,7 @@
     </div>
 
     <!-- Challenge Modal -->
-    <div id="challengeModal" class="hidden fixed inset-0 z-[100] flex items-center justify-center p-4">
+    <div id="challengeModal" class="hidden fixed inset-0 z-[10000] flex items-center justify-center p-4">
         <div class="modal-overlay" onclick="closeChallengeModal()"></div>
         <div class="modal-box text-center max-w-md">
             <button type="button" onclick="closeChallengeModal()" class="absolute top-4 right-4 text-gray-400 hover:text-white text-2xl leading-none cursor-pointer">×</button>
@@ -2559,7 +2559,7 @@
          muestra esto DE INMEDIATO al abrir el link (mismo momento que el
          modal de Reto Social), con la info real ya cargada -- ver
          showRoomInviteModal(). -->
-    <div id="roomInviteModal" class="hidden fixed inset-0 z-[100] flex items-center justify-center p-4">
+    <div id="roomInviteModal" class="hidden fixed inset-0 z-[10000] flex items-center justify-center p-4">
         <div class="modal-overlay" onclick="closeRoomInviteModal()"></div>
         <div class="modal-box text-center max-w-md">
             <button type="button" onclick="closeRoomInviteModal()" class="absolute top-4 right-4 text-gray-400 hover:text-white text-2xl leading-none cursor-pointer">×</button>
@@ -3035,7 +3035,7 @@
     </script>
 
     <!-- Toast Container -->
-    <div id="toastContainer" class="fixed top-20 right-4 z-[200] flex flex-col gap-2"></div>
+    <div id="toastContainer" class="fixed top-20 right-4 z-[10050] flex flex-col gap-2"></div>
 
     <!-- ==================== SCRIPTS ==================== -->
     <!-- Scripts críticos para funcionalidad básica - mantener sin defer -->
@@ -10411,6 +10411,37 @@
         .mtr2-nav-brand { display:none; }
         .mtr2-session-banner { display:none; align-items:center; gap:12px; border-radius:16px; padding:14px 16px; margin-bottom:16px; background:linear-gradient(120deg, rgba(251,146,60,0.18), rgba(8,15,26,0.9)); border:1.5px solid rgba(251,146,60,0.5); }
         body.mtr2-no-session .mtr2-session-banner { display:flex; }
+
+        /* MODO VISITANTE (sin cuenta): antes el shell solo se activaba con
+           sesión, así que quien llegaba por primera vez veía el layout viejo
+           (una página larga con todo apilado, sin menú). Ahora ve las mismas
+           4 pestañas; lo que necesita cuenta se oculta o lleva a registrarse. */
+        .mtr2-guest-only { display:none; }
+        body.mtr2-guest .mtr2-guest-only { display:block; }
+        body.mtr2-guest .mtr2-guest-only.mtr2-flex { display:flex; }
+        body.mtr2-guest .mtr2-auth-only { display:none !important; }
+        /* En Jugar la tarjeta de bienvenida ya cumple el rol del aviso. */
+        body.mtr2-guest #mtr2ViewJugar .mtr2-session-banner { display:none; }
+        .mtr2-welcome { position:relative; overflow:hidden; border-radius:22px; padding:22px 18px 18px; margin-bottom:18px;
+            background:radial-gradient(420px circle at 0% 0%, rgba(0,240,255,0.22), transparent 60%), radial-gradient(420px circle at 100% 100%, rgba(255,46,196,0.22), transparent 60%), linear-gradient(135deg, rgba(15,23,42,0.95), rgba(8,15,26,0.98));
+            border:1.5px solid rgba(0,240,255,0.35); box-shadow:0 0 32px rgba(0,240,255,0.14), 0 0 48px rgba(255,46,196,0.08); }
+        .mtr2-welcome-kicker { display:inline-flex; align-items:center; gap:6px; font-size:10.5px; font-weight:800; letter-spacing:0.08em; text-transform:uppercase; color:#67e8f9; background:rgba(0,240,255,0.1); border:1px solid rgba(0,240,255,0.3); border-radius:999px; padding:4px 10px; margin-bottom:12px; }
+        .mtr2-welcome h1 { margin:0 0 8px; font-size:26px; line-height:1.12; font-weight:700; color:#fff; letter-spacing:-0.01em; }
+        .mtr2-welcome h1 .mtr2-grad { background:linear-gradient(90deg,#00f0ff,#ff2ec4); -webkit-background-clip:text; background-clip:text; color:transparent; }
+        .mtr2-welcome p { margin:0 0 16px; font-size:13.5px; line-height:1.5; color:#cbd5e1; max-width:520px; }
+        .mtr2-welcome-ctas { display:flex; flex-direction:column; gap:10px; }
+        .mtr2-welcome-ctas button { display:flex; align-items:center; justify-content:center; gap:8px; padding:13px 16px; border-radius:14px; font-family:inherit; font-size:14.5px; font-weight:800; cursor:pointer; border:none; }
+        .mtr2-welcome-perks { display:flex; flex-wrap:wrap; gap:6px; margin-top:14px; }
+        .mtr2-welcome-perks span { display:inline-flex; align-items:center; gap:6px; font-size:11px; font-weight:700; color:#d1d5db; background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.1); border-radius:999px; padding:5px 10px; }
+        .mtr2-welcome-perks i { width:6px; height:6px; border-radius:50%; flex-shrink:0; box-shadow:0 0 6px currentColor; }
+        .mtr2-guest-enter { font-size:12px; font-weight:800; color:#05060a; background:linear-gradient(90deg,#00f0ff,#22d3ee); border:none; border-radius:9px; padding:7px 12px; cursor:pointer; font-family:inherit; white-space:nowrap; box-shadow:0 0 14px rgba(0,240,255,0.35); }
+        @media (min-width:640px) {
+            .mtr2-welcome { padding:30px 28px 24px; }
+            .mtr2-welcome h1 { font-size:34px; }
+            .mtr2-welcome p { font-size:15px; }
+            .mtr2-welcome-ctas { flex-direction:row; }
+            .mtr2-welcome-ctas button { flex:0 1 auto; padding:13px 22px; }
+        }
         /* Animación principal (video "Live Battles", 16:9) dentro de Jugar.
            Misma proporción que el video en todas las pantallas -- con una
            altura fija, en escritorio el recuadro quedaba mucho más ancho que
@@ -10472,18 +10503,40 @@
                 </div>
                 <div style="display:flex; align-items:center; gap:8px;">
                     <span class="mtr-bonus-badge hidden" style="font-size:10px; font-weight:800; color:#fdba74; background:rgba(251,146,60,0.14); border:1px solid rgba(251,146,60,0.4); border-radius:8px; padding:5px 8px; white-space:nowrap;"></span>
-                    <div id="mtr2CreditsChipWrap" style="font-size:11px; font-weight:800; color:#ff2ec4; background:rgba(255,46,196,0.12); border:1px solid rgba(255,46,196,0.35); border-radius:8px; padding:5px 9px; white-space:nowrap;"><span id="mtr2CreditsChip">0</span> créditos</div>
+                    <button type="button" class="mtr2-guest-only mtr2-guest-enter" onclick="mtr2GuestLogin()">Entrar</button>
+                    <div id="mtr2CreditsChipWrap" class="mtr2-auth-only" style="font-size:11px; font-weight:800; color:#ff2ec4; background:rgba(255,46,196,0.12); border:1px solid rgba(255,46,196,0.35); border-radius:8px; padding:5px 9px; white-space:nowrap;"><span id="mtr2CreditsChip">0</span> créditos</div>
                     <!-- Campana al final del todo, pegada al borde derecho --
                          es donde suele ir en cualquier app (mismo pedido que
                          ya se hizo para el header viejo de escritorio). Antes
                          quedaba ANTES del chip de créditos, no en el extremo. -->
-                    <button type="button" onclick="if(typeof window.toggleChallengeNotifications==='function') window.toggleChallengeNotifications(this)" style="position:relative; width:32px; height:32px; border-radius:9px; background:rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.12); display:flex; align-items:center; justify-content:center; color:#e5e7eb; flex-shrink:0;" aria-label="Notificaciones de tus desafíos" title="Notificaciones de tus desafíos">
+                    <button type="button" class="mtr2-auth-only" onclick="if(typeof window.toggleChallengeNotifications==='function') window.toggleChallengeNotifications(this)" style="position:relative; width:32px; height:32px; border-radius:9px; background:rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.12); display:flex; align-items:center; justify-content:center; color:#e5e7eb; flex-shrink:0;" aria-label="Notificaciones de tus desafíos" title="Notificaciones de tus desafíos">
                         <span data-mtr-icon="bell" data-mtr-plain data-mtr-size="16"></span>
                         <span class="challenge-bell-badge hidden" style="position:absolute; top:-4px; right:-4px; min-width:16px; height:16px; padding:0 3px; border-radius:999px; background:#ff2ec4; color:#05060a; font-size:10px; font-weight:800; display:flex; align-items:center; justify-content:center; line-height:1;">0</span>
                     </button>
                 </div>
             </div>
             <div class="mtr2-content">
+                <!-- Bienvenida para visitantes (sin cuenta) -- reemplaza al
+                     #loginWall del layout viejo dentro del diseño nuevo. -->
+                <section class="mtr2-welcome mtr2-guest-only">
+                    <span class="mtr2-welcome-kicker"><span class="mtr2-dot" style="width:6px; height:6px; border-radius:50%; background:#00f0ff; box-shadow:0 0 8px #00f0ff;"></span>Batallas de música en vivo</span>
+                    <h1 class="mtr2-h">Tu canción contra la suya.<br><span class="mtr2-grad">Gana el mejor gusto.</span></h1>
+                    <p>Elegí una canción, desafiá a un amigo o a cualquiera en segundos y apostá créditos. Empezá gratis con el Modo Práctica.</p>
+                    <div class="mtr2-welcome-ctas">
+                        <button type="button" onclick="mtr2GuestSignup()" style="color:#05060a; background:linear-gradient(90deg,#00f0ff,#22d3ee); box-shadow:0 0 22px rgba(0,240,255,0.4);">
+                            <span data-mtr-icon="mail" data-mtr-plain data-mtr-size="18"></span>Crear cuenta gratis
+                        </button>
+                        <button type="button" onclick="mtr2GuestWallet()" style="color:#f5d0fe; background:rgba(255,46,196,0.12); border:1.5px solid rgba(255,46,196,0.45);">
+                            <span data-mtr-icon="link" data-mtr-plain data-mtr-size="18"></span>Conectar wallet
+                        </button>
+                    </div>
+                    <div class="mtr2-welcome-perks">
+                        <span><i style="background:#34d399;"></i>Práctica sin riesgo</span>
+                        <span><i style="background:#67e8f9;"></i>Entrá con Google o email</span>
+                        <span><i style="background:#fde047;"></i>Recargá y retirá en pesos</span>
+                    </div>
+                </section>
+
                 <div id="mtr2HeroSlot"></div>
                 <div id="mtr2StreamSlot" style="margin-bottom:16px;"></div>
 
@@ -10583,7 +10636,8 @@
                     <div class="mtr2-logo-dot"></div>
                     <span class="mtr2-h" style="font-size:16px; font-weight:700; color:#00f0ff;">MusicToken Ring</span>
                 </div>
-                <div style="font-size:11px; font-weight:800; color:#ff2ec4; background:rgba(255,46,196,0.12); border:1px solid rgba(255,46,196,0.35); border-radius:8px; padding:5px 9px; white-space:nowrap;"><span class="mtr2-credits-mirror">0</span> créditos</div>
+                <button type="button" class="mtr2-guest-only mtr2-guest-enter" onclick="mtr2GuestLogin()">Entrar</button>
+                <div class="mtr2-auth-only" style="font-size:11px; font-weight:800; color:#ff2ec4; background:rgba(255,46,196,0.12); border:1px solid rgba(255,46,196,0.35); border-radius:8px; padding:5px 9px; white-space:nowrap;"><span class="mtr2-credits-mirror">0</span> créditos</div>
             </div>
             <div class="mtr2-content">
                 <h1 class="mtr2-h" style="margin:0 0 2px; font-size:22px; font-weight:700; color:#fff;">Torneos</h1>
@@ -10603,7 +10657,7 @@
             <div class="mtr2-content mtr2-narrow">
                 <h1 class="mtr2-h" style="margin:0 0 14px; font-size:22px; font-weight:700; color:#fff;">Cartera</h1>
 
-                <div class="mtr2-card" style="border:1.5px solid rgba(255,46,196,0.4); box-shadow:0 0 24px rgba(255,46,196,0.15); padding:20px; margin-bottom:16px; background:linear-gradient(135deg, rgba(255,46,196,0.14), rgba(8,15,26,0.95));">
+                <div class="mtr2-card mtr2-auth-only" style="border:1.5px solid rgba(255,46,196,0.4); box-shadow:0 0 24px rgba(255,46,196,0.15); padding:20px; margin-bottom:16px; background:linear-gradient(135deg, rgba(255,46,196,0.14), rgba(8,15,26,0.95));">
                     <div style="font-size:11.5px; font-weight:700; color:#ff9bde; letter-spacing:0.04em; margin-bottom:6px;">SALDO DISPONIBLE</div>
                     <div class="mtr2-h" style="font-size:32px; font-weight:700; color:#fff; margin-bottom:4px; line-height:1;"><span class="mtr2-credits-mirror">0</span> <span style="font-size:16px; color:#ff6bd6;">créditos</span></div>
                     <div style="font-size:12.5px; color:#9ca3af;">= $<span class="mtr2-usd-mirror">0</span> USD nominal <span style="color:#34d399;">· 1 crédito ≈ $1</span></div>
@@ -10661,10 +10715,21 @@
                 <div style="display:flex; flex-direction:column; align-items:center; text-align:center; margin-bottom:18px; padding-top:6px;">
                     <div id="mtr2ProfileAvatar" style="width:72px; height:72px; border-radius:50%; background:linear-gradient(135deg,#00f0ff,#0891b2); display:flex; align-items:center; justify-content:center; font-size:26px; font-weight:800; color:#05060a; box-shadow:0 0 24px rgba(0,240,255,0.45); border:3px solid rgba(0,240,255,0.3); margin-bottom:10px;">?</div>
                     <div class="mtr2-h" id="mtr2ProfileName" style="font-size:17px; font-weight:700; color:#fff; margin-bottom:4px;">Jugador</div>
-                    <div id="mtr2ProfileWalletStatus" style="font-size:11px; font-weight:700; color:#9ca3af; background:rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.1); border-radius:999px; padding:4px 10px; cursor:pointer;">Wallet no conectada</div>
+                    <div id="mtr2ProfileWalletStatus" class="mtr2-auth-only" style="font-size:11px; font-weight:700; color:#9ca3af; background:rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.1); border-radius:999px; padding:4px 10px; cursor:pointer;">Wallet no conectada</div>
                 </div>
 
-                <div style="display:flex; gap:8px; margin-bottom:16px;">
+                <!-- Visitante: qué gana creando la cuenta, en vez de un perfil vacío. -->
+                <div class="mtr2-card mtr2-guest-only" style="border:1.5px solid rgba(0,240,255,0.3); padding:18px; margin-bottom:16px; background:linear-gradient(135deg, rgba(0,240,255,0.1), rgba(15,23,42,0.9)); box-shadow:0 0 24px rgba(0,240,255,0.1);">
+                    <div class="mtr2-h" style="font-size:16px; font-weight:700; color:#fff; margin-bottom:12px;">Con tu cuenta vas a tener</div>
+                    <div style="display:flex; flex-direction:column; gap:12px; margin-bottom:16px;">
+                        <div style="display:flex; align-items:center; gap:12px;"><span data-mtr-icon="chart" data-mtr-color="cyan" data-mtr-badge-size="34" data-mtr-size="16" style="flex-shrink:0;"></span><span style="font-size:13px; color:#e5e7eb;">Tus victorias, derrotas e historial de batallas</span></div>
+                        <div style="display:flex; align-items:center; gap:12px;"><span data-mtr-icon="wallet" data-mtr-color="magenta" data-mtr-badge-size="34" data-mtr-size="16" style="flex-shrink:0;"></span><span style="font-size:13px; color:#e5e7eb;">Saldo en créditos para apostar, recargable en pesos</span></div>
+                        <div style="display:flex; align-items:center; gap:12px;"><span data-mtr-icon="bell" data-mtr-color="purple" data-mtr-badge-size="34" data-mtr-size="16" style="flex-shrink:0;"></span><span style="font-size:13px; color:#e5e7eb;">Aviso cuando alguien acepte tu desafío</span></div>
+                    </div>
+                    <button type="button" class="mtr2-cta" style="color:#05060a; background:linear-gradient(90deg,#00f0ff,#22d3ee);" onclick="mtr2GuestSignup()">CREAR CUENTA GRATIS</button>
+                </div>
+
+                <div class="mtr2-auth-only" style="display:flex; gap:8px; margin-bottom:16px;">
                     <div class="mtr2-stat" style="background:linear-gradient(135deg, rgba(250,204,21,0.16), rgba(15,23,42,0.9)); border:1px solid rgba(250,204,21,0.35);">
                         <div class="mtr2-h" style="font-size:18px; font-weight:700; color:#fde047;" id="mtr2StatWins">0</div>
                         <div style="font-size:10px; color:#9ca3af; font-weight:600;">Victorias</div>
@@ -10679,7 +10744,7 @@
                     </div>
                 </div>
 
-                <div class="mtr2-card" style="border:1px solid rgba(255,46,196,0.3); padding:14px 16px; margin-bottom:18px; display:flex; align-items:center; justify-content:space-between; background:linear-gradient(135deg, rgba(255,46,196,0.1), rgba(15,23,42,0.6));">
+                <div class="mtr2-card mtr2-auth-only" style="border:1px solid rgba(255,46,196,0.3); padding:14px 16px; margin-bottom:18px; display:flex; align-items:center; justify-content:space-between; background:linear-gradient(135deg, rgba(255,46,196,0.1), rgba(15,23,42,0.6));">
                     <div>
                         <div style="font-size:11px; color:#9ca3af; margin-bottom:2px;">Saldo total</div>
                         <div class="mtr2-h" style="font-size:18px; font-weight:700; color:#fff;"><span class="mtr2-credits-mirror">0</span> <span style="font-size:12px; font-weight:600; color:#ff6bd6;">créditos</span></div>
@@ -10687,7 +10752,7 @@
                     <div style="font-size:12px; color:#9ca3af;">$<span class="mtr2-usd-mirror">0</span> USD</div>
                 </div>
 
-                <div class="mtr2-card" style="border:1px solid rgba(255,255,255,0.08); padding:4px 14px; background:rgba(255,255,255,0.02);">
+                <div class="mtr2-card mtr2-auth-only" style="border:1px solid rgba(255,255,255,0.08); padding:4px 14px; background:rgba(255,255,255,0.02);">
                     <button type="button" class="mtr2-row" onclick="if(typeof openProfileModal==='function') openProfileModal()">
                         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;"><path d="M3 3v18h18"/><path d="M7 14l4-4 3 3 5-6"/></svg>
                         <span style="flex:1; font-size:13.5px; font-weight:600; color:#e5e7eb;">Historial de batallas</span>
@@ -10711,7 +10776,7 @@
                 </div>
                 <div id="mtr2PushHelp"></div>
 
-                <button type="button" onclick="if(typeof logout==='function') logout()" style="display:block; width:100%; margin-top:14px; text-align:center; font-size:13px; font-weight:700; color:#f87171; padding:10px; background:none; border:none; cursor:pointer; font-family:inherit;">Cerrar sesión</button>
+                <button type="button" class="mtr2-auth-only" onclick="if(typeof logout==='function') logout()" style="display:block; width:100%; margin-top:14px; text-align:center; font-size:13px; font-weight:700; color:#f87171; padding:10px; background:none; border:none; cursor:pointer; font-family:inherit;">Cerrar sesión</button>
             </div>
         </div>
     </div>
@@ -10886,8 +10951,23 @@
                     document.querySelectorAll('.mtr2-usd-mirror').forEach(function (el) { el.textContent = usdTxt; });
                 }
 
+                // Visitante: el aviso de "sesión no activa" pasa a ser una
+                // invitación a crear cuenta, y el perfil no muestra "Jugador"
+                // con estadísticas en cero.
+                var guest = document.body.classList.contains('mtr2-guest');
+                document.querySelectorAll('.mtr2-session-banner').forEach(function (banner) {
+                    var t = banner.querySelector('.mtr2-sb-title'), sub = banner.querySelector('.mtr2-sb-sub'), btn = banner.querySelector('.mtr2-sb-btn');
+                    if (t) t.textContent = guest ? 'Creá tu cuenta para jugar' : 'Tu sesión no está activa en este dispositivo';
+                    if (sub) sub.textContent = guest ? 'Entrá gratis con Google o email: recargá en pesos, jugá con créditos y retirá.' : 'Iniciá sesión para ver tu saldo, jugar con créditos y recargar.';
+                    if (btn) btn.textContent = guest ? 'Crear cuenta' : 'Iniciar sesión';
+                });
+                if (guest) {
+                    document.getElementById('mtr2ProfileName').textContent = 'Invitado';
+                    document.getElementById('mtr2ProfileAvatar').textContent = '?';
+                }
+
                 var name = document.getElementById('profileDisplayName');
-                if (name && name.textContent.trim()) {
+                if (!guest && name && name.textContent.trim()) {
                     var nameTxt = name.textContent.trim();
                     document.getElementById('mtr2ProfileName').textContent = nameTxt;
                     document.getElementById('mtr2ProfileAvatar').textContent = nameTxt.charAt(0).toUpperCase();
@@ -10933,9 +11013,16 @@
             // realidad SÍ funcionaban, pero la pantalla entera quedaba
             // invisible detrás del shell.
             var MTR2_IN_PROGRESS_IDS = ['songSelection', 'waitingScreen', 'roomScreen', 'joinRoomPreview', 'tournamentArena', 'battleArena', 'victorySection', 'socialChallengeShare'];
-            function mtr2ShouldBeActive() {
+            // Visitante sin cuenta = #loginWall visible. Antes eso apagaba el
+            // shell entero y quien llegaba por primera vez veía el layout
+            // viejo; ahora el shell se muestra igual, en "modo visitante"
+            // (body.mtr2-guest): bienvenida + registro en vez de saldo/perfil.
+            function mtr2IsGuest() {
                 var loginWall = document.getElementById('loginWall');
-                if (!loginWall || !loginWall.classList.contains('hidden')) return false;
+                return !!(loginWall && !loginWall.classList.contains('hidden'));
+            }
+
+            function mtr2ShouldBeActive() {
                 for (var i = 0; i < MTR2_IN_PROGRESS_IDS.length; i++) {
                     var el = document.getElementById(MTR2_IN_PROGRESS_IDS[i]);
                     if (el && !el.classList.contains('hidden')) return false;
@@ -10953,8 +11040,6 @@
             // que nunca parezca que "la app entera se rompió".
             var MTR2_NAV_HIDDEN_IDS = ['battleArena', 'victorySection', 'tournamentArena'];
             function mtr2ShouldNavBeVisible() {
-                var loginWall = document.getElementById('loginWall');
-                if (!loginWall || !loginWall.classList.contains('hidden')) return false;
                 for (var i = 0; i < MTR2_NAV_HIDDEN_IDS.length; i++) {
                     var el = document.getElementById(MTR2_NAV_HIDDEN_IDS[i]);
                     if (el && !el.classList.contains('hidden')) return false;
@@ -10969,8 +11054,6 @@
             // diferencia de mtr2ShouldNavBeVisible(), esta devuelve true
             // (ocultar) precisamente cuando ESTAMOS en uno de esos momentos.
             function mtr2ShouldFocusMain() {
-                var loginWall = document.getElementById('loginWall');
-                if (!loginWall || !loginWall.classList.contains('hidden')) return false;
                 for (var i = 0; i < MTR2_NAV_HIDDEN_IDS.length; i++) {
                     var el = document.getElementById(MTR2_NAV_HIDDEN_IDS[i]);
                     if (el && !el.classList.contains('hidden')) return true;
@@ -11029,6 +11112,7 @@
             var mtr2WasActive = false;
             function mtr2Sync() {
                 var active = mtr2ShouldBeActive();
+                document.body.classList.toggle('mtr2-guest', mtr2IsGuest());
                 document.body.classList.toggle('mtr2-active', active);
                 document.body.classList.toggle('mtr2-nav-active', mtr2ShouldNavBeVisible());
                 document.body.classList.toggle('mtr2-focus-active', mtr2ShouldFocusMain());
@@ -11052,6 +11136,37 @@
             // esperar hasta 1s al próximo tick del interval de abajo.
             window.mtr2Sync = mtr2Sync;
 
+            // Registro / login: mismo modal que el botón "Entrar con
+            // Email/Google" del #loginWall viejo.
+            // "Crear cuenta" abre directo el formulario de registro (con
+            // Google incluido); "Entrar" deja el de inicio de sesión.
+            window.mtr2GuestLogin = function () {
+                var fn = typeof window.openAuthModal === 'function' ? window.openAuthModal : (typeof openAuthModal === 'function' ? openAuthModal : null);
+                if (fn) fn();
+            };
+            window.mtr2GuestSignup = function () {
+                window.mtr2GuestLogin();
+                if (typeof window.switchToSignup === 'function') window.switchToSignup();
+                else if (typeof switchToSignup === 'function') switchToSignup();
+            };
+            // Wallet: reusa el botón real del #loginWall (ya tiene todo el
+            // flujo de conexión enganchado), sin duplicar lógica.
+            window.mtr2GuestWallet = function () {
+                var btn = document.getElementById('connectWalletOnboardingBtn') || document.getElementById('walletConnectBtn');
+                if (btn) btn.click(); else window.mtr2GuestSignup();
+            };
+            // Sin cuenta, elegir un modo o un método de recarga llevaba a
+            // pantallas que después fallaban al apostar/pagar. Para un
+            // visitante esos botones abren directo el registro.
+            document.addEventListener('click', function (e) {
+                if (!document.body.classList.contains('mtr2-guest')) return;
+                var target = e.target && e.target.closest ? e.target.closest('#mtr2Shell .mtr2-mode .mtr2-cta, #mtr2Shell .mtr2-method') : null;
+                if (!target) return;
+                e.preventDefault();
+                e.stopPropagation();
+                window.mtr2GuestSignup();
+            }, true);
+
             // Con una wallet vinculada guardada en este dispositivo,
             // showLoginWall() oculta el muro de login aunque NO haya sesión de
             // Supabase (venció, o se cerró en este navegador) -- la vista nueva
@@ -11067,10 +11182,10 @@
                     banner.innerHTML =
                         '<span style="color:#fdba74; flex-shrink:0; display:flex;">' + (window.MTRIcons ? window.MTRIcons.svg('warning', { size: 22 }) : '') + '</span>' +
                         '<div style="flex:1; min-width:0;">' +
-                            '<div style="font-size:13.5px; font-weight:800; color:#fed7aa;">Tu sesión no está activa en este dispositivo</div>' +
-                            '<div style="font-size:11.5px; color:#d1d5db;">Iniciá sesión para ver tu saldo, jugar con créditos y recargar.</div>' +
+                            '<div class="mtr2-sb-title" style="font-size:13.5px; font-weight:800; color:#fed7aa;">Tu sesión no está activa en este dispositivo</div>' +
+                            '<div class="mtr2-sb-sub" style="font-size:11.5px; color:#d1d5db;">Iniciá sesión para ver tu saldo, jugar con créditos y recargar.</div>' +
                         '</div>' +
-                        '<button type="button" style="flex-shrink:0; padding:9px 14px; border-radius:10px; border:none; cursor:pointer; font-family:inherit; font-size:12.5px; font-weight:800; color:#05060a; background:linear-gradient(90deg,#fb923c,#fdba74);">Iniciar sesión</button>';
+                        '<button type="button" style="flex-shrink:0; padding:9px 14px; border-radius:10px; border:none; cursor:pointer; font-family:inherit; font-size:12.5px; font-weight:800; color:#05060a; background:linear-gradient(90deg,#fb923c,#fdba74);"><span class="mtr2-sb-btn">Iniciar sesión</span></button>';
                     banner.querySelector('button').onclick = function () {
                         var fn = typeof window.openAuthModal === 'function' ? window.openAuthModal : (typeof openAuthModal === 'function' ? openAuthModal : null);
                         if (fn) fn();
