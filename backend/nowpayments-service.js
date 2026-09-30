@@ -473,7 +473,16 @@ function sortKeysDeep(value) {
 
 class NOWPaymentsService {
     constructor() {
-        this.tradingFundService = new TradingFundService();
+        // TradingFundService exige ADMIN_WALLET_PRIVATE_KEY (la wallet
+        // comprometida 0x7537…). Sin este try, al sacar esa clave de Render
+        // TODO NOWPayments dejaba de iniciar (facturas y depósitos con 503).
+        // Este servicio no usa el trading fund para nada más que tenerlo.
+        try {
+            this.tradingFundService = new TradingFundService();
+        } catch (e) {
+            console.warn('[nowpayments] Trading fund no disponible (sin ADMIN_WALLET_PRIVATE_KEY): se sigue sin él');
+            this.tradingFundService = null;
+        }
     }
 
     /**
