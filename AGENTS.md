@@ -25,4 +25,4 @@ Or equivalently: `npm run preview` (uses `npx serve .`).
 - The project has no `node_modules` dependencies. `npm install` is essentially a no-op but is safe to run.
 - The `package-lock.json` is empty (no dependencies). Do not be alarmed.
 - Some files (`backend/prize-service.js`, `SAFE_ROLLOUT_CHECKLIST.md`) contain leftover merge-conflict-style branch markers — these are not active git conflicts.
-- Full app functionality (search, battles, deposits, cashout) requires the external backend at `https://musictoken-backend.onrender.com` and a MetaMask wallet on Base (chain 8453). Without these, the UI loads and displays the streaming dashboard but interactive features won't connect.
+- Full app functionality (search, battles, deposits, cashout) requires the external backend at `https://musictoken-ring.onrender.com` (Render service `musictoken-ring`; the old `musictoken-backend` URL in older docs is dead) and a MetaMask wallet on Base (chain 8453). Without these, the UI loads and displays the streaming dashboard but interactive features won't connect.
