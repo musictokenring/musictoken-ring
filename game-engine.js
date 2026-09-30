@@ -1334,7 +1334,22 @@ const GameEngine = {
         // Verificar créditos suficientes ANTES de crear el desafío
         // CRÍTICO: Recargar balance primero para asegurar sincronización con backend
         const walletAddress = window.connectedAddress || localStorage.getItem('mtr_wallet');
-        if (walletAddress && window.CreditsSystem) {
+        // Con sesión activa, el saldo es el de la cuenta logueada (loadBalance
+        // ya lo resuelve así). El chequeo por wallet de abajo lo pisaba con el
+        // saldo de la wallet guardada en localStorage -- aunque estuviera
+        // desconectada o fuera de otra cuenta -- y bloqueaba con "Tienes 0.00"
+        // a cuentas con saldo real (visto en vivo 2026-09-29, 550 -> 0).
+        const createSession = window.CreditsSystem && typeof supabaseClient !== 'undefined'
+            ? (await supabaseClient.auth.getSession())?.data?.session
+            : null;
+        if (createSession && window.CreditsSystem) {
+            await window.CreditsSystem.loadBalance(walletAddress || null, createSession.user.id);
+            const sessionCredits = Number(window.CreditsSystem.currentCredits || 0);
+            if (sessionCredits < normalizedBet) {
+                showToast(`Créditos insuficientes. Tienes ${sessionCredits.toFixed(2)} créditos pero necesitas ${normalizedBet}. Añade saldo (Mercado Pago o NOWPayments) para obtener más créditos.`, 'error');
+                return;
+            }
+        } else if (walletAddress && window.CreditsSystem) {
             console.log('[createSocialChallenge] 🔄 Recargando balance antes de verificar créditos...');
             await window.CreditsSystem.loadBalance(walletAddress);
             // Esperar un momento para que se actualice
@@ -1738,9 +1753,12 @@ const GameEngine = {
             // pegaba contra /api/user/credits/null y quedaba con
             // userCredits=0 aunque tuviera saldo real, bloqueando la
             // aceptación por "créditos insuficientes" de mentira.
+            // Con sesión (siempre acá) manda el saldo que loadBalance acaba de
+            // leer para la cuenta logueada: la wallet de localStorage puede ser
+            // de otra cuenta o estar desconectada (mismo bug que al crear).
             const backendUrl = window.CONFIG?.BACKEND_API || window.CreditsSystem?.backendUrl || 'https://musictoken-ring.onrender.com';
             let userCredits = 0;
-            if (walletAddress) {
+            if (walletAddress && !session) {
                 const creditsResponse = await fetch(`${backendUrl}/api/user/credits/${walletAddress}`);
                 if (creditsResponse.ok) {
                     const creditsData = await creditsResponse.json();
@@ -1887,7 +1905,7 @@ const GameEngine = {
                 // un usuario nuevo sin wallet pegaba contra
                 // /api/user/credits/null y quedaba con 0 de mentira).
                 let finalUserCredits = 0;
-                if (walletAddress) {
+                if (walletAddress && !session) {
                     const finalBackendUrl = window.CONFIG?.BACKEND_API || window.CreditsSystem?.backendUrl || 'https://musictoken-ring.onrender.com';
                     const finalCreditsResponse = await fetch(`${finalBackendUrl}/api/user/credits/${walletAddress}`);
                     if (finalCreditsResponse.ok) {
