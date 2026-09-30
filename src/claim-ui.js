@@ -111,7 +111,7 @@
 
                         <div id="claimAuthWarning" class="hidden p-4 rounded-lg bg-yellow-500/10 border border-yellow-500/20 mb-4">
                             <div class="text-sm text-yellow-400 flex items-center gap-2">
-                                ${window.MTRIcons ? window.MTRIcons.inline('warning', {color:'yellow', glow:false, style:'margin:0'}) : ''}Debes iniciar sesión para reclamar créditos. <a href="#" onclick="window.location.reload()" class="underline">Iniciar sesión</a>
+                                ${window.MTRIcons ? window.MTRIcons.inline('warning', {color:'yellow', glow:false, style:'margin:0'}) : ''}Debes iniciar sesión para reclamar créditos. <a href="#" onclick="event.preventDefault(); if (typeof window.openAuthModal === 'function') window.openAuthModal();" class="underline">Iniciar sesión</a>
                             </div>
                         </div>
 
