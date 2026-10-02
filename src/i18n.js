@@ -219,6 +219,8 @@
             'Batalla en curso': 'Battle in progress',
             'Preparando batalla…': 'Getting the battle ready…',
             'Iniciar sesión': 'Log in',
+            'Revisando tu canción con IA': 'Checking your song with AI',
+            'Suele tardar unos segundos…': 'This usually takes a few seconds…',
             'BATALLA SORPRESA': 'SURPRISE BATTLE',
             'Tu fanatismo le ganó a la fama: tu canción era la menos popular de las dos y ganaste por destreza.':
                 'Your fandom beat fame: your song was the less popular of the two and you won on skill.',

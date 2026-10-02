@@ -3166,7 +3166,7 @@
          MTRIcons.badge()/inline() estén disponibles cuando los otros
          scripts arman HTML dinámico. -->
     <script src="./src/icons.js?v=v2-gift"></script>
-    <script src="./src/i18n.js?v=v2"></script>
+    <script src="./src/i18n.js?v=v3"></script>
     <!-- Mobile Auth Check -->
     <script src="src/mobile-auth-check.js"></script>
     <script src="./src/wallet-credits-integration.js?v=v2.7"></script>
@@ -3188,7 +3188,7 @@
          app nativa -- un QR es el equivalente universal (cámara del
          celular lo detecta sola) que sí funciona sin integración nativa. -->
     <script src="./src/qrcode.js?v=v1"></script>
-    <script src="./game-engine.js?v=v3.28-underdog></script>
+    <script src="./game-engine.js?v=v3.29-genre-wait"></script>
     <script>window.MTR_INLINE_TOP_STREAMS_ACTIVE = true;</script>
     <!-- DEFINIR quickBet INMEDIATAMENTE - ANTES DE CUALQUIER OTRO SCRIPT -->
     <script>
@@ -6164,10 +6164,6 @@
             }
             if (typeof requestGenreCurationClient !== 'function') return true;
 
-            var checkingToast = typeof showToast === 'function'
-                ? showToast('Verificando que la canción encaje con el género...', 'info')
-                : null;
-
             var result = await requestGenreCurationClient(song.artist, song.name, enrollment.genreLabel);
 
             if (result.verdict === 'block') {
@@ -6892,7 +6888,6 @@
                 var genreMeta = MTR_SOCIAL_GENRES.find(function (g) { return g.id === socialGenreId; });
                 socialGenreLabel = genreMeta ? genreMeta.label : socialGenreId;
                 if (typeof requestGenreCurationClient === 'function' && song.artist && song.name) {
-                    showToast('Verificando que la canción encaje con el género...', 'info');
                     socialGenreCheck = await requestGenreCurationClient(song.artist, song.name, socialGenreLabel);
                     if (socialGenreCheck.verdict === 'block') {
                         showToast(

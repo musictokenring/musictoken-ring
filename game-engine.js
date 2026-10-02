@@ -66,7 +66,47 @@ const HOST_AGENT_URL = 'https://host-agent-287417719690.us-central1.run.app';
 // cliente falla o alguien la saltea, esa otra sigue bloqueando igual.
 const CURATOR_AGENT_URL = 'https://curator-agent-287417719690.us-central1.run.app';
 
+// Pantalla de espera mientras la IA revisa la canción -- reportado en vivo:
+// la consulta puede tardar hasta 20 s y no se veía nada, el jugador no sabía
+// si la app se había trabado. Tapa la pantalla (evita también un segundo
+// clic que dispare otra consulta) y muestra los segundos que van.
+function showGenreCheckOverlay(artist, title, genreLabel) {
+    var old = document.getElementById('mtrGenreCheckOverlay');
+    if (old) old.remove();
+    var esc = function (v) { return String(v == null ? '' : v).replace(/[&<>"']/g, function (c) { return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]; }); };
+    var el = document.createElement('div');
+    el.id = 'mtrGenreCheckOverlay';
+    el.setAttribute('role', 'status');
+    el.setAttribute('aria-live', 'polite');
+    el.style.cssText = 'position:fixed;inset:0;z-index:10001;display:flex;align-items:center;justify-content:center;padding:16px;background:rgba(0,0,0,0.72);backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px);';
+    el.innerHTML =
+        '<style>@keyframes mtrGcSpin{to{transform:rotate(360deg)}}@keyframes mtrGcBar{0%{transform:translateX(-100%)}100%{transform:translateX(250%)}}</style>' +
+        '<div style="width:100%;max-width:24rem;border-radius:18px;border:1px solid rgba(34,211,238,0.3);background:#05060a;box-shadow:0 0 40px rgba(34,211,238,0.15);padding:22px 20px;text-align:center;">' +
+            '<div style="width:52px;height:52px;margin:0 auto 14px;border-radius:50%;border:3px solid rgba(34,211,238,0.18);border-top-color:#22d3ee;border-right-color:#d946ef;animation:mtrGcSpin 0.9s linear infinite;"></div>' +
+            '<div style="font-size:16px;font-weight:800;color:#fff;margin-bottom:6px;">Revisando tu canción con IA</div>' +
+            '<div style="font-size:13px;color:#d1d5db;line-height:1.45;">Verificamos que <strong style="color:#a5f3fc;">' + esc(title) + '</strong> de ' + esc(artist) +
+            ' encaje con el género <strong style="color:#f0abfc;">' + esc(genreLabel) + '</strong>.</div>' +
+            '<div style="height:4px;border-radius:4px;background:rgba(255,255,255,0.08);overflow:hidden;margin:16px 0 10px;"><div style="width:40%;height:100%;border-radius:4px;background:linear-gradient(90deg,#22d3ee,#d946ef);animation:mtrGcBar 1.4s ease-in-out infinite;"></div></div>' +
+            '<div id="mtrGenreCheckHint" style="font-size:12px;color:#9ca3af;">Suele tardar unos segundos…</div>' +
+        '</div>';
+    document.body.appendChild(el);
+    var started = Date.now();
+    var timer = setInterval(function () {
+        var hint = document.getElementById('mtrGenreCheckHint');
+        if (!hint) { clearInterval(timer); return; }
+        var secs = Math.round((Date.now() - started) / 1000);
+        hint.textContent = secs < 6
+            ? 'Suele tardar unos segundos…'
+            : 'Todavía revisando (' + secs + ' s) -- puede tardar hasta 20 s. No cierres la página.';
+    }, 1000);
+    return function hide() {
+        clearInterval(timer);
+        el.remove();
+    };
+}
+
 async function requestGenreCurationClient(artist, title, genreLabel) {
+    var hideOverlay = typeof document !== 'undefined' ? showGenreCheckOverlay(artist, title, genreLabel) : function () {};
     try {
         const resp = await fetch(CURATOR_AGENT_URL + '/curate', {
             method: 'POST',
@@ -83,6 +123,8 @@ async function requestGenreCurationClient(artist, title, genreLabel) {
             verdict: 'warn',
             reason: 'No se pudo verificar automáticamente (curador de género no disponible ahora mismo).'
         };
+    } finally {
+        hideOverlay();
     }
 }
 
