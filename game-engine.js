@@ -3397,12 +3397,15 @@ const GameEngine = {
                 if (timeLeft <= 5) statusEl.innerHTML = '<span class="text-red-400 font-bold animate-pulse">' + svgIcon('bolt', 14) + 'FINAL ÉPICO</span>';
                 else statusEl.innerHTML = '<span class="text-cyan-400">' + svgIcon('music', 14) + 'Sumá reproducciones tocando en el momento justo</span>';
             }
+            self.fanPlaysFxTick(null, timeLeft);
         }, 1000);
 
         if (gameArea) {
-            window.FanPlaysMinigame.start(gameArea, this.battleDuration, function (liveAvg, rounds) {
+            this.fanPlaysFxTick(0, null, true);
+            window.FanPlaysMinigame.start(gameArea, this.battleDuration, function (liveAvg, rounds, perfectCount) {
                 livePlayerAvg = liveAvg || 0;
                 livePlayerRounds = rounds || 0;
+                self.fanPlaysFxTick(perfectCount);
                 refreshDisplay();
             }, async function (finalPlayerAvg, playerRounds) {
                 clearInterval(cpuInterval);
@@ -3914,6 +3917,27 @@ const GameEngine = {
     /**
      * Batalla de torneo: misma UI y audio que práctica (canción del líder activo).
      */
+    // Onomatopeyas en las batallas de destreza: cada 3 aciertos perfectos
+    // seguidos en el total ("¡COMBO x3!") y una vez al entrar a los últimos
+    // 5 s. Llamar con reset=true al arrancar una batalla nueva.
+    fanPlaysFxTick(perfectCount, timeLeft, reset) {
+        var fx = window.MTRBattleFX;
+        if (reset || !this._fpFx) this._fpFx = { lastCombo: 0, finalShown: false };
+        if (!fx) return;
+        var st = this._fpFx;
+        if (typeof perfectCount === 'number' && perfectCount >= 3) {
+            var combo = Math.floor(perfectCount / 3) * 3;
+            if (combo > st.lastCombo) {
+                st.lastCombo = combo;
+                fx.burst(combo >= 9 ? '¡IMPARABLE!' : '¡COMBO x' + combo + '!', { side: 'left', palette: combo >= 9 ? 'gold' : 'cyan', size: 0.85 });
+            }
+        }
+        if (typeof timeLeft === 'number' && timeLeft <= 5 && timeLeft > 0 && !st.finalShown) {
+            st.finalShown = true;
+            fx.burst('¡FINAL ÉPICO!', { side: 'center', palette: 'red', size: 0.95, strong: true, hold: 900 });
+        }
+    },
+
     async startTournamentPlayback(match, options) {
         options = options || {};
         if (!match) return;
@@ -3977,6 +4001,14 @@ const GameEngine = {
 
         playLeadingAudio(1);
 
+        // Onomatopeyas de cómic (src/battle-fx.js): al cambiar quién va
+        // ganando, golpes sueltos cada tanto para el que domina, y el
+        // remate en los últimos 5 s y al terminar. Solo decoración.
+        var fx = window.MTRBattleFX || null;
+        var fxLeader = 0;
+        var fxNextHitAt = 6 + Math.floor(Math.random() * 4);
+        var fxElapsed = 0;
+
         var battleInterval = setInterval(function () {
             timeLeft--;
             var timerEl = document.getElementById('battleTimer');
@@ -4022,6 +4054,20 @@ const GameEngine = {
             if (img2) img2.style.boxShadow = '0 0 ' + (15 + health2 * 0.3) + 'px rgba(236,72,153,' + (0.3 + health2 * 0.005) + ')';
 
             var diff = Math.abs(health1 - health2);
+            if (fx && timeLeft > 0) {
+                fxElapsed++;
+                var leaderNow = diff < 1 ? fxLeader : (health1 > health2 ? 1 : 2);
+                if (timeLeft === 5) {
+                    fx.burst('¡FINAL ÉPICO!', { side: 'center', palette: 'red', size: 1.1, strong: true, hold: 1000 });
+                } else if (leaderNow !== fxLeader && fxLeader !== 0 && fxElapsed > 2) {
+                    fx.burst(Math.random() < 0.5 ? '¡REMONTADA!' : '¡GIRO!', { side: leaderNow === 1 ? 'left' : 'right', palette: leaderNow === 1 ? 'cyan' : 'magenta', strong: true });
+                    fxNextHitAt = fxElapsed + 5 + Math.floor(Math.random() * 4);
+                } else if (fxElapsed >= fxNextHitAt) {
+                    fx.random(leaderNow === 2 ? 'right' : 'left');
+                    fxNextHitAt = fxElapsed + 6 + Math.floor(Math.random() * 5);
+                }
+                fxLeader = leaderNow;
+            }
             if (statusEl) {
                 if (timeLeft <= 5) {
                     statusEl.innerHTML = '<span class="text-red-400 font-bold animate-pulse">' + svgIcon('bolt', 14) + 'FINAL EXPRESS</span>';
@@ -4043,6 +4089,7 @@ const GameEngine = {
                     self.battleAnimState.winner = winner;
                 }
                 self.spawnVictoryParticles(winner);
+                if (fx) setTimeout(function () { fx.burst('¡K.O.!', { side: winner === 1 ? 'left' : 'right', palette: 'gold', size: 1.25, strong: true, hold: 1300 }); }, 250);
                 var winnerSong = winner === 1
                     ? match.player1_song_preview
                     : match.player2_song_preview;
@@ -5883,10 +5930,13 @@ const GameEngine = {
                     : '<span class="text-cyan-400">' + svgIcon('music', 14) + 'Sumá reproducciones tocando en el momento justo</span>') + rivalStatusHtml();
             }
             broadcastMine();
+            self.fanPlaysFxTick(null, live.timeLeft);
         }, 1000);
 
         renderLive();
+        this.fanPlaysFxTick(0, null, true);
         window.FanPlaysMinigame.start(gameArea, this.battleDuration, function (liveAvg, roundsResolved, perfectCount) {
+            self.fanPlaysFxTick(perfectCount);
             live.mine.avg = liveAvg;
             live.mine.rounds = roundsResolved;
             live.mine.perfects = perfectCount || 0;
