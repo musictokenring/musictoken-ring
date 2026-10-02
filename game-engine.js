@@ -10,6 +10,25 @@ const MIN_BET_TORNEO = 1; // mismo mínimo para Torneo
 // Ícono SVG chico para insertar en HTML generado por este archivo (nunca en
 // toasts -- showToast() usa textContent a propósito por seguridad, así que
 // ahí se saca el emoji en vez de intentar meterle HTML).
+// "Batalla Sorpresa": ganó por destreza clara la canción que Deezer NO
+// tenía como favorita (tilt>0 favorece al lado 1, tilt<0 al lado 2; umbral
+// de 3 puntos para no marcar como sorpresa un tilt casi parejo). Es solo
+// narrativa -- "tu fanatismo puede ganarle a la fama" -- nunca decide nada.
+function isUnderdogWin(winner, resultKind, tilt) {
+    tilt = Number(tilt) || 0;
+    return resultKind === 'destreza_clara' && ((winner === 1 && tilt < -3) || (winner === 2 && tilt > 3));
+}
+
+function underdogCalloutHtml() {
+    return '<div style="max-width:30rem;margin:0 auto 1.5rem;padding:14px 16px;border-radius:16px;text-align:left;display:flex;gap:12px;align-items:center;' +
+        'background:linear-gradient(135deg,rgba(250,204,21,0.16),rgba(217,70,239,0.10));border:1px solid rgba(250,204,21,0.45);box-shadow:0 0 24px rgba(250,204,21,0.18);animation:fadeInUp 0.6s ease-out;">' +
+        '<span style="flex-shrink:0;display:inline-flex;align-items:center;justify-content:center;width:42px;height:42px;border-radius:50%;background:rgba(250,204,21,0.18);color:#fde047;">' +
+        (window.MTRIcons ? window.MTRIcons.svg('bolt', { size: 22 }) : '') + '</span>' +
+        '<div><div style="font-size:11px;font-weight:900;letter-spacing:0.12em;color:#fde047;">BATALLA SORPRESA</div>' +
+        '<div style="font-size:14px;color:#f3f4f6;line-height:1.4;margin-top:2px;">Tu fanatismo le ganó a la fama: tu canción era la menos popular de las dos y ganaste por destreza.</div></div>' +
+        '</div>';
+}
+
 function svgIcon(name, size, extraClass) {
     return window.MTRIcons ? window.MTRIcons.svg(name, { size: size || 14, className: 'inline-block align-[-2px] mr-1' + (extraClass ? ' ' + extraClass : '') }) : '';
 }
@@ -3488,6 +3507,7 @@ const GameEngine = {
             '</div>' +
             '<p class="text-base sm:text-lg text-gray-300 mb-2 max-w-xl mx-auto">' + explain + '</p>' +
             '<p class="text-sm text-gray-500 mb-6">' + friendlyNote + '</p>' +
+            (userWon && isUnderdogWin(winner, resultKind, breakdown.tilt) ? underdogCalloutHtml() : '') +
             (breakdown.tokenInfo ? '<p class="text-gray-500 mb-6" style="font-size:11px;">Desempate verificable -- bloque Base #' + breakdown.tokenInfo.blockNumber + ' <a href="' + breakdown.tokenInfo.explorerUrl + '" target="_blank" class="underline text-cyan-400">ver en BaseScan</a></p>' : '') +
             '<div class="flex flex-wrap items-center justify-center">' +
             '<button onclick="' + backButtonAction + '" class="px-8 py-3 rounded-xl text-lg font-bold bg-gradient-to-r from-cyan-500 to-fuchsia-500 text-white hover:opacity-90 transition-all shadow-lg shadow-cyan-500/25 cursor-pointer">' +
@@ -3810,7 +3830,7 @@ const GameEngine = {
         if (pending.kind === 'fanplays') {
             this.shareFanPlaysResult(pending.match, pending.winner, pending.resultKind, pending.breakdown);
         } else if (pending.kind === 'victory') {
-            this.shareVictoryResult(pending.match, pending.winner, pending.prize);
+            this.shareVictoryResult(pending.match, pending.winner, pending.prize, pending.isUnderdog === true);
         }
     },
 
@@ -3829,8 +3849,7 @@ const GameEngine = {
         // desempate (tilt>0 favorece al lado 1, tilt<0 al lado 2). Umbral
         // chico (3 puntos) para no marcar como "sorpresa" un tilt casi
         // parejo.
-        var tilt = breakdown ? Number(breakdown.tilt) || 0 : 0;
-        var isUnderdog = resultKind === 'destreza_clara' && ((winner === 1 && tilt < -3) || (winner === 2 && tilt > 3));
+        var isUnderdog = isUnderdogWin(winner, resultKind, breakdown && breakdown.tilt);
         this.shareBattleResult({
             winnerName: winnerName, winnerArtist: winnerArtist, winnerImg: winnerImg,
             scoreLine: scoreLine, isUnderdog: isUnderdog,
@@ -3838,14 +3857,14 @@ const GameEngine = {
         });
     },
 
-    shareVictoryResult(match, winner, prize) {
+    shareVictoryResult(match, winner, prize, isUnderdog) {
         var winnerName = winner === 1 ? match.player1_song_name : match.player2_song_name;
         var winnerArtist = winner === 1 ? match.player1_song_artist : match.player2_song_artist;
         var winnerImg = winner === 1 ? match.player1_song_image : match.player2_song_image;
         var scoreLine = prize > 0 ? ('+' + prize + ' MTR ganados') : '';
         this.shareBattleResult({
             winnerName: winnerName, winnerArtist: winnerArtist, winnerImg: winnerImg,
-            scoreLine: scoreLine, isUnderdog: false,
+            scoreLine: scoreLine, isUnderdog: !!isUnderdog,
             shareText: '¡Gané una batalla real en MusicToken Ring con ' + (winnerName || 'mi canción') + '! 🎧🏆 Jugá vos también.'
         });
     },
@@ -6374,6 +6393,27 @@ const GameEngine = {
             showToast(userWon ? 'Tu rival no terminó la batalla a tiempo: ganaste por abandono.' : 'No terminaste la batalla a tiempo: se dio por abandono.', userWon ? 'success' : 'error');
         }
         this.showVictoryScreen(finalMatch, winner, userWon, payouts);
+        if (userWon && !wonByForfeit) this.checkUnderdogVictory(finalMatch.id);
+    },
+
+    // Batallas reales: el servidor calcula si fue "Batalla Sorpresa" (ver
+    // /api/battles/:id/underdog) -- el cliente no tiene los ranks de Deezer
+    // de un partido que resolvió el servidor. Se agrega después de pintar,
+    // así una demora o falla de Deezer nunca retrasa el resultado.
+    async checkUnderdogVictory(matchId) {
+        try {
+            const backendUrl = window.CONFIG?.BACKEND_API || window.CreditsSystem?.backendUrl || 'https://musictoken-ring.onrender.com';
+            const resp = await fetch(backendUrl + '/api/battles/' + encodeURIComponent(matchId) + '/underdog');
+            const data = await resp.json().catch(() => ({}));
+            if (!resp.ok || !data.isUnderdog) return;
+            const slot = document.getElementById('mtrUnderdogSlot');
+            if (slot) slot.innerHTML = underdogCalloutHtml();
+            if (this._pendingShare && this._pendingShare.kind === 'victory' && this._pendingShare.match && this._pendingShare.match.id === matchId) {
+                this._pendingShare.isUnderdog = true;
+            }
+        } catch (e) {
+            console.warn('[checkUnderdogVictory]', e && e.message);
+        }
     },
 
     async runBattle(match) {
@@ -6844,6 +6884,7 @@ const GameEngine = {
                 ? '<p class="text-base text-gray-300 mb-6">Batalla amistosa contra la CPU · no encontramos rival humano a tiempo · tus créditos no cambiaron</p>'
                 : (prize > 0 ? '<p class="text-3xl sm:text-4xl font-black text-cyan-400 mb-6" style="text-shadow:0 0 20px rgba(0,243,255,0.5);animation:pulse 1s ease-in-out infinite">+' + prize + ' MTR</p>' : '<p class="text-lg text-gray-400 mb-6">Mejor suerte la próxima vez</p>')) +
             (!isPractice && !isFriendlyFallback && payouts.platformFee ? '<div class="text-sm text-gray-500 mb-6 space-y-1"><p>Comisión: ' + payouts.platformFee + ' MTR</p><p>Pago ganador: ' + payouts.winnerPayout + ' MTR</p></div>' : '') +
+            '<div id="mtrUnderdogSlot"></div>' +
             (this.lastPrizeTxHash ? '<p class="text-sm text-cyan-400 mb-4">Tx: <a href="https://basescan.org/tx/' + this.lastPrizeTxHash + '" target="_blank" class="underline">' + this.lastPrizeTxHash.slice(0, 14) + '...</a></p>' : '') +
             '<div class="flex flex-wrap items-center justify-center">' +
             '<button onclick="' + (isPractice ? 'GameEngine.goToPracticeSelection()' : 'location.reload()') + '" class="px-8 py-3 rounded-xl text-lg font-bold bg-gradient-to-r from-cyan-500 to-fuchsia-500 text-white hover:opacity-90 transition-all shadow-lg shadow-cyan-500/25 cursor-pointer">' +

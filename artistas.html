@@ -139,6 +139,14 @@
         font-variant-numeric: tabular-nums; letter-spacing: -0.01em;
     }
     .royalty-amount .unit { font-size: 1.1rem; font-family: var(--sans); font-weight: 700; margin-left: 0.3rem; }
+    /* "Tu fanatismo puede ganarle a la fama" -- el pitch para artistas
+       emergentes. Es una consecuencia real de cómo se decide una batalla
+       (destreza de quien juega; Deezer solo desempata, con tope de 10%). */
+    .pitch { display: grid; gap: 0.7rem; margin: -0.6rem 0 1.6rem; }
+    .pitch-item { display: flex; gap: 0.8rem; align-items: flex-start; padding: 0.9rem 1rem; border-radius: 14px; background: rgba(246, 226, 184, 0.05); border: 1px solid rgba(246, 226, 184, 0.16); }
+    .pitch-num { flex-shrink: 0; width: 1.8rem; height: 1.8rem; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 0.85rem; color: #1a1508; background: linear-gradient(135deg, var(--gold-bright), #e0b973); }
+    .pitch-item strong { display: block; color: var(--gold-bright); font-size: 0.92rem; margin-bottom: 0.15rem; }
+    .pitch-item span { color: var(--text-muted); font-size: 0.82rem; line-height: 1.45; }
     .royalty-note { font-size: 0.76rem; color: var(--text-dim); margin-top: 0.6rem; }
     .royalty-note strong { color: var(--text-muted); }
 
@@ -195,6 +203,12 @@
         <div class="hero-badge">${ICON_MIC}</div>
         <h1>Portal de <em>Artistas</em></h1>
         <p>Registrá tu perfil, reclamá tus canciones, y sumá regalías de impulso cada vez que un jugador las elija en una batalla real en MusicToken Ring, ganen o pierdan.</p>
+    </div>
+
+    <div class="pitch">
+        <div class="pitch-item"><div class="pitch-num">1</div><div><strong>Tus fans deciden, no el algoritmo</strong><span>En cada batalla gana quien mejor juega con su canción. La popularidad en Deezer solo sirve de desempate cuando el partido queda parejo, y nunca pesa más de un 10%.</span></div></div>
+        <div class="pitch-item"><div class="pitch-num">2</div><div><strong>Tu fanatismo puede ganarle a la fama</strong><span>Una canción emergente le puede ganar a un hit mundial si quien la juega lo hace mejor. Cuando pasa, el resultado se marca como "Batalla Sorpresa" y se puede compartir en redes.</span></div></div>
+        <div class="pitch-item"><div class="pitch-num">3</div><div><strong>Cobrás aunque tu canción pierda</strong><span>Las regalías se suman cada vez que alguien elige tu canción en una batalla con dinero real, sea cual sea el resultado.</span></div></div>
     </div>
 
     <div id="loggedOutCard" class="card hidden" style="text-align:center;">

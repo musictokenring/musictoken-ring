@@ -4674,6 +4674,51 @@ async function resolveFanPlaysWinner(p1Score, p2Score, match) {
  * el puntaje final SIEMPRE se recalcula acá (submit-fanplay-score),
  * nunca se confía en lo que el cliente afirma.
  */
+/**
+ * "Batalla Sorpresa" -- ¿la canción menos popular (según Deezer) ganó por
+ * destreza clara? Es solo narrativa para la pantalla de resultado y la
+ * tarjeta para compartir: NO interviene en quién gana ni en el pago (eso ya
+ * lo decidió resolveFanPlaysWinner). Mismo umbral que el cliente usa en
+ * Modo Práctica: destreza clara (>20) y la popularidad en contra (>3 puntos
+ * del "tilt" de Deezer). Sin columnas nuevas: se recalcula del partido
+ * terminado y se guarda en memoria.
+ */
+const underdogCache = new Map();
+app.get('/api/battles/:matchId/underdog', async (req, res) => {
+    try {
+        const { matchId } = req.params;
+        if (underdogCache.has(matchId)) return res.json({ ok: true, ...underdogCache.get(matchId) });
+        const { data: m } = await supabase
+            .from('matches')
+            .select('id, status, winner, player1_song_id, player2_song_id, player1_final_health, player2_final_health, fanplay_seed, fanplay_timeout_resolution')
+            .eq('id', matchId)
+            .maybeSingle();
+        if (!m) return res.status(404).json({ error: 'Match no encontrado' });
+        if (m.status !== 'finished' || !m.winner || !m.fanplay_seed || m.fanplay_timeout_resolution) {
+            return res.json({ ok: true, isUnderdog: false });
+        }
+        const diff = Number(m.player1_final_health || 0) - Number(m.player2_final_health || 0);
+        const clearSkill = Math.abs(diff) > 20 && ((m.winner === 1 && diff > 0) || (m.winner === 2 && diff < 0));
+        let isUnderdog = false;
+        if (clearSkill) {
+            const [rank1, rank2] = await Promise.all([fetchDeezerRank(m.player1_song_id), fetchDeezerRank(m.player2_song_id)]);
+            if (rank1 == null || rank2 == null || (rank1 + rank2) <= 0) {
+                // Deezer no respondió: no cachear, que el próximo intento pueda calcularlo.
+                return res.json({ ok: true, isUnderdog: false });
+            }
+            const tilt = Math.max(-10, Math.min(10, (rank1 / (rank1 + rank2)) * 100 - 50));
+            isUnderdog = (m.winner === 1 && tilt < -3) || (m.winner === 2 && tilt > 3);
+        }
+        const result = { isUnderdog };
+        underdogCache.set(matchId, result);
+        if (underdogCache.size > 5000) underdogCache.delete(underdogCache.keys().next().value);
+        res.json({ ok: true, ...result });
+    } catch (error) {
+        console.error('[underdog] Error:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
 app.get('/api/battles/:matchId/fanplay-seed', async (req, res) => {
     try {
         const { matchId } = req.params;

@@ -219,6 +219,18 @@
             'Batalla en curso': 'Battle in progress',
             'Preparando batalla…': 'Getting the battle ready…',
             'Iniciar sesión': 'Log in',
+            'BATALLA SORPRESA': 'SURPRISE BATTLE',
+            'Tu fanatismo le ganó a la fama: tu canción era la menos popular de las dos y ganaste por destreza.':
+                'Your fandom beat fame: your song was the less popular of the two and you won on skill.',
+            'Volver a intentarlo': 'Try again',
+            'Perdiste esta vez': 'You lost this time',
+            '¡VICTORIA!': 'VICTORY!',
+            'Derrota': 'Defeat',
+            'Jugar de Nuevo': 'Play Again',
+            'Continuar en práctica': 'Keep practicing',
+            'Mejor suerte la próxima vez': 'Better luck next time',
+            'Batalla de práctica · sin apuesta -- tus créditos no cambiaron': 'Practice battle · no bet -- your credits did not change',
+            'Batalla amistosa · sin apuesta -- tus créditos no cambiaron': 'Friendly battle · no bet -- your credits did not change',
             'Saldo insuficiente': 'Insufficient balance'
         }
     };
