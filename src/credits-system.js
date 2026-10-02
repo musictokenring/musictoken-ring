@@ -1171,10 +1171,13 @@
                 ? Math.max(1, Math.ceil((new Date(this.currentBonusExpiresAt).getTime() - Date.now()) / (24 * 60 * 60 * 1000)))
                 : null;
             const text = hasBonus
-                ? `🎁 ${this.currentBonusCredits.toFixed(0)} de prueba${daysLeft ? ' · ' + daysLeft + (daysLeft === 1 ? ' día' : ' días') : ''}`
+                ? `${this.currentBonusCredits.toFixed(0)} de prueba${daysLeft ? ' · ' + daysLeft + (daysLeft === 1 ? ' día' : ' días') : ''}`
                 : '';
             document.querySelectorAll('.mtr-bonus-badge').forEach((el) => {
-                el.textContent = text;
+                // text solo trae números y texto fijo, así que innerHTML es seguro aquí.
+                el.innerHTML = text && window.MTRIcons
+                    ? '<span style="vertical-align:-2px;margin-right:4px;">' + window.MTRIcons.svg('gift', { size: 12 }) + '</span>' + text
+                    : text;
                 el.classList.toggle('hidden', !hasBonus);
             });
             if (typeof window.updateSocialBonusToggleVisibility === 'function') {

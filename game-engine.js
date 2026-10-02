@@ -1323,7 +1323,7 @@ const GameEngine = {
                 const challenge = result.challenge;
                 const challengeLink = `${window.location.origin}${window.location.pathname}?challenge=${challenge.challenge_id}`;
                 this.showSocialChallengeShareUI(challenge, challengeLink, song, normalizedBet);
-                showToast('🎁 Desafío de PRUEBA creado. Compartí el link -- tu amigo podrá probarlo gratis.', 'success');
+                showToast('Desafío de PRUEBA creado. Compartí el link -- tu amigo podrá probarlo gratis.', 'success');
             } catch (error) {
                 console.error('[createSocialChallenge] Error creando desafío de prueba:', error);
                 showToast('Error al crear desafío de prueba: ' + (error?.message || 'error desconocido'), 'error');
@@ -1717,7 +1717,7 @@ const GameEngine = {
                         return;
                     }
                     if (ensureResult.toppedUp) {
-                        showToast(`🎁 Te regalamos ${ensureResult.amount} créditos de prueba para que puedas jugar gratis. No son retirables, son solo para probar la plataforma.`, 'success', 9000);
+                        showToast(`Te regalamos ${ensureResult.amount} créditos de prueba para que puedas jugar gratis. No son retirables, son solo para probar la plataforma.`, 'success', 9000);
                     }
                 } catch (ensureError) {
                     console.error('[acceptSocialChallenge] Error preparando saldo de prueba:', ensureError);

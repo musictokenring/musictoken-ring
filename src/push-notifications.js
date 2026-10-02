@@ -106,12 +106,12 @@
         if (s === 'unsupported') return '';
         if (s === 'ios-install') {
             return '<div class="mtr-push-prompt" style="margin-top:14px; padding:12px 14px; border-radius:14px; border:1px solid rgba(34,211,238,0.35); background:rgba(34,211,238,0.08); text-align:left;">' +
-                '<div style="font-size:13px; font-weight:800; color:#a5f3fc;">🔔 Avisos en tu iPhone</div>' +
+                '<div style="font-size:13px; font-weight:800; color:#a5f3fc;">' + (window.MTRIcons ? '<span style="vertical-align:-2px;margin-right:6px;">' + window.MTRIcons.svg('bell', { size: 14 }) + '</span>' : '') + 'Avisos en tu iPhone</div>' +
                 '<div style="font-size:12px; color:#d1d5db; margin-top:4px; line-height:1.45;">' + lead + ' En iPhone: tocá <strong>Compartir</strong> → <strong>Agregar a pantalla de inicio</strong>, abrí MusicToken Ring desde ese ícono y activalas ahí.</div>' +
             '</div>';
         }
         return '<div class="mtr-push-prompt" style="margin-top:14px; padding:12px 14px; border-radius:14px; border:1px solid rgba(34,211,238,0.35); background:rgba(34,211,238,0.08); text-align:left; display:flex; gap:12px; align-items:center;">' +
-            '<div style="flex:1; min-width:0;"><div style="font-size:13px; font-weight:800; color:#a5f3fc;">🔔 No te pierdas la batalla</div>' +
+            '<div style="flex:1; min-width:0;"><div style="font-size:13px; font-weight:800; color:#a5f3fc;">' + (window.MTRIcons ? '<span style="vertical-align:-2px;margin-right:6px;">' + window.MTRIcons.svg('bell', { size: 14 }) + '</span>' : '') + 'No te pierdas la batalla</div>' +
             '<div style="font-size:12px; color:#d1d5db; margin-top:3px; line-height:1.45;">' + lead + '</div></div>' +
             '<button type="button" onclick="window.MTRPush.enableFromPrompt(this)" style="flex-shrink:0; padding:9px 14px; border-radius:10px; border:none; cursor:pointer; font-size:12.5px; font-weight:800; color:#05060a; background:linear-gradient(90deg,#22d3ee,#a5f3fc);">Activar</button>' +
         '</div>';
@@ -123,7 +123,7 @@
         var r = await enable();
         var box = btn.closest('.mtr-push-prompt');
         if (r.ok) {
-            if (box) box.innerHTML = '<div style="font-size:13px; font-weight:700; color:#6ee7b7;">✅ Notificaciones activadas. Te vamos a avisar.</div>';
+            if (box) box.innerHTML = '<div style="font-size:13px; font-weight:700; color:#6ee7b7;">' + (window.MTRIcons ? '<span style="vertical-align:-2px;margin-right:6px;">' + window.MTRIcons.svg('circleCheck', { size: 14 }) + '</span>' : '') + 'Notificaciones activadas. Te vamos a avisar.</div>';
         } else {
             btn.disabled = false;
             btn.textContent = 'Activar';

@@ -1128,7 +1128,7 @@
 
 
         <!-- GAME MODE SELECTOR (shown when logged in) -->
-        <section id="modeSelector" class="hidden mb-16">
+        <section id="modeSelector" class="hidden mb-16" data-i18n>
             <div class="text-center mb-10">
                 <h2 class="mtr2-h text-3xl font-extrabold text-white mb-2">Elige tu Modo de Juego</h2>
                 <p class="text-gray-400">Selecciona cómo quieres competir</p>
@@ -1333,7 +1333,7 @@
                              que acepte también juega gratis. -->
                         <label id="socialBonusToggleWrap" class="hidden items-center gap-2 mb-3 px-3 py-2 rounded-lg bg-orange-500/10 border border-orange-500/30 text-orange-300 text-xs cursor-pointer">
                             <input type="checkbox" id="socialBonusToggle" style="accent-color:#fb923c;">
-                            <span>🎁 Crear con créditos de prueba (no retirable, tu invitado también juega gratis)</span>
+                            <span><span data-mtr-icon="gift" data-mtr-color="orange" data-mtr-inline data-mtr-size="14"></span>Crear con créditos de prueba (no retirable, tu invitado también juega gratis)</span>
                         </label>
                         <div class="flex gap-2 mb-5" id="betAmountButtons">
                             <button type="button" onclick="window.quickBet(5)" class="bet-amount-btn flex-1 py-2 rounded-lg text-xs font-bold bg-white/5 border border-white/10 text-gray-300 hover:text-white hover:border-cyan-500/30 transition cursor-pointer" data-amount="5">5</button>
@@ -1463,7 +1463,7 @@
         </section>
 
         <!-- CASHOUT CARD -->
-        <section id="cashoutSection" class="mb-16">
+        <section id="cashoutSection" class="mb-16" data-i18n>
             <div class="max-w-2xl mx-auto p-6 sm:p-8 rounded-2xl border border-fuchsia-500/40 bg-gradient-to-br from-gray-900/80 to-purple-950/30 neon-border-magenta">
                 <h3 class="text-xl font-bold text-fuchsia-400 neon-text-magenta mb-2">Retirar Créditos</h3>
                 <p class="text-gray-400 text-sm mb-4">Retira tus créditos nominales y recibe fondos en tu wallet (USD / stablecoin según red y pasarela). Conversión 1:1 respaldada por vault.</p>
@@ -2517,7 +2517,7 @@
                  dinero real, y se lo decimos acá mismo, no después de que
                  ya jugó. -->
             <div id="challengeBonusBanner" class="hidden mb-4 px-4 py-3 rounded-xl bg-orange-500/10 border border-orange-500/30 text-left">
-                <p class="text-orange-300 text-sm font-bold mb-1">🎁 Fuiste invitado GRATIS a probar MusicToken Ring</p>
+                <p class="text-orange-300 text-sm font-bold mb-1"><span data-mtr-icon="gift" data-mtr-color="orange" data-mtr-inline data-mtr-size="14"></span>Fuiste invitado GRATIS a probar MusicToken Ring</p>
                 <p class="text-orange-200/80 text-xs">Esta partida es solo de práctica -- no representa dinero real, ni podés retirar lo que ganes acá. Si te gustó y querés jugar por premios de verdad, <a href="#" onclick="closeChallengeModal(); if(typeof window.openMercadoPagoModal === 'function') window.openMercadoPagoModal(); return false;" class="underline font-semibold">recargá saldo</a>.</p>
             </div>
 
@@ -3165,7 +3165,8 @@
          reemplaza los emojis de la UI. Va antes que el resto para que
          MTRIcons.badge()/inline() estén disponibles cuando los otros
          scripts arman HTML dinámico. -->
-    <script src="./src/icons.js?v=v1"></script>
+    <script src="./src/icons.js?v=v2-gift"></script>
+    <script src="./src/i18n.js?v=v1"></script>
     <!-- Mobile Auth Check -->
     <script src="src/mobile-auth-check.js"></script>
     <script src="./src/wallet-credits-integration.js?v=v2.7"></script>
@@ -3178,7 +3179,7 @@
     <script src="./src/claim-ui.js?v=v3.1-crypto-address" defer></script>
     <script src="./src/fan-plays-scoring.js?v=v1"></script>
     <script src="./src/fan-plays-minigame.js?v=v2"></script>
-    <script src="./src/push-notifications.js?v=v1"></script>
+    <script src="./src/push-notifications.js?v=v2-icons"></script>
     <!-- QR Code Generator for JavaScript (Kazuhiko Arase, MIT) -- vendoreado
          tal cual, sin build step, para el QR clicable de la tarjeta de
          "Compartir resultado" (ver buildResultShareCard en game-engine.js).
@@ -3187,7 +3188,7 @@
          app nativa -- un QR es el equivalente universal (cámara del
          celular lo detecta sola) que sí funciona sin integración nativa. -->
     <script src="./src/qrcode.js?v=v1"></script>
-    <script src="./game-engine.js?v=v3.26-social-extras-push"></script>
+    <script src="./game-engine.js?v=v3.27-icons-i18n"></script>
     <script>window.MTR_INLINE_TOP_STREAMS_ACTIVE = true;</script>
     <!-- DEFINIR quickBet INMEDIATAMENTE - ANTES DE CUALQUIER OTRO SCRIPT -->
     <script>
@@ -10566,7 +10567,7 @@
                 <a href="./artistas.html" class="mtr2-banner-gold" style="border-radius:16px; padding:16px; margin-bottom:20px; background:radial-gradient(280px circle at 12% -30%, rgba(246,226,184,0.18), transparent 60%), linear-gradient(120deg, rgba(224,185,115,0.18), rgba(8,15,26,0.45)); border:1.5px solid rgba(224,185,115,0.5); display:flex; align-items:center; gap:13px; cursor:pointer; text-decoration:none;">
                     <span data-mtr-icon="crown" data-mtr-color="yellow" data-mtr-badge-size="42" data-mtr-size="21" style="flex-shrink:0;"></span>
                     <div style="flex:1; min-width:0;">
-                        <div style="display:flex; align-items:center; gap:6px; margin-bottom:2px;">
+                        <div data-i18n style="display:flex; align-items:center; gap:6px; margin-bottom:2px;">
                             <span style="font-size:8.5px; font-weight:800; text-transform:uppercase; letter-spacing:0.06em; color:#1a1508; background:linear-gradient(90deg,#f6e2b8,#e0b973); padding:1.5px 6px; border-radius:999px;">Nuevo</span>
                             <span style="font-size:13px; font-weight:800; color:#f6e2b8;">Programa de Artistas</span>
                         </div>
@@ -10585,7 +10586,7 @@
                      Rápido al final -- antes iba Rápido/Privada/Social/
                      Práctica. Solo cambia el orden visual; cada tarjeta
                      sigue llamando exactamente el mismo selectMode(...). -->
-                <div class="mtr2-modes" style="display:flex; flex-direction:column; gap:12px;">
+                <div class="mtr2-modes" data-i18n style="display:flex; flex-direction:column; gap:12px;">
                     <div class="mtr2-mode" style="background:linear-gradient(135deg, rgba(52,211,153,0.18), rgba(8,15,26,0.95)); border:1.5px solid rgba(52,211,153,0.45); box-shadow:0 0 22px rgba(52,211,153,0.12);">
                         <div style="display:flex; align-items:center; gap:12px; margin-bottom:10px;">
                             <div style="width:44px; height:44px; border-radius:12px; background:linear-gradient(135deg,#34d399,#059669); display:flex; align-items:center; justify-content:center; flex-shrink:0; box-shadow:0 0 16px rgba(52,211,153,0.5);"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#05060a" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3.2"/></svg></div>
@@ -10723,7 +10724,7 @@
             <div class="mtr2-content mtr2-narrow">
                 <div style="display:flex; flex-direction:column; align-items:center; text-align:center; margin-bottom:18px; padding-top:6px;">
                     <div id="mtr2ProfileAvatar" style="width:72px; height:72px; border-radius:50%; background:linear-gradient(135deg,#00f0ff,#0891b2); display:flex; align-items:center; justify-content:center; font-size:26px; font-weight:800; color:#05060a; box-shadow:0 0 24px rgba(0,240,255,0.45); border:3px solid rgba(0,240,255,0.3); margin-bottom:10px;">?</div>
-                    <div class="mtr2-h" id="mtr2ProfileName" style="font-size:17px; font-weight:700; color:#fff; margin-bottom:4px;">Jugador</div>
+                    <div class="mtr2-h" id="mtr2ProfileName" data-i18n style="font-size:17px; font-weight:700; color:#fff; margin-bottom:4px;">Jugador</div>
                     <div id="mtr2ProfileWalletStatus" class="mtr2-auth-only" style="display:none !important; font-size:11px; font-weight:700; color:#9ca3af; background:rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.1); border-radius:999px; padding:4px 10px; cursor:pointer;">Wallet no conectada</div>
                 </div>
 
@@ -10738,7 +10739,7 @@
                     <button type="button" class="mtr2-cta" style="color:#05060a; background:linear-gradient(90deg,#00f0ff,#22d3ee);" onclick="mtr2GuestSignup()">CREAR CUENTA GRATIS</button>
                 </div>
 
-                <div class="mtr2-auth-only" style="display:flex; gap:8px; margin-bottom:16px;">
+                <div class="mtr2-auth-only" data-i18n style="display:flex; gap:8px; margin-bottom:16px;">
                     <div class="mtr2-stat" style="background:linear-gradient(135deg, rgba(250,204,21,0.16), rgba(15,23,42,0.9)); border:1px solid rgba(250,204,21,0.35);">
                         <div class="mtr2-h" style="font-size:18px; font-weight:700; color:#fde047;" id="mtr2StatWins">0</div>
                         <div style="font-size:10px; color:#9ca3af; font-weight:600;">Victorias</div>
@@ -10784,6 +10785,24 @@
                     </button>
                 </div>
                 <div id="mtr2PushHelp"></div>
+
+                <div class="mtr2-card" style="display:flex; align-items:center; justify-content:space-between; gap:12px; padding:12px 14px; margin-bottom:12px;">
+                    <span style="display:flex; align-items:center; gap:10px; font-size:13.5px; font-weight:600; color:#e5e7eb;"><span data-mtr-icon="world" data-mtr-plain data-mtr-size="18" style="color:#9ca3af; display:inline-flex;"></span><span data-i18n>Idioma</span></span>
+                    <div id="mtr2LangSwitch" style="display:flex; gap:4px; padding:3px; border-radius:10px; background:rgba(255,255,255,0.06);">
+                        <button type="button" data-lang="es" onclick="window.MTRI18n && window.MTRI18n.setLang('es')" style="padding:6px 12px; border-radius:8px; border:none; cursor:pointer; font-size:12px; font-weight:800; background:transparent; color:#9ca3af;" data-no-i18n>Español</button>
+                        <button type="button" data-lang="en" onclick="window.MTRI18n && window.MTRI18n.setLang('en')" style="padding:6px 12px; border-radius:8px; border:none; cursor:pointer; font-size:12px; font-weight:800; background:transparent; color:#9ca3af;" data-no-i18n>English</button>
+                    </div>
+                </div>
+                <script>
+                    (function () {
+                        var cur = (window.MTRI18n && window.MTRI18n.lang) || 'es';
+                        document.querySelectorAll('#mtr2LangSwitch [data-lang]').forEach(function (b) {
+                            if (b.getAttribute('data-lang') !== cur) return;
+                            b.style.background = 'linear-gradient(90deg,#22d3ee,#a5f3fc)';
+                            b.style.color = '#05060a';
+                        });
+                    })();
+                </script>
 
                 <button type="button" class="mtr2-auth-only" onclick="if(typeof logout==='function') logout()" style="display:block; width:100%; margin-top:14px; text-align:center; font-size:13px; font-weight:700; color:#f87171; padding:10px; background:none; border:none; cursor:pointer; font-family:inherit;">Cerrar sesión</button>
             </div>
