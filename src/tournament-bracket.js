@@ -393,9 +393,21 @@
           '</div></div>';
       } else if (lobbyStatus === 'cancelled') {
         status.innerHTML =
-          '<div class="text-center text-red-400">' +
-          '<p class="font-bold mb-2">' + svgIcon('circleX', 15) + 'Torneo cancelado</p>' +
-          '<p class="text-sm text-gray-400">' + (lastLifecycleError || 'Error al iniciar.') + '</p></div>';
+          '<div class="text-center p-4">' +
+          '<p class="font-bold mb-2 text-red-400">' + svgIcon('circleX', 15) + 'Torneo cancelado</p>' +
+          '<p class="text-sm text-gray-300 mb-3">No se pudo jugar esta ronda. Si estabas inscrito, te devolvimos la inscripción a tu saldo.</p>' +
+          '<button type="button" id="tournamentCancelledHubBtn" class="px-4 py-2 rounded-lg bg-cyan-600 text-white text-sm">Volver a los torneos</button>' +
+          '</div>';
+        var cancelledBtn = document.getElementById('tournamentCancelledHubBtn');
+        if (cancelledBtn) {
+          cancelledBtn.onclick = function () {
+            close();
+            if (typeof selectMode === 'function') selectMode('tournament');
+          };
+        }
+        if (window.CreditsSystem && typeof window.CreditsSystem.loadBalance === 'function') {
+          window.CreditsSystem.loadBalance(window.connectedAddress || null, window.CreditsSystem.currentUserId || null);
+        }
       } else if (lobbyStatus === 'in_progress') {
         var duelTotal = (b && b.duels && b.duels.length) || 0;
         var duelIdx = (b && b.currentDuelIndex) || 0;
@@ -1251,8 +1263,13 @@
 
       if (data.tournament.status === 'cancelled') {
         lastLifecycleError = data.lifecycleError || 'Ronda cancelada';
-        toast(lastLifecycleError, 'warning');
+        lobbyStatus = 'cancelled';
+        resetSkill();
         if (!playing) renderLobby(data);
+        // Nada más que esperar: se deja de consultar (antes repetía el aviso
+        // cada 6 s y parecía un bucle).
+        if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
+        if (countdownTimer) { clearInterval(countdownTimer); countdownTimer = null; }
         return;
       }
 

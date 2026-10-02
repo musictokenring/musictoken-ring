@@ -198,10 +198,13 @@ class TournamentService {
 
     const humanCount = await this.countHumanParticipants(tournamentId);
     if (this.expressAlwaysStartsBattle(t, humanCount)) {
+      // Solo desde "registration": sin esto, una ronda ya en curso volvía
+      // a "locked" y se reabría (ver el candado en tournament-battle.js).
       await this.supabase
         .from('tournaments')
         .update({ status: 'locked', updated_at: nowIso })
-        .eq('id', tournamentId);
+        .eq('id', tournamentId)
+        .eq('status', 'registration');
       const { data: locked } = await this.supabase
         .from('tournaments')
         .select('*')
@@ -460,7 +463,8 @@ class TournamentService {
         await this.supabase
           .from('tournaments')
           .update({ status: 'locked', updated_at: nowIso })
-          .eq('id', t.id);
+          .eq('id', t.id)
+          .eq('status', 'registration');
         console.log('[tournament] 🔒 Torneo cerrado (listo):', t.name, 'humanos:', humanCount);
         const { data: locked } = await this.supabase
           .from('tournaments')
@@ -662,6 +666,10 @@ class TournamentService {
       }
       if (after?.status === 'in_progress' && after.bracket_state) {
         return { ok: true, stage: 'in_progress' };
+      }
+      if (after?.bracket_state && after.bracket_state.phase === 'opening') {
+        // Otra llamada está armando la ronda en este momento.
+        return { ok: true, stage: 'locked' };
       }
 
       return {

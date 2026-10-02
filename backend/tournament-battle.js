@@ -422,18 +422,33 @@ class TournamentBattleEngine {
     return allParticipants;
   }
 
+  /**
+   * Cancela y DEVUELVE la inscripción a los humanos inscritos. Antes solo
+   * cambiaba el estado: quien había pagado perdía la inscripción aunque el
+   * torneo nunca se jugara. El cambio de estado es condicional (solo desde
+   * un estado activo), así que la devolución corre una sola vez.
+   */
   async cancelTournament(tournamentId, reason) {
     console.error('[tournament-battle] Cancelado:', tournamentId, reason);
-    await this.supabase.from('tournaments').update({
+    const { data: claimed } = await this.supabase.from('tournaments').update({
       status: 'cancelled',
       updated_at: new Date().toISOString()
-    }).eq('id', tournamentId);
+    }).eq('id', tournamentId)
+      .in('status', ['registration', 'locked', 'in_progress'])
+      .select('id, entry_fee');
+    if (!claimed || !claimed.length) return;
+    const humans = await this.loadHumans(tournamentId);
+    const ids = humans.map(function (h) { return h.user_id; }).filter(Boolean);
+    if (ids.length) {
+      await this.refundEntry(ids, Number(claimed[0].entry_fee || 3), 'torneo cancelado');
+      console.warn('[tournament-battle] ↩️ Inscripción devuelta a', ids.length, 'jugador(es) por cancelación:', tournamentId);
+    }
   }
 
   async startTournament(tournament, maxPlayers) {
     if (!tournament) return null;
 
-    if (tournament.status === 'in_progress' && isSkillBracket(tournament.bracket_state)) {
+    if (isSkillBracket(tournament.bracket_state) && tournament.bracket_state.phase !== 'opening') {
       // Los inscritos tarde ya cuentan: la resolución lee los participantes
       // de la base, no de este snapshot. Reconstruir borraría la semilla.
       return tournament.bracket_state;
@@ -466,7 +481,7 @@ class TournamentBattleEngine {
       const { error: lockErr } = await this.supabase.from('tournaments').update({
         status: 'locked',
         updated_at: new Date().toISOString()
-      }).eq('id', tournament.id);
+      }).eq('id', tournament.id).eq('status', 'registration');
       if (lockErr) {
         console.warn('[tournament-battle] lock DB skip:', tournament.id, lockErr.message);
       }
@@ -474,6 +489,16 @@ class TournamentBattleEngine {
     }
 
     if (tournament.status !== 'locked' && tournament.status !== 'registration') return null;
+
+    // CANDADO: el inicio se dispara desde varios lados a la vez (scheduler
+    // cada 10 s, el "kick" del navegador de cada jugador, rutas de limpieza).
+    // Antes daba igual; con la ronda de destreza, dos inicios juntos
+    // reabrían la ronda con OTRA semilla (los toques de quien ya jugaba se
+    // calificaban contra otro patrón) o chocaban al recrear los bots y el
+    // torneo terminaba cancelado. Solo quien gana este UPDATE condicional
+    // arma la ronda; un candado colgado (>2 min) se puede retomar.
+    const claimed = await this.claimSkillOpening(tournament.id);
+    if (!claimed) return null;
 
     let humanRows = await this.loadHumans(tournament.id);
     for (let attempt = 0; attempt < 5 && !humanRows.length; attempt += 1) {
@@ -515,6 +540,31 @@ class TournamentBattleEngine {
       .map(participantPayload);
 
     return this.openSkillRound(tournament, payloads, humanRows.length, maxPlayers);
+  }
+
+  async claimSkillOpening(tournamentId) {
+    const fresh = await this.loadTournamentRow(tournamentId);
+    if (!fresh || (fresh.status !== 'locked' && fresh.status !== 'registration')) return false;
+    const bs = fresh.bracket_state;
+    const nowIso = new Date().toISOString();
+    const lock = { version: 3, phase: 'opening', openingAt: nowIso, openingToken: crypto.randomUUID() };
+    let q = this.supabase.from('tournaments')
+      .update({ bracket_state: lock, updated_at: nowIso })
+      .eq('id', tournamentId)
+      .in('status', ['locked', 'registration']);
+    if (isSkillBracket(bs)) {
+      if (bs.phase !== 'opening') return false;
+      if (Date.now() - Date.parse(bs.openingAt || 0) < 2 * 60 * 1000) return false;
+      q = q.eq('bracket_state->>openingToken', bs.openingToken);
+    } else if (bs) {
+      // Restos de una llave vieja (formato anterior) en un torneo sin
+      // arrancar: se reemplazan solo si siguen siendo exactamente esos.
+      q = q.eq('updated_at', fresh.updated_at);
+    } else {
+      q = q.is('bracket_state', null);
+    }
+    const { data } = await q.select('id');
+    return Boolean(data && data.length);
   }
 
   /** Cierra la inscripción y abre la ronda de destreza (todavía no se decide nada). */
