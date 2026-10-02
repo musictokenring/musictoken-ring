@@ -297,6 +297,8 @@
 
   function renderLobby(data) {
     if (showingResult) return;
+    var statusShow = document.getElementById('tournamentArenaStatus');
+    if (statusShow && !document.getElementById('tournamentSkillPanel')) statusShow.style.display = '';
     if (!playing) showArena();
     if (playing) {
       return;
@@ -369,9 +371,10 @@
             '<p class="tournament-lobby-hint">Debes elegir tu canción antes de participar</p>';
         }
         var presenceHint = isEnrolledInCurrentWatch()
-          ? '<p class="tournament-lobby-hint" style="color:#a5f3fc">' + svgIcon('target', 13) +
-            'Al cerrar la inscripción jugás en vivo el mini-juego de la estrella contra todos: quedate en esta pantalla. ' +
-            'Gana el mejor puntaje real. Si no llegás a jugar, te devolvemos la inscripción.</p>'
+          ? '<div style="max-width:34rem;margin:0 auto 1.25rem;padding:10px 14px;border-radius:12px;background:rgba(34,211,238,0.08);' +
+            'border:1px solid rgba(34,211,238,0.3);color:#a5f3fc;font-size:13px;line-height:1.45;text-align:center;">' + svgIcon('target', 13) +
+            'Al cerrar la inscripción jugás en vivo el mini-juego de la estrella contra todos: <strong>quedate en esta pantalla</strong>. ' +
+            'Gana el mejor puntaje real. Si no llegás a jugar, te devolvemos la inscripción.</div>'
           : '';
         status.innerHTML = lobbyCountdownHtml(sec, 300) + presenceHint + enrollCta;
         var enrollBtn = document.getElementById('tournamentEnrollFromArenaBtn');
@@ -965,10 +968,20 @@
     return el;
   }
 
+  // Durante la ronda, la caja de estado (vacía) y la grilla de
+  // competidores se esconden: la pantalla es solo para el juego.
+  function setSkillFocus(on) {
+    var status = document.getElementById('tournamentArenaStatus');
+    if (status) status.style.display = on ? 'none' : '';
+    var grid = document.getElementById('tournamentBracketGrid');
+    if (grid) grid.style.display = on ? 'none' : '';
+  }
+
   function clearSkillPanel() {
     if (skill.timer) { clearInterval(skill.timer); skill.timer = null; }
     var el = document.getElementById('tournamentSkillPanel');
     if (el) el.remove();
+    setSkillFocus(false);
   }
 
   function resetSkill() {
@@ -1034,6 +1047,8 @@
     if (sub) sub.textContent = (data.tournament.tournament_type === 'weekly' ? 'Grand Prix semanal' : 'Express') + ' · ronda de destreza en vivo';
     var status = document.getElementById('tournamentArenaStatus');
     if (status && skill.state !== 'playing') status.innerHTML = '';
+    var statusBox = document.getElementById('tournamentArenaStatus');
+    if (statusBox) statusBox.style.display = 'none';
     updateAbandonButtonVisibility();
 
     if (skill.state === 'playing' || skill.state === 'starting' || skill.state === 'submitting') return;
@@ -1118,14 +1133,25 @@
       return;
     }
     skill.state = 'playing';
+    setSkillFocus(true);
+    panel.setAttribute('data-fanplays-scene', '');
     var durationSec = Math.round((Number(startRes.durationMs) || 60000) / 1000);
+    var stat = function (label, id, value, color) {
+      return '<div style="flex:1;min-width:0;padding:10px 8px;border-radius:14px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);">' +
+        '<div style="font-size:10px;font-weight:800;letter-spacing:0.12em;color:#9ca3af;">' + label + '</div>' +
+        '<div id="' + id + '" style="font-size:30px;font-weight:900;line-height:1.1;color:' + color + ';font-variant-numeric:tabular-nums;">' + value + '</div></div>';
+    };
     panel.innerHTML =
-      '<div style="text-align:center;margin-bottom:10px;">' +
-        '<div style="font-size:12px;font-weight:900;letter-spacing:0.12em;color:#a5f3fc;">' + svgIcon('target', 13) + 'RONDA DE DESTREZA · EN VIVO</div>' +
-        '<div style="font-size:14px;color:#d1d5db;margin-top:4px;">Tiempo: <strong id="tournamentSkillTime" style="color:#fff;font-variant-numeric:tabular-nums;">' + durationSec + '</strong> s · ' +
-        'Tu puntaje: <strong id="tournamentSkillScore" style="color:#fde047;font-variant-numeric:tabular-nums;">0</strong></div>' +
-      '</div>' +
-      '<div id="tournamentSkillGame" class="max-w-md mx-auto"></div>';
+      '<div style="max-width:34rem;margin:0 auto;padding:16px;border-radius:20px;' +
+        'background:linear-gradient(180deg,rgba(15,23,42,0.95),rgba(88,28,135,0.12));border:1px solid rgba(34,211,238,0.3);box-shadow:0 0 50px rgba(34,211,238,0.08);">' +
+        '<div style="text-align:center;font-size:12px;font-weight:900;letter-spacing:0.14em;color:#a5f3fc;margin-bottom:10px;">' +
+          svgIcon('target', 13) + 'RONDA DE DESTREZA · EN VIVO</div>' +
+        '<div style="display:flex;gap:10px;text-align:center;margin-bottom:14px;">' +
+          stat('TIEMPO', 'tournamentSkillTime', durationSec, '#ffffff') +
+          stat('TU PUNTAJE', 'tournamentSkillScore', '0.0', '#fde047') +
+        '</div>' +
+        '<div id="tournamentSkillGame"></div>' +
+      '</div>';
     var started = Date.now();
     if (skill.timer) clearInterval(skill.timer);
     skill.timer = setInterval(function () {
@@ -1146,6 +1172,8 @@
 
   async function submitSkillTaps(b, tid, rawTaps) {
     skill.state = 'submitting';
+    var gridBack = document.getElementById('tournamentBracketGrid');
+    if (gridBack) gridBack.style.display = '';
     var panel = skillPanel();
     if (panel) panel.innerHTML = skillCard('Enviando tu resultado…', '<p style="font-size:13px;color:#d1d5db;">El servidor recalcula tu puntaje desde tus toques.</p>');
     var res = null;

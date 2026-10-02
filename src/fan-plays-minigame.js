@@ -452,7 +452,10 @@
             // (pantallas muy bajas / apaisado), se prioriza que la parte
             // INTERACTIVA (la pista) quede entera, igual que antes.
             var self = this;
-            var sceneEl = containerEl.closest('#battleArena') || containerEl;
+            // La "escena" a encuadrar: la arena 1 vs 1, o cualquier panel que
+            // se marque con data-fanplays-scene (la ronda de destreza de los
+            // torneos), así el tiempo y el puntaje de arriba también entran.
+            var sceneEl = containerEl.closest('#battleArena, [data-fanplays-scene]') || containerEl;
             var fitSceneIntoView = function (behavior) {
                 try {
                     if (!document.body.contains(containerEl)) return false; // la batalla ya terminó
