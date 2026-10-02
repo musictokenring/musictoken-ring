@@ -2895,6 +2895,44 @@ app.post('/api/tournaments/:id/abandon', requireCreditMutationAuth, async (req, 
     }
 });
 
+// Ronda de destreza de los torneos (ver backend/tournament-battle.js).
+// Mismo usuario que la inscripción: resolveCreditsUserId, como en join.
+async function resolveTournamentPlayer(req) {
+    const resolved = await resolveCreditsUserId(supabase, {
+        getUserIdFromWallet: (addr) => walletLinkService ? walletLinkService.getUserIdFromWallet(addr) : null
+    }, req.authUser, null);
+    return resolved && resolved.userId ? resolved.userId : null;
+}
+
+app.post('/api/tournaments/:id/skill/start', requireCreditMutationAuth, async (req, res) => {
+    try {
+        if (!tournamentScheduler?.service) return res.status(503).json({ ok: false, error: 'Tournament service unavailable' });
+        const userId = await resolveTournamentPlayer(req);
+        if (!userId) return res.status(401).json({ ok: false, error: 'Sesión no válida' });
+        const result = await tournamentScheduler.service.battleEngine.startSkillForUser(req.params.id, userId);
+        res.status(result.ok ? 200 : 400).json(result);
+    } catch (error) {
+        console.error('[server] tournament skill start error:', error);
+        res.status(500).json({ ok: false, error: error.message });
+    }
+});
+
+app.post('/api/tournaments/:id/skill/submit', requireCreditMutationAuth, async (req, res) => {
+    try {
+        if (!tournamentScheduler?.service) return res.status(503).json({ ok: false, error: 'Tournament service unavailable' });
+        const userId = await resolveTournamentPlayer(req);
+        if (!userId) return res.status(401).json({ ok: false, error: 'Sesión no válida' });
+        const engine = tournamentScheduler.service.battleEngine;
+        const result = await engine.submitSkillScore(req.params.id, userId, req.body?.taps);
+        // Si era el último en mandar, se resuelve ya (sin esperar al scheduler).
+        if (result.ok) engine.resolveSkillRoundIfDue(req.params.id).catch(function () {});
+        res.status(result.ok ? 200 : 400).json(result);
+    } catch (error) {
+        console.error('[server] tournament skill submit error:', error);
+        res.status(500).json({ ok: false, error: error.message });
+    }
+});
+
 app.post('/api/tournaments/:id/advance-playback', async (req, res) => {
     try {
         if (!tournamentScheduler?.service) {

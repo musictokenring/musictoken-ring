@@ -17,7 +17,7 @@ const {
   enrichExpressRow,
   getIsoWeekKey
 } = require('./tournament-genres');
-const { TournamentBattleEngine, isHumanParticipantRow, isCpuParticipantRow } = require('./tournament-battle');
+const { TournamentBattleEngine, isHumanParticipantRow, isCpuParticipantRow, isSkillBracket } = require('./tournament-battle');
 const { deductUnifiedBalance } = require('./unified-balance');
 const { requestGenreCuration } = require('../integrations/gcpConnector');
 const { upsertBattleRow, bumpUserStats, recordTournamentBattles } = require('./player-battle-history');
@@ -41,11 +41,32 @@ class TournamentService {
     const ready = await this.ensureSchemaReady();
     if (!ready) return;
 
+    await this.processSkillRounds();
     await this.processStaleExpressBattles();
     await this.ensureAllExpressSlots();
     await this.ensureWeeklyTournaments();
     await this.processExpiredRegistrations();
     await this.processLockedTournaments();
+  }
+
+  /**
+   * Resuelve las rondas de destreza vencidas aunque nadie esté mirando
+   * (premio y devoluciones no dependen de que haya un navegador abierto).
+   */
+  async processSkillRounds() {
+    const { data: rows } = await this.supabase
+      .from('tournaments')
+      .select('id, bracket_state')
+      .eq('status', 'in_progress');
+    for (const t of rows || []) {
+      const b = t.bracket_state;
+      if (!isSkillBracket(b) || b.phase !== 'skill_round') continue;
+      try {
+        await this.battleEngine.resolveSkillRoundIfDue(t.id);
+      } catch (err) {
+        console.error('[tournament] resolveSkillRound:', t.id, err.message);
+      }
+    }
   }
 
   /**
@@ -60,6 +81,10 @@ class TournamentService {
       if (!Number.isFinite(closesMs)) return false;
       return (nowMs - closesMs) > 3 * 60 * 1000;
     }
+
+    // Ronda de destreza sin resolver: NUNCA darla por terminada desde acá
+    // (se cerraría sin pagar). La resuelve processSkillRounds().
+    if (isSkillBracket(bracket) && bracket.phase !== 'resolved') return false;
 
     const playbackDone = bracket.playbackStatus === 'completed';
     const duelsDone = bracket.duels?.length &&
@@ -502,6 +527,13 @@ class TournamentService {
 
     if (t.status === 'cancelled' || t.status === 'completed') {
       return { ok: true, stage: t.status };
+    }
+
+    if (t.status === 'in_progress' && isSkillBracket(t.bracket_state)) {
+      if (t.bracket_state.phase === 'skill_round') {
+        await this.battleEngine.resolveSkillRoundIfDue(tournamentId);
+      }
+      return { ok: true, stage: 'in_progress' };
     }
 
     if (t.status === 'in_progress' && t.bracket_state) {
@@ -1233,6 +1265,11 @@ class TournamentService {
 
     if (tournament.status === 'completed' || tournament.status === 'cancelled') {
       return { ok: false, error: 'El torneo ya finalizó. No puedes abandonar.' };
+    }
+    if (tournament.status === 'in_progress' || tournament.status === 'locked') {
+      // Con la ronda de destreza, retirarse a mitad de camino (después de
+      // ver cómo te fue) no puede cambiar el resultado de los demás.
+      return { ok: false, error: 'El torneo ya arrancó: no se puede abandonar ahora.' };
     }
 
     const { data: participant, error: pErr } = await this.supabase

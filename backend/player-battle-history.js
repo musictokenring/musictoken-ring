@@ -124,8 +124,18 @@ async function recordTournamentBattles(supabase, tournament, bracket) {
     return p && !p.isCpu && p.userId && !isCpuUserId(p.userId);
   });
 
+  // Torneo por destreza (version 3): cobra el mejor jugador REAL
+  // (prizeWinnerIds), que puede no ser el campeón de la llave si un bot
+  // terminó arriba; a quien no se presentó se le devolvió la inscripción.
+  const isSkill = bracket.version === 3;
+  const prizeIds = isSkill ? (bracket.prizeWinnerIds || []) : null;
+  const perWinner = isSkill && prizeIds.length ? Math.round((prizeAwarded / prizeIds.length) * 10) / 10 : prizeAwarded;
+
   for (const p of humans) {
-    const isChampion = p.id === winnerId && bracket.winnerIsHuman;
+    const isChampion = isSkill ? prizeIds.indexOf(p.id) !== -1 : (p.id === winnerId && bracket.winnerIsHuman);
+    const noShow = isSkill && !refunded && p.skillPlayed === false;
+    const wagered = noShow ? 0 : entryFee;
+    const won = isChampion ? perWinner : 0;
     const row = {
       user_id: p.userId,
       battle_kind: 'tournament',
@@ -135,10 +145,10 @@ async function recordTournamentBattles(supabase, tournament, bracket) {
       opponent_label: 'Torneo',
       song_name: p.songName || null,
       song_artist: p.songArtist || null,
-      credits_wagered: entryFee,
-      credits_won: isChampion ? prizeAwarded : 0,
+      credits_wagered: wagered,
+      credits_won: won,
       placement: isChampion ? 1 : 2,
-      event_label: eventLabel,
+      event_label: noShow ? baseLabel + ' · No te presentaste (inscripción devuelta)' : eventLabel,
       played_at: playedAt
     };
 
@@ -148,8 +158,8 @@ async function recordTournamentBattles(supabase, tournament, bracket) {
         supabase,
         p.userId,
         isChampion,
-        isChampion ? prizeAwarded : 0,
-        entryFee
+        won,
+        wagered
       );
     }
   }

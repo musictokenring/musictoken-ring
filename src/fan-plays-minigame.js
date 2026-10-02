@@ -395,7 +395,16 @@
             // contexto que reuse este módulo sin ese placeholder), se cae
             // a un lugar propio dentro de containerEl para no perder la
             // función por completo.
-            var achievementsHost = document.getElementById('fanPlaysAchievementsTop') || containerEl;
+            // Sin el placeholder, el tablerito va en un div PROPIO al final
+            // de containerEl -- antes se escribía sobre containerEl entero y
+            // borraba la pista recién dibujada (lo destapó la ronda de
+            // destreza de los torneos, el primer uso sin ese placeholder).
+            var achievementsHost = document.getElementById('fanPlaysAchievementsTop');
+            if (!achievementsHost) {
+                achievementsHost = document.createElement('div');
+                achievementsHost.style.marginTop = '6px';
+                containerEl.appendChild(achievementsHost);
+            }
             // flex-wrap + min-width:0 en los dos grupos -- esta fila ahora
             // vive en una columna angosta (compartida con el círculo del
             // cronómetro, ver createBattleUI en game-engine.js), así que

@@ -71,7 +71,10 @@
       !playing &&
       !showingResult &&
       lobbyStatus !== 'completed' &&
-      lobbyStatus !== 'cancelled';
+      lobbyStatus !== 'cancelled' &&
+      // Ya arrancado no se puede abandonar (el servidor lo rechaza).
+      lobbyStatus !== 'in_progress' &&
+      lobbyStatus !== 'locked';
     btn.classList.toggle('hidden', !canAbandon);
   }
 
@@ -365,7 +368,12 @@
             svgIcon('music', 14) + 'Elegir canción e inscribirme</button>' +
             '<p class="tournament-lobby-hint">Debes elegir tu canción antes de participar</p>';
         }
-        status.innerHTML = lobbyCountdownHtml(sec, 300) + enrollCta;
+        var presenceHint = isEnrolledInCurrentWatch()
+          ? '<p class="tournament-lobby-hint" style="color:#a5f3fc">' + svgIcon('target', 13) +
+            'Al cerrar la inscripción jugás en vivo el mini-juego de la estrella contra todos: quedate en esta pantalla. ' +
+            'Gana el mejor puntaje real. Si no llegás a jugar, te devolvemos la inscripción.</p>'
+          : '';
+        status.innerHTML = lobbyCountdownHtml(sec, 300) + presenceHint + enrollCta;
         var enrollBtn = document.getElementById('tournamentEnrollFromArenaBtn');
         if (enrollBtn) {
           enrollBtn.onclick = function () {
@@ -378,7 +386,7 @@
           '<div class="tournament-lobby-rings urgent"><div class="ring ring-1"></div><div class="ring ring-2"></div></div>' +
           '<div class="tournament-lobby-core">' +
           '<div class="tournament-lobby-label">Preparando arena</div>' +
-          '<div class="text-lg font-bold text-amber-300 animate-pulse">' + svgIcon('lock', 16) + 'Generando bracket y rivales CPU…</div>' +
+          '<div class="text-lg font-bold text-amber-300 animate-pulse">' + svgIcon('lock', 16) + 'Preparando la ronda de destreza…</div>' +
           '</div></div>';
       } else if (lobbyStatus === 'cancelled') {
         status.innerHTML =
@@ -463,6 +471,16 @@
   function computeRanking(b) {
     var parts = (b.participants || []).slice();
     if (!parts.length) return [];
+    if (b.version === 3) {
+      var prizeIds = b.prizeWinnerIds || [];
+      parts.sort(function (a, c) {
+        var pa = prizeIds.indexOf(a.id) !== -1 ? 1 : 0;
+        var pc = prizeIds.indexOf(c.id) !== -1 ? 1 : 0;
+        if (pa !== pc) return pc - pa;
+        return (Number(c.skillScore) || 0) - (Number(a.skillScore) || 0);
+      });
+      return parts;
+    }
     var lostRound = {};
     (b.duels || []).forEach(function (d) {
       var p1 = d.player1 && d.player1.id;
@@ -546,7 +564,7 @@
         '<div class="mtr-standings">' +
         '<div class="mtr-standings-title">Clasificación final</div>' +
         ranking.map(function (p, i) {
-          var isChamp = i === 0;
+          var isChamp = b.version === 3 ? (b.prizeWinnerIds || []).indexOf(p.id) !== -1 : i === 0;
           var isYou = meId && p.userId === meId;
           var fallback = 'https://e-cdns-images.dzcdn.net/images/cover/2646329172/250x250-000000-80-0-0.jpg';
           var tag = isYou
@@ -562,7 +580,12 @@
             '<div class="mtr-standing-copy">' +
             '<div class="mtr-standing-name">' + escapeHtml(p.displayName || 'Jugador') + '</div>' +
             '<div class="mtr-standing-song">' + svgIcon('music', 12) + escapeHtml(p.songName || 'Sin título') + '</div>' +
-            '</div>' + tag +
+            '</div>' +
+            (b.version === 3
+              ? '<span style="margin-left:auto;margin-right:8px;font-weight:800;font-size:13px;color:' + (p.skillPlayed === false ? '#9ca3af' : '#a5f3fc') + ';white-space:nowrap;">' +
+                (p.skillPlayed === false ? 'No jugó' : (Number(p.skillScore) || 0).toFixed(1) + ' pts') + '</span>'
+              : '') +
+            tag +
             '</div>'
           );
         }).join('') +
@@ -579,7 +602,7 @@
       confettiHtml() +
       '<div class="mtr-result-inner text-center">' +
       '<div class="mtr-result-crown" style="color:#fbbf24">' + (window.MTRIcons ? window.MTRIcons.svg('crown', { size: 40 }) : '') + '</div>' +
-      '<div class="mtr-result-title">Campeón del torneo</div>' +
+      '<div class="mtr-result-title">' + (b.version === 3 ? 'Mejor jugador real' : 'Campeón del torneo') + '</div>' +
       '<h3 class="mtr-champion-name mt-1">' + escapeHtml(b.championName || 'Campeón') + '</h3>' +
       '<p class="mtr-champion-song">' + svgIcon('music', 13) + escapeHtml(b.championSong || '') + '</p>' +
       podiumHtml +
@@ -918,6 +941,244 @@
     playNext(startIdx);
   }
 
+  // ===== Ronda de destreza (torneos version 3, ver backend/tournament-battle.js) =====
+  // Al cerrar la inscripción, todos los inscritos juegan a la vez el
+  // mini-juego de la estrella. La semilla llega recién al empezar
+  // (/skill/start) y lo que se manda son los toques crudos (/skill/submit):
+  // el puntaje lo recalcula el servidor. Quien no está inscrito mira.
+  var skill = { tid: null, state: 'idle', score: null, timer: null };
+
+  function isSkillPhase(b) {
+    return Boolean(b && b.version === 3 && (b.phase === 'skill_round' || b.phase === 'resolving'));
+  }
+
+  function skillPanel() {
+    var el = document.getElementById('tournamentSkillPanel');
+    if (!el) {
+      var status = document.getElementById('tournamentArenaStatus');
+      if (!status || !status.parentNode) return null;
+      el = document.createElement('div');
+      el.id = 'tournamentSkillPanel';
+      el.className = 'mb-6';
+      status.parentNode.insertBefore(el, status.nextSibling);
+    }
+    return el;
+  }
+
+  function clearSkillPanel() {
+    if (skill.timer) { clearInterval(skill.timer); skill.timer = null; }
+    var el = document.getElementById('tournamentSkillPanel');
+    if (el) el.remove();
+  }
+
+  function resetSkill() {
+    if (skill.state === 'playing' && window.FanPlaysMinigame && typeof window.FanPlaysMinigame.stop === 'function') {
+      try { window.FanPlaysMinigame.stop(); } catch (e) { /* ignore */ }
+    }
+    clearSkillPanel();
+    skill = { tid: null, state: 'idle', score: null, timer: null };
+  }
+
+  function skillCard(title, bodyHtml, accent) {
+    return '<div style="max-width:30rem;margin:0 auto;padding:18px;border-radius:18px;text-align:center;' +
+      'background:linear-gradient(135deg,rgba(34,211,238,0.10),rgba(217,70,239,0.08));border:1px solid ' + (accent || 'rgba(34,211,238,0.35)') + ';">' +
+      '<div style="font-size:12px;font-weight:900;letter-spacing:0.12em;color:#a5f3fc;margin-bottom:6px;">' + svgIcon('target', 13) + 'RONDA DE DESTREZA</div>' +
+      '<div style="font-size:18px;font-weight:800;color:#fff;margin-bottom:6px;">' + title + '</div>' +
+      bodyHtml + '</div>';
+  }
+
+  function mmss(ms) {
+    var sec = Math.max(0, Math.ceil(ms / 1000));
+    return fmtClock(sec);
+  }
+
+  function renderSkillInfo(b) {
+    var panel = skillPanel();
+    if (!panel) return;
+    var deadline = Date.parse(b.skillRoundSubmitDeadline || '') || 0;
+    var left = deadline ? mmss(deadline - serverNowMs()) : '';
+    var resultsLine = '<div style="font-size:12px;color:#9ca3af;margin-top:8px;">' +
+      (b.phase === 'resolving' ? 'Calculando resultados…' : 'Resultados en ' + left) + '</div>';
+    var title, body;
+    if (skill.state === 'submitted') {
+      title = 'Tu puntaje verificado: <span style="color:#fde047">' + (skill.score != null ? Number(skill.score).toFixed(1) : '—') + '</span>';
+      body = '<p style="font-size:13px;color:#d1d5db;line-height:1.45;">El servidor recalculó tu puntaje desde tus toques. Esperando a que terminen los demás jugadores.</p>' + resultsLine;
+    } else if (skill.state === 'missed') {
+      title = 'La ronda ya había empezado';
+      body = '<p style="font-size:13px;color:#d1d5db;line-height:1.45;">No llegaste a jugar a tiempo: al cerrar el torneo se te devuelve la inscripción.</p>' + resultsLine;
+    } else {
+      title = 'Los jugadores están compitiendo';
+      body = '<p style="font-size:13px;color:#d1d5db;line-height:1.45;">Todos los inscritos juegan ahora el mini-juego de la estrella. Después vas a ver la llave con sus puntajes reales.</p>' + resultsLine;
+    }
+    panel.innerHTML = skillCard(title, body);
+  }
+
+  async function skillAuthHeaders() {
+    if (window.GameEngine && typeof window.GameEngine.getBackendAuthHeaders === 'function') {
+      return window.GameEngine.getBackendAuthHeaders();
+    }
+    return { 'Content-Type': 'application/json' };
+  }
+
+  function handleSkillRound(data) {
+    showArena();
+    var b = data.bracket;
+    var tid = data.tournament.id;
+    if (skill.tid !== tid) {
+      resetSkill();
+      skill.tid = tid;
+    }
+    var grid = document.getElementById('tournamentBracketGrid');
+    if (grid && skill.state !== 'playing') renderBracketRoster(b);
+    var sub = document.getElementById('tournamentArenaSubtitle');
+    if (sub) sub.textContent = (data.tournament.tournament_type === 'weekly' ? 'Grand Prix semanal' : 'Express') + ' · ronda de destreza en vivo';
+    var status = document.getElementById('tournamentArenaStatus');
+    if (status && skill.state !== 'playing') status.innerHTML = '';
+    updateAbandonButtonVisibility();
+
+    if (skill.state === 'playing' || skill.state === 'starting' || skill.state === 'submitting') return;
+    if (b.phase === 'resolving' || skill.state === 'submitted' || skill.state === 'spectator' || skill.state === 'missed') {
+      renderSkillInfo(b);
+      return;
+    }
+    var closes = Date.parse(b.skillRoundStartClosesAt || '') || 0;
+    if (closes && serverNowMs() > closes) {
+      // Ya no se puede empezar: igual se pregunta al servidor por si este
+      // jugador ya había mandado su puntaje desde otra pestaña.
+      beginSkillPlay(data, true);
+      return;
+    }
+    if (skill.state === 'idle') {
+      skill.state = 'countdown';
+      startSkillCountdown(data);
+    }
+  }
+
+  function startSkillCountdown(data) {
+    if (skill.timer) return;
+    var b = data.bracket;
+    var startsAt = Date.parse(b.skillRoundStartsAt || '') || serverNowMs();
+    var tick = function () {
+      var panel = skillPanel();
+      if (!panel) return;
+      var ms = startsAt - serverNowMs();
+      if (ms <= 0) {
+        clearInterval(skill.timer);
+        skill.timer = null;
+        beginSkillPlay(data, false);
+        return;
+      }
+      panel.innerHTML = skillCard(
+        'Arranca en <span style="color:#fde047;font-variant-numeric:tabular-nums;">' + Math.ceil(ms / 1000) + '</span>',
+        '<p style="font-size:13px;color:#d1d5db;line-height:1.45;">Todos los inscritos juegan al mismo tiempo: tocá cuando la estrella que se mueve coincida con la estrella fija (si coincide justo, vale doble). ' +
+        'Gana el mejor puntaje real; los bots solo completan la llave y nunca cobran.</p>'
+      );
+    };
+    tick();
+    skill.timer = setInterval(tick, 250);
+  }
+
+  async function beginSkillPlay(data, lateCheck) {
+    var b = data.bracket;
+    var tid = data.tournament.id;
+    skill.state = 'starting';
+    var res = null;
+    try {
+      var resp = await fetch(backendUrl() + '/api/tournaments/' + encodeURIComponent(tid) + '/skill/start', {
+        method: 'POST',
+        headers: await skillAuthHeaders(),
+        body: '{}',
+        cache: 'no-store'
+      });
+      res = await resp.json().catch(function () { return {}; });
+    } catch (e) {
+      res = { ok: false, error: 'Sin conexión con el servidor.' };
+    }
+    if (skill.tid !== tid) return; // se cerró la vista mientras tanto
+    if (!res || !res.ok) {
+      if (res && res.alreadySubmitted) { skill.state = 'submitted'; skill.score = res.score; }
+      else if (res && res.tooLate) skill.state = 'missed';
+      else if (res && res.notYet) { skill.state = 'idle'; return; }
+      else skill.state = 'spectator';
+      renderSkillInfo(b);
+      return;
+    }
+    if (lateCheck) {
+      // Ya pasó la ventana para empezar pero el servidor nos dejó (había
+      // empezado antes en esta misma cuenta): se juega igual.
+    }
+    playSkillRound(b, tid, res);
+  }
+
+  function playSkillRound(b, tid, startRes) {
+    var panel = skillPanel();
+    if (!panel || !window.FanPlaysMinigame) {
+      skill.state = 'spectator';
+      toast('No se pudo cargar el mini-juego. Recargá la página.', 'error');
+      return;
+    }
+    skill.state = 'playing';
+    var durationSec = Math.round((Number(startRes.durationMs) || 60000) / 1000);
+    panel.innerHTML =
+      '<div style="text-align:center;margin-bottom:10px;">' +
+        '<div style="font-size:12px;font-weight:900;letter-spacing:0.12em;color:#a5f3fc;">' + svgIcon('target', 13) + 'RONDA DE DESTREZA · EN VIVO</div>' +
+        '<div style="font-size:14px;color:#d1d5db;margin-top:4px;">Tiempo: <strong id="tournamentSkillTime" style="color:#fff;font-variant-numeric:tabular-nums;">' + durationSec + '</strong> s · ' +
+        'Tu puntaje: <strong id="tournamentSkillScore" style="color:#fde047;font-variant-numeric:tabular-nums;">0</strong></div>' +
+      '</div>' +
+      '<div id="tournamentSkillGame" class="max-w-md mx-auto"></div>';
+    var started = Date.now();
+    if (skill.timer) clearInterval(skill.timer);
+    skill.timer = setInterval(function () {
+      var t = document.getElementById('tournamentSkillTime');
+      if (t) t.textContent = Math.max(0, durationSec - Math.floor((Date.now() - started) / 1000));
+    }, 500);
+    var gameEl = document.getElementById('tournamentSkillGame');
+    try { gameEl.scrollIntoView({ behavior: 'smooth', block: 'center' }); } catch (e) { /* ignore */ }
+
+    window.FanPlaysMinigame.start(gameEl, durationSec, function (liveAvg) {
+      var sc = document.getElementById('tournamentSkillScore');
+      if (sc) sc.textContent = (Number(liveAvg) || 0).toFixed(1);
+    }, function (finalAvg, roundsHit, rawTaps) {
+      if (skill.timer) { clearInterval(skill.timer); skill.timer = null; }
+      submitSkillTaps(b, tid, rawTaps || []);
+    }, Number(startRes.seed));
+  }
+
+  async function submitSkillTaps(b, tid, rawTaps) {
+    skill.state = 'submitting';
+    var panel = skillPanel();
+    if (panel) panel.innerHTML = skillCard('Enviando tu resultado…', '<p style="font-size:13px;color:#d1d5db;">El servidor recalcula tu puntaje desde tus toques.</p>');
+    var res = null;
+    // Hasta 3 intentos: un corte de señal justo al terminar no puede
+    // costarle el torneo a quien sí jugó (los toques siguen en memoria).
+    for (var attempt = 1; attempt <= 3; attempt++) {
+      try {
+        var resp = await fetch(backendUrl() + '/api/tournaments/' + encodeURIComponent(tid) + '/skill/submit', {
+          method: 'POST',
+          headers: await skillAuthHeaders(),
+          body: JSON.stringify({ taps: rawTaps }),
+          cache: 'no-store'
+        });
+        res = await resp.json().catch(function () { return {}; });
+        if (resp.status < 500) break;
+      } catch (e) {
+        res = null;
+      }
+      await new Promise(function (r) { setTimeout(r, attempt * 2000); });
+    }
+    if (skill.tid !== tid) return;
+    if (res && res.ok) {
+      skill.state = 'submitted';
+      skill.score = res.score;
+    } else {
+      skill.state = 'spectator';
+      toast((res && res.error) || 'No se pudo enviar tu resultado. Revisá tu conexión.', 'error');
+    }
+    renderSkillInfo(b);
+    refresh();
+  }
+
+
   async function refresh() {
     if (!watchId) return;
     if (battleKickInFlight) return;
@@ -995,7 +1256,14 @@
         return;
       }
 
+      if (data.tournament.status === 'in_progress' && data.bracket && isSkillPhase(data.bracket)) {
+        lobbyStatus = 'in_progress';
+        handleSkillRound(data);
+        return;
+      }
+
       if (data.tournament.status === 'in_progress' && data.bracket) {
+        clearSkillPanel();
         recoverStuckPlaybackState();
         startBattleAttempts = 0;
         zeroKickSent = true;
@@ -1125,6 +1393,7 @@
 
   function close(opts) {
     opts = opts || {};
+    resetSkill();
     watchId = null;
     playing = false;
     showingResult = false;

@@ -3972,6 +3972,15 @@ const GameEngine = {
             duelLabelEl.textContent = match.duel_label;
         }
 
+        // Los "plays" de un duelo de torneo no son reproducciones reales
+        // (ahora son el puntaje de destreza x100, antes eran inventados):
+        // solo sirven para la proporción de las barras. No mostrarlos como
+        // si fueran streams.
+        ['plays1', 'plays2'].forEach(function (id) {
+            var el = document.getElementById(id);
+            if (el && el.parentElement) el.parentElement.style.display = 'none';
+        });
+
         await new Promise(function (resolve) { setTimeout(resolve, 200); });
 
         var battleArena = document.getElementById('battleArena');
